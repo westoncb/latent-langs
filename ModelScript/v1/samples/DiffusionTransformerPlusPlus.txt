@@ -1,0 +1,634 @@
+STRUCTURE DiffusionTransformerPlusPlus {
+  PARAMETERS {
+    VocabSize : Int # Size of the token vocabulary
+    EmbeddingSize : Int # Size of token embeddings  
+    NumLayers : Int # Number of transformer layers
+    NumHeads : Int # Number of attention heads
+    HiddenSize : Int # Size of hidden states
+    FFSize : Int # Size of feedforward expansion
+    T : Int # Number of diffusion timesteps
+  }
+
+  NOTATION {
+    α_t := 1 - β_t # Notation for alpha schedule
+    q(x_t|x_{t-1}) := N(x_t; SQRT(α_t) * x_{t-1}, (1 - α_t) * I) # Diffusion step
+    p(x_{t-1}|x_t) := N(x_{t-1}; μ_θ(x_t, t), Σ_θ(x_t, t)) # Denoising step
+  }
+
+  # Sinusoidal position embeddings
+  DEF pos_embedding(t : Int) -> TensorLike[EmbeddingSize] := (
+    LET i := RANGE(EmbeddingSize),
+        f := EXP(-LOG(10000) * i / EmbeddingSize)
+    IN [IF i % 2 = 0 THEN SIN(t * f[i // 2]) ELSE COS(t * f[i // 2])]
+  )
+
+  # Transformer encoder layer
+  STRUCTURE TransformerLayer {
+    DEF norm1 : LayerNorm(HiddenSize)  
+    DEF mha : MultiHeadAttention(NumHeads, HiddenSize)
+    DEF norm2 : LayerNorm(HiddenSize)
+    DEF ff : FeedForward(HiddenSize, FFSize)
+
+    DEF forward(x : TensorLike[HiddenSize]) -> TensorLike[HiddenSize] := (
+      LET x_attn := x + mha.forward(norm1.forward(x)), 
+          x_ff := x_attn + ff.forward(norm2.forward(x_attn))
+      IN x_ff  
+    )
+  }
+
+  # Stack of transformer layers
+  DEF transformer := Sequential(
+    [TransformerLayer() FOR _ : RANGE(NumLayers)]
+  )
+
+  # Noise prediction network  
+  STRUCTURE NoisePred {
+    DEF proj : Linear(HiddenSize, VocabSize)
+
+    DEF forward(x_t : TensorLike[VocabSize], 
+                t : Int) -> TensorLike[VocabSize] := (
+      LET x_proj := token_embedding[x_t] + pos_embedding(t),
+          h := transformer.forward(x_proj)
+      IN SOFTMAX(proj.forward(h))        
+    )      
+  }
+
+  DEF token_embedding : TensorLike[[VocabSize, EmbeddingSize], Float] # Token embeddings
+  DEF noise_pred := NoisePred() # Noise prediction network
+  DEF beta : TensorLike[[T], Float] # Beta noise schedule
+
+  # Sampling loop
+  DEF sample(num_steps : Int, x_T : TensorLike[VocabSize]) -> TensorLike[VocabSize] := (
+    LET x := x_T
+    IN FOR t : REVERSE(RANGE(1, T+1)) {
+         LET t_emb := pos_embedding(t),
+             ε_θ := noise_pred.forward(x, t),
+             α := α_t[t],
+             α_prev := α_{t-1}[t],
+             σ := SQRT((1 - α_prev) / (1 - α)) * SQRT(1 - α / α_prev),
+             μ := (x - σ² / SQRT(α) * ε_θ) / SQRT(α_prev),
+             x := μ + σ * RANDN(SHAPE(x)) # Euler sampling step  
+       },
+       x
+  )
+
+  # Training objective
+  DEF loss(x_0 : TensorLike[VocabSize], 
+           ε : TensorLike[VocabSize]) -> TensorLike[] := (
+    LET t ~ Uniform({1,...,T}), # Sample timestep
+        x_t := SQRT(α_t[t]) * x_0 + SQRT(1 - α_t[t]) * ε, # Sample noised input    
+        ε_θ := noise_pred.forward(x_t, t) # Predict noise
+    IN MSE(ε_θ, ε)
+  )
+
+  # Model properties and assumptions  
+  [t < T => β_t < β_{t+1}] # Monotonically increasing noise schedule
+
+  [∀x_0, ∀ε . 
+    LET t ~ Uniform({1,...,T}), 
+        x_t := SQRT(α_t[t]) * x_0 + SQRT(1 - α_t[t]) * ε
+    IN p(x_0 | x_t) = q(x_t | x_0) * p(x_0) / p(x_t)
+  ] # Posterior matches product of diffusion & prior
+    
+  [∀x_0 : TensorLike[VocabSize] .
+    sample(T, RANDN(SHAPE(x_0))) ≈ p(x_0) 
+      AS NumSteps -> Inf
+  ] # Samples converge to data distribution
+    
+  RETURN {
+    sample, # Sampling function  
+    loss # Training objective
+  }
+}
+
+This models a Diffusion Transformer++ as a neural network that learns to iteratively denoise token sequences over a series of timesteps. The key components are:
+
+A Transformer encoder that processes corrupted token sequences at each denoising step. It uses sinusoidal position embeddings to inject timestep information.
+A noise prediction network that takes the Transformer output and predicts the noise added at each step. This allows the model to reverse the diffusion process.
+A sampling loop that starts from pure noise and iteratively denoises the sequence using the learned model, guided by the noise schedule.
+A training objective based on re-estimating noise at randomly sampled timesteps. The model learns to match the true posterior over denoised sequences.
+
+The ModelScript also states some key properties, like the monotonically increasing noise schedule, the equivalence of diffusion and denoising, and the convergence of the sampling process to the data distribution.
+
+
+
+
+
+STRUCTURE DiffusionTransformerPlusPlus {
+  PARAMETERS {
+    VocabSize : Int # Size of the token vocabulary
+    EmbeddingSize : Int # Size of token embeddings  
+    NumLayers : Int # Number of transformer layers
+    NumHeads : Int # Number of attention heads
+    HiddenSize : Int # Size of hidden states
+    FFSize : Int # Size of feedforward expansions
+    DiffSteps : Int # Number of diffusion steps
+  }
+
+  # Custom notations
+  NOTATION {
+    β_t := LinearSchedule(0.0001, 0.02, DiffSteps) # Noise schedule
+    α_t := 1 - β_t
+    ᾱ_t := CUMPROD(α_t)
+    DiffusionEmbedding(t) := SinusoidalEmbedding(t, EmbeddingSize)
+  }
+
+  # Embeddings
+  DEF token_embedding := Embedding(VocabSize, EmbeddingSize)
+  DEF pos_embedding := Embedding(MaxLen, EmbeddingSize)
+  
+  # Transformer Layers
+  DEF transformer_layers := [
+    TransformerLayer(
+      SelfAttention(HiddenSize, NumHeads), 
+      FeedForward(HiddenSize, FFSize)
+    ) FOR _ : RANGE(NumLayers)
+  ]
+
+  # Diffusion Layers  
+  STRUCTURE DiffusionLayer {
+    DEF conv1 := Conv1D(HiddenSize, HiddenSize)
+    DEF conv2 := Conv1D(HiddenSize, HiddenSize)
+    DEF diffusion_proj := Linear(EmbeddingSize, HiddenSize)
+    
+    DEF forward(x_t, t) := {
+      LET h := conv1(x_t),
+          c := GELU(h + diffusion_proj(DiffusionEmbedding(t))),  
+          y := conv2(c),
+          s_t := Sigmoid(conv1(y))
+      IN s_t * h + (1 - s_t) * y
+    }
+  }
+  
+  DEF diffusion_layers := [DiffusionLayer() FOR _ : RANGE(NumLayers)]
+  
+  # Output
+  DEF output := Linear(HiddenSize, VocabSize) 
+
+  # Forward diffusion process
+  DEF q_sample(x_0, t) := {
+    LET mean := SQRT(ᾱ_t[t]) * x_0,
+        variance := 1 - ᾱ_t[t],
+        ϵ ~ N(0, 1)
+    IN mean + SQRT(variance) * ϵ  
+  }
+  
+  # Training loss
+  DEF loss(model, x_0, t) := {
+    LET x_t := q_sample(x_0, t),
+        ϵ_θ := model(x_t, t),
+        ϵ ~ N(0, 1)
+    IN MSE(ϵ_θ, ϵ)
+  }
+
+  # Reverse diffusion process 
+  DEF p_sample(model, x_t, t) := {
+    LET ϵ_θ := model(x_t, t),
+        mean := 1/SQRT(α_t[t]) * (x_t - (1 - α_t[t])/SQRT(1 - ᾱ_t[t]) * ϵ_θ),
+        variance := β_t[t],
+        z ~ N(0, 1) IF t > 0 ELSE 0
+    IN mean + SQRT(variance) * z
+  }
+
+  DEF forward(tokens) := { 
+    LET x_0 := token_embedding(tokens) + pos_embedding(RANGE(LENGTH(tokens))),
+        t := SAMPLE(RANGE(1, DiffSteps)), 
+        x_t := q_sample(x_0, t)
+        
+    IN FOR layer : diffusion_layers {
+         x_t := layer.forward(x_t, t)
+       },
+       FOR layer : transformer_layers {
+         x_t := layer.forward(x_t)  
+       },
+       output(x_t)
+  }
+
+  DEF dream(prompt, num_steps) := {
+    LET tokens := TOKENIZE(prompt),
+        x_T ~ N(0, 1)
+    IN FOR t : REVERSE(RANGE(DiffSteps)) {
+         FOR _ : RANGE(num_steps) {
+           x_T := p_sample(λx_t,t . forward(x_t), x_T, t)  
+         }
+       },
+       MAP(ARGMAX, x_T)
+  }
+
+  [∀x,t . q_sample(x, DiffSteps) ≈ N(0, 1)] # Diffused data has unit normal distribution 
+
+  [∀x_0,x_T,t . p_sample(λx_t,t . q_sample(x_0, t), x_T, t) = x_0] # Inference inverts diffusion
+
+  [∀x,t . p_sample(λx_t,t . forward(x_t), q_sample(x, t), t) ≈ x] # Reconstruction property
+  
+  RETURN dream
+}
+
+This model combines a Transformer architecture with a diffusion process to generate "neural dreams" from prompts. Here are the key components:
+
+The core Transformer layers use self-attention and feedforward layers to learn rich representations of the input tokens.
+The diffusion layers use convolutions and time-dependent embeddings to gradually diffuse the input according to a noise schedule. This allows the model to learn a reverse denoising process.
+The forward diffusion process q_sample corrupts the input x_0 into a noisy x_t based on the noise level at step t.
+The model is trained to predict the noise ϵ added at each step, allowing it to learn to denoise corrupted inputs.
+The reverse diffusion process p_sample iteratively denoises a random latent x_T by applying the model repeatedly, guided by the learned denoising.
+The dream function generates samples by initializing a random latent, then running the reverse process while conditioning on an input prompt.
+
+The assertions capture key properties we expect from the diffusion model:
+
+After running the full forward process, the data should be indistinguishable from unit Gaussian noise.
+The reverse process should deterministically invert the forward diffusion, recovering the original input.
+Running one step of reverse diffusion on a corrupted input should approximate the original clean input.
+
+
+
+
+STRUCTURE DiffusionTransformerPlusPlus {
+  PARAMETERS {
+    VocabSize : Int # Size of the token vocabulary
+    EmbeddingSize : Int # Size of token embeddings  
+    NumLayers : Int # Number of transformer layers
+    NumHeads : Int # Number of attention heads
+    HiddenSize : Int # Size of hidden states
+    FFSize : Int # Size of feedforward expansion
+    T : Int # Number of diffusion timesteps
+  }
+
+  NOTATION {
+    α_t := LearnedNoiseSchedule(t) # Adaptive noise schedule
+    q(x_t|x_{t-1}, c) := N(x_t; SQRT(α_t) * x_{t-1}, (1 - α_t) * I) # Conditional diffusion
+    p(x_{t-1}|x_t, c) := N(x_{t-1}; μ_θ(x_t, t, c), Σ_θ(x_t, t, c)) # Conditional denoising
+  }
+
+  # Hybrid continuous-discrete token embedding
+  DEF token_embedding(x : TensorLike[VocabSize]) -> TensorLike[EmbeddingSize] := (
+    LET x_cont := Softmax(x),
+        x_disc := OneHot(ArgMax(x), VocabSize)
+    IN Concat(Embedding(x_disc), x_cont)
+  )
+    
+  # Adaptive positional encoding
+  DEF pos_encoding(t : Int, seq_len : Int) -> TensorLike[EmbeddingSize] := (
+    LET freq := Exp(-Log(10000) * Range(0, EmbeddingSize, 2) / EmbeddingSize),
+        pos := Range(seq_len)
+    IN Concat(Sin(Outer(pos, freq) * t), Cos(Outer(pos, freq) * t), -1)
+  )
+    
+  # Transformer encoder with cross-attention to condition
+  STRUCTURE TransformerLayer {
+    DEF norm1 : LayerNorm(HiddenSize)  
+    DEF norm2 : LayerNorm(HiddenSize)
+    DEF norm3 : LayerNorm(HiddenSize)
+    DEF self_attn : MultiHeadAttention(NumHeads, HiddenSize)
+    DEF cross_attn : MultiHeadAttention(NumHeads, HiddenSize)  
+    DEF ff : FeedForward(HiddenSize, FFSize)
+
+    DEF forward(x : TensorLike[HiddenSize], 
+                c : TensorLike[HiddenSize]) -> TensorLike[HiddenSize] := (
+      LET x_self := x + self_attn.forward(norm1.forward(x)),
+          x_cross := x_self + cross_attn.forward(norm2.forward(x_self), c),  
+          x_ff := x_cross + ff.forward(norm3.forward(x_cross))
+      IN x_ff  
+    )
+  }
+
+  DEF transformer := Sequential(
+    [TransformerLayer() FOR _ : RANGE(NumLayers)]
+  )
+    
+  # Conditional noise prediction network
+  STRUCTURE NoisePred {
+    DEF proj1 : Linear(HiddenSize, HiddenSize)
+    DEF proj2 : Linear(HiddenSize, VocabSize)
+    DEF cond_proj : Linear(CondSize, HiddenSize)
+
+    DEF forward(x_t : TensorLike[VocabSize],
+                t : Int,
+                c : TensorLike[CondSize]) -> TensorLike[VocabSize] := (
+      LET x_emb := token_embedding(x_t) + pos_encoding(t),  
+          c_emb := cond_proj.forward(c),
+          h := transformer.forward(x_emb, c_emb),
+          h_proj := proj1.forward(LayerNorm(HiddenSize).forward(h))
+      IN proj2.forward(GeLU.forward(h_proj))        
+    )
+  }
+
+  DEF noise_pred := NoisePred() # Noise prediction network
+
+  # Hierarchical sampling loop
+  DEF sample(num_steps: Int, 
+             x_T : TensorLike[VocabSize], 
+             c : TensorLike[CondSize]) -> TensorLike[VocabSize] := (
+    LET coarse_steps := num_steps // 2,
+        fine_steps := num_steps - coarse_steps,
+        x_0 := x_T
+    
+    # Coarse sampling stage  
+    FOR t : REVERSE(RANGE(T - coarse_steps, T)) {
+      LET ε_θ := noise_pred.forward(Expand(Argmax(x_0), VocabSize), t, c),
+          x_0 := p_sample(x_0, ε_θ, t, c)
+    },
+      
+    # Fine sampling stage  
+    FOR t : REVERSE(RANGE(1, T - coarse_steps)) {
+      LET ε_θ := noise_pred.forward(x_0, t, c), 
+          x_0 := p_sample(x_0, ε_θ, t, c)  
+    },
+      
+    RETURN x_0  
+  )
+
+  # Training objective
+  DEF loss(model : NoisePred, 
+           x_0 : TensorLike[VocabSize],
+           c : TensorLike[CondSize]) -> TensorLike[] := (
+    LET t ~ UniformInt(0, T),
+        ε ~ N(0, 1),
+        x_t := q_sample(x_0, t, c, ε),
+        ε_θ := model.forward(x_t, t, c)
+    IN Mse(ε_θ, ε)            
+  )
+
+  # Model properties and assumptions
+  [∀t . 0 < α_t < 1] # Valid noise schedule
+    
+  [∀x_0, ∀c, ∀t, ∀ε . 
+    q(x_t | x_0, c) = N(x_t; SQRT(α_t) * x_0, (1 - α_t) * I)
+  ] # Well-defined diffusion process
+    
+  [∀x_0, ∀c .
+    sample(T, ZEROS(VocabSize), c) ≈ p(x_0 | c) 
+      AS T -> Inf
+  ] # Samples converge to data distribution
+
+  RETURN {
+    sample, # Sampling function  
+    loss # Training objective
+  }
+}
+
+
+
+
+STRUCTURE DiffusionTransformerPlusPlus {
+  PARAMETERS {
+    VocabSize : Int # Size of the token vocabulary
+    EmbeddingSize : Int # Size of token embeddings  
+    NumLayers : Int # Number of transformer layers
+    NumHeads : Int # Number of attention heads
+    HiddenSize : Int # Size of hidden states
+    FFSize : Int # Size of feedforward expansion
+    T : Int # Number of diffusion timesteps
+  }
+
+  NOTATION {
+    α_t := 1 - β_t # Notation for alpha schedule
+    q(x_t|x_{t-1}, c) := N(x_t; SQRT(α_t) * x_{t-1}, (1 - α_t) * I) # Conditional diffusion step
+    p(x_{t-1}|x_t, c) := N(x_{t-1}; μ_θ(x_t, t, c), Σ_θ(x_t, t, c)) # Conditional denoising step  
+  }
+
+  # Hybrid continuous-discrete token embedding
+  DEF token_embedding(x : TensorLike[VocabSize]) -> TensorLike[[EmbeddingSize, 2]] := (
+    LET x_discrete := Linear(VocabSize, EmbeddingSize)(x),
+        x_continuous ~ N(0, I)
+    IN STACK([x_discrete, x_continuous], axis=-1)  
+  )
+
+  # Adaptive sinusoidal position embeddings  
+  DEF pos_embedding(t : Int) -> TensorLike[EmbeddingSize] := (
+    LET i := RANGE(EmbeddingSize),
+        f := Softplus(Linear(1, EmbeddingSize)(t / T)) * i / EmbeddingSize
+    IN [IF i % 2 = 0 THEN SIN(f[i // 2]) ELSE COS(f[i // 2])]
+  )
+
+  # Conditional Transformer encoder layer
+  STRUCTURE TransformerLayer {
+    DEF norm1 : AdaptiveLayerNorm(HiddenSize)  
+    DEF mha : MultiHeadAttention(NumHeads, HiddenSize)
+    DEF cross_attn : CrossAttention(NumHeads, HiddenSize)  
+    DEF norm2 : AdaptiveLayerNorm(HiddenSize)
+    DEF ff : FeedForward(HiddenSize, FFSize)
+
+    DEF forward(x : TensorLike[[HiddenSize, 2]], 
+                c : TensorLike[HiddenSize]) -> TensorLike[[HiddenSize, 2]] := (
+      LET x_attn := x + mha.forward(norm1.forward(x)), 
+          x_cond := x_attn + cross_attn.forward(x_attn, c),
+          x_ff := x_cond + ff.forward(norm2.forward(x_cond))
+      IN x_ff  
+    )
+  }
+
+  # Stack of conditional transformer layers
+  DEF transformer := Sequential(
+    [TransformerLayer() FOR _ : RANGE(NumLayers)]
+  )
+
+  # Hierarchical noise prediction network
+  STRUCTURE HierarchicalNoisePred {
+    DEF char_proj : Linear(HiddenSize, VocabSize)
+    DEF word_proj : Linear(HiddenSize, VocabSize)
+
+    DEF forward(x_t : TensorLike[[HiddenSize, 2]], 
+                t : Int,
+                c : TensorLike[HiddenSize]) -> (
+      TensorLike[VocabSize], # Character-level noise
+      TensorLike[VocabSize]  # Word-level noise
+    ) := (
+      LET x_proj := x_t[...,0] + pos_embedding(t),
+          h := transformer.forward(CONCAT([x_t, EXPAND_DIMS(x_proj, -1)], axis=-1), c),
+          ε_char := char_proj.forward(h[...,0]),
+          ε_word := word_proj.forward(REDUCE_MEAN(h[...,0], axis=-2))
+      IN (SOFTMAX(ε_char), SOFTMAX(ε_word))
+    )      
+  }
+
+  DEF noise_pred := HierarchicalNoisePred() # Hierarchical noise prediction network
+  DEF beta : TensorLike[[T], Float] # Learned noise schedule
+
+  # Adaptive noise scheduling
+  STRUCTURE NoiseScheduler {
+    DEF sched_mlp : Sequential(
+      DEF layers := [
+        Linear(1, HiddenSize), 
+        Tanh(),
+        Linear(HiddenSize, HiddenSize),
+        Tanh(), 
+        Linear(HiddenSize, 1)
+      ]
+    )
+    
+    DEF forward(t : Int, 
+                h : TensorLike[HiddenSize]) -> TensorLike[] := (
+      LET t_embed := pos_embedding(t),
+          h_pool := REDUCE_MEAN(h, axis=-2),
+          h_cond := CONCAT([t_embed, h_pool], axis=-1),
+          beta_t := Sigmoid(sched_mlp.forward(t / T)) * 0.5
+      IN beta_t    
+    )
+  }
+
+  DEF noise_sched := NoiseScheduler() # Adaptive noise scheduler
+
+  # Sampling loop  
+  DEF sample(num_steps : Int,
+             x_T : TensorLike[VocabSize], 
+             c : TensorLike[HiddenSize]) -> (
+    TensorLike[VocabSize], # Character-level sequence
+    TensorLike[VocabSize]  # Word-level sequence  
+  ) := (
+    LET x := STACK([x_T, ZEROS_LIKE(x_T)], axis=-1),
+        x_char := x_T,
+        x_word := x_T
+    IN FOR t : REVERSE(RANGE(1, T+1)) {
+         LET t_emb := pos_embedding(t),
+             h := transformer.forward(x, c),
+             (ε_char, ε_word) := noise_pred.forward(x, t, c),
+             β_t := beta[t] * noise_sched.forward(t, h),
+             α := 1 - β_t,
+             α_prev := α_{t-1},
+             σ := SQRT(β_t),
+             μ_char := (x[...,0] - σ * ε_char) / SQRT(α),
+             μ_word := (x[...,1] - σ * ε_word) / SQRT(α),
+             x_char := μ_char + σ * RANDN(SHAPE(x_char)),
+             x_word := μ_word + σ * RANDN(SHAPE(x_word)),  
+             x := STACK([x_char, x_word], axis=-1)
+       },
+       (x_char, x_word)
+  )
+
+  # Training objective  
+  DEF loss(x_0 : TensorLike[[VocabSize, 2]],
+           c : TensorLike[HiddenSize],
+           ε : TensorLike[[VocabSize, 2]]) -> TensorLike[] := (
+    LET t ~ Uniform({1,...,T}), 
+        x_t := SQRT(α_t[t]) * x_0 + SQRT(1 - α_t[t]) * ε,
+        (ε_char, ε_word) := noise_pred.forward(x_t, t, c),
+        loss_char := CrossEntropy(ε_char, ε[...,0]),
+        loss_word := CrossEntropy(ε_word, ε[...,1])
+    IN loss_char + loss_word
+  )
+  
+  # Model properties and assumptions
+  [t < T => β_t < β_{t+1}] # Monotonically increasing noise schedule
+
+  [∀x_0, ∀c, ∀ε .
+    LET t ~ Uniform({1,...,T}),
+        x_t := SQRT(α_t[t]) * x_0 + SQRT(1 - α_t[t]) * ε
+    IN p(x_0 | x_t, c) = q(x_t | x_0, c) * p(x_0 | c) / p(x_t | c)  
+  ] # Posterior matches product of diffusion & prior
+
+  [∀x_0 : TensorLike[[VocabSize, 2]], ∀c : TensorLike[HiddenSize] .
+    LET (x_char, x_word) := sample(T, RANDN(SHAPE(x_0)), c)  
+    IN (x_char, x_word) ≈ p(x_0 | c) AS NumSteps -> Inf
+  ] # Samples converge to data distribution
+    
+  RETURN {
+    sample,  
+    loss,
+    transformer.forward AS encode # Transformer as encoder  
+  }
+}
+
+
+
+
+
+STRUCTURE DiffusionTransformerPlusPlus {
+  PARAMETERS {
+    VocabSize : Int # Size of the token vocabulary
+    LatentDim : Int # Dimensionality of the latent space
+    NumLayers : Int # Number of transformer layers
+    NumHeads : Int # Number of attention heads
+    HiddenDim : Int # Size of the hidden states
+    T : Int # Number of diffusion timesteps
+  }
+
+  NOTATION {
+    InvertibleTransformer(dim, heads) := {
+      DEF layers := [
+        InvertibleTransformerLayer(dim, heads) FOR _ : RANGE(NumLayers)
+      ]
+      RETURN InvertibleSequential(layers)
+    }
+  }
+
+  DEF embedding := Embedding(VocabSize, LatentDim)
+  DEF flow := InvertibleTransformer(LatentDim, NumHeads)
+  DEF posterior := AmortizedPosterior(LatentDim, HiddenDim)
+  DEF noise_pred := HierarchicalNoisePred(HiddenDim, VocabSize)
+  DEF noise_sched := NoiseScheduler(LatentDim, HiddenDim)
+  
+  DEF diffusion(x_0, c, num_steps) := {
+    LET x := x_0,
+        timesteps := RANGE(1, T+1)
+    IN FOR t : timesteps {
+         LET z_t := flow(x, c),
+             β_t := noise_sched(t, z_t),
+             α_t := 1 - β_t,
+             ε ~ N(0, I),
+             x := SQRT(α_t) * x + SQRT(1 - α_t) * ε
+       },
+       x    
+  }
+  
+  DEF denoise(x_t, c, t) := {
+    LET z_t := flow(x_t, c),
+        (ε_char, ε_word) := noise_pred(z_t, t, c),
+        σ_t := SQRT(noise_sched(t, z_t)),
+        μ_char := (x_t[...,0] - σ_t * ε_char) / SQRT(1 - CUMPROD(noise_sched(i, flow(x_t, c))) FOR i : RANGE(1, t+1)),
+        μ_word := (x_t[...,1] - σ_t * ε_word) / SQRT(1 - CUMPROD(noise_sched(i, flow(x_t, c))) FOR i : RANGE(1, t+1))
+    IN STACK([μ_char, μ_word], axis=-1)
+  }
+
+  DEF forward(x_0, c) := {
+    LET x_t := diffusion(x_0, c, T),
+        z_t := flow(x_t, c),
+        q_posterior := posterior(x_0, z_t),
+        p_prior := N(0, I),
+        kl_div := KL(q_posterior || p_prior)
+    IN kl_div
+  }
+
+  DEF sample(c, num_steps) := {
+    LET x_T ~ N(0, I),
+        timesteps := REVERSE(RANGE(1, T+1))
+    IN FOR t : timesteps {
+         LET x_t := denoise(x_T, c, t),
+             x_T := x_t
+       },
+       x_0    
+  }
+
+  DEF compress() := {
+    DEF compressed_flow := DistillTransformer(flow, LatentDim, NumHeads / 2)
+    DEF quantized_embedding := QuantizeEmbedding(embedding, 8)
+    DEF pruned_posterior := PruneAmortizedPosterior(posterior, 0.5)
+    DEF simplified_noise_pred := SimplifyHierarchicalNoisePred(noise_pred)
+    DEF compressed_noise_sched := CompressNoiseScheduler(noise_sched)
+    
+    RETURN DiffusionTransformerPlusPlus(
+      VocabSize, LatentDim, NumLayers, 
+      NumHeads / 2, HiddenDim, T,
+      compressed_flow, pruned_posterior,
+      simplified_noise_pred, compressed_noise_sched,
+      quantized_embedding
+    )
+  }
+
+  [∀ x_0, c :
+    LET x_t := diffusion(x_0, c, T),
+        x_0_hat := sample(c, T) 
+    IN x_0 ≈ x_0_hat
+  ] # Reconstruction property
+  
+  [∀ x_0, c, t < T :  
+    LET x_t := diffusion(x_0, c, t),
+        x_t_hat := denoise(x_t, c, t)
+    IN x_t_hat ≈ x_0
+  ] # Denoising property
+
+  RETURN {
+    forward,
+    sample,
+    compress
+  }
+}

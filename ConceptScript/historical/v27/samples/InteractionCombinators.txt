@@ -1,0 +1,112 @@
+CONCEPT InteractionCombinators {
+  LANGUAGE {
+    TYPE Symbol = String
+    TYPE Cell = (Symbol, [Port])
+    TYPE Port = (Cell, Nat)
+    TYPE Net = ([Cell], [Port], [(Port, Port)])
+
+    FUNC Arity : Symbol -> Nat
+    FUNC Interaction : (Symbol, Symbol) -> Net?
+    PRED Reduced : Net -> Bool
+
+    PRED Reduces : (Net, InteractionSystem, Net) -> Bool
+    PRED ReducesInMany : (Net, InteractionSystem, Net) -> Bool
+    
+    AXIOM PortCount = FORALL (s: Symbol) (c: Cell) (ps: [Port]) .
+      (c.0 = s AND c.1 = ps) IMPLIES LENGTH(ps) = Arity(s) + 1
+
+    AXIOM PortDistinct = FORALL (c: Cell) (ps: [Port]) (i: Nat) (j: Nat) .
+      (c in Net.0 AND (c, i) in ps AND (c, j) in ps AND i != j) IMPLIES (c, i) != (c, j)
+
+    AXIOM Symmetry = FORALL (a: Symbol) (b: Symbol) (α: Net) (β: Net) .
+      Interaction(a, b) = α AND Interaction(b, a) = β IMPLIES α = Flip(β)
+
+    AXIOM Determinism = FORALL (a: Symbol) (b: Symbol) (α: Net) (β: Net) .
+      Interaction(a, b) = α AND Interaction(a, b) = β IMPLIES α = β
+  }
+
+  NOTATION {
+    INFIX --[_]--> : (Net, InteractionSystem, Net) -> Bool = Reduces
+    INFIX --*[_]--> : (Net, InteractionSystem, Net) -> Bool = ReducesInMany
+    INFIX --IC--> : (Net, Net) -> Bool = Reduces(?, InteractionCombinatorsSystem, ?)
+    INFIX --*IC--> : (Net, Net) -> Bool = ReducesInMany(?, InteractionCombinatorsSystem, ?)
+    𝒯(_, _) : (InteractionSystem, InteractionSystem) -> Set = 
+      (S, T) => {t: Net -> Net | Equivariant(t, S, T) AND FORALL net . Reduced(t(net), T) IFF Reduced(net, S)}
+    <_ ↦ _>_ : (Cell, Net, Net) -> Net = Substitution
+  }
+
+  STRUCTURES {
+    STRUCTURE InteractionSystem {
+      FIELD alphabet : Set[Symbol] 
+      FIELD rules : Map[(Symbol, Symbol), Net]
+
+      AXIOM WellFormedRules = FORALL ((a, b) ↦ α) in rules . 
+        a in alphabet AND b in alphabet AND Reduced(α)
+        
+      AXIOM Totality = FORALL (a: Symbol) (b: Symbol) .
+        a in alphabet AND b in alphabet IMPLIES ((a, b) in rules.Keys OR (b, a) in rules.Keys)
+    }
+  }
+
+  TRANSFORMERS {  
+    TACTIC Substitution : (net: Net, c: Cell, sub: Net) -> Net =
+      MATCH net WITH
+      | (cs ∪ {c}, ps, ws) -> (cs ∪ sub.0, <c ↦ sub.1>ps, <c ↦ sub.2>ws)
+  }
+
+  PROOFS {
+    PROOF ChurchRosser : FORALL (S: InteractionSystem) (net: Net) .
+      (net --*[S]--> &1 AND net --*[S]--> &2) IMPLIES (EXISTS (result: Net) . &1 --*[S]--> result AND &2 --*[S]--> result)  
+    {
+      GIVEN S: InteractionSystem, net: Net
+      ASSUME net1: net --*[S]--> &1, net2: net --*[S]--> &2
+
+      LET LocalConfluence = FORALL (net_: Net) .
+        (net_ --[S]--> net_1 AND net_ --[S]--> net_2) IMPLIES 
+        (EXISTS (result: Net) . net_1 --[S]--> result AND net_2 --[S]--> result)
+
+      PROVE EXISTS (result: Net) . &1 --*[S]--> result AND &2 --*[S]--> result:
+        REWRITE &1 = net_1 --[S]--> ... --[S]--> result1
+        REWRITE &2 = net_1 --[S]--> ... --[S]--> net_k --[S]--> ... --[S]--> result2
+        result1 = result2 BY Induction, LocalConfluence
+        
+      PROVE UNIQUE result: result = &1 --*[S]--> ? AND &2 --*[S]--> ?:  
+        REWRITE &1 = net_1 --[S]--> ... --[S]--> result  
+        REWRITE &2 = net_1 --[S]--> ... --[S]--> net_k --[S]--> ... --[S]--> result
+
+        ASSUME &1 --*[S]--> ?1, &2 --*[S]--> ?2
+
+        REWRITE ?1 = result --[S]--> ... --[S]--> ?1
+        REWRITE ?2 = result --[S]--> ... --[S]--> ?2
+
+        ?1 = ?2 BY Induction, Determinism
+      
+      QED
+    }
+
+    PROOF TranslationTheorem : FORALL (S: InteractionSystem) .
+      EXISTS (T: 𝒯(S, InteractionCombinatorsSystem)) . FaithfullyRepresents(T)
+    {  
+      GIVEN S: InteractionSystem
+      LET C, D, E, #p, #q, $p, $q = InteractionCombinatorsSystem.alphabet
+
+      DEFINE 𝒯: 𝒯(S, InteractionCombinatorsSystem) {
+        ON a: S.alphabet 
+          𝒯(a) = TreeOf(CodesOf({& | (a, b) ↦ & in S.rules}))
+        ON net: Net
+          𝒯(net) = <a ↦ 𝒯(a)>net
+      } 
+
+      PROVE Equivariant(𝒯):
+        LET net: Net, result: Net, net --[S]--> result  
+        SHOW 𝒯(net) --*IC--> 𝒯(result) USING DecodingSimulation
+
+      PROVE FORALL net: Net . Reduced(𝒯(net), InteractionCombinatorsSystem) IFF Reduced(net, S) 
+        USING DecodingSimulation, Definitions
+
+      HENCE FaithfullyRepresents(𝒯)
+
+      QED
+    }
+  }
+}

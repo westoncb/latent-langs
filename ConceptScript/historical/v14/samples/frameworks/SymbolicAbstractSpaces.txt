@@ -1,0 +1,366 @@
+CONCEPT SymbolicAbstractSpaces {
+  LANGUAGE {
+    type Space 
+    type Morphism = Space -> Space
+    type Invariant = Morphism -> Prop
+    type Sym = Const(Space) | Var(ℕ) | Binary(Sym, Sym) | Unary(Sym)
+    
+    S := Abstract(Sym) | S + S | S × S | S ⊗ S | S - S | S / S | S ∘ S | 0 | 1 
+    φ := id | φ + φ | φ × φ | φ ⊗ φ | φ ∘ φ | φ⁻¹ | D(φ)
+    I := I ∧ I | I ∨ I | φ ⟼ I | ∀φ. I | ∃φ. I
+    
+    notation "S + T" = Binary(S: Sym, T: Sym)
+    notation "φ ∘ ψ" = Binary(φ: Morphism, ψ: Morphism)
+    notation "D(φ)" = Unary(φ: Morphism)                ; Symbolic derivative
+    notation "φ ⟼ I" = λφ. I(φ)
+    
+    func Object(S: Space, σ: Structure): Prop
+    func Arrow(φ: Morphism, I: Invariant): Prop
+    pred Hom(S, T: Space) = Σ(φ: S -> T). ∀ψ: S -> S. I(ψ) ⇒ I(φ ∘ ψ)
+    pred Concrete(S: Space) = ∃(X: Set). S = Abstract(X)
+    
+    axiom Functoriality(φ: S -> T, ψ: T -> U):
+      D(ψ ∘ φ) = D(ψ) ∘ φ + ψ ∘ D(φ)
+  }
+  
+  STRUCTURE {
+    SymbolicConstructions: {
+      Abstract(E) with embed: Sym -> E ; Symbolic expressions 
+      S + T with inj₁, inj₂             ; Formal sum
+      S × T with proj₁, proj₂           ; Formal product
+      S - T with [_, _]                 ; Formal difference  
+      S / T with quo(_)                 ; Formal quotient
+    }
+    
+    InvariantConstructions: {
+      0 ⟼ I                             ; Invariant under constant morphism
+      (φ + ψ) ⟼ (I ∧ J)                 ; Invariant under sum  
+      (φ ∘ ψ) ⟼ I                       ; Invariant under composition
+      D(φ) ⟼ I                          ; Invariant under derivative
+      ∀(φ: S ≅ T). I                    ; Invariant under isomorphism
+    }
+    
+    DifferentialStructure: {
+      D: Morphism -> Morphism
+      D(id) = 0
+      D(φ + ψ) = D(φ) + D(ψ) 
+      D(φ ∘ ψ) = D(φ) ∘ ψ + φ ∘ D(ψ)
+      D(D(φ)) = 0                       ; Integrability condition
+    }
+  }
+  
+  PROOFS {
+    theorem EmbeddingFunctor(X, Y: Set, f: X -> Y):
+      ⊢ Functor(Abstract ∘ Embed(f))
+    {
+      let F = Abstract ∘ Embed(f)
+      suffices to show
+        F(X) = Abstract(Embed(X)),
+        F(g: X -> Y) = Abstract(Embed(g)),
+        F(id) = id, 
+        F(g ∘ h) = F(g) ∘ F(h)  
+      ; Omitted: check functorial axioms
+    }
+    
+    tactic DifferentialInvariance(φ: S -> T, I: Invariant): 
+      Arrow(φ, I) ⊢ Arrow(D(φ), I)
+    {
+      assume Arrow(φ, I)
+      suffices to show ∀ψ: S -> S. I(ψ) ⇒ I(D(φ) ∘ ψ)
+      {
+        assume I(ψ)
+        have I(φ ∘ ψ)              ; By Arrow(φ, I)
+        have D(φ ∘ ψ) = D(φ) ∘ ψ + φ ∘ D(ψ)   ; Functoriality  
+        have I(D(φ) ∘ ψ) ∧ I(φ ∘ D(ψ))         ; Linearity of I
+        hence I(D(φ) ∘ ψ)            
+      }
+    }
+    
+    theorem QuotientInvariance(S: Space, ~: Equivalence, I: Invariant):
+      (∀ φ: S -> S. (∀ a, b: S. a ~ b ⇒ φ(a) ~ φ(b)) ⇒ Arrow(φ, I)) 
+      ⊢ ∀(q: S / ~ -> S / ~). Arrow(q, I)
+    {
+      assume ∀ φ: S -> S. (∀ a, b: S. a ~ b ⇒ φ(a) ~ φ(b)) ⇒ Arrow(φ, I)
+      let Q = S / ~
+      assume q: Q -> Q
+      suffices to show ∀(ψ: Q -> Q). I(ψ) ⇒ I(q ∘ ψ)
+      {
+        let ψ: Q -> Q and assume I(ψ)
+        have ∀ a, b: S. a ~ b ⇒ ψ(quo(a)) = ψ(quo(b))  ; By I(ψ)
+        so ∃(φ: S -> S). ∀(a: S). φ(a) ~ ψ(quo(a))
+        have ∀ a, b: S. a ~ b ⇒ φ(a) ~ φ(b) 
+        so Arrow(φ, I)              ; By assumption
+        have ∀ a: S. q(ψ(quo(a))) = q(quo(φ(a)))
+        hence I(q ∘ ψ)              
+      }        
+    }
+      
+    theorem SymbolicDifferentiationTheorem(φ: Sym, I: Invariant):
+      (∀ ψ: Sym. determines(φ, ψ) ⇒ Arrow(D(ψ), I))
+      ⊢ Arrow(D(φ), I)  
+    {
+      assume ∀ ψ: Sym. determines(φ, ψ) ⇒ Arrow(D(ψ), I)
+      let ψ: Sym such that determines(φ, ψ)
+      have Arrow(D(ψ), I)        ; By assumption
+      DifferentialInvariance(ψ, I)
+      hence Arrow(D(ψ), I)
+      so Arrow(D(φ), I)          ; As φ determines ψ
+    }
+  }
+}
+
+This Concept, SymbolicAbstractSpaces, brings together ideas from abstract spaces, differential structures, and symbolic computation:
+
+It defines a language for constructing spaces using symbolic expressions, with operations like formal sums, products, differences and quotients.
+It equips spaces with an invariant-based notion of structure-preserving maps, similar to AbstractSpaces.
+It includes a differential structure compatible with the symbolic space constructions, allowing differentiation of symbolic morphism expressions.
+Proofs explore properties like functoriality of symbol embedding, invariance of differential operators and quotient maps, and the transfer of invariance from concrete to symbolic morphisms.
+
+The intent is to provide a framework for reasoning about abstract spaces and their morphisms in a symbolic way, automatically endowing symbolically defined mappings with properties like differentiability. This could enable modeling of e.g. differential equations, dynamical systems, and optimization problems over abstract spaces in an algebraic way.
+Let me know if you would like me to elaborate on or refine any part of this! The framework is quite flexible and can likely be adapted to many domains.
+
+
+
+
+
+
+
+
+
+
+
+METALANGUAGE AbstractSpaceTheory {
+  type Space
+  type Morphism
+  type Invariant
+  type Sym
+  
+  func Id(Space): Morphism
+  func Comp(Morphism, Morphism): Morphism
+  func Sum(Space, Space): Space
+  func Prod(Space, Space): Space
+  func Tensor(Space, Space): Space
+  func Diff(Space, Space): Space
+  func Quot(Space, Space): Space
+  func Inv(Morphism): Morphism
+  func D(Morphism): Morphism
+  func Const(Space): Sym
+  func Var(ℕ): Sym
+  func Binary(Sym, Sym): Sym
+  func Unary(Sym): Sym
+  func Abstract(Sym): Space
+  
+  pred Hom(Space, Space, Morphism)
+  pred Iso(Space, Space)
+  pred Concrete(Space)
+  pred Invariant(Morphism, Invariant)
+  
+  notation "φ: S → T" = Hom(S, T, φ)
+  notation "S ≅ T" = Iso(S, T)
+  notation "S + T" = Sum(S, T)
+  notation "S × T" = Prod(S, T)  
+  notation "S ⊗ T" = Tensor(S, T)
+  notation "S - T" = Diff(S, T)
+  notation "S / T" = Quot(S, T)
+  notation "φ⁻¹" = Inv(φ)
+  notation "D(φ)" = D(φ)
+  notation "⟨S⟩" = Abstract(S)
+  notation "φ ⟼ I" = Invariant(φ, I)
+  
+  axiom IdLeft(S: Space, φ: Morphism):
+    φ: S → T ⊢ Id(S) ∘ φ = φ
+    
+  axiom IdRight(S: Space, φ: Morphism):  
+    φ: S → T ⊢ φ ∘ Id(T) = φ
+    
+  axiom CompAssoc(φ: Morphism, ψ: Morphism, θ: Morphism):
+    (φ: S → T) ∧ (ψ: T → U) ∧ (θ: U → V) ⊢ (φ ∘ ψ) ∘ θ = φ ∘ (ψ ∘ θ)
+    
+  axiom SumUniversal(S: Space, T: Space, ι₁: Morphism, ι₂: Morphism):
+    (ι₁: S → (S + T)) ∧ (ι₂: T → (S + T)) ⊢ 
+      ∀ U: Space, φ₁: S → U, φ₂: T → U. 
+        ∃! ψ: (S + T) → U. (ψ ∘ ι₁ = φ₁) ∧ (ψ ∘ ι₂ = φ₂)  
+        
+  axiom ProdUniversal(S: Space, T: Space, π₁: Morphism, π₂: Morphism):
+    (π₁: (S × T) → S) ∧ (π₂: (S × T) → T) ⊢
+      ∀ U: Space, φ₁: U → S, φ₂: U → T.
+        ∃! ψ: U → (S × T). (π₁ ∘ ψ = φ₁) ∧ (π₂ ∘ ψ = φ₂)
+        
+  axiom TensorSymmetric(S: Space, T: Space):  
+    S ⊗ T ≅ T ⊗ S
+    
+  axiom TensorAssociative(S: Space, T: Space, U: Space):
+    (S ⊗ T) ⊗ U ≅ S ⊗ (T ⊗ U)
+    
+  axiom DiffUniversal(S: Space, T: Space, ι: Morphism, π: Morphism):  
+    (ι: S → (S - T)) ∧ (π: (S - T) → T) ⊢
+      ∀ U: Space, φ: S → U, ψ: U → T. 
+        ∃! θ: (S - T) → U. (θ ∘ ι = φ) ∧ (ψ ∘ θ = π)
+        
+  axiom QuotUniversal(S: Space, T: Space, π: Morphism):
+    π: S → (S / T) ⊢ 
+      ∀ U: Space, φ: S → U. (∀ ψ: T → S. φ ∘ ψ = 0) ⇒ ∃! θ: (S / T) → U. θ ∘ π = φ
+      
+  axiom InvIsomorphism(φ: Morphism):  
+    (φ: S → T) ⊢ (φ⁻¹: T → S) ⇔ (S ≅ T)
+    
+  axiom DFunctorial(φ: Morphism, ψ: Morphism):
+    D(ψ ∘ φ) = D(ψ) ∘ φ + ψ ∘ D(φ)
+    
+  infer AbstractionHom(E: Set, e: E → Space):
+    ⊢ ∀ S: Space. ∃! φ: ⟨E⟩ → S. φ ∘ e = idₑ
+    
+  infer AbstractionIso(E: Set, e: E → Space, e': E → Space):  
+    (∀ x: E. e(x) = e'(x)) ⊢ ⟨E⟩ ≅ ⟨E⟩
+    
+  infer ConcreteRepresentation(S: Space):
+    Concrete(S) ⊢ ∃ E: Set. S ≅ ⟨E⟩
+    
+  infer InvariantUnderIso(S: Space, T: Space, I: Invariant):
+    (S ≅ T) ⊢ (∀ φ: S → S. I(φ)) ⇔ (∀ ψ: T → T. I(ψ))  
+}
+
+This metalanguage provides a rich set of primitives for constructing and reasoning about abstract spaces and morphisms between them. It includes:
+
+Basic types for Spaces, Morphisms, Invariants, and Symbolic expressions (Sym).
+Functions for constructing spaces via sums, products, tensors, differences, quotients, and abstraction from symbolic expressions.
+Functions for constructing morphisms via identity, composition, inversion, and differentiation.
+Predicates for expressing homomorphisms, isomorphisms, concreteness, and invariance under morphisms.
+Notations for common constructions and properties, improving readability.
+Axioms capturing the basic categorical structure of spaces and morphisms, including identity, composition, and universal properties of sums, products, differences, and quotients.
+Axioms for the tensor product, capturing its symmetry and associativity.
+An axiom for the functoriality of the differential operator on morphisms.
+Inference rules for reasoning about abstraction spaces, concrete representations, and invariants under isomorphism.
+
+This metalanguage provides a foundation for expressing and deriving a wide range of theorems and constructions in the theory of abstract spaces. It captures the essential structure of categories, with additional primitives for differential structure and invariants.
+
+
+
+
+
+
+THEORY FreeVectorSpaceTheory : AbstractSpaceTheory {
+
+  structure VectorSpace {
+    F: Space      ; The base field
+    V: Space      ; The vector space
+    +: V × V → V  ; Vector addition
+    *: F × V → V  ; Scalar multiplication
+    0: V          ; Zero vector
+  }
+
+  structure FreeVectorSpace {
+    F: Space
+    B: Set
+    V: VectorSpace(F)
+    i: B → V.V
+  }
+  
+  theorem UniversalProperty(F: FreeVectorSpace(F, B))
+  {
+    ∀ W: VectorSpace(F), f: B → W.V.
+      ∃! φ: F.V → W.V. 
+        (φ: F.V → W.V) ∧ (∀ b: B. φ(F.i(b)) = f(b))
+  }
+  
+  theorem BasisIndependence(F: FreeVectorSpace(F, B))
+  {
+    ∀ n: ℕ, b₁ ... bₙ: B, c₁ ... cₙ: F.
+      (F.i(b₁) + ... + F.i(bₙ) = 0) ∧ (c₁ * F.i(b₁) + ... + cₙ * F.i(bₙ) = 0)
+      ⇒ (c₁ = 0) ∧ ... ∧ (cₙ = 0)
+  }
+  
+  theorem DimensionProperty(F: FreeVectorSpace(F, B))
+  {
+    Concrete(F.F) ∧ Finite(B) ⊢ 
+      ∀ W: VectorSpace(F).
+        Iso(F.V, W) ⇔ (∃ A ⊆ W.V. Basis(W, A) ∧ |A| = |B|)
+  }
+  
+  proof UniversalArrow(F: FreeVectorSpace(F, B), i := F.i): 
+    ∀ W: VectorSpace(F), f: B → W.V.
+      ∃! φ: F.V → W.V. (φ: F.V → W.V) ∧ (∀ b: B. φ(i(b)) = f(b))
+  {
+    assume W: VectorSpace(F), f: B → W.V
+    
+    define φ(v: F.V) = match v {
+      | i(b) => f(b)
+      | u + v => φ(u) + φ(v) 
+      | c * v => c * φ(v)
+    }
+    
+    have φ: F.V → W.V
+    {
+      φ(0) = φ(0 * i(b)) = 0 * φ(i(b)) = 0 * f(b) = 0
+      φ(u + v) = φ(u) + φ(v)  ; By definition
+      φ(c * v) = c * φ(v)     ; By definition
+    }
+    
+    have ∀ b: B. φ(i(b)) = f(b)  ; By definition
+    
+    suffices to show 
+      ∀ ψ: F.V → W.V. (∀ b: B. ψ(i(b)) = f(b)) ⇒ ψ = φ
+    {  
+      assume ψ: F.V → W.V, ∀ b: B. ψ(i(b)) = f(b)
+      
+      let v: F.V
+      suffices to show ψ(v) = φ(v) by induction on v
+      {
+        case i(b) => ψ(i(b)) = f(b) = φ(i(b))
+        case u + v => 
+          ψ(u + v) = ψ(u) + ψ(v) = φ(u) + φ(v) = φ(u + v)
+        case c * v =>  
+          ψ(c * v) = c * ψ(v) = c * φ(v) = φ(c * v)
+      }
+    }
+  }
+  
+  proof DimensionInvariance(F: FreeVectorSpace(F, B), G: FreeVectorSpace(F, C)):
+    Finite(B) ∧ (|B| = |C|) ⊢ Iso(F.V, G.V)
+  {  
+    assume Finite(B), |B| = |C|
+    
+    let i := F.i, j := G.j 
+    
+    have ∃ f: B ≅ C ; Bijection between finite sets of same cardinality
+    let f: B ≅ C
+    
+    define φ(v: F.V) = match v {
+      | i(b) => j(f(b))
+      | u + v => φ(u) + φ(v)
+      | c * v => c * φ(v)  
+    }
+    
+    have φ: F.V → G.V ; Similar to above
+    
+    define ψ(w: G.V) = match w {
+      | j(c) => i(f⁻¹(c))
+      | u + v => ψ(u) + ψ(v)
+      | c * v => c * ψ(v)
+    }
+    
+    have ψ: G.V → F.V ; Similar to above
+    
+    have φ ∘ ψ = idG ∧ ψ ∘ φ = idF 
+    {
+      ∀ b: B. φ(ψ(j(f(b)))) = φ(i(b)) = j(f(b))
+      ∀ c: C. ψ(φ(i(f⁻¹(c)))) = ψ(j(c)) = i(f⁻¹(c))
+      ; And similarly for sums and scalar multiples
+    }
+    
+    hence F.V ≅ G.V by definition
+  }  
+}
+
+In this theory, we:
+
+Define structures for general vector spaces and free vector spaces over a given base field and basis set.
+State the universal property of free vector spaces: that linear maps from a free vector space are uniquely determined by their action on basis vectors.
+State the basis independence property: that the representation of the zero vector as a linear combination of basis vectors is unique.
+State a dimension property: that a free vector space over a finite basis is isomorphic to any vector space with a basis of the same cardinality.
+Prove the universal property by explicitly constructing the unique linear map and showing its uniqueness.
+Prove the dimension invariance property: that free vector spaces over bases of the same finite cardinality are isomorphic.
+
+The proofs make use of the inductive structure of free vector spaces, matching on the different ways vectors can be constructed (basis vectors, sums, scalar multiples). They also use the notion of bijections between finite sets to establish isomorphisms.
+This theory demonstrates how the AbstractSpaceTheory metalanguage can be used to express and reason about non-trivial constructions and properties in linear algebra. The universal property and dimension invariance are fundamental results that capture the essence of free vector spaces.
+Of course, this is just a starting point, and there are many more concepts and theorems in linear algebra that could be formalized in this way, such as linear independence, bases, quotient spaces, dual spaces, tensor products, etc. But I hope this gives a flavor of the kinds of theories that can be developed in the AbstractSpaceTheory metalanguage.

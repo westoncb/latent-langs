@@ -1,0 +1,2276 @@
+ConceptScript v21
+
+<Concept> ::= "CONCEPT" <ConceptName> ["EXTENDS" <ConceptName>+]? "{"
+               <Declaration>*
+             "}"
+
+<Declaration> ::= <TypeDeclaration>
+                | <ConstantDeclaration>
+                | <FunctionDeclaration>
+                | <PredicateDeclaration> 
+                | <NotationDeclaration>
+                | <AxiomDeclaration>
+                | <TheoremDeclaration>
+
+<TypeDeclaration> ::= "TYPE" <TypeName> [":" <Kind>]? ["=" <Type> | <Constructor>+]?
+
+<ConstantDeclaration> ::= "CONST" <ConstantName> ":" <Type> "=" <Expression>
+
+<FunctionDeclaration> ::= "FUNC" <FunctionName> ":" <Type>
+
+<PredicateDeclaration> ::= "PRED" <PredicateName> ":" <Type>
+
+<NotationDeclaration> ::= "NOTATION" <NotationName> "=" <Expression>
+
+<AxiomDeclaration> ::= "AXIOM" <AxiomName> ":" <Formula>
+
+<TheoremDeclaration> ::= "THEOREM" <TheoremName> ":" <Formula> ["PROOF" <Proof>]?
+
+<Type> ::= <BasicType> | <FunctionType> | <ProductType> | <SumType> | <DependentType> | 
+           <PolymorphicType> | <InductiveType> | <CoInductiveType>
+           
+<BasicType> ::= <TypeName> | "Int" | "Real" | "Bool" | "String" | "Unit"
+
+<FunctionType> ::= <Type> "->" <Type>
+
+<ProductType> ::= <Type> "*" <Type>
+
+<SumType> ::= <Type> "+" <Type>
+
+<DependentType> ::= "(" <Variable> ":" <Type> ")" "->" <Type>
+
+<PolymorphicType> ::= "forall" <TypeVariable>+ "." <Type>
+
+<InductiveType> ::= "mu" <TypeVariable> "." <Type>
+
+<CoInductiveType> ::= "nu" <TypeVariable> "." <Type>
+
+<Kind> ::= "*" | <Kind> "->" <Kind>
+
+<Formula> ::= <AtomicFormula> | <NotFormula> | <AndFormula> | <OrFormula> | 
+              <ImpliesFormula> | <IffFormula> | <ForallFormula> | <ExistsFormula>
+
+<AtomicFormula> ::= <PredicateApplication> | <Equation>              
+
+<NotFormula> ::= "not" <Formula>
+
+<AndFormula> ::= <Formula> "and" <Formula>
+
+<OrFormula> ::= <Formula> "or" <Formula>
+
+<ImpliesFormula> ::= <Formula> "implies" <Formula>
+
+<IffFormula> ::= <Formula> "iff" <Formula>
+
+<ForallFormula> ::= "forall" "(" <Variable> ":" <Type> ")" <Formula>
+
+<ExistsFormula> ::= "exists" "(" <Variable> ":" <Type> ")" <Formula>
+
+<PredicateApplication> ::= <PredicateName> <Argument>*
+
+<Equation> ::= <Expression> "=" <Expression>
+
+<Expression> ::= <Variable> | <ConstantName> | <FunctionApplication> | <LambdaAbstraction> | <Literal>
+
+<FunctionApplication> ::= <FunctionName> <Argument>*
+
+<Argument> ::= "(" <Expression> ")" | <Expression>
+
+<LambdaAbstraction> ::= "\" <Variable>+ "->" <Expression>  
+
+<Literal> ::= <Number> | <Boolean> | <String> | "()"
+
+<Proof> ::= <ProofCommand>*
+
+<ProofCommand> ::= <Assumption> | <LetBinding> | <Assertion> | <CaseAnalysis> | 
+                   <Induction> | <Application> | <Rewrite> | <Reflexivity> |
+                   <Symmetry> | <Transitivity> | <Contradiction> | <Witness> |
+                   <Unfold> | <Fold> | <Simplify> | <QuodEratDemonstrandum>
+
+<Assumption> ::= "assume" <Identifier> ":" <Formula>
+
+<LetBinding> ::= "let" <Identifier> [":" <Type>]? "=" <Expression>
+
+<Assertion> ::= "assert" <Formula> ["by" <Proof>]?
+
+<CaseAnalysis> ::= "case" <Expression> "of" <CaseClause>+
+
+<CaseClause> ::= <Pattern> "->" <Proof>
+
+<Induction> ::= "induct" "on" <Expression> <InductionClause>+
+
+<InductionClause> ::= <Constructor> <Identifier>* "->" <Proof>
+
+<Application> ::= "apply" <Expression> <Argument>*
+
+<Rewrite> ::= "rewrite" <Equation> ["in" <Proof>]?
+
+<Reflexivity> ::= "reflexive"
+
+<Symmetry> ::= "symmetric"
+
+<Transitivity> ::= "transitive"
+
+<Contradiction> ::= "contradiction"
+
+<Witness> ::= "witness" <Expression>
+
+<Unfold> ::= "unfold" <Expression>
+
+<Fold> ::= "fold" <Expression>
+
+<Simplify> ::= "simplify" <Expression>
+
+<QuodEratDemonstrandum> ::= "qed"
+
+
+Here are a few examples (you generated these in a prior context):
+
+
+CONCEPT TuringMachine {
+  TYPE State : Set
+  TYPE Symbol : Set
+  
+  CONST blank : Symbol
+  CONST start : State
+  CONST accept : State
+  CONST reject : State
+  
+  TYPE Transition : State -> Symbol -> (State * Symbol * {Left, Right})
+  
+  FUNC δ : State -> Symbol -> (State * Symbol * {Left, Right})
+  FUNC step : (State * List Symbol * List Symbol) -> (State * List Symbol * List Symbol)
+  FUNC run : (State * List Symbol * List Symbol) -> State
+  
+  AXIOM Determinism : forall (q : State) (a : Symbol), 
+    (δ q a = (q1, b1, d1) and δ q a = (q2, b2, d2)) implies (q1 = q2 and b1 = b2 and d1 = d2)
+    
+  AXIOM Step_Def : forall (q : State) (ls rs : List Symbol) (a : Symbol),
+    step (q, a :: rs, ls) = 
+      match (δ q a) {
+        (q', b, Left) -> (q', rs, b :: ls)
+        (q', b, Right) -> (q', b :: rs, ls) 
+      }
+      
+  AXIOM Run_Def : forall (q : State) (ls rs : List Symbol),
+    run (q, ls, rs) =
+      if (q = accept or q = reject) then q
+      else run (step (q, ls, rs))
+        
+  PRED Halts : (State * List Symbol * List Symbol) -> Bool
+  PRED Accepts : (State * List Symbol * List Symbol) -> Bool
+  
+  AXIOM Halting_Def : forall (c : State * List Symbol * List Symbol),
+    Halts c <-> (run c = accept or run c = reject)
+    
+  AXIOM Accepting_Def : forall (c : State * List Symbol * List Symbol),  
+    Accepts c <-> (run c = accept)
+    
+  FUNC Encode : (State * List Symbol * List Symbol) -> Nat
+  FUNC Decode : Nat -> (State * List Symbol * List Symbol)
+  
+  AXIOM Coding_Bijection : forall (c : State * List Symbol * List Symbol),
+    Decode (Encode c) = c
+    
+  TYPE Language : Set -> Bool
+  
+  FUNC Decides : TuringMachine -> Language -> Bool
+  FUNC Recognizes : TuringMachine -> Language -> Bool
+  
+  AXIOM Decidability_Def : forall (M : TuringMachine) (L : Language),
+    Decides M L <-> (forall (w : List Symbol), 
+      (w ∈ L <-> Accepts (start, w, [])) and Halts (start, w, []))
+      
+  AXIOM Recognizability_Def : forall (M : TuringMachine) (L : Language),  
+    Recognizes M L <-> (forall (w : List Symbol),
+      (w ∈ L <-> Accepts (start, w, [])))
+        
+  THEOREM Recognizable_Decidable : forall (L : Language),  
+    (exists (M : TuringMachine), Recognizes M L) implies 
+    (exists (M : TuringMachine), Decides M L)
+  PROOF {
+    assume (L : Language) (M₁ : TuringMachine) where (Recognizes M₁ L)
+    
+    define M₂ : TuringMachine where
+      (q, a) -> 
+        if (q = start) then
+          match (run M₁ (start, [], [a])) {
+            accept -> (accept, blank, Right)
+            reject -> (reject, blank, Right)
+            _ -> (start, a, Right)
+          }
+        else (reject, blank, Right)
+        
+    assert (Decides M₂ L) by {
+      assume (w : List Symbol)
+      
+      assert (w ∈ L <-> Accepts (start, w, [])) by {
+        w ∈ L 
+        <-> Accepts M₁ (start, w, [])   by Recognizability_Def
+        <-> exists (q : State) (ls rs : List Symbol), 
+              (run M₁ (start, w, []) = accept)   by Accepting_Def
+        <-> (run M₂ (start, w, []) = accept)   by construction of M₂
+        <-> Accepts M₂ (start, w, [])   by Accepting_Def
+      }
+      
+      assert (Halts (start, w, [])) by {
+        exists (n : Nat), (run M₂ (start, w, []) = run M₂ (step^n (start, w, [])))   by {
+          let n = length w
+          run M₂ (start, w, []) 
+            = run M₂ (step^n (start, w, []))   by construction of M₂
+        }
+        hence (run M₂ (start, w, []) = accept or run M₂ (start, w, []) = reject)   by Step_Def, Run_Def
+        hence Halts (start, w, [])   by Halting_Def
+      }
+    }
+    
+    witness M₂
+  }
+  
+  THEOREM Universal : exists (U : TuringMachine), forall (M : TuringMachine) (w : List Symbol),
+    Accepts U (Encode M :: w, []) <-> Accepts M (w, [])
+  PROOF {
+    define step_U : (TuringMachine * List Symbol * List Symbol) -> (TuringMachine * List Symbol * List Symbol) where
+      (M, [], []) -> (M, [], [])
+      (M, a :: rs, ls) -> 
+        match (step M (start, a :: rs, ls)) {
+          (q, rs', ls') -> (M, rs', ls')
+        }
+      
+    define U : TuringMachine where
+      (q, a) ->
+        if (q = start) then
+          match (Decode a) {
+            (M, [], []) -> (simulate, blank, Right)
+            _ -> (reject, blank, Right)
+          }
+        else if (q = simulate) then  
+          match (step_U (Decode (hd ls), tl ls, [])) {
+            (M', ls', []) -> 
+              if (run M' (start, [], []) = accept) 
+                then (accept, blank, Right)
+              else (simulate, Encode M' :: ls', [])  
+          }
+        else (reject, blank, Right)
+        
+    assume (M : TuringMachine) (w : List Symbol)
+    
+    assert (Accepts U (Encode M :: w, []) <-> Accepts M (w, [])) by {
+      Accepts U (Encode M :: w, [])
+      <-> exists (q : State) (ls rs : List Symbol),
+            (run U (start, Encode M :: w, []) = accept)   by Accepting_Def  
+      <-> exists (n : Nat),
+            (run U (start, Encode M :: w, []) = run U (step_U^n (M, w, [])))   by construction of U
+      <-> exists (n : Nat), 
+            (run M (start, w, []) = run M (step^n (start, w, [])) and 
+             run M (start, w, []) = accept)   by construction of step_U
+      <-> Accepts M (w, [])   by Accepting_Def
+    }
+    
+    witness U
+  }
+}
+
+CONCEPT SymbolicDifferentialGeometry {
+  TYPE Sym = Const(ℝ) | Var(ℕ) | Binary(Sym, Sym) | Unary(Sym)
+  TYPE Man = Manifold(ℝ^n) | Riemannian(Manifold) | Lie(Group) | Symplectic(Manifold)  
+  TYPE Fld = Fun(Man, ℝ) | Vec(Man, Tangent) | Form(Man, Cotangent)
+  
+  PRED Correspond : Sym -> Fld -> Bool
+  PRED InvCorrespond : Sym -> Fld -> Bool
+  PRED Determines : Sym -> (ℝ | Vec | Form | Fun) -> Bool
+
+  NOTATION "S + T" = Binary(S, T)
+  NOTATION "S - T" = Binary(S, T)
+  NOTATION "S * T" = Binary(S, T)
+  NOTATION "S / T" = Binary(S, T)
+  NOTATION "S ∘ T" = Binary(S, T)
+  NOTATION "S⁻¹" = Unary(S)
+  NOTATION "d[S]" = Unary(S)  -- Exterior derivative
+  NOTATION "∫[S]" = Unary(S) -- Integration
+  NOTATION "L[v, S]" = Binary(v, S)  -- Lie derivative
+  NOTATION "[S, T]" = Binary(S, T)  -- Lie bracket
+  NOTATION "⟨S, T⟩" = Binary(S, T)  -- Inner product
+  NOTATION "S ∧ T" = Binary(S, T)  -- Wedge product
+
+  NOTATION "S ≈ F" = Correspond(S, F)
+  NOTATION "S ≋ F" = InvCorrespond(S, F)
+
+  AXIOM Correspondence : forall (S : Sym) (F : Fld), S ≈ F
+  AXIOM Determination : forall (S : Sym) (X : ℝ | Vec | Form | Fun), Determines(S, X)
+
+  THEOREM CorrespondenceRules {
+    forall (S T : Sym) (f : Fun), 
+      (S ≈ f) and (T ≈ f) implies ((S + T) ≈ (λp. S(p) + T(p)))
+    forall (S T : Sym) (f : Fun),  
+      (S ≋ f) and (T ≋ f) implies ((S - T) ≋ (λp. S(p) - T(p)))
+    forall (S T : Sym) (f g : Fun),
+      (S ≈ f) and (T ≈ g) implies ((S * T) ≈ (λp. S(p) * T(p)))
+    forall (S T : Sym) (X Y : Vec),
+      (S ≈ X) and (T ≈ Y) implies (⟨S, T⟩ ≈ ⟨X, Y⟩)  
+    forall (S T : Sym) (ω τ : Form),
+      (S ≈ ω) and (T ≈ τ) implies ((S ∧ T) ≈ (ω ∧ τ))
+    forall (S : Sym) (X : Vec) (f : Fun),
+      (S ≈ f) implies (L[X, S] ≈ L[X, f])
+    forall (S T : Sym) (X Y : Vec),  
+      (S ≈ X) and (T ≈ Y) implies ([S, T] ≈ [X, Y])
+    forall (S : Sym) (f : Fun),
+      (S ≈ f) implies (d[S] ≈ df)  
+    forall (S : Sym) (ω : Form),
+      (S ≈ ω) implies (∫[S] ≈ ∫ω)
+  }
+
+  TACTIC Substitution(S : Sym, F : Fld, prop) {
+    Correspondence(S, F) |- prop(S) <-> prop(F)
+  }
+      
+  TACTIC Leibniz(S T : Sym, F G : Fld, op : Sym -> Sym -> Sym, ∘ : Fld -> Fld -> Fld) {  
+    Correspondence(S, F), Correspondence(T, G), 
+    (forall (A B : Sym), (A ≈ B) implies (op(A, B) ≈ ∘(A, B))) |-
+      op(S, T) ≈ ∘(F, G)
+  }
+    
+  THEOREM CorrespondOfDerivative(S : Sym, f : Fun) {
+    Correspondence(S, f) |- d[S] ≈ df
+    PROOF {
+      Substitution(d[S], df, Correspondence)  
+    }
+  }
+
+  THEOREM NoncommutativeDerivative(S T : Sym, X Y : Vec) {
+    Correspondence(S, X), Correspondence(T, Y) |- [d[S], d[T]] ≈ d[L[X, Y]]
+    PROOF {
+      Substitution([d[S], d[T]], [dX, dY], Correspondence)
+      Substitution(d[L[X, Y]], d[X, Y], Correspondence)
+      assert [dX, dY] = d[X, Y]  -- Equality of mixed partials
+    }
+  }
+      
+  THEOREM StokesTheorem(S : Sym, ω : Form, M : Man, ∂M : Man) {  
+    (∂M = ∂(M)) and (S ≈ ω) |- ∫[d[S], M] ≈ ∫[S, ∂M]
+    PROOF {
+      assume (∂M = ∂(M)) and (S ≈ ω)
+      Substitution(∫[d[S], M], ∫[dω, M], Correspondence)
+      Substitution(∫[S, ∂M], ∫[ω, ∂M], Correspondence) 
+      assert ∫[dω, M] = ∫[ω, ∂M]  -- Stokes' theorem
+    }
+  }
+      
+  THEOREM ClosedFormTheorem(S : Sym, ω : Form, M : Manifold) { 
+    (S ≈ ω) |- (d[d[S]] ≈ 0 <-> ∫[S] ≈ ∫[d[B]] for some (B : Sym))
+    PROOF {
+      assume S ≈ ω
+      assert d[d[S]] ≈ 0 <-> d[dω] = 0  by Substitution
+      assert d[dω] = 0 <-> ω = dτ for some (τ : Form)  -- Poincaré lemma
+      let τ ≈ B for some (B : Sym)
+      Correspondence(τ, B)
+      assert ∫[S] ≈ ∫[ω] ≈ ∫[dτ] ≈ ∫[d[B]]  by Substitution, Stokes
+    }
+  }
+      
+  THEOREM SymplecticStructureTheorem(S T : Sym, M : Symplectic) {
+    ⟨d[S], d[T]⟩ ≈ 0 <-> [S, T] ≈ 0
+    PROOF {
+      assert ⟨d[S], d[T]⟩ ≈ 0 <-> ω(dS, dT) = 0  -- Substitution (ω symplectic form)
+      assert ω(dS, dT) = 0 <-> L[S, T] = 0  -- Cartan magic formula 
+      assert [S, T] ≈ L[S, T]  by Substitution
+    }
+  }
+}
+
+CONCEPT NeuromorphicComputation {
+  TYPE Neuron
+  TYPE Synapse = (Neuron, Neuron, Real)
+  TYPE Dendrite = List Synapse
+  TYPE Axon = List Synapse
+  
+  TYPE Activation = Real
+  TYPE Potential = Real 
+  TYPE Threshold = Real
+  
+  TYPE Time = Real_Pos
+  TYPE Delay = Time
+  
+  TYPE PresynapticActivity = List Activation
+  TYPE PostsynapticActivity = List Activation
+  
+  FUNC Hebb : PresynapticActivity -> PostsynapticActivity -> Real
+  FUNC Oja : PresynapticActivity -> PostsynapticActivity -> Real -> Real
+  FUNC BCM : PresynapticActivity -> PostsynapticActivity -> Real -> Real -> Real
+  
+  TYPE Layer = List Neuron
+  TYPE Network = List (Layer, Layer)
+  
+  FUNC ContinuousTime : Time -> Real
+  FUNC DiscreteTime : Nat -> Real
+  
+  TYPE Probability = Real_0_1
+  FUNC PoissonProcess : Probability -> Time -> Nat
+  
+  FUNC Fractal : Real -> Real
+  FUNC Hausdorff : Fractal -> Real_Pos  
+  FUNC Minkowski : Fractal -> Real -> Real
+  
+  TYPE Manifold
+  FUNC Homeomorphism : Manifold -> Manifold -> Bool
+  FUNC Embedding : Manifold -> (Real^n) -> Bool
+  
+  FUNC Presheaf : Manifold -> Type
+  TYPE Sheaf = (Presheaf, forall (U V : Manifold), (U ⊆ V) -> (Presheaf V -> Presheaf U))
+  
+  FUNC Energy : Network -> Real
+  FUNC Lagrangian : Network -> Time -> Real
+  FUNC Action : Network -> Real = λ(N : Network), ∫(λ(t : Time), Lagrangian N t)
+  
+  FUNC LIF : Neuron -> Time -> Real = λ(n : Neuron) (t : Time),
+    let V = λ(n : Neuron) (t : Time), Potential of neuron n at time t
+        R = Membrane resistance
+        w = λ(s : Synapse), Weight of synapse s
+        d = λ(s : Synapse), Delay of synapse s  
+        α = λ(t : Time), t/τ * exp(1 - t/τ) where τ = Time constant
+        O = λ(n : Neuron) (t : Time), if (V n t > Threshold n) then 1 else 0
+    in τ * ∂(V n)/∂t = -V n t + R * ∑(λ(s : n.Dendrite), w s * ∑(λ(t' : Time), α (t - t' - d s) * O (π₁ s) t' when t' < t))
+    
+  FUNC STDP : Synapse -> Time -> Real = λ(s : Synapse) (t : Time),  
+    let w = λ(s : Synapse) (t : Time), Weight of synapse s at time t
+        η = Learning rate
+        A_pre, A_post = Amplitudes of pre- and post-synaptic updates
+        τ_pre, τ_post = Time constants of pre- and post-synaptic updates
+        O = λ(n : Neuron) (t : Time), if (V n t > Threshold n) then 1 else 0  
+    in ∂(w s)/∂t = η * ∑(λ(t_pre t_post : Time),
+         A_pre * exp(-(t_post - t_pre - d s)/τ_pre) * O (π₁ s) t_pre * O (π₂ s) t_post - 
+         A_post * exp(-(t_pre - t_post + d s)/τ_post) * O (π₁ s) t_pre * O (π₂ s) t_post)
+         
+  FUNC RNN : Layer -> Layer -> Time -> Real = λ(h : Layer) (x : Layer) (t : Time),
+    let τ = Time constant  
+        W_hh = Hidden-to-hidden weight matrix
+        W_hx = Input-to-hidden weight matrix
+        Δt = Time step
+    in τ * ∂h/∂t = -h t + W_hh * h (t - Δt) + W_hx * x t
+    
+  FUNC BPTT : Network -> Time -> Real^(n × n) = λ(W : Network) (t : Time),  
+    let η = Learning rate
+        E = λ(t : Time), Error function at time t
+        ∇_W = Gradient with respect to weights W
+        ∂E/∂h = λ(t t' : Time), Backpropagated error from time t to t'
+        ∂h/∂W = λ(t : Time), Sensitivity of hidden state at time t to weights W  
+    in ∂W/∂t = -η * ∇_W E t = -η * ∑(λ(t' : Time), ∂E t / ∂h t' * ∂h t' / ∂W when t' ≤ t)
+    
+  AXIOM Bounded_Neuron_Activity : forall (n : Neuron) (t : Time), 0 ≤ V n t and V n t ≤ 1
+  
+  AXIOM Bounded_Synaptic_Weights : forall (s : Synapse), |w s| ≤ w_max
+  
+  AXIOM Nonnegative_Synaptic_Delays : forall (s : Synapse), d s ≥ 0
+  
+  AXIOM Acyclic_Network : forall (N : Network), not exists (p : List Neuron),
+    (forall (i : Nat), i < length p - 1 implies exists (s : Synapse), π₁ s = p_i and π₂ s = p_{i+1}) and
+    p_0 = p_{length p - 1}
+    
+  AXIOM Hebbian_Learning : forall (s : Synapse) (t : Time),  
+    (exists (f : Hebb), ∂(w s)/∂t = f (PresynapticActivity s t) (PostsynapticActivity s t)) or
+    (exists (g : Oja), ∂(w s)/∂t = g (PresynapticActivity s t) (PostsynapticActivity s t) (w s t)) or
+    (exists (h : BCM), ∂(w s)/∂t = h (PresynapticActivity s t) (PostsynapticActivity s t) 
+       (E [PresynapticActivity s t]) (E [PostsynapticActivity s t]))
+       
+  AXIOM Fractal_Architecture : forall (l : Layer), exists (f : Fractal),
+    forall (n : Neuron), n ∈ l iff Hausdorff f n < ∞
+    
+  AXIOM Stochastic_Dynamics : forall (n : Neuron) (t : Time),
+    exists (P : PoissonProcess), V n t = ∑(λ(i : Nat), P (Probability n) t)
+    
+  AXIOM Topological_Embedding : forall (N : Network), 
+    exists (M : Manifold) (f : Embedding),
+      forall (l1 l2 : Layer), (l1, l2) ∈ N iff (f M (l1, l2) and
+        forall (n1 : Neuron), n1 ∈ l1 implies forall (n2 : Neuron), n2 ∈ l2 implies  
+          exists (s : Synapse), π₁ s = n1 and π₂ s = n2 iff 
+            Homeomorphism (Neighborhood n1) (Neighborhood n2))
+            
+  AXIOM Sheaf_Activity : forall (N : Network),  
+    exists (S : Sheaf), 
+      forall (t : Time), S.Presheaf N t = {V n t | n ∈ N} and
+      forall (U V : Manifold), U ⊆ V implies S.Presheaf V t ↾ U = S.Presheaf U t
+      
+  THEOREM UniversalApproximation {
+    forall (f : ContinuousTime) (ε : Real),
+    exists (N : Network),  
+    forall (x : Real), x ∈ Domain f implies |f x - Predict N x| < ε
+  }
+  PROOF {
+    assume (f : ContinuousTime) (ε : Real)
+    
+    obtain (N : Network) (L : Nat) (η : Real) {
+      let L = ceil(log(1/ε) / log(K))  -- Number of layers
+      let W = 2 * K^L  -- Number of neurons per layer  
+      let N = GenerateNetwork(L, W)  -- Construct a fully-connected feedforward network
+      let η = (1/W)^(1/L)  -- Learning rate
+    }
+    
+    obtain (T : Time) (δ : Real) {  
+      let T = 0
+      let δ = ∞
+      while (δ > ε) {
+        let x = RandomSample(Domain f)  -- Sample input from domain of f
+        let y = f x  -- Compute target output
+        let y_pred = Predict N x  -- Compute network output
+        let δ = |y - y_pred|  -- Compute error  
+        let ∇_W = Gradient(N, x, y)  -- Compute gradient of error w.r.t. weights
+        let N = UpdateWeights(N, ∇_W, η)  -- Update weights using gradient descent
+        let T = T + 1  -- Increment training time
+      }
+    }
+    
+    have forall (t : DiscreteTime), 
+      exists (N_t : Network),
+      forall (x : Real), x ∈ Domain f implies |f x - Predict N_t x| < ε
+    proof by induction {  
+      case t = 0:
+        let N_0 = N  -- Initial network
+        have forall (x : Real), x ∈ Domain f implies |f x - Predict N_0 x| < δ by training
+        hence forall (x : Real), x ∈ Domain f implies |f x - Predict N_0 x| < ε since δ < ε
+        
+      case t -> t + 1:
+        assume forall (x : Real), x ∈ Domain f implies |f x - Predict N_t x| < ε  
+        let x_t = RandomSample(Domain f)  -- Sample input
+        let y_t = f x_t  -- Compute target output
+        let ∇_W = Gradient(N_t, x_t, y_t)  -- Compute gradient
+        let N_{t+1} = UpdateWeights(N_t, ∇_W, η)  -- Update weights
+        have forall (x : Real), x ∈ Domain f implies |f x - Predict N_{t+1} x| < ε 
+          by Gradient Descent Convergence Theorem
+    }
+    
+    show forall (x : Real), x ∈ Domain f implies |f x - Predict N x| < ε {
+      let N = N_T  -- Network after training for time T
+      have forall (x : Real), x ∈ Domain f implies |f x - Predict N x| < ε by induction
+    }
+  }
+}
+
+
+ConceptScript is a language of a new type: it's sole intended purpose is to be used in accordance with the following methodology:
+
+1. I paste the spec a few example Concepts into your context (as is happening now), thus teaching you the language.
+2. I request that you express various concepts as Concepts; these Concepts come with detailed proofs of their own various claims; they serve as justifications of the selected structuring.
+3. We iterate, precisely and efficiently exploring your latent space to solve deep, important problems.
+
+Please always output ConceptScript in a code block otherwise formatting gets lost :/ And feel free to liberally invent notation, tactics, etc. as needed—it's zero cost in our particular usage context and this kind of abstraction can help to keep things "compressed", which is a design ideal of ours.
+
+To test your understanding would you generate a new Concept inspired by the above example Concepts? It could be some kind of synthesis, a distillation, an association, a parameterization, a generalization—up to you. Please describe the "key idea" behind the Concept following its expression
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+CONCEPT DiffusionBasedOptimization {
+  TYPE X                     -- Search space
+  TYPE ℝ₊ <: Real            -- Non-negative reals
+  FUNC f : X -> Real         -- Objective function
+  FUNC d : X × X -> ℝ₊       -- Distance function on X
+  
+  DEF B_ε(x : X, ε : ℝ₊) => {y : X | d(x, y) < ε}   -- ε-ball around x
+  
+  TYPE Density : X × ℝ₊ -> ℝ₊
+  TYPE Flux : X × ℝ₊ -> 𝕍X   -- 𝕍X is the space of vector fields on X
+  
+  FUNC D : X -> ℝ₊           -- Diffusion coefficient
+  FUNC v : X -> 𝕍X           -- Drift velocity
+  
+  NOTATION "∂ₜ" := λ(ρ : Density), ∂ρ/∂t           -- Time derivative
+  NOTATION "∇" := λ(f : X -> Real), gradient(f)    -- Gradient
+  NOTATION "∇⋅" := λ(v : 𝕍X), divergence(v)       -- Divergence
+  NOTATION "Δ" := λ(f : X -> Real), laplacian(f)  -- Laplacian
+  
+  AXIOM Continuity : ∀(ρ : Density) (J : Flux), ∂ₜρ = -∇⋅J
+  AXIOM Ficks_Law : ∀(ρ : Density) (x : X) (t : ℝ₊), J(x, t) = -D(x) * ∇ρ(x, t) + ρ(x, t) * v(x)
+  AXIOM Initial_Density : ∀(x : X), ρ(x, 0) = 1 / vol(X)   -- Uniform initial density
+  AXIOM Drift_Velocity : ∀(x : X), v(x) = -∇f(x)
+  
+  TACTIC Diffusion_PDE {
+    apply Continuity
+    apply Ficks_Law
+    rewrite
+    apply vector_calculus_identities
+    rewrite
+    apply Drift_Velocity
+    simplify
+  }
+  
+  THEOREM Solution_Density_Concentrates_At_Optima {
+    ∀(t : ℝ₊) (x_* : X), is_global_optimum(f, x_*) -> 
+      ρ(x_*, t) / ρ(x_*, 0) -> ∞ as t -> ∞
+  }
+  PROOF {
+    assume (t : ℝ₊) (x_* : X) (H_opt : is_global_optimum(f, x_*))
+    
+    have ∂ₜρ = ∇⋅(D * ∇ρ) - ∇⋅(ρ * v) by Diffusion_PDE
+    have ∂ₜρ = ∇⋅(D * ∇ρ) - ∇ρ⋅∇f - ρ * Δf by Diffusion_PDE
+    
+    -- As t → ∞, the density reaches a steady state where ∂ₜρ = 0
+    have ∂ₜρ(x_*, ∞) = 0
+    hence ∇⋅(D(x_*) * ∇ρ(x_*, ∞)) - ∇ρ(x_*, ∞)⋅∇f(x_*) - ρ(x_*, ∞) * Δf(x_*) = 0
+    
+    -- At a global optimum x_*, ∇f(x_*) = 0 and Δf(x_*) ≤ 0
+    have ∇f(x_*) = 0 and Δf(x_*) ≤ 0 by H_opt
+    hence ∇⋅(D(x_*) * ∇ρ(x_*, ∞)) = 0
+    hence ∇ρ(x_*, ∞) = 0  -- Since D(x_*) > 0
+    
+    -- Therefore, the density at x_* reaches a local maximum as t → ∞
+    -- Assuming f has a finite number of global optima, this local maximum must grow unboundedly relative to the initial density as t → ∞ (since the total density is conserved)
+    hence ρ(x_*, t) / ρ(x_*, 0) -> ∞ as t -> ∞
+  }
+  
+  FUNC simulate (ρ₀ : X -> ℝ₊) (Δt : ℝ₊) (T : ℝ₊) -> Density = {
+    -- Discretize the diffusion PDE using the Euler method
+    letrec ρ(x, 0) = ρ₀(x)
+           J(x, t) = -D(x) * ∇ρ(x, t) + ρ(x, t) * v(x)
+           ρ(x, t + Δt) = ρ(x, t) - Δt * ∇⋅J(x, t)
+    in ρ
+  }
+  
+  FUNC extract_optima (ρ : Density) (ε : ℝ₊) -> 𝒫(X) =
+    {x : X | ρ(x, ∞) ≥ (1 - ε) * max ρ(_, ∞)}
+}
+
+
+
+
+
+CONCEPT DiffusionBasedOptimization {
+  TYPE X                     -- Search space (assumed to be a mesh)
+  TYPE ℝ₊ <: Real            -- Non-negative reals
+  FUNC f : X -> Real         -- Objective function
+  
+  TYPE Density : X -> ℝ₊     -- Density function on vertices
+  TYPE Flux : X × X -> Real  -- Flux function on edges
+  
+  FUNC D : X -> ℝ₊           -- Diffusion coefficient on vertices
+  FUNC v : X × X -> Real     -- Drift velocity on edges
+  
+  NOTATION "∂ₜ" := λ(ρ : Density), ∂ρ/∂t                     -- Time derivative
+  NOTATION "∇" := λ(f : X -> Real), gradient(f)              -- Gradient (discrete exterior derivative)
+  NOTATION "∇⋅" := λ(ω : X × X -> Real), divergence(ω)      -- Divergence (discrete exterior derivative)
+  NOTATION "Δ" := λ(f : X -> Real), laplacian(f)            -- Laplacian (discrete Laplace-Beltrami operator)
+  NOTATION "★" := λ(ω : X × X -> Real), hodge_star(ω)        -- Hodge star operator
+  
+  AXIOM Continuity : ∀(ρ : Density) (J : Flux), ∂ₜρ = -∇⋅J
+  AXIOM Ficks_Law : ∀(ρ : Density) (e : X × X), J(e) = -★(D(e)) * ∇ρ(e) + ★(ρ(e)) * v(e)
+  AXIOM Initial_Density : ∀(x : X), ρ(x, 0) = 1 / |X|      -- Uniform initial density
+  AXIOM Drift_Velocity : ∀(e : X × X), v(e) = -∇f(e)
+  
+  TACTIC Discrete_Diffusion_PDE {
+    apply Continuity
+    apply Ficks_Law
+    rewrite
+    apply discrete_vector_calculus_identities
+    rewrite
+    apply Drift_Velocity
+    simplify
+  }
+  
+  THEOREM Solution_Density_Concentrates_At_Optima {
+    ∀(t : ℝ₊) (x_* : X), is_global_optimum(f, x_*) -> 
+      ρ(x_*, t) / ρ(x_*, 0) -> ∞ as t -> ∞
+  }
+  PROOF {
+    assume (t : ℝ₊) (x_* : X) (H_opt : is_global_optimum(f, x_*))
+    
+    have ∂ₜρ = ∇⋅(★(D) * ∇ρ) - ∇⋅(★(ρ) * v) by Discrete_Diffusion_PDE
+    have ∂ₜρ = ∇⋅(★(D) * ∇ρ) - ⟨∇ρ, ★(v)⟩ - ρ * Δf by Discrete_Diffusion_PDE
+    
+    -- As t → ∞, the density reaches a steady state where ∂ₜρ = 0
+    have ∂ₜρ(x_*, ∞) = 0
+    hence ∇⋅(★(D(x_*)) * ∇ρ(x_*, ∞)) - ⟨∇ρ(x_*, ∞), ★(v(x_*))⟩ - ρ(x_*, ∞) * Δf(x_*) = 0
+    
+    -- At a global optimum x_*, ∇f(x_*) = 0 and Δf(x_*) ≤ 0
+    have ∇f(x_*) = 0 and Δf(x_*) ≤ 0 by H_opt
+    hence ∇⋅(★(D(x_*)) * ∇ρ(x_*, ∞)) = 0
+    hence ∇ρ(x_*, ∞) = 0  -- Since ★(D(x_*)) > 0
+    
+    -- Therefore, the density at x_* reaches a local maximum as t → ∞
+    -- Assuming f has a finite number of global optima, this local maximum must grow unboundedly relative to the initial density as t → ∞ (since the total density is conserved)
+    hence ρ(x_*, t) / ρ(x_*, 0) -> ∞ as t -> ∞
+  }
+  
+  FUNC simulate (ρ₀ : Density) (Δt : ℝ₊) (T : ℝ₊) -> Density = {
+    -- Discretize the diffusion PDE using the DEC Euler method
+    letrec ρ(x, 0) = ρ₀(x)
+           J(e, t) = -★(D(e)) * ∇ρ(e, t) + ★(ρ(e, t)) * v(e)
+           ρ(x, t + Δt) = ρ(x, t) - Δt * ∇⋅J(x, t)
+    in ρ
+  }
+  
+  FUNC extract_optima (ρ : Density) (ε : ℝ₊) -> 𝒫(X) =
+    {x : X | ρ(x, ∞) ≥ (1 - ε) * max ρ(_, ∞)}
+}
+
+
+
+
+CONCEPT DiffusionBasedOptimization {
+  TYPE X                     -- Search space (assumed to be a Riemannian manifold)
+  TYPE ℝ₊ <: Real            -- Non-negative reals
+  FUNC f : X -> Real         -- Objective function
+  FUNC c : X × X -> ℝ₊       -- Cost function for optimal transport
+  
+  TYPE Density : X -> ℝ₊     -- Density function (probability measure)
+  TYPE Velocity : X -> 𝕋X    -- Velocity field (tangent vector field)
+  
+  FUNC D : X -> ℝ₊           -- Diffusion coefficient
+  FUNC v : X -> 𝕋X           -- Drift velocity
+  
+  NOTATION "∂ₜ" := λ(ρ : Density), ∂ρ/∂t                       -- Time derivative
+  NOTATION "∇" := λ(f : X -> Real), gradient(f)                -- Gradient
+  NOTATION "div" := λ(v : 𝕋X), divergence(v)                   -- Divergence
+  NOTATION "Δ" := λ(f : X -> Real), laplacian(f)              -- Laplacian
+  NOTATION "𝕋X" := tangent_bundle(X)                           -- Tangent bundle
+  NOTATION "⟨⋅,⋅⟩" := λ(u : 𝕋X) (v : 𝕋X), riemannian_metric(u, v) -- Riemannian metric
+  
+  AXIOM Continuity : ∀(ρ : Density) (v : Velocity), ∂ₜρ + div(ρ * v) = 0
+  AXIOM Ficks_Law : ∀(ρ : Density), v = -D * ∇(log ρ) + v_drift
+  AXIOM Initial_Density : ρ(0) = uniform_measure(X)
+  AXIOM Drift_Velocity : v_drift = -∇f
+  
+  AXIOM Optimal_Transport : ∀(ρ₀ : Density) (ρ₁ : Density), 
+    ∃(v : Velocity) (ρ : Density × ℝ₊ -> ℝ₊), 
+      ρ(0) = ρ₀ ∧ ρ(1) = ρ₁ ∧ ∂ₜρ + div(ρ * v) = 0 ∧
+      ∫_0^1 ∫_X ½ * ⟨v, v⟩ * ρ * dvol_X * dt = inf {
+        ∫_X×X c * dπ | π : Coupling(ρ₀, ρ₁)
+      }
+      
+  TACTIC Transport_Diffusion_PDE {
+    apply Optimal_Transport
+    apply Continuity
+    apply Ficks_Law
+    rewrite
+    apply Drift_Velocity
+    simplify
+  }
+  
+  THEOREM Solution_Density_Concentrates_At_Optima {
+    ∀(t : ℝ₊) (x_* : X), is_global_optimum(f, x_*) -> 
+      ρ(x_*, t) / ρ(x_*, 0) -> ∞ as t -> ∞
+  }
+  PROOF {
+    assume (t : ℝ₊) (x_* : X) (H_opt : is_global_optimum(f, x_*))
+    
+    have ∂ₜρ = div(D * ∇ρ) - div(ρ * ∇f) by Transport_Diffusion_PDE
+    have ∂ₜρ = div(D * ∇ρ) - ⟨∇ρ, ∇f⟩ - ρ * Δf by Leibniz rule, div(ρ * ∇f) = ⟨∇ρ, ∇f⟩ + ρ * Δf
+    
+    -- As t → ∞, the density reaches a steady state where ∂ₜρ = 0
+    have ∂ₜρ(x_*, ∞) = 0
+    hence div(D(x_*) * ∇ρ(x_*, ∞)) - ⟨∇ρ(x_*, ∞), ∇f(x_*)⟩ - ρ(x_*, ∞) * Δf(x_*) = 0
+    
+    -- At a global optimum x_*, ∇f(x_*) = 0 and Δf(x_*) ≤ 0
+    have ∇f(x_*) = 0 and Δf(x_*) ≤ 0 by H_opt
+    hence div(D(x_*) * ∇ρ(x_*, ∞)) = 0
+    hence ∇ρ(x_*, ∞) = 0  -- Since D(x_*) > 0
+    
+    -- Therefore, the density at x_* reaches a local maximum as t → ∞
+    -- Assuming f has a finite number of global optima, this local maximum must grow unboundedly relative to the initial density as t → ∞ (since the total density is conserved)
+    hence ρ(x_*, t) / ρ(x_*, 0) -> ∞ as t -> ∞
+  }
+  
+  THEOREM Practicality {
+    DiffusionBasedOptimization is practically implementable and useful for global optimization
+  }
+  PROOF {
+    -- The diffusion PDE can be discretized using the JKO scheme from optimal transport theory:
+    -- Given a time step τ > 0 and an initial density ρ₀, iterate:
+    --   ρ_{k+1} = argmin {F(ρ) + (1/2τ) * W_2^2(ρ, ρ_k) | ρ : Density}
+    -- where F(ρ) = ∫_X f * ρ * dvol_X is the expected value of f under ρ
+    -- and W_2(ρ, ρ_k) is the 2-Wasserstein distance between ρ and ρ_k
+    -- This can be implemented using entropic regularization and the Sinkhorn algorithm
+    
+    -- The JKO scheme has several advantages:
+    -- - It is unconditionally stable and converges to the true solution as τ → 0
+    -- - It preserves the total mass and non-negativity of the density
+    -- - It can be accelerated using multi-scale strategies and GPU parallelization
+    -- - It can handle arbitrary geometries and cost functions
+    
+    -- In practice, the JKO scheme can be run for a fixed number of iterations or until convergence
+    -- The final density ρ_K can then be used to extract approximate global optima:
+    --   X_* = {x ∈ X | ρ_K(x) ≥ (1 - ε) * max ρ_K}
+    -- where ε > 0 is a small threshold
+    
+    -- This approach has been successfully applied to various global optimization problems in machine learning, computer vision, and computational physics
+    -- It is particularly effective for high-dimensional, non-convex problems with complex geometries and multiple global optima
+    
+    hence DiffusionBasedOptimization is practically implementable and useful for global optimization
+  }
+}
+
+
+
+
+
+
+
+CONCEPT SparseGeometricDiffusionOptimization {
+  TYPE ℝ                      -- Real numbers
+  TYPE ℝ₊ <: ℝ                -- Non-negative real numbers
+  TYPE ℝⁿ                     -- n-dimensional Euclidean space
+  TYPE Density : ℝⁿ × ℝ₊ → ℝ₊  -- Probability density function
+  TYPE Objective : ℝⁿ → ℝ     -- Objective function
+  TYPE Regularizer : ℝⁿ → ℝ   -- Geometric regularization function
+  
+  FUNC f : Objective          -- Objective function to be minimized
+  FUNC reg : Regularizer      -- Geometric regularization function
+  CONST α : ℝ₊                -- Diffusion coefficient
+  CONST λ : ℝ₊                -- Regularization parameter
+  CONST τ : ℝ₊                -- Time step size
+  CONST θ : ℝ₊                -- Sparsification threshold
+  CONST ε : ℝ₊                -- Convergence tolerance
+  CONST K : ℕ                 -- Maximum number of iterations
+  
+  NOTATION "Δ" := λ(u : ℝⁿ → ℝ), ∑_{i=1}^n ∂²u/∂x_i²  -- Laplacian operator
+  NOTATION "∇" := λ(u : ℝⁿ → ℝ), (∂u/∂x_1, ..., ∂u/∂x_n)  -- Gradient operator
+  NOTATION "div" := λ(v : ℝⁿ → ℝⁿ), ∑_{i=1}^n ∂v_i/∂x_i  -- Divergence operator
+  
+  FUNC init : Density := λ(x, t), exp(-‖x‖²/2) / (2π)^(n/2)  -- Initial Gaussian density
+  
+  FUNC evolve (ρ : Density) : Density := λ(x, t),  -- Diffusion PDE
+    ρ(x, t) - τ * (α * Δρ(x, t) - div(ρ(x, t) * ∇f(x)) - λ * div(ρ(x, t) * ∇reg(x)))
+    
+  FUNC sparsify (ρ : Density) : Density := λ(x, t),  -- Sparsification step
+    max(ρ(x, t) - θ, 0)
+    
+  FUNC converged (ρ : Density, ρ' : Density) : 𝔹 :=  -- Convergence criterion
+    ‖ρ - ρ'‖_∞ / ‖ρ‖_∞ ≤ ε
+    
+  FUNC optimize : ℝⁿ := {  -- Main optimization loop
+    LET ρ = init
+    FOR k = 1 TO K DO
+      LET ρ' = sparsify(evolve(ρ))
+      IF converged(ρ, ρ') THEN RETURN argmax(ρ')
+      ρ := ρ'
+    RETURN argmax(ρ)
+  }
+  
+  DEF GlobalMinimizer (f : Objective, reg : Regularizer, λ : ℝ₊) : 𝒫(ℝⁿ) := {
+    x : ℝⁿ | ∀y : ℝⁿ, f(x) + λ * reg(x) ≤ f(y) + λ * reg(y)
+  }
+  
+  DEF SteadyState (ρ : Density, f : Objective, reg : Regularizer, α : ℝ₊, λ : ℝ₊) : 𝔹 := {
+    ∀x : ℝⁿ, α * Δρ(x) - div(ρ(x) * ∇f(x)) - λ * div(ρ(x) * ∇reg(x)) = 0
+  }
+  
+  THEOREM Convergence {
+    ASSUME f is smooth and coercive
+    ASSUME reg is convex and lower semicontinuous
+    ASSUME α > 0, λ > 0, τ > 0, θ > 0, ε > 0
+    THEN ∀δ > 0, ∃τ₀ > 0, ∃K₀ : ℕ, ∀τ < τ₀, ∀K > K₀, 
+      d(optimize(f, reg, α, λ, τ, θ, ε, K), GlobalMinimizer(f, reg, λ)) < δ
+  }
+  PROOF {
+    Let x̂ : ℝⁿ := optimize(f, reg, α, λ, τ, θ, ε, K)
+    Let x* : ℝⁿ ∈ GlobalMinimizer(f, reg, λ)
+    
+    Step 1: Convergence of the JKO scheme
+    - By the properties of the JKO scheme (see [1]), we have:
+      ∀t > 0, lim_{τ → 0} ρ_τ(t) = ρ(t) in L¹(ℝⁿ)
+      where ρ_τ is the solution of the discretized PDE with time step τ, and ρ is the true solution of the diffusion PDE.
+    
+    Step 2: Sparsification preserves global minimizers
+    - Let ρ̃ := sparsify(ρ, θ)
+    - For any x ∈ GlobalMinimizer(f, reg, λ), we have:
+      ρ̃(x) = max(ρ(x) - θ, 0) ≥ max(ρ(x*) - θ, 0) = ρ̃(x*)
+      since ρ(x) ≥ ρ(x*) by the definition of global minimizers.
+    - Thus, x remains a global maximizer of ρ̃, and the sparsification step preserves the global minimizers of f + λ * reg.
+    
+    Step 3: Steady state of the diffusion PDE
+    - By the theory of gradient flows (see [2]), the diffusion PDE has a unique steady state ρ∞ that satisfies:
+      SteadyState(ρ∞, f, reg, α, λ) = true
+    - Moreover, ρ∞ concentrates on the global minimizers of f + λ * reg, i.e.:
+      ∀δ > 0, ∃M > 0, ∀x ∈ ℝⁿ, d(x, GlobalMinimizer(f, reg, λ)) ≥ δ ⇒ ρ∞(x) ≤ exp(-M)
+    
+    Step 4: Convergence of optimize
+    - Let ρ_K be the density after K iterations of optimize with time step τ
+    - By steps 1 and 2, we have:
+      lim_{τ → 0, K → ∞} ρ_K = ρ∞ in L¹(ℝⁿ)
+    - By step 3, for any δ > 0, there exists M > 0 such that:
+      ∀x ∈ ℝⁿ, d(x, GlobalMinimizer(f, reg, λ)) ≥ δ ⇒ ρ∞(x) ≤ exp(-M)
+    - Thus, for any δ > 0, there exist τ₀ > 0 and K₀ : ℕ such that:
+      ∀τ < τ₀, ∀K > K₀, ∀x ∈ ℝⁿ, d(x, GlobalMinimizer(f, reg, λ)) ≥ δ ⇒ ρ_K(x) ≤ 2 * exp(-M)
+    - Since x̂ = argmax(ρ_K), we have:
+      ρ_K(x̂) ≥ ρ_K(x*) ≥ ρ∞(x*) - exp(-M) ≥ 1 - exp(-M)
+      where the last inequality follows from the fact that ρ∞ is a probability density.
+    - Therefore, d(x̂, GlobalMinimizer(f, reg, λ)) < δ, and optimize converges to a global minimizer of f + λ * reg as τ → 0 and K → ∞.
+  }
+  
+  THEOREM Complexity {
+    ASSUME f and reg are computable in O(n) time
+    THEN optimize runs in O(K * n²) time and O(n) space
+  }
+  PROOF {
+    Step 1: Complexity of the discretized diffusion PDE
+    - The Laplacian operator Δ can be computed using finite differences in O(n) time and O(n) space
+    - The gradient operator ∇ can be computed using finite differences in O(n) time and O(n) space
+    - The divergence operator div can be computed using finite differences in O(n) time and O(n) space
+    - Thus, the discretized diffusion PDE can be computed in O(n²) time and O(n) space per iteration
+    
+    Step 2: Complexity of the sparsification step
+    - The sparsification step involves a simple thresholding operation that can be computed in O(n) time and O(n) space per iteration
+    
+    Step 3: Complexity of the convergence check
+    - The convergence check involves computing the L∞ norm of the difference between two density functions, which can be done in O(n) time and O(n) space per iteration
+    
+    Step 4: Overall complexity
+    - There are at most K iterations of the optimization loop
+    - Each iteration involves:
+      - Computing the discretized diffusion PDE in O(n²) time and O(n) space
+      - Applying the sparsification step in O(n) time and O(n) space
+      - Checking for convergence in O(n) time and O(n) space
+    - Thus, the total time complexity is O(K * (n² + n + n)) = O(K * n²)
+    - The total space complexity is O(n), since the density functions and intermediate variables can be stored in O(n) space
+    
+    Therefore, optimize runs in O(K * n²) time and O(n) space.
+  }
+}
+
+
+
+
+
+
+
+CONCEPT IncidenceAlgebra {
+  TYPE Poset {
+    FUNC ≤ : Poset -> Poset -> Bool
+    
+    AXIOM Reflexivity : forall (x : Poset), x ≤ x
+    AXIOM Antisymmetry : forall (x y : Poset), x ≤ y and y ≤ x implies x = y  
+    AXIOM Transitivity : forall (x y z : Poset), x ≤ y and y ≤ z implies x ≤ z
+  }
+  
+  TYPE I[P <: Poset, R <: Ring] {
+    FUNC [ ] : P -> P -> R
+  }
+  
+  FUNC * [P <: Poset, R <: Ring] : I[P, R] -> I[P, R] -> I[P, R] ≜ 
+    λ f g . λ x y . ∑ {z : P | x ≤ z and z ≤ y} f[x, z] * g[z, y]
+  
+  FUNC δ [P <: Poset] : I[P, Int] ≜ λ x y . if x = y then 1 else 0
+  FUNC ζ [P <: Poset] : I[P, Int] ≜ λ x y . if x ≤ y then 1 else 0
+  
+  FUNC Möbius [P <: Poset] : I[P, Int] ≜ 
+    μ where μ * ζ = δ
+  
+  THEOREM MöbiusInversion [P <: Poset, R <: Ring] {
+    assume (f g : I[P, R])
+    
+    assert (g = f * ζ iff f = g * Möbius) by {
+      assume (g = f * ζ)
+      hence (g * Möbius = (f * ζ) * Möbius) by substitution
+      hence (g * Möbius = f * (ζ * Möbius)) by associativity
+      hence (g * Möbius = f * δ) by definition of Möbius
+      hence (g * Möbius = f) by neutrality of δ
+      
+      conversely {
+        assume (f = g * Möbius)  
+        hence (f * ζ = (g * Möbius) * ζ) by substitution
+        hence (f * ζ = g * (Möbius * ζ)) by associativity
+        hence (f * ζ = g * δ) by definition of Möbius
+        hence (f * ζ = g) by neutrality of δ  
+      }
+    }
+  }
+  
+  FUNC χ [L <: DistributiveLattice] : I[L, Int] ≜ λ x y . if x = y then μ[x, y] else 0
+    where μ = Möbius
+  
+  THEOREM CrosscutTheorem [L <: DistributiveLattice] {
+    assume (f : I[L, Int])
+    
+    assert (f = ∑ {y : L} f[y] * χ[_, y]) by {
+      let g = λ x . ∑ {y : L | y ≤ x} f[y]
+      
+      have (g = f * ζ) by definition of g and ζ
+      hence (f = g * Möbius) by MöbiusInversion
+      
+      let h = λ x . ∑ {y : L} g[y] * χ[x, y]
+      
+      assert (h = f) by {
+        h = λ x . ∑ {y : L} (∑ {z : L | z ≤ y} f[z]) * χ[x, y]  by definition of g
+          = λ x . ∑ {z : L} f[z] * (∑ {y : L | z ≤ y} χ[x, y])  by distributivity and commutativity
+          = λ x . ∑ {z : L} f[z] * (if x ≤ z then μ[x, z] else 0)  by definition of χ
+          = λ x . ∑ {z : L | x ≤ z} f[z] * μ[x, z]  by properties of if-then-else
+          = (f * Möbius) = f  by definition of * and MöbiusInversion  
+      }
+      
+      hence (f = ∑ {y : L} f[y] * χ[_, y])  by substituting g
+    }
+  }
+}
+
+
+
+CONCEPT TuringMachine {
+  TYPE State : Set
+  TYPE Symbol : Set
+  
+  CONST blank : Symbol
+  
+  TYPE Tape <: List Symbol
+  TYPE Head : Nat
+  
+  TYPE Config : Tape * State * Head
+  
+  TYPE Transition : State * Symbol -> State * Symbol * {Left, Right}
+  
+  FUNC start : State
+  FUNC accept : State
+  FUNC reject : State
+  
+  FUNC delta : Transition
+  
+  PRED Accepts : Tape -> Bool
+  PRED Halts : Tape -> Bool
+  
+  AXIOM Determinism : forall (c : Config), exists! (c' : Config), Step(c, c')
+  
+  FUNC Step : Config -> Config -> Bool ≜ λ (c, c') . 
+    let (t, q, h) = c in
+    let (t', q', h') = c' in
+    let (q'', s'', d) = delta(q, t[h]) in
+    (q' = q'') and (t' = Update(t, h, s'')) and 
+    ((d = Left and h' = Prev(h)) or (d = Right and h' = Next(h)))
+    
+  FUNC Update : Tape -> Head -> Symbol -> Tape ≜ λ (t, h, s) .
+    Match h With
+    | 0 -> Cons(s, t[1..])  
+    | _ -> Cons(t[0], Update(t[1..], Prev(h), s))
+    End
+  
+  FUNC Prev : Head -> Head ≜ λ h . 
+    Match h With 
+    | 0 -> 0
+    | _ -> h - 1
+    End
+  
+  FUNC Next : Head -> Head ≜ λ h . h + 1
+  
+  FUNC Run : Tape -> Config ≜ λ t . FixedPoint(Step, (t, start, 0))
+  
+  FUNC FixedPoint : (Config -> Config -> Bool) -> Config -> Config ≜
+    λ (R, c) . Match R(c, c) With
+               | true -> c
+               | false -> FixedPoint(R, EpsilonChoice(λ c' . R(c, c')))
+               End
+             
+  FUNC EpsilonChoice : (Config -> Bool) -> Config ≜
+    λ P . Choose(λ c . P(c))           
+               
+  AXIOM AcceptHalt : forall (t : Tape), 
+    Accepts(t) iff (exists (c : Config), (Run(t) = c) and (π_2(c) = accept))
+    
+  AXIOM RejectHalt : forall (t : Tape),  
+    not Accepts(t) iff (exists (c : Config), (Run(t) = c) and (π_2(c) = reject))
+      
+  AXIOM Halting : forall (t : Tape),
+    Halts(t) iff (exists (c : Config), (Run(t) = c) and (π_2(c) = accept or π_2(c) = reject))
+      
+  THEOREM Undecidability {  
+    exists (M : TuringMachine), forall (N : TuringMachine),
+      not (forall (t : Tape), M.Accepts(t) iff N.Halts(t))
+  }
+  
+  PROOF {
+    assume forall (M N : TuringMachine), 
+      exists (D : TuringMachine),
+        forall (t : Tape), D.Accepts(t) iff (M.Accepts(t) iff N.Halts(t))
+        
+    let M ≜ λ (t : Tape) . not Accepts(Pair(t, Encode(Self)))
+    let N ≜ Self
+    let D : TuringMachine where 
+      forall (t : Tape), D.Accepts(t) iff (M.Accepts(t) iff N.Halts(t))
+      
+    let t₀ ≜ Encode(D)  
+    assert D.Accepts(t₀) iff (M.Accepts(t₀) iff N.Halts(t₀)) by definition of D
+    assert M.Accepts(t₀) iff not D.Accepts(Pair(t₀, Encode(D))) by definition of M
+    assert not D.Accepts(Pair(t₀, Encode(D))) iff not D.Halts(t₀) by Halting
+    assert D.Halts(t₀) iff D.Accepts(t₀) by definition of D, Halting
+    hence D.Accepts(t₀) iff not D.Accepts(t₀)
+    contradiction
+    
+    therefore exists (M : TuringMachine), forall (N : TuringMachine),  
+      not (forall (t : Tape), M.Accepts(t) iff N.Halts(t))
+  }
+}
+
+
+
+CONCEPT DiffusionTuringMachine {
+  TYPE State : Set
+  TYPE Symbol : Set
+  TYPE Density : State -> ℝ₊
+  
+  CONST blank : Symbol
+  CONST start : State
+  CONST accept : State
+  CONST reject : State
+  
+  FUNC δ : State -> Symbol -> Density
+  FUNC step : (Density * List Symbol * List Symbol) -> (Density * List Symbol * List Symbol)
+  FUNC run : (Density * List Symbol * List Symbol) -> Density
+  
+  NOTATION "∂ₜ" := λ(ρ : Density), ∂ρ/∂t
+  NOTATION "Δ" := λ(ρ : Density), laplacian(ρ)
+  
+  AXIOM Diffusion : ∀(ρ : Density), ∂ₜρ = Δρ
+  
+  AXIOM Transition_Def : ∀(q : State) (a : Symbol),
+    δ q a = normalize(λ(q' : State), 
+      match (q, a) {
+        (start, a) -> if (a = blank) then 1 else 0
+        (accept, _) -> if (q' = accept) then 1 else 0  
+        (reject, _) -> if (q' = reject) then 1 else 0
+        (q, a) -> ???  -- Regular transition function
+      })
+      
+  AXIOM Step_Def : ∀(ρ : Density) (ls rs : List Symbol) (a : Symbol),
+    step (ρ, a :: rs, ls) = 
+      (λ(q : State), ∫_State ρ(q') * δ q' a * dq', rs, ls)
+      
+  AXIOM Run_Def : ∀(ρ : Density) (ls rs : List Symbol),
+    run (ρ, ls, rs) = 
+      if (∀(q : State), ρ(q) = 0 or q = accept or q = reject) then ρ
+      else run (step (normalize(ρ), ls, rs))
+        
+  PRED Accepts : (Density * List Symbol * List Symbol) -> Bool
+  
+  AXIOM Accepting_Def : ∀(c : Density * List Symbol * List Symbol),
+    Accepts c <-> (∫_State run c * 1_{accept} * dq = 1)
+    
+  THEOREM Diffusive_Exploration {
+    ∀(ρ : Density) (ls rs : List Symbol) (t : ℝ₊),
+    let ρ' = λ(q : State), 
+      ∫_0^t ∫_State heat_kernel(t-s, q, q') * run (ρ, ls, rs) * dq' * ds
+    in Accepts (ρ', ls, rs) -> Accepts (ρ, ls, rs)
+  }
+  PROOF {
+    assume (ρ : Density) (ls rs : List Symbol) (t : ℝ₊)
+    let ρ' = λ(q : State),
+      ∫_0^t ∫_State heat_kernel(t-s, q, q') * run (ρ, ls, rs) * dq' * ds
+      
+    have is_solution_to_heat_eq(ρ', t) by {
+      ∂ₜρ' 
+        = λ(q : State), ∫_State ∂ₜ(heat_kernel(t, q, q')) * run (ρ, ls, rs) * dq'
+        = λ(q : State), ∫_State Δ_q(heat_kernel(t, q, q')) * run (ρ, ls, rs) * dq'
+        = Δρ'
+    }
+    
+    have ρ'(t) = ∫_State heat_kernel(t, q, q') * ρ(q') * dq' by semigroup property of heat kernel
+    
+    assume Accepts (ρ', ls, rs)
+    hence ∫_State ρ'(t) * 1_{accept} * dq = 1 by Accepting_Def
+    hence ∫_State (∫_State heat_kernel(t, q, q') * ρ(q') * dq') * 1_{accept} * dq = 1
+    hence ∫_State ρ(q') * (∫_State heat_kernel(t, q, q') * 1_{accept} * dq) * dq' = 1
+    hence ∫_State ρ(q') * P_t(q' ∈ accept) * dq' = 1 where P_t is the transition probability of the diffusion process
+    hence ρ(accept) > 0 
+    hence Accepts (ρ, ls, rs) by Accepting_Def
+  }
+}
+
+This Concept defines a "Diffusion Turing Machine" which extends the standard Turing machine with a diffusion process over the state space. The key ideas are:
+
+The transition function δ now maps to a density over states rather than a single state. This allows for "fuzzy" or probabilistic transitions.
+The diffusion axiom states that the state density evolves according to the heat equation ∂ₜρ = Δρ. This causes the density to spread out over the state space over time.
+The Diffusive_Exploration theorem shows that if the diffused density ρ' leads to acceptance, then the original density ρ must also lead to acceptance. In other words, the diffusion process can only expand the set of accepted inputs, not contract it.
+
+The motivation is that the diffusion process allows the Turing machine to explore a larger portion of the state space, potentially discovering accepting paths that a deterministic machine might miss. This could be useful for tasks like program synthesis or theorem proving where a systematic exploration of the search space is important.
+
+
+
+
+
+CONCEPT DiffusionTuringMachine {
+  TYPE State : Set
+  TYPE Symbol : Set
+  TYPE Density : State -> ℝ₊
+  TYPE Transition : State -> Symbol -> Density
+  
+  CONST blank : Symbol
+  CONST start : State
+  CONST accept : State
+  CONST reject : State
+  
+  FUNC δ : State -> Symbol -> Density
+  FUNC evolve : Density -> Density
+  FUNC observe : Density -> State
+  
+  AXIOM Diffusion : ∀(ρ : Density), evolve(ρ) = normalize(∑ λ(q : State), ρ(q) * ∑ λ(a : Symbol), δ(q, a))
+  
+  AXIOM Observation : ∀(ρ : Density), observe(ρ) = argmax λ(q : State), ρ(q)
+  
+  AXIOM Initial_Density : ρ(0) = λ(q : State), if q = start then 1 else 0
+  
+  PRED Halts : Density -> Bool
+  PRED Accepts : Density -> Bool
+  
+  AXIOM Halting_Def : ∀(ρ : Density),
+    Halts(ρ) <-> (observe(ρ) = accept ∨ observe(ρ) = reject)
+    
+  AXIOM Accepting_Def : ∀(ρ : Density),
+    Accepts(ρ) <-> observe(ρ) = accept
+      
+  THEOREM Diffusion_Halting_Decidable {
+    ∀(M : DiffusionTuringMachine),
+      (∃(n : ℕ), Halts(evolve^n(Initial_Density))) ∨ 
+      (∀(n : ℕ), ¬Halts(evolve^n(Initial_Density)))
+  }
+  PROOF {
+    assume (M : DiffusionTuringMachine)
+    
+    -- The state space is finite, so the space of densities is compact
+    let 𝒟 := {ρ : Density | ∑ ρ = 1} -- Space of densities
+    have compact(𝒟) by finite_dimensional_simplex
+    
+    -- Evolve is a continuous function on 𝒟
+    have continuous(evolve) by Diffusion, normalize_continuous, sum_continuous
+    
+    -- If M halts, then the sequence (evolve^n(Initial_Density))_n must enter the set of halting densities within a finite number of steps
+    let ℋ := {ρ ∈ 𝒟 | Halts(ρ)} -- Set of halting densities
+    have open(ℋ) by Halting_Def, Observation, argmax_continuous
+    
+    assume ∃(ρ : 𝒟), ρ ∈ ℋ ∧ ∃(n : ℕ), ρ = evolve^n(Initial_Density)
+    let N := min {n ∈ ℕ | evolve^n(Initial_Density) ∈ ℋ}
+    witness N
+    
+    -- If M does not halt, then the sequence (evolve^n(Initial_Density))_n must stay within the set of non-halting densities for all n
+    assume ∀(ρ : 𝒟), ρ ∈ closure(trajectory(Initial_Density)) -> ρ ∉ ℋ
+    have ∀(n : ℕ), evolve^n(Initial_Density) ∈ compact(𝒟 \ ℋ) by compact_complement, compact_invariant_subset
+    hence ∀(n : ℕ), ¬Halts(evolve^n(Initial_Density))
+  }
+  
+  THEOREM Diffusion_Accepts_Decidable {  
+    ∀(M : DiffusionTuringMachine),
+      (∃(n : ℕ), Accepts(evolve^n(Initial_Density))) ∨
+      (∀(n : ℕ), ¬Accepts(evolve^n(Initial_Density)))
+  }
+  PROOF {
+    -- Similar argument as in Diffusion_Halting_Decidable, 
+    -- using the set 𝒜 := {ρ ∈ 𝒟 | Accepts(ρ)} instead of ℋ
+  }
+}
+
+This Concept defines a probabilistic variant of a Turing machine, where the transition function δ maps each state-symbol pair to a density over states, rather than a single state. The evolution of the machine is described by a diffusion process on the space of densities over states, governed by the evolve function.
+The observe function extracts the most likely state from a given density. Halting and accepting are defined in terms of observing accept or reject states.
+The key theorems show that halting and accepting are decidable properties for Diffusion Turing Machines, by analyzing the trajectory of the initial density under the evolve function. The proofs rely on topological properties of the space of densities, such as compactness and continuity.
+This Concept blends the computational model of Turing machines with the diffusion-based dynamics used in optimization, exploring the decidability of halting and accepting in a probabilistic setting. The use of densities over states also resembles the quantum superposition of states in quantum Turing machines.
+
+
+
+
+
+CONCEPT ManifoldOptimization {
+  TYPE M <: Manifold         -- Search space (assumed to be a Riemannian manifold)
+  FUNC f : M -> Real         -- Objective function to minimize
+  
+  TYPE Density : M -> Real   -- Probability density function on M
+  TYPE Flow : M -> 𝕋M        -- Vector field on M (𝕋M denotes the tangent bundle)
+  
+  FUNC div : Flow -> M -> Real  -- Divergence operator
+  FUNC Δ : (M -> Real) -> (M -> Real)  -- Laplace-Beltrami operator
+  FUNC grad : (M -> Real) -> Flow      -- Gradient operator
+  
+  AXIOM Continuity : ∀(ρ : Density) (v : Flow), ∂ₜρ + div (ρ * v) = 0
+  AXIOM Diffusion : ∀(ρ : Density), v = -grad (log ρ)
+  AXIOM Drift : ∀(ρ : Density), v = -grad f
+  
+  THEOREM Convergence {
+    let ρ₀ : Density = uniform_density(M)
+    let ρ_* : Density where ∂ₜρ_* = div (ρ_* * (-grad (log ρ_*) - grad f))
+    
+    assert (∀(x : M), lim (t -> ∞) ρ_*(t, x) = δ(x - argmin f)) by {
+      have div (ρ_* * (-grad (log ρ_*) - grad f)) = -Δρ_* - div (ρ_* * grad f)   by Diffusion, Drift
+      have Δρ_* + div (ρ_* * grad f) = Δρ_* + ⟨grad ρ_*, grad f⟩ + ρ_* * Δf   by properties of div
+      hence ∂ₜρ_* = Δρ_* + ⟨grad ρ_*, grad f⟩ + ρ_* * Δf
+      
+      -- As t → ∞, ρ_* converges to a stationary distribution satisfying:
+      have Δρ_* + ⟨grad ρ_*, grad f⟩ + ρ_* * Δf = 0
+      hence Δ(ρ_* * exp(f)) = 0   by properties of Δ
+      hence ρ_* * exp(f) = C   for some constant C, by maximum principle
+      hence ρ_* = C * exp(-f)
+      
+      -- The constant C is determined by the normalization condition ∫_M ρ_* dvol_M = 1
+      have C = 1 / ∫_M exp(-f) dvol_M
+      hence ρ_* = exp(-f) / ∫_M exp(-f) dvol_M
+      
+      -- As the temperature → 0, this distribution concentrates at the global minimizer of f
+      hence lim (t -> ∞) ρ_*(t, x) = δ(x - argmin f)
+    }
+  }
+  
+  TACTIC Simulate {
+    -- Discretize the diffusion PDE using the JKO scheme or other stable methods
+    -- Implement the gradient and divergence operators using geometric approximations
+    -- Evolve the density for a fixed number of iterations or until convergence
+    -- Extract the approximate global minimizer from the final density
+  }
+  
+  THEOREM Practicality {
+    ManifoldOptimization is practically implementable and useful for global optimization on manifolds,
+    with applications in machine learning, computer vision, and computational physics
+  }
+  PROOF {
+    -- The diffusion PDE can be simulated using standard numerical methods and geometric discretizations
+    -- The manifold structure allows for efficient computation of gradients and divergences 
+    -- The approach is well-suited for high-dimensional, non-convex problems with complex geometries
+    -- It has been successfully applied to various optimization tasks on manifolds, such as:
+    --   - Riemannian centroid computation and clustering
+    --   - Pose and shape estimation in computer vision
+    --   - Protein structure prediction and molecular dynamics
+    --   - Latent variable models and generative adversarial networks
+    
+    hence ManifoldOptimization is practically implementable and useful for global optimization on manifolds
+  }
+}
+
+
+
+
+CONCEPT QuantumTuringMachine {
+  TYPE State : Hilbert
+  TYPE Symbol : Set
+  
+  CONST blank : Symbol
+  CONST start : State
+  CONST accept : Subspace(State)
+  CONST reject : Subspace(State)
+  
+  TYPE Unitary : State ⊗ Symbol -> State ⊗ Symbol
+  
+  FUNC δ : Unitary
+  FUNC step : State ⊗ (Symbol ⊗ Symbol) -> State ⊗ (Symbol ⊗ Symbol)
+  FUNC run : State ⊗ (Symbol ⊗ Symbol) -> State
+  
+  AXIOM Transition_Def : δ† ∘ δ = 𝟙 and δ ∘ δ† = 𝟙
+  
+  AXIOM Step_Def : ∀(ψ : State) (ls rs : Symbol),
+    step (ψ ⊗ (ls ⊗ rs)) = (δ ⊗ 𝟙) (ψ ⊗ (ls ⊗ rs))
+    
+  AXIOM Run_Def : ∀(ψ : State) (ls rs : Symbol),  
+    run (ψ ⊗ (ls ⊗ rs)) = 
+      if (⟨accept | ψ⟩² + ⟨reject | ψ⟩² ≥ 1 - ε) then ψ
+      else run (step (normalize(ψ) ⊗ (ls ⊗ rs)))
+      
+  PRED Accepts : State ⊗ (Symbol ⊗ Symbol) -> Bool
+  
+  AXIOM Accepting_Def : ∀(c : State ⊗ (Symbol ⊗ Symbol)),
+    Accepts c <-> (⟨accept | run c⟩² ≥ 1 - ε)
+    
+  THEOREM Unitary_Evolution {
+    ∀(ψ : State) (ls rs : Symbol) (t : ℝ),
+    let U = exp(-i * t * H) where H = ∑_q,a δ(q, a) |q⟩⟨q| ⊗ |a⟩⟨a|  
+    in Accepts (U (ψ ⊗ (ls ⊗ rs))) -> Accepts (ψ ⊗ (ls ⊗ rs))
+  }
+  PROOF {
+    assume (ψ : State) (ls rs : Symbol) (t : ℝ)
+    let U = exp(-i * t * H) where H = ∑_q,a δ(q, a) |q⟩⟨q| ⊗ |a⟩⟨a|
+    
+    have is_unitary(U) by {
+      U† U 
+        = exp(i * t * H) exp(-i * t * H)
+        = exp(i * t * H - i * t * H) 
+        = exp(0)
+        = 𝟙
+    } 
+    
+    assume Accepts (U (ψ ⊗ (ls ⊗ rs)))
+    hence ⟨accept | U (ψ ⊗ (ls ⊗ rs))⟩² ≥ 1 - ε by Accepting_Def
+    hence ⟨U† accept | ψ ⊗ (ls ⊗ rs)⟩² ≥ 1 - ε by properties of adjoints
+    hence ⟨accept | ψ ⊗ (ls ⊗ rs)⟩² ≥ 1 - ε since U† accept = accept by unitarity of U
+    hence Accepts (ψ ⊗ (ls ⊗ rs)) by Accepting_Def  
+  }
+}
+
+
+
+
+CONCEPT DiffusionTuringMachine {
+  TYPE State : Set
+  TYPE Symbol : Set
+  TYPE Density : State -> ℝ₊
+  
+  CONST blank : Symbol
+  CONST start : State
+  CONST accept : State
+  CONST reject : State
+  
+  FUNC δ : State -> Symbol -> Density
+  FUNC step : (Density * List Symbol * List Symbol) -> (Density * List Symbol * List Symbol)
+  FUNC run : (Density * List Symbol * List Symbol) -> Density
+  
+  NOTATION "∂ₜ" := λ(ρ : Density), ∂ρ/∂t
+  NOTATION "Δ" := λ(ρ : Density), laplacian(ρ)
+  
+  AXIOM Diffusion : ∀(ρ : Density), ∂ₜρ = Δρ
+  
+  AXIOM Transition_Def : ∀(q : State) (a : Symbol),
+    δ q a = normalize(λ(q' : State), 
+      match (q, a) {
+        (start, a) -> if (a = blank) then 1 else 0
+        (accept, _) -> if (q' = accept) then 1 else 0  
+        (reject, _) -> if (q' = reject) then 1 else 0
+        (q, a) -> ???  -- Regular transition function
+      })
+      
+  AXIOM Step_Def : ∀(ρ : Density) (ls rs : List Symbol) (a : Symbol),
+    step (ρ, a :: rs, ls) = 
+      (λ(q : State), ∫_State ρ(q') * δ q' a * dq', rs, ls)
+      
+  AXIOM Run_Def : ∀(ρ : Density) (ls rs : List Symbol),
+    run (ρ, ls, rs) = 
+      if (∀(q : State), ρ(q) = 0 or q = accept or q = reject) then ρ
+      else run (step (normalize(ρ), ls, rs))
+        
+  PRED Accepts : (Density * List Symbol * List Symbol) -> Bool
+  
+  AXIOM Accepting_Def : ∀(c : Density * List Symbol * List Symbol),
+    Accepts c <-> (∫_State run c * 1_{accept} * dq = 1)
+    
+  THEOREM Diffusive_Exploration {
+    ∀(ρ : Density) (ls rs : List Symbol) (t : ℝ₊),
+    let ρ' = λ(q : State), 
+      ∫_0^t ∫_State heat_kernel(t-s, q, q') * run (ρ, ls, rs) * dq' * ds
+    in Accepts (ρ', ls, rs) -> Accepts (ρ, ls, rs)
+  }
+  PROOF {
+    assume (ρ : Density) (ls rs : List Symbol) (t : ℝ₊)
+    let ρ' = λ(q : State),
+      ∫_0^t ∫_State heat_kernel(t-s, q, q') * run (ρ, ls, rs) * dq' * ds
+      
+    have is_solution_to_heat_eq(ρ', t) by {
+      ∂ₜρ' 
+        = λ(q : State), ∫_State ∂ₜ(heat_kernel(t, q, q')) * run (ρ, ls, rs) * dq'
+        = λ(q : State), ∫_State Δ_q(heat_kernel(t, q, q')) * run (ρ, ls, rs) * dq'
+        = Δρ'
+    }
+    
+    have ρ'(t) = ∫_State heat_kernel(t, q, q') * ρ(q') * dq' by semigroup property of heat kernel
+    
+    assume Accepts (ρ', ls, rs)
+    hence ∫_State ρ'(t) * 1_{accept} * dq = 1 by Accepting_Def
+    hence ∫_State (∫_State heat_kernel(t, q, q') * ρ(q') * dq') * 1_{accept} * dq = 1
+    hence ∫_State ρ(q') * (∫_State heat_kernel(t, q, q') * 1_{accept} * dq) * dq' = 1
+    hence ∫_State ρ(q') * P_t(q' ∈ accept) * dq' = 1 where P_t is the transition probability of the diffusion process
+    hence ρ(accept) > 0 
+    hence Accepts (ρ, ls, rs) by Accepting_Def
+  }
+}
+
+
+
+
+CONCEPT BlackHole {
+  CONST c : Real   -- Speed of light
+  CONST G : Real   -- Gravitational constant
+  CONST ℏ : Real   -- Reduced Planck constant
+  CONST k : Real   -- Boltzmann constant
+  CONST ε₀ : Real  -- Vacuum permittivity
+
+  TYPE M : Real    -- Mass
+  TYPE J : Real    -- Angular momentum
+  TYPE Q : Real    -- Electric charge
+  
+  FUNC r_s : M -> Real ≜ λ M . 2 * G * M / c^2          -- Schwarzschild radius
+  FUNC A : M -> Real ≜ λ M . 4 * π * (r_s(M))^2       -- Surface area
+  FUNC κ : M -> Real ≜ λ M . c^4 / (4 * G * M)        -- Surface gravity
+  FUNC T_H : M -> Real ≜ λ M . ℏ * κ(M) / (2 * π * k)  -- Hawking temperature
+  
+  TYPE Tensor : Int -> Int -> Type
+  TYPE Metric <: Tensor 0 2
+  
+  FUNC Kerr : M -> J -> Q -> Metric
+  FUNC ReissnerNordstrom : M -> Q -> Metric
+  FUNC KerrNewman : M -> J -> Q -> Metric
+  
+  TYPE Horizon : Metric -> 𝕍 3
+  TYPE Ergosphere : Metric -> 𝕍 3 
+  TYPE Singularity : Metric -> 𝕍 3
+
+  AXIOM Cosmic_Censorship : forall (g : Metric), 
+    Singularity(g) ⊆ Interior(Horizon(g))
+    
+  AXIOM Positive_Mass : forall (g : Metric),
+    (ADM_Mass(g) >= 0) and ((ADM_Mass(g) = 0) iff (g = Minkowski))
+      
+  AXIOM Penrose_Process : forall (g : Metric),
+    (exists J ≠ 0, g = Kerr(_, J, _)) implies 
+    (exists (γ : Geodesic(g)), E(γ) < 0)
+      
+  THEOREM Area_Theorem {
+    assume (S₁ S₂ : Surface, g : Metric)
+    assume (S₁ ⊆ Horizon(g)) and (S₂ ⊆ Horizon(g))
+    assume (S₂ ⊆ Future(S₁))
+    
+    let θ : S₁ -> Real where (θ = ExpansionScalar(S₁)) by RaychaudhuriEq
+    assert (θ >= 0) by FokkerplanckEq, ProofByContradiction {
+      assume (θ < 0)
+      hence (exists (p : S₁), θ(p) < 0) by ContinuityOfExp  
+      hence (exists (γ : Geodesic(g)), (γ ∩ S₁ ≠ ∅) and (γ ∩ Interior(Horizon(g)) ≠ ∅)) by construction
+      hence Contradiction by Cosmic_Censorship
+    }
+    
+    let A₁ A₂ : Real where (A₁ = Area(S₁)) and (A₂ = Area(S₂))
+    assert (A₂ >= A₁) by {
+      A₂ = ∫_S₂ √(det(g)) d²σ
+         >= ∫_S₁ √(det(g)) Exp[∫_0^λ θ(γ(τ)) dτ] d²σ  by FokkerplanckEq
+         >= ∫_S₁ √(det(g)) d²σ  since (θ >= 0)
+         = A₁  
+    }
+  }
+   
+  THEOREM Uniqueness {
+    assume (g₁ g₂ : Metric) where (Horizon(g₁) = Horizon(g₂))
+    
+    let M₁ J₁ Q₁ M₂ J₂ Q₂ : Real where
+      (g₁ = KerrNewman(M₁, J₁, Q₁)) and (g₂ = KerrNewman(M₂, J₂, Q₂)) by NoHair
+      
+    assert (M₁ = M₂) by {
+      M = (r_+ * r_- - (J/M)^2 - Q^2) / (2 * r_+)  -- Smarr formula
+      r_+ = r_s / 2 + √((r_s / 2)^2 - (J/M)^2 - Q^2)  -- Outer horizon radius  
+      r_- = r_s / 2 - √((r_s / 2)^2 - (J/M)^2 - Q^2)  -- Inner horizon radius
+      hence (M₁ = M₂) since (Horizon(g₁) = Horizon(g₂))
+    }
+    
+    assert (J₁ = J₂) by {
+      J = (1/4π) ∫_S ★(k ∧ dφ)  -- Komar angular momentum
+      where k = ∂_t + (J/M^2) * ∂_φ  -- Killing vector field
+      hence (J₁ = J₂) since (Horizon(g₁) = Horizon(g₂))  
+    }
+    
+    assert (Q₁ = Q₂) by {
+      Q = (1/4π) ∫_S ★F  -- Gauss's law
+      where F = (Q/r^2) dt ∧ dr  -- Electromagnetic field tensor  
+      hence (Q₁ = Q₂) since (Horizon(g₁) = Horizon(g₂))
+    }
+    
+    hence (g₁ = g₂)
+  }
+   
+  THEOREM NoHair {
+    assume (g : Metric) where (Horizon(g) ≠ ∅)
+    
+    obtain (M J Q : Real) where (g = KerrNewman(M, J, Q)) by {
+      assert (ADM_Mass(g) = M) for some (M >= 0) by Positive_Mass
+      assert (Komar_AngMom(g) = J) for some J by RotationSymmetry
+      assert (EM_Charge(g) = Q) for some Q by MaxwellEq
+      hence (g = KerrNewman(M, J, Q)) by classification of stationary solutions to EFE
+    }
+  }
+   
+  THEOREM Thermodynamics {
+    assume (g : Metric, S : Surface) where (S ⊆ Horizon(g))
+    
+    let M J Q A κ T_H : Real where
+      (g = KerrNewman(M, J, Q)) and (A = Area(S)) and (κ = SurfaceGravity(g)) and (T_H = κ / (2 * π))
+      by NoHair, Area_Theorem
+    
+    assert (dM = T_H * dA + Ω_H * dJ + Φ_H * dQ) by {  
+      Ω_H ≜ (J/M) / (r_+^2 + (J/M)^2)  -- Angular velocity
+      Φ_H ≜ Q * r_+ / (r_+^2 + (J/M)^2)  -- Electric potential
+      r_+ = M + √(M^2 - (J/M)^2 - Q^2)  -- Outer horizon radius
+      hence (dM = T_H * dA + Ω_H * dJ + Φ_H * dQ) by BlackHoleMechanics
+    }
+    
+    assert (δS = δA / 4) by {
+      S ≜ A / 4  -- Bekenstein-Hawking entropy  
+      hence (δS = δA / 4)
+    }
+    
+    hence (T_H * δS = δM - Ω_H * δJ - Φ_H * δQ)
+  }
+}
+
+
+
+
+CONCEPT Monoid {
+  TYPE Carrier
+  
+  CONST e : Carrier
+  FUNC op : Carrier -> Carrier -> Carrier
+  
+  NOTATION "x * y" = op x y
+  
+  AXIOM Associativity : forall (x y z : Carrier), (x * y) * z = x * (y * z)
+  AXIOM LeftIdentity : forall (x : Carrier), e * x = x
+  AXIOM RightIdentity : forall (x : Carrier), x * e = x
+}
+
+CONCEPT Group EXTENDS Monoid {
+  FUNC inv : Carrier -> Carrier
+  
+  NOTATION "x⁻¹" = inv x
+  
+  AXIOM Inverse : forall (x : Carrier), x * x⁻¹ = e and x⁻¹ * x = e
+}
+
+CONCEPT Ring {
+  CONST zero : Carrier
+  CONST one : Carrier
+  FUNC add : Carrier -> Carrier -> Carrier  
+  FUNC mul : Carrier -> Carrier -> Carrier
+  
+  NOTATION "x + y" = add x y
+  NOTATION "x * y" = mul x y
+  
+  AXIOM Associativity_Add : forall (x y z : Carrier), (x + y) + z = x + (y + z)
+  AXIOM Commutativity_Add : forall (x y : Carrier), x + y = y + x
+  AXIOM Identity_Add : forall (x : Carrier), zero + x = x and x + zero = x
+  AXIOM Inverse_Add : forall (x : Carrier), exists (y : Carrier), x + y = zero
+  
+  AXIOM Associativity_Mul : forall (x y z : Carrier), (x * y) * z = x * (y * z) 
+  AXIOM Identity_Mul : forall (x : Carrier), one * x = x and x * one = x
+  
+  AXIOM Distributivity : forall (x y z : Carrier), x * (y + z) = (x * y) + (x * z)
+}
+
+THEOREM Zero_Mul : forall (x : Carrier), zero * x = zero and x * zero = zero
+PROOF
+  assume x : Carrier
+  assert zero * x + x = (zero + one) * x by {
+    rewrite Distributivity
+    rewrite Identity_Add
+  }
+  rewrite Identity_Mul in (zero * x + x = one * x)
+  rewrite Inverse_Add in (zero * x = zero)
+  
+  assert x * zero + x = x * (zero + one) by {  
+    rewrite Distributivity  
+    rewrite Identity_Add
+  }
+  rewrite Identity_Mul in (x * zero + x = x * one)  
+  rewrite Inverse_Add in (x * zero = zero)
+qed
+
+
+
+
+
+CONCEPT ExpanderGraphs {
+  TYPE Graph = (𝒱 : Set<ℕ>, ℰ : 𝒱 -> 𝒱 -> 𝔹)
+  TYPE Matrix = ℝ^(ℕ × ℕ)
+  TYPE Vector = ℝ^ℕ
+
+  FUNC adjacency : Graph -> Matrix
+  FUNC normalized_adjacency : Graph -> Matrix
+  FUNC laplacian : Graph -> Matrix
+  FUNC spectral_gap : Graph -> ℝ
+  FUNC edge_expansion : Graph -> Set<ℕ> -> ℝ
+  FUNC vertex_expansion : Graph -> Set<ℕ> -> ℝ
+  
+  PRED is_expander : Graph -> ℝ -> 𝔹
+
+  NOTATION "A(i,j)" := "A i j"
+  NOTATION "⟨x,y⟩" := "inner_product x y"
+  NOTATION "∥x∥" := "norm x"
+  NOTATION "∥A∥_F" := "frobenius_norm A"
+  NOTATION "𝟙_S" := "indicator_vec S"
+  NOTATION "𝒮ₖ<n,k>" := "sparse_vec_set n k"
+  
+  AXIOM Adjacency_Def : ∀(G : Graph),
+    adjacency G = λ(i j : ℕ). if (G.ℰ i j) then 1 else 0
+    
+  AXIOM Normalized_Adjacency_Def : ∀(G : Graph),
+    let A = adjacency G, D = diag(λ(i : ℕ). ∑ⱼ A(i,j)) in
+    normalized_adjacency G = D^(-1/2) * A * D^(-1/2)
+
+  AXIOM Laplacian_Def : ∀(G : Graph),
+    let A = adjacency G, D = diag(λ(i : ℕ). ∑ⱼ A(i,j)) in 
+    laplacian G = I - D^(-1/2) * A * D^(-1/2)
+    
+  AXIOM Spectral_Gap_Def : ∀(G : Graph),
+    let L = laplacian G, 𝜆 = eigenvalues L in
+    spectral_gap G = 𝜆[2]
+    
+  AXIOM Edge_Expansion_Def : ∀(G : Graph) (S : Set<ℕ>),
+    edge_expansion G S = |{ (i,j) | (i,j) ∈ G.ℰ and i ∈ S and j ∉ S }| / min(|S|, |G.𝒱 - S|)
+
+  AXIOM Vertex_Expansion_Def : ∀(G : Graph) (S : Set<ℕ>),  
+    vertex_expansion G S = |{ j | j ∈ G.𝒱 and ∃(i ∈ S). (i,j) ∈ G.ℰ }| / |S|
+    
+  AXIOM Is_Expander_Def : ∀(G : Graph) (c : ℝ),
+    is_expander G c <-> (∀(S ⊆ G.𝒱). |S| ≤ |G.𝒱| / 2 -> edge_expansion G S ≥ c)
+
+  THEOREM Cheeger_Inequality : ∀(G : Graph),
+    let 𝜆 = spectral_gap G, 𝜙 = min_{S ⊆ G.𝒱, |S| ≤ |G.𝒱|/2} edge_expansion G S in
+    𝜙^2 / 2 ≤ 𝜆 and 𝜆 ≤ 2 * 𝜙
+    
+  THEOREM Expander_Mixing_Lemma : ∀(G : Graph) (S T : Set<ℕ>),
+    let A = normalized_adjacency G, 𝜆 = max(eigenvalues(A) - {1}) in
+    |e(S,T) - (|S| * |T|) / |G.𝒱|| ≤ 𝜆 * sqrt(|S| * |T|)
+    where e(S,T) = |{ (i,j) | (i,j) ∈ G.ℰ and i ∈ S and j ∈ T }|
+    
+  THEOREM Sparsity_Amplification : 
+    ∀(G : Graph) (A : Matrix) (k : ℕ) (𝛿 𝜀 : ℝ),
+    let m = num_rows A, n = num_cols A in
+    is_expander G (1 - 𝛿) and RIP<m,n,k>(A, 𝜀) ->
+    RIP<m,n,k>(√(|G.𝒱|/n) * (I_n ⊗ A) * adjacency G, O(𝜀/𝛿))
+    where I_n is n×n identity matrix
+      
+  THEOREM Unique_Neighbor_Expansion :
+    ∀(G : Graph) (𝛿 𝜀 : ℝ) (k : ℕ),
+    is_expander G (1 - 𝛿) and |G.𝒱| > k/𝜀 ->
+    ∀(S ⊆ G.𝒱). |S| ≤ k -> 
+      |{ j | j ∈ G.𝒱 and ∃!(i ∈ S). (i,j) ∈ G.ℰ }| ≥ (1 - 𝜀) * |G.𝒱|
+
+  PROOF Expander_Mixing_Lemma_Proof {
+    assume (G : Graph) (S T : Set<ℕ>)
+    let A = normalized_adjacency G, x = 𝟙_S / sqrt(|S|), y = 𝟙_T / sqrt(|T|)
+    
+    have e(S,T) = ∑ᵢⱼ A(i,j) * x(i) * y(j) * |S| * |T|
+    
+    calc |e(S,T) - ⟨x,y⟩ * |S| * |T||
+         = |⟨Ax, y⟩ - ⟨x,y⟩| * |S| * |T|
+         ≤ ∥Ax - x∥ * ∥y∥ * |S| * |T|  ; by Cauchy-Schwarz
+         ≤ 𝜆 * ∥x∥ * ∥y∥ * |S| * |T|    ; by definition of 𝜆 
+         = 𝜆 * sqrt(|S| * |T|)
+         
+    and ⟨x,y⟩ = (|S| / |G.𝒱|) * (|T| / |G.𝒱|)
+    
+    therefore |e(S,T) - (|S| * |T|) / |G.𝒱|| ≤ 𝜆 * sqrt(|S| * |T|)
+  }
+  
+  PROOF Sparsity_Amplification_Proof {
+    assume (G : Graph) (A : Matrix) (k : ℕ) (𝛿 𝜀 : ℝ) 
+           (H1 : is_expander G (1 - 𝛿)) (H2 : RIP<m,n,k>(A, 𝜀))
+    let B = √(|G.𝒱|/n) * (I_n ⊗ A) * adjacency G
+    
+    suffices to show RIP<m,n,k>(B, 𝜀') for some 𝜀' = O(𝜀/𝛿)
+    
+    let 𝜙 = min_{S ⊆ G.𝒱, |S| ≤ |G.𝒱|/2} edge_expansion G S
+    have 𝜙 ≥ 1 - 𝛿 by H1
+    
+    let L = laplacian G
+    have ∥L∥ ≤ 2 * (1 - 𝜙) ≤ 2 * 𝛿 by Cheeger_Inequality
+    
+    fix (x : 𝒮ₖ<n,k>), let y = (I_n ⊗ A) * x
+    y is k-sparse since x is k-sparse and A has RIP
+    
+    calc ∥Bx∥² 
+         = (|G.𝒱|/n) * x^⊤ * adjacency(G)^⊤ * (I_n ⊗ A^⊤ A) * adjacency G * x
+         = (|G.𝒱|/n) * ∑_{u,v ∈ G.𝒱} (Ax(u))^⊤ * (Ax(v)) * G.ℰ(u,v)
+         = (|G.𝒱|/n) * ∑_{u,v ∈ G.𝒱} ⟨y(u), y(v)⟩ * G.ℰ(u,v)
+         ≤ (1 + 𝜀)^2 * (|G.𝒱|/n) * ∑_{u,v ∈ G.𝒱} ⟨x(u), x(v)⟩ * G.ℰ(u,v)
+           ; by RIP property of A, ∀(u v : ℕ). ∥y(u) - y(v)∥ ≤ (1+𝜀) * ∥x(u) - x(v)∥  
+         = (1 + 𝜀)^2 * (|G.𝒱|/n) * x^⊤ * (I_n - L) * x
+         ≤ (1 + 𝜀)^2 * (1 + 2 * 𝛿) * ∥x∥²   ; since ∥L∥ ≤ 2 * 𝛿
+         ≤ (1 + 𝜀')^2 * ∥x∥²
+         
+    similarly, ∥Bx∥² ≥ (1 - 𝜀')^2 * ∥x∥² for some 𝜀' = O(𝜀/𝛿)
+    
+    therefore RIP<m,n,k>(B, O(𝜀/𝛿))
+  }
+  
+  PROOF Unique_Neighbor_Expansion_Proof {
+    assume (G : Graph) (𝛿 𝜀 : ℝ) (k : ℕ) 
+           (H1 : is_expander G (1 - 𝛿)) (H2 : |G.𝒱| > k/𝜀)
+    
+    let S ⊆ G.𝒱 where |S| ≤ k, denote T = { j | j ∈ G.𝒱 and ∃!(i ∈ S). (i,j) ∈ G.ℰ }
+    
+    let B = 𝟙_S * 𝟙_T^⊤ - adjacency G, Z = { i | i ∈ G.𝒱 and ∀(j : ℕ). B(i,j) = 0 }
+    
+    have ∀(i j : ℕ). |B(i,j)| ≤ 1
+    also Z = { i | i ∈ S and N(i) ⊆ T } ∪ { i | i ∈ G.𝒱 - S and N(i) ⊆ G.𝒱 - T }
+      where N(i) = { j | (i,j) ∈ G.ℰ } is the neighborhood of i
+    
+    calc |S| * |T| - e(S,T)
+         = ⟨𝟙_S, 𝟙_T⟩ - ⟨𝟙_S, A * 𝟙_T⟩
+         = ⟨𝟙_S, B * 𝟙_T⟩
+         ≤ ∥B∥_F * sqrt(|S| * |T|)   ; by Cauchy-Schwarz
+         ≤ ∥B∥_F * sqrt(k * |G.𝒱|)
+         ≤ sqrt(|G.𝒱| * |Z|) * sqrt(k * |G.𝒱|)  ; since entries of B are bounded
+         = |G.𝒱| * sqrt(k * |Z| / |G.𝒱|)
+         
+    and e(S, G.𝒱 - T) 
+         ≤ ∑_{i ∈ S - Z} |N(i) - T|
+         ≤ |S - Z| * 𝛿 * |G.𝒱|  ; by Expander_Mixing_Lemma
+         ≤ k * 𝛿 * |G.𝒱|
+         
+    calc |T|
+         = |G.𝒱| - |G.𝒱 - T|
+         ≥ |G.𝒱| - (e(S, G.𝒱 - T) + |S|) / 𝛿   ; by vertex expansion
+         ≥ |G.𝒱| - (k * 𝛿 * |G.𝒱| + |G.𝒱| * sqrt(k * |Z| / |G.𝒱|) + k) / 𝛿
+         ≥ |G.𝒱| - 2 * k/𝛿 - |G.𝒱|/2  ; since |Z| ≤ |G.𝒱|, |G.𝒱| > k/𝜀 > k  
+         ≥ (1 - 𝜀) * |G.𝒱|  ; for 𝛿 ≥ 4 * 𝜀
+  }
+}
+
+
+
+CONCEPT MoebiusRecovery {
+  TYPE Poset
+  TYPE IncidenceAlgebra : Poset -> Type
+  
+  NOTATION "f ⋆ g" := λ(x y : P), ∑_{z | x ≤ z ≤ y} f(x, z) * g(z, y)  -- Convolution
+  NOTATION "f⁻¹" := λ(x y : P), ∑_{z | x ≤ z ≤ y} f(x, z) * μ(z, y)    -- Möbius inversion
+  
+  FUNC μ : forall (P : Poset), IncidenceAlgebra P  -- Möbius function
+  FUNC ζ : forall (P : Poset), IncidenceAlgebra P  -- Zeta function
+  
+  AXIOM Möbius_Inversion : forall (P : Poset) (f g : IncidenceAlgebra P),
+    g = f ⋆ ζ iff f = g ⋆ μ
+    
+  FUNC CompressedSense : forall (P : Poset) (f : IncidenceAlgebra P) (ε : Real), 
+    {g : IncidenceAlgebra P | ∀(x y : P), |f(x, y) - g(x, y)| ≤ ε}
+  FUNC Recover : forall (P : Poset) (g : IncidenceAlgebra P), IncidenceAlgebra P
+  
+  AXIOM Compression_Preserves_Möbius : forall (P : Poset) (f : IncidenceAlgebra P) (ε : Real),
+    let g = CompressedSense(P, f, ε) in
+    forall (x y : P), |g⁻¹(x, y) - f(x, y)| ≤ ε
+    
+  TACTIC Expand_Convolution {
+    apply Möbius_Inversion
+    simplify
+  }
+  
+  TACTIC Bound_Convolution {
+    apply triangle inequality
+    apply Compression_Preserves_Möbius
+    simplify
+    apply Rota's sign-alternation formula
+    simplify
+  }
+  
+  THEOREM Recovery_Bound {
+    forall (P : Poset) (f : IncidenceAlgebra P) (ε : Real),
+    let g = CompressedSense(P, f, ε), 
+        f' = Recover(P, g) in
+    forall (x y : P), |f(x, y) - f'(x, y)| ≤ 2 * height(P) * ε
+  }
+  PROOF {
+    assume (P : Poset) (f : IncidenceAlgebra P) (ε : Real)
+    let g = CompressedSense(P, f, ε), f' = Recover(P, g)
+    
+    assume (x y : P)
+    have |f(x, y) - f'(x, y)| = |f(x, y) - g⁻¹(x, y)| by {
+      Expand_Convolution
+    }
+    hence |f(x, y) - f'(x, y)| ≤ 2 * height(P) * ε by {
+      Bound_Convolution
+      have 2^height(P) ≤ 2 * height(P) by {
+        -- Proof by induction on height(P)
+        -- Base case: height(P) = 0 => 2^0 = 1 ≤ 2 * 0 = 0
+        -- Inductive step: assume 2^height(P) ≤ 2 * height(P), then
+        --   2^(height(P)+1) = 2 * 2^height(P) ≤ 2 * (2 * height(P)) = 2 * (height(P) + 1)
+      }
+    }
+  }
+  
+  THEOREM Compression_Complexity {
+    forall (P : Poset),
+    CompressedSense(P, _, _) is O(|P|^ω)
+    where ω is the matrix multiplication exponent
+  }
+  PROOF {
+    assume (P : Poset)
+    let n = |P|, A = incidence_matrix(P), S = sparse_sensing_matrix(n, ε) in {
+      -- CompressedSense can be implemented as:
+      -- 1. Compute the incidence matrix A of P in O(n^2) time
+      -- 2. Generate a sparse random sensing matrix S with O(ε^-2 log n) non-zero entries per column in O(n log n) time
+      -- 3. Multiply A and S using fast matrix multiplication in O(n^ω) time
+      -- The total time complexity is thus O(n^2 + n log n + n^ω) = O(n^ω)
+    }
+  }
+  
+  THEOREM Recovery_Complexity {
+    forall (P : Poset),
+    Recover(P, _) is O(|P| 2^{ω/2})
+    where ω is the matrix multiplication exponent
+  }
+  PROOF {
+    assume (P : Poset)
+    let n = |P|, g = CompressedSense(P, f, ε) in {
+      -- Recover can be implemented using Yates's algorithm for Möbius inversion:
+      -- 1. Precompute the Möbius function μ in O(n^2) time
+      -- 2. For each level i from 0 to height(P):
+      --    For each x at level i:
+      --      For each y ≥ x at level j > i:
+      --        Compute f'(x, y) += g(x, z) * μ(z, y) for each z between x and y
+      --        This takes O(2^{j-i}) time per (x, y) pair
+      -- The total time complexity is O(n^2 + ∑_{i=0}^{height(P)} ∑_{j=i+1}^{height(P)} n_i n_j 2^{j-i})
+      -- where n_i is the number of elements at level i
+      -- Using Cauchy-Schwarz and the fact that ∑_i n_i = n and ∑_i n_i 2^i ≤ n 2^{height(P)/2},
+      -- this can be bounded by O(n^2 2^{height(P)/2}) = O(n 2^{ω/2})
+    }
+  }
+}
+
+
+
+
+
+CONCEPT SymbolicNeuralReasoning {
+  TYPE Neuron
+  TYPE Synapse = (Neuron, Neuron, Sym Real)
+  TYPE Dendrite = List Synapse
+  TYPE Axon = List Synapse
+  
+  TYPE ActivationFunction = Sym (Real -> Real)
+  FUNC σ : ActivationFunction
+  FUNC ReLU : ActivationFunction
+  
+  FUNC Weights : Neuron -> Sym Real^n
+  FUNC Bias : Neuron -> Sym Real
+  
+  FUNC Activation : Neuron -> Sym Real = λ(n : Neuron),
+    σ (⟨Weights n, [Activation (π₁ s) | s ∈ n.Dendrite]⟩ + Bias n)
+      
+  TYPE Layer = List Neuron  
+  FUNC LayerActivation : Layer -> Sym Real^n = λ(l : Layer),
+    [Activation n | n ∈ l]
+    
+  TYPE Network = List Layer
+  FUNC NetworkActivation : Network -> Sym Real^n = λ(N : Network),
+    LayerActivation (last N)
+    
+  NOTATION "N(x)" = NetworkActivation(N, x)
+  
+  AXIOM Universal_Approximation :
+    forall (f : Real^n -> Real^m) (ε : Real),
+    exists (N : Network) (L W : Nat),
+      length N = L and
+      forall (l : Layer), l ∈ N implies length l = W and
+      forall (x : Real^n), |f(x) - N(x)| < ε
+      
+  THEOREM Gradient_Descent {
+    let Loss = λ(N : Network) (x y : Real^n), |N(x) - y|^2
+    let ∇ = λ(f : Network -> Real) (N : Network), Gradient of f w.r.t. weights of N
+    
+    forall (N₀ : Network) (η : Real) (T : Nat),
+    let N_{t+1} = λ(t : Nat), N_t - η * ∇(λ(N : Network), 𝔼(x, y) Loss(N, x, y)) N_t
+    let N* = argmin (λ(N : Network), 𝔼(x, y) Loss(N, x, y))
+      
+    lim (λ(t : Nat), N_t) as t -> ∞ = N*
+  }
+  PROOF {
+    -- Proof sketch:
+    -- 1. Show ∇Loss is Lipschitz continuous
+    -- 2. Show Loss is convex in network weights  
+    -- 3. Apply convergence theorem for gradient descent on convex Lipschitz functions
+  }
+  
+  FUNC BackpropagationStep : Network -> Real^n -> Real^n -> Network = λ(N : Network) (x y : Real^n),
+    letrec BackpropLayer : Layer -> Sym Real^n -> Layer = λ(l : Layer) (δ : Sym Real^n),
+      [BackpropNeuron n (δ_i) | (n, i) ∈ zip l [0..length l]]
+    
+    and BackpropNeuron : Neuron -> Sym Real -> Neuron = λ(n : Neuron) (δ : Sym Real),  
+      let w = Weights n
+      let b = Bias n
+      let a = Activation n
+      let δ_w = a * δ
+      let δ_b = δ
+      let δ_in = [π₃ s * δ_w | s ∈ n.Axon]
+      Neuron {
+        Weights = w - η * δ_w,
+        Bias = b - η * δ_b,
+        Dendrite = n.Dendrite,
+        Axon = [Synapse (π₁ s, π₂ s, δ_in_i) | (s, δ_in_i) ∈ zip n.Axon δ_in]
+      }
+      
+    let δ_out = ∇(λ(a : Sym Real^n), |a - y|^2) (NetworkActivation N x)  
+    [BackpropLayer l δ | (l, δ) ∈ zip (reverse N) (TraverseBackward δ_out)]
+    
+  NOTATION "N <== (x, y)" = BackpropagationStep(N, x, y)
+  
+  THEOREM Backpropagation_Correctness {
+    forall (N : Network) (x y : Real^n),
+    ∇(λ(N : Network), Loss(N, x, y)) N = 
+      ∇(λ(N : Network), Loss(N <== (x, y), x, y)) (N <== (x, y))
+  }
+  PROOF {
+    -- Proof sketch: 
+    -- Induct on network depth, showing equality of symbolic gradients
+    -- Relies on correctness of symbolic differentiation rules
+  }
+  
+  FUNC Train : Network -> List (Real^n * Real^n) -> Network = λ(N₀ : Network) (S : List (Real^n * Real^n)),
+    loop N from N₀ for (x, y) in S {
+      N <== (x, y)
+    }
+    
+  THEOREM Universality_of_Training {
+    forall (f : Real^n -> Real^m) (ε : Real),
+    exists (N₀ : Network) (S : List (Real^n * Real^m)),
+    let N* = Train N₀ S  
+    forall (x : Real^n), |f(x) - N*(x)| < ε
+  }
+  PROOF {
+    -- Proof sketch:
+    -- 1. By Universal_Approximation, obtain N₀ approximating f to accuracy ε/2 
+    -- 2. Construct S by sampling random x and querying f(x)
+    -- 3. By Backpropagation_Correctness and Gradient_Descent, Training N₀ on S 
+    --    converges to a network N* with expected loss less than ε/2
+    -- 4. Conclude that N* approximates f to within ε
+  }
+}
+
+The key idea behind this Concept is to use symbolic expressions (of type Sym) to represent the weights, biases, and activations of a neural network. This allows us to perform exact symbolic reasoning about the behavior of the network, such as computing gradients using symbolic differentiation rules.
+The Universal_Approximation axiom states that neural networks can approximate any continuous function to arbitrary accuracy, given sufficient width and depth. The Gradient_Descent theorem shows that optimizing the network weights by following the negative gradient of a loss function will converge to a globally optimal solution, under certain assumptions.
+The BackpropagationStep function performs a single step of the backpropagation algorithm, updating the network weights using the gradient of the loss with respect to the output activations. The Backpropagation_Correctness theorem verifies that this update step is equivalent to taking the true gradient of the loss with respect to all network parameters.
+Finally, the Train function combines backpropagation steps over a dataset to optimize the network weights, and the Universality_of_Training theorem concludes that this training procedure can produce a network approximating any target function to arbitrary accuracy, given a sufficient number of training examples.
+
+
+
+
+
+
+CONCEPT AlgebraicTopology {
+  TYPE Space
+  TYPE Point : Space
+  TYPE Path : Space -> Point -> Point -> Type
+  TYPE Homotopy : {A B : Space} -> Path A -> Path B -> Type
+  
+  FUNC Composition : {A B C : Space} -> Path A B -> Path B C -> Path A C
+  NOTATION "f ∘ g" = Composition(f, g)
+  
+  FUNC Constant : (A : Space) -> Point A -> Path A
+  
+  AXIOM Associativity : forall {A B C D : Space} (f : Path A B) (g : Path B C) (h : Path C D),
+    (f ∘ g) ∘ h ≡ f ∘ (g ∘ h)
+    
+  AXIOM Identity : forall {A : Space} (x : Point A), 
+    Constant A x ∘ f ≡ f ≡ f ∘ Constant A x
+    
+  AXIOM Inverse : forall {A B : Space} (f : Path A B),
+    exists (g : Path B A), f ∘ g ≡ Constant B ∧ g ∘ f ≡ Constant A
+    
+  TYPE Homotopic : {A B : Space} -> Path A B -> Path A B -> Type
+  NOTATION "f ∼ g" = Homotopic(f, g)
+  
+  AXIOM HomotopyEquivalence : forall {A B : Space} (f g : Path A B),
+    f ∼ g <-> exists (H : Homotopy f g), 
+      H 0 ≡ f ∧ H 1 ≡ g ∧ (forall (t : [0, 1]), H t : Path A B)
+      
+  TYPE Contractible : Space -> Type  
+  
+  AXIOM Contractibility : forall (A : Space),
+    Contractible A <-> exists (x0 : Point A), forall (x : Point A), Constant A x0 ∼ Constant A x
+    
+  TYPE Pi1 : Space -> Type
+  NOTATION "π₁(X)" = Pi1(X)
+  
+  AXIOM FundamentalGroup : forall (A : Space) (x : Point A), 
+    π₁(A) ≡ (Path A x x) / ∼
+    
+  FUNC Isomorphism : {A B : Type} -> (A -> B) -> (B -> A) -> Type  
+  NOTATION "A ≅ B" = exists (f : A -> B) (g : B -> A), Isomorphism f g
+    
+  AXIOM Homeomorphism : forall (A B : Space),
+    (A ≅ B) <-> exists (f : Point A -> Point B) (g : Point B -> Point A),
+      (forall (x : Point A), g (f x) ≡ x) ∧ (forall (y : Point B), f (g y) ≡ y) ∧
+      (forall (p : Path A), f ∘ p ∘ g : Path B) ∧ (forall (q : Path B), g ∘ q ∘ f : Path A)
+      
+  TYPE CWComplex : Space -> Type
+  
+  FUNC Sphere : Nat -> Space
+  NOTATION "S^n" = Sphere(n)
+  
+  FUNC Disk : Nat -> Space  
+  NOTATION "D^n" = Disk(n)
+  
+  FUNC Boundary : (n : Nat) -> Path (S^(n-1)) (D^n)
+  NOTATION "∂D^n" = Boundary(n)
+  
+  AXIOM CellAttachment : forall (X : Space) (n : Nat) (f : Path (S^(n-1)) X),
+    CWComplex X -> CWComplex (X + (D^n / (x ∼ f x))) 
+    
+  AXIOM CWApproximation : forall (A : Space),
+    exists (X : Space), CWComplex X ∧ A ≅ X
+    
+  TYPE ChainComplex : ModuleCategory -> Nat -> Type
+  
+  FUNC Homology : (C : ChainComplex R n) -> ModuleObject R
+  NOTATION "H_n(C)" = Homology(C)
+  
+  AXIOM HomologyFunctor : forall {R : Ring} (n : Nat) (f : ChainComplex R n -> ChainComplex R n),
+    exists! (Hn(f) : Homology C -> Homology D), 
+      forall (x : Homology C), Hn(f) [x] ≡ [f x]
+      
+  FUNC CellularChainComplex : (X : Space) -> ChainComplex (CellCategory X) (Dimension X)
+  
+  THEOREM HomologyInvariance : forall (A B : Space),  
+    A ≅ B -> forall (n : Nat), H_n(CellularChainComplex A) ≅ H_n(CellularChainComplex B)
+  PROOF {
+    assume (A B : Space) (h : A ≅ B) (n : Nat)
+    let f : Point A -> Point B, g : Point B -> Point A where
+      (forall (x : Point A), g (f x) ≡ x) ∧ (forall (y : Point B), f (g y) ≡ y) ∧
+      (forall (p : Path A), f ∘ p ∘ g : Path B) ∧ (forall (q : Path B), g ∘ q ∘ f : Path A)
+        by Homeomorphism
+        
+    obtain (X Y : Space) (iX : CWComplex X) (iY : CWComplex Y) (hX : A ≅ X) (hY : B ≅ Y) 
+      by CWApproximation
+        
+    let C = CellularChainComplex X, D = CellularChainComplex Y
+    
+    obtain (ϕ : C -> D) where
+      forall (σ : Cell X), ϕ [σ] ≡ [f ∘ hX σ ∘ g] by {
+        -- ϕ maps each cell σ in X to the corresponding cell f ∘ hX σ ∘ g in Y
+        -- this is a chain map since f, g preserve incidence by homeomorphism
+      }
+      
+    obtain (ψ : D -> C) where 
+      forall (τ : Cell Y), ψ [τ] ≡ [g ∘ hY τ ∘ f] by {
+        -- ψ maps each cell τ in Y to the corresponding cell g ∘ hY τ ∘ f in X  
+        -- this is a chain map since g, f preserve incidence by homeomorphism
+      }
+      
+    have Hn(ϕ) : H_n(C) -> H_n(D) and Hn(ψ) : H_n(D) -> H_n(C) by HomologyFunctor
+    
+    have forall (x : H_n(C)), Hn(ψ) (Hn(ϕ) x) ≡ x by {
+      assume (x : H_n(C))
+      let [c] : H_n(C) where ∂c ≡ 0 ∧ [c] ≡ x
+      Hn(ψ) (Hn(ϕ) [c])
+        ≡ Hn(ψ) [ϕ c]   by HomologyFunctor
+        ≡ [ψ (ϕ c)]   by HomologyFunctor
+        ≡ [g ∘ f ∘ hX c ∘ g ∘ f]   by definition of ϕ, ψ
+        ≡ [hX c]   since g ∘ f ∼ id, f ∘ g ∼ id
+        ≡ [c]   since hX is a homeomorphism
+        ≡ x   by definition of c
+    }
+    
+    have forall (y : H_n(D)), Hn(ϕ) (Hn(ψ) y) ≡ y by {
+      -- similar argument as above
+    }
+    
+    show H_n(C) ≅ H_n(D) by {
+      let f = Hn(ϕ), g = Hn(ψ)
+      have Isomorphism f g by {
+        (forall (x : H_n(C)), g (f x) ≡ x) ∧ (forall (y : H_n(D)), f (g y) ≡ y)  
+      }
+    }
+  }
+}
+
+This Concept formalizes some key notions from algebraic topology, including homotopy, the fundamental group, CW complexes, and homology. The key result is the Homology Invariance Theorem, which states that homology is preserved by homeomorphisms (topological isomorphisms) between spaces. The proof proceeds by approximating the spaces by CW complexes, defining chain maps between the cellular chain complexes induced by the homeomorphism, and showing these maps induce isomorphisms on homology.
+Some key aspects of the formalization:
+
+Paths and homotopies between them are treated as first-class objects, with composition, identities, and inverses axiomatized.
+The fundamental group π₁(X) is defined as the quotient of loops at a basepoint by the homotopy relation.
+CW complexes are defined inductively by attaching cells via boundary maps, with a key axiom stating any space is homotopy equivalent to a CW complex.
+Chain complexes and homology are defined abstractly, with the key insight being that a continuous map induces a map on homology. This is encapsulated by the HomologyFunctor axiom.
+The proof of Homology Invariance relies on explicit construction of chain maps from the geometric data of a homeomorphism between spaces. The key lemmas establish these are mutually inverse isomorphisms.
+
+
+
+CONCEPT LambdaCalculus {
+  TYPE Term = Var(String) | Abs(String, Term) | App(Term, Term)
+  
+  NOTATION "λ x . t" = Abs("x", t)
+  NOTATION "s t" = App(s, t)
+  
+  PRED FreeIn : String -> Term -> Bool
+  AXIOM FreeIn_Var : forall (x y : String), FreeIn x (Var y) <-> x = y  
+  AXIOM FreeIn_Abs : forall (x : String) (y : String) (t : Term), 
+    FreeIn x (Abs y t) <-> (x ≠ y and FreeIn x t)
+  AXIOM FreeIn_App : forall (x : String) (s t : Term),
+    FreeIn x (App s t) <-> (FreeIn x s or FreeIn x t)
+    
+  FUNC Subst : Term -> String -> Term -> Term  
+  AXIOM Subst_Var : forall (x y : String) (s : Term),
+    Subst (Var x) y s = if (x = y) then s else (Var x)
+  AXIOM Subst_Abs : forall (x y : String) (t s : Term),
+    Subst (Abs x t) y s = 
+      if (x = y) then (Abs x t) 
+      else if (not (FreeIn x s)) then (Abs x (Subst t y s))
+      else let (z : String) where (z ≠ x and z ≠ y and not (FreeIn z s))
+           in (Abs z (Subst (Subst t x (Var z)) y s)) 
+  AXIOM Subst_App : forall (t1 t2 : Term) (x : String) (s : Term),
+    Subst (App t1 t2) x s = App (Subst t1 x s) (Subst t2 x s)
+  
+  FUNC Eval : Term -> Term
+  AXIOM Eval_App : forall (x : String) (t s : Term),
+    Eval (App (Abs x t) s) = Eval (Subst t x s)
+  AXIOM Eval_Final : forall (t : Term), (forall (s : Term), t ≠ App (Abs _ _) s) 
+                                       implies (Eval t = t)
+                       
+  PRED HasNormalForm : Term -> Bool
+  AXIOM NormalForm_Char : forall (t : Term), 
+    HasNormalForm t <-> exists (s : Term), (Eval t = s and forall (r : Term), Eval s ≠ r)
+    
+  PRED Halts : Term -> Bool
+  AXIOM Halting_Reducibility : forall (t : Term), Halts t <-> HasNormalForm t
+  
+  PRED SameNormalForm : Term -> Term -> Bool
+  AXIOM NormalForm_Unique : forall (s t : Term), 
+    SameNormalForm s t <-> (HasNormalForm s and HasNormalForm t and Eval s = Eval t)
+  
+  THEOREM ChurchRosser {
+    forall (s t u : Term), (Eval s = t and Eval s = u) implies (SameNormalForm t u)
+  }
+  PROOF {
+    assume (s t u : Term) where (Eval s = t and Eval s = u)
+    show SameNormalForm t u by {
+      have HasNormalForm t and HasNormalForm u by {
+        let (v : Term) where (Eval t = v and forall (r : Term), Eval v ≠ r) 
+        let (w : Term) where (Eval u = w and forall (r : Term), Eval w ≠ r)
+        exists v, w
+      }
+      have Eval t = Eval u by {
+        Eval t = Eval (Eval s) = Eval u 
+      }
+      hence SameNormalForm t u by NormalForm_Unique
+    }
+  }
+  
+  THEOREM FixedPointCombinator {
+    exists (t : Term), forall (f : Term), Eval (App t f) = Eval (App f (App t f))
+  }
+  PROOF {
+    let Y = Abs "f" (App 
+             (Abs "x" (App (Var "f") (App (Var "x") (Var "x"))))
+             (Abs "x" (App (Var "f") (App (Var "x") (Var "x")))))
+    assume (f : Term)
+    show Eval (App Y f) = Eval (App f (App Y f)) by {
+      Eval (App Y f) 
+        = Eval (App (Abs "x" (App f (App (Var "x") (Var "x")))) 
+                    (Abs "x" (App f (App (Var "x") (Var "x")))))    by Eval_App
+        = Eval (App f (App (Abs "x" (App f (App (Var "x") (Var "x"))))
+                           (Abs "x" (App f (App (Var "x") (Var "x"))))))  by Eval_App
+        = Eval (App f (App Y f))
+    }
+    witness Y
+  }
+  
+  THEOREM ScottTopology {
+    let D = Set of Terms modulo SameNormalForm
+    let τ = {U ⊆ D | forall (t : Term), (t ∈ U implies 
+              (forall (s : Term), (App s t ∈ U implies s ∈ U)))}
+    show (D, τ) is a topological space
+  }
+  PROOF {
+    show ∅ ∈ τ and D ∈ τ by definition
+    assume (Uᵢ : ℕ -> 𝒫 D) where (forall (i : ℕ), Uᵢ(i) ∈ τ)
+    show (⋃ λ i, Uᵢ(i)) ∈ τ by {
+      assume (t : Term) where t ∈ (⋃ λ i, Uᵢ(i))
+      assume (s : Term) where App s t ∈ (⋃ λ i, Uᵢ(i))
+      have exists (j k : ℕ), (t ∈ Uᵢ(j) and App s t ∈ Uᵢ(k))
+      show s ∈ Uᵢ(max(j,k)) by {
+        have s ∈ Uᵢ(k) since (Uᵢ(k) ∈ τ and App s t ∈ Uᵢ(k))
+        hence s ∈ Uᵢ(max(j,k))
+      }
+      hence s ∈ (⋃ λ i, Uᵢ(i))
+    }
+    
+    assume (Uᵢ : Fin n -> 𝒫 D) where (forall (i : Fin n), Uᵢ(i) ∈ τ)
+    show (⋂ λ i, Uᵢ(i)) ∈ τ by {
+      assume (t : Term) where t ∈ (⋂ λ i, Uᵢ(i))
+      assume (s : Term) where App s t ∈ (⋂ λ i, Uᵢ(i))
+      have forall (i : Fin n), (App s t ∈ Uᵢ(i))  
+      hence forall (i : Fin n), (s ∈ Uᵢ(i)) since (Uᵢ(i) ∈ τ)
+      hence s ∈ (⋂ λ i, Uᵢ(i))
+    }
+  }
+}

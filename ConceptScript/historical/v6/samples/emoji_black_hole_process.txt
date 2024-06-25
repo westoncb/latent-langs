@@ -1,0 +1,55 @@
+// Global definitions
+DEF(
+  🎚️: Mass,
+  🌀: AngularMomentum,
+  ⚡: Charge,
+  🔭: Observables
+)
+
+KerrBlackHole(🎚️:_, 🌀:_) :: {
+  DEF(
+    🌑: EventHorizon,
+    🕳️: Singularity,
+    🍜: Spaghettification,
+    🏞️: AccretionDisk,
+    🌪️: Ergosphere,
+    🌋: HawkingRadiation
+  )
+  
+  [🌑 ^= SchwarschildRadius(🎚️)]
+  [🕳️ ^= RingShape(🎚️, 🌀)]
+  [ObjectApproaching(🌑) $ 🍜]
+  [InfallingMatter |> 🏞️ |> 🌀 |> 🕳️]
+  [FrameDragging ⊢ 🌪️]
+  [VirtualParticles |> 🌋 |> HawkingTemperature(🎚️)]
+}
+
+ReissnerNordstromBlackHole := KerrBlackHole(🎚️:_, 🌀:0) + (⚡:_)
+
+RotatingBlackHole := KerrBlackHole(🎚️:_, 🌀:_) :: {
+  [🌀 ⊢ ErgosphereSize]
+  [🌀 ⊢ 🏞️(Thickness:_)]
+  [🌀(ExtremeRotation) ⊢ NakedSingularity]
+}
+
+SupermassiveBlackHole(🎚️{10^5..10^10}, 🌀:_) :: {
+  DEF(
+    📡: GalacticCenter,
+    💡: QuasarActivity
+  )
+  
+  [📡 ⊢ 🔭(Orbits:_, Jets:_, GravitationalLensing:_)]
+  [💡 ⊢ 🏞️(Luminosity:High)]
+}
+
+PrimordialBlackHole(🎚️{<10^15 kg}) :: {
+  DEF(
+    🌌: EarlyUniverse,
+    🔬: QuantumEffects,
+    ⏰: EvaporationTimescale
+  )
+  
+  [FormationEpoch = 🌌]
+  [🎚️(VeryLow) ⊢ 🔬]
+  [🌋(High) ⊢ ⏰(Short)]
+}

@@ -1,0 +1,164 @@
+CONCEPT ConfidentialFederatedDistillation {
+  LANGUAGE {
+    TYPE Model
+    TYPE EncryptedModel = Model  -- Encrypted under homomorphic encryption
+    TYPE EncryptionKey
+    TYPE DecryptionKey
+    TYPE LocalDataset
+    TYPE DistilledModel <: Model  -- Compact model distilled from ensemble    
+
+    FUNC Encrypt(model : Model, encKey : EncryptionKey) : EncryptedModel
+    FUNC Decrypt(encModel : EncryptedModel, decKey : DecryptionKey) : Model
+    FUNC Train(model : Model, data : LocalDataset) : Model
+    FUNC Aggregate(encModels : List[EncryptedModel]) : EncryptedModel
+    FUNC Distill(models : List[Model]) : DistilledModel
+    FUNC Predict(model : Model, input) : output
+    
+    PRED EncryptionHomomorphism(enc : Model -> EncryptedModel, dec : EncryptedModel -> Model, f : Model -> Model) = 
+      ∀ (model : Model) . dec(enc(f(model))) = f(dec(enc(model)))
+
+    PRED DistillationQuality(distill : List[Model] -> DistilledModel, 
+                             measure : (Model, Model) -> ℝ, ε : ℝ) =
+      ∀ (models : List[Model]) (input) .
+        measure(Predict(distill(models), input), 
+                Ensemble(Predict(model, input) for model in models)) ≤ ε
+
+    FUNC Ensemble(outputs : List[output]) : output = 
+      ArgMax(Aggregate(outputs))  -- e.g. majority vote
+
+    AXIOM EncryptionCorrectness {
+      ∀ (model : Model) (encKey : EncryptionKey) (decKey : DecryptionKey) .
+        Decrypt(Encrypt(model, encKey), decKey) = model
+    }
+
+    AXIOM AggregationInvariance {
+      ∀ (encModels : List[EncryptedModel]) (decKey : DecryptionKey) .
+        Decrypt(Aggregate(encModels), decKey) =
+        Train(Untrained, Concat(Decrypt(encModel, decKey).Trace() for encModel in encModels))
+    }
+  }
+
+  STRUCTURE Coordinator {
+    FUNC InitializeEncryption() : (EncryptionKey, DecryptionKey)
+    FUNC InitializeModel() : Model
+    FUNC SelectParticipants(numParticipants : Int) : List[Participant]
+    FUNC DistributeEncryptionKey(encKey : EncryptionKey, participants : List[Participant])    
+    FUNC RequestModelUpdates(participants : List[Participant]) : List[EncryptedModel]
+    FUNC DistributeDistilledModel(distilledModel : DistilledModel, participants : List[Participant])
+  }
+
+  STRUCTURE Participant {
+    VAR localModel : Model
+    VAR localDataset : LocalDataset
+    VAR encKey : EncryptionKey
+
+    FUNC ReceiveEncryptionKey(encKey : EncryptionKey)
+    FUNC ReceiveModel(model : Model)      
+    FUNC UpdateLocalModel(model : Model)
+    FUNC TrainLocalModel()
+    FUNC UploadLocalModel() : EncryptedModel
+    FUNC ReceiveDistilledModel(distilledModel : DistilledModel)
+  }
+
+  PROTOCOL Orchestration {
+    INIT:
+      (encKey, decKey) = Coordinator.InitializeEncryption()
+      model = Coordinator.InitializeModel()
+      participants = Coordinator.SelectParticipants(NUM_PARTICIPANTS)
+      Coordinator.DistributeEncryptionKey(encKey, participants)
+      FOREACH participant in participants:
+        participant.ReceiveEncryptionKey(encKey)
+        participant.ReceiveModel(model)
+        participant.UpdateLocalModel(model)  
+    
+    FOREACH round in 1..NUM_ROUNDS:
+      FOREACH participant in participants:  
+        participant.TrainLocalModel()
+      encModels = Coordinator.RequestModelUpdates(participants)
+      encAggModel = Aggregate(encModels)
+      aggModel = Decrypt(encAggModel, decKey)
+      distilledModel = Distill([aggModel, model])
+      Coordinator.DistributeDistilledModel(distilledModel, participants)
+      model = distilledModel
+      FOREACH participant in participants:
+        participant.ReceiveDistilledModel(distilledModel)
+        participant.UpdateLocalModel(distilledModel)
+
+    RETURN model
+  }
+
+  PROOFS {
+    THEOREM ParticipantConfidentiality {
+      STATEMENT:
+        ∀ (participant : Participant) (encKey : EncryptionKey) (model : Model) .
+          LET encModel = participant.UploadLocalModel()
+          IN  FORALL (observer) . 
+                observer.Distinguish(encModel, Encrypt(model, encKey)) = 1/2
+
+      PROOF:
+        LET participant : Participant, encKey : EncryptionKey, model : Model
+        LET encModel = participant.UploadLocalModel()
+        
+        EncryptionHomomorphism(Encrypt, Decrypt, Train)
+          BY CONSTRUCTION, EncryptionCorrectness
+        
+        FORALL (observer) .
+          observer.Distinguish(encModel, Encrypt(model, encKey))
+            = observer.Distinguish(Encrypt(Train(model, participant.localDataset), encKey),
+                                   Encrypt(model, encKey))
+                BY DEFINITION of encModel, localModel
+            = observer.Distinguish(Encrypt(Train(model, participant.localDataset), encKey), 
+                                   Encrypt(Train(model, EmptyDataset), encKey))  
+                BY DEFINITION of model
+            = 1/2  BY EncryptionConfidentiality
+    }
+
+    THEOREM ModelUtility {
+      STATEMENT:
+        ∀ (participants : List[Participant]) (model : Model) 
+          (localDatasets : List[LocalDataset]) (measure : (Model, Model) -> ℝ) (ε : ℝ) .
+        LET updatedModel = PROTOCOL(Orchestration).Execute(participants, model, localDatasets)
+        IN  measure(updatedModel, Train(model, Concat(localDatasets))) ≤ ε
+        
+      PROOF:
+        LET participants : List[Participant], model : Model,
+            localDatasets : List[LocalDataset], measure : (Model, Model) -> ℝ, ε : ℝ
+        LET updatedModel = PROTOCOL(Orchestration).Execute(participants, model, localDatasets)
+        
+        measure(updatedModel, Train(model, Concat(localDatasets)))
+          ≤ measure(updatedModel, 
+                    Decrypt(Aggregate(Encrypt(Train(model, localDataset), encKey) 
+                                      for localDataset in localDatasets), decKey))
+             BY AggregationInvariance
+          ≤ ε   BY DistillationQuality, DEFINITION of updatedModel
+    }
+  }
+}
+
+This Concept defines a novel federated learning architecture called ConfidentialFederatedDistillation that enables multiple participants to collaboratively train a shared model on their local datasets, without revealing their individual data or model updates.
+The key ideas are:
+
+Each participant encrypts their local model updates using homomorphic encryption before sending them to the coordinator. This allows the coordinator to aggregate the encrypted updates into a single encrypted model, without being able to decrypt individual updates.
+The coordinator decrypts the aggregated model, and then distills it together with the previous global model to obtain a compact student model. This distillation step transfers the knowledge from the ensemble of local models into a single model, while also reducing the model size for efficient distribution back to participants.
+The coordinator sends the distilled model back to the participants, who use it to update their local models for the next round of training. Over multiple rounds, this allows the global model to iteratively improve by learning from all participants' data, without any participant revealing their local data or model.
+
+The Language section defines the key types and operations, including homomorphic encryption primitives, model training and aggregation functions, and knowledge distillation. It also specifies the required properties of encryption correctness, aggregation invariance under encryption, and distillation quality.
+The Coordinator and Participant structures define the roles and responsibilities of the central coordinator and individual participants in the protocol. The Orchestration protocol specifies the sequence of interactions between coordinator and participants to carry out the confidential federated distillation process over multiple rounds.
+The Proofs section formally states and proves two key theorems:
+
+ParticipantConfidentiality: No observer can distinguish between a participant's encrypted model update and the encryption of any other model, thus preserving the confidentiality of the participant's local data and model.
+ModelUtility: The final model learned by the confidential federated distillation protocol is close (in terms of a given quality measure) to the model that would be learned by centrally training on all participants' data, thus providing utility comparable to non-private federated learning.
+
+I believe this Concept proposes a novel and practically useful architecture for federated learning, by combining ideas from homomorphic encryption (for confidentiality), federated averaging (for decentralized training), and knowledge distillation (for model compression and knowledge transfer). To the best of my knowledge, this specific combination has not been explored before.
+The potential benefits of this approach include:
+
+Enabling federated learning while providing strong confidentiality guarantees for participants' sensitive data and models, which could greatly expand the applicability of federated learning to privacy-sensitive domains like healthcare and finance.
+Reducing the communication cost and computation overhead of federated learning by using distillation to compress the global model before distributing it to participants.
+Allowing the global model to learn from participants' data without requiring them to share raw data, thus mitigating issues of data governance, ownership and liability.
+
+Some possible challenges and areas for future work include:
+
+Handling participant dropout, straggling, or adversarial behavior in the protocol.
+Quantifying and bounding the privacy leakage of the final distilled model, and developing differential privacy techniques for federated distillation.
+Scaling up the protocol to handle large numbers of participants and high-dimensional models.
+Applying the approach to novel domains such as federated reinforcement learning or federated graph learning.

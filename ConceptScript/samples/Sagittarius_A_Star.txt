@@ -1,0 +1,488 @@
+CONCEPT Sagittarius_A_Star EXTENDS BlackHole {
+  PARAMETERS {
+    -- Best estimates from observational data (as of 2022)
+    M_value : Mass = 4.154e6 * SolarMass
+    D_value : Length = 8.175 * KiloParsec
+    i_value : Angle = 134.18 * degree -- Inclination of spin axis 
+    P_value : Real = 0.5 -- Dimensionless spin parameter
+  }
+
+  CONTEXT {
+    TYPES {
+      SolarMass := 1.98847e30 kg
+      Parsec := 3.0857e16 m  
+      KiloParsec := 1000 * Parsec
+      Jansky := 1e-26 watts / (m^2 * hertz) 
+      Sersic_Index := Real
+      
+      INDUCTIVE AccretionModel {
+        CASE ADAF   -- Advection-dominated accretion flow
+        CASE CDAF   -- Convection-dominated accretion flow
+        CASE ADIOS  -- Advection-dominated inflow-outflow solution
+        CASE LHAF   -- Luminous hot accretion flow
+        CASE MAD    -- Magnetically arrested disk 
+        CASE SANE   -- Standard and normal evolution disk
+      }
+      
+      STRUCTURE AccretionFlow {
+        Model : AccretionModel  
+        BondiRadius : Length
+        BondiRate : Mass / Time
+        InnerRadius : Length
+        OuterRadius : Length
+        CoolingTime : Time
+        CoolingRate : Power
+        Luminosity : Power
+
+        FUNC Temperature(r : Length) -> Temperature
+        FUNC Density(r : Length) -> Density
+        FUNC AngularVelocity(r : Length) -> AngularSpeed
+        FUNC MagneticField(r : Length) -> MagneticFluxDensity
+        FUNC IonTemperature(r : Length) -> Temperature
+        FUNC ElectronTemperature(r : Length) -> Temperature
+        FUNC Plasma_β(r : Length) -> Real -- Ratio of gas to magnetic pressure
+        FUNC HeatingRate(r : Length) -> Power  
+      }
+      
+      STRUCTURE Jet {    
+        LorentzFactor : Real
+        OpeningAngle : Angle  
+        PowerLawIndex : Real
+        BasePressure : Pressure
+      
+        FUNC MagneticField(z : Length) -> MagneticFluxDensity
+        FUNC ElectronDensity(z : Length) -> NumberDensity
+      }
+      
+      STRUCTURE WindRegion {
+        SonicRadius : Length
+        MassLossRate : Mass / Time
+        TerminalVelocity : Speed
+        FUNC Density(r : Length, θ : Angle) -> Density
+        FUNC Velocity(r : Length, θ : Angle) -> Speed  
+      }
+      
+      STRUCTURE Torus { 
+        CenterRadius : Length
+        AspectRatio : Real
+        AngularMomentum : AngularMomentum
+        FUNC Density(r : Length, θ : Angle, φ : Angle) -> Density
+        FUNC Temperature(r : Length, θ : Angle, φ : Angle) -> Temperature
+      }
+
+      STRUCTURE RadiationModel {
+        SynchrotronComponent : STRUCTURE {
+          SpectralIndex : Real
+          MinFrequency : Frequency
+          PeakFrequency : Frequency
+          FUNC FluxDensity(ν : Frequency) -> Jansky
+        }
+        
+        BremsstrahlungComponent : STRUCTURE {
+          EmissionMeasure : Real
+          ElectronTemperature : Temperature
+          FUNC FluxDensity(E : Energy) -> Jansky
+        }  
+
+        ComptonizedComponent : STRUCTURE {  
+          ComptonY : Real
+          SeedPhotonTemperature : Temperature
+          FUNC FluxDensity(E : Energy) -> Jansky
+        }
+
+        CyclotronComponent : STRUCTURE {
+          MagneticField : MagneticFluxDensity  
+          PlasmaFrequency : Frequency
+          FUNC FluxDensity(ν : Frequency) -> Jansky  
+        }
+        
+        FUNC TotalSpectrum(ν_or_E) -> Jansky {
+          SynchrotronComponent.FluxDensity(ν_or_E)
+           + BremsstrahlungComponent.FluxDensity(ν_or_E)  
+           + ComptonizedComponent.FluxDensity(ν_or_E)
+           + CyclotronComponent.FluxDensity(ν_or_E)
+        }
+      }
+
+      STRUCTURE Variability {
+        FUNC PowerSpectralDensity(ν : Frequency) -> Real
+        FUNC RmsAmplitude(ν_min : Frequency, ν_max : Frequency) -> Real
+        FUNC LightCurve(t : Time, λ : Wavelength) -> Luminosity
+      }
+    }
+
+    FUNCTIONS {
+      SchwarzschildRadius(m : Mass) -> Length {
+        2 * G * m / c^2
+      }
+      
+      SpinParameter(a : SpecificAngularMomentum, m : Mass) -> Real {
+        a / (G * m / c)  
+      }
+      
+      ISCO_Radius(a_star : Real) -> Length {
+        IF a_star = 0 THEN 6 * G * M / c^2
+        ELSE LET Z_1 = 1 + (1 - a_star^2)^(1/3) * ((1 + a_star)^(1/3) + (1 - a_star)^(1/3))
+             LET Z_2 = sqrt(3 * a_star^2 + Z_1^2)  
+             IN G * M / c^2 * (3 + Z_2 - sqrt((3 - Z_1) * (3 + Z_1 + 2*Z_2)))
+      }
+
+      MagneticFluxDensity(m : Mass, ṁ : AccretionRate) -> Tesla {
+        sqrt(8 * π * ṁ * c / (α_B * r_g^2))
+        WHERE r_g = G * m / c^2
+              α_B = 0.1 -- Assumed magnetic viscosity parameter
+      }
+      
+      JetPower(ṁ : AccretionRate) -> Power {
+        η * ṁ * c^2
+        WHERE η = 0.1 -- Assumed jet efficiency
+      }
+    
+      RadiativeLuminosity(ṁ : AccretionRate, r : Length) -> Power {
+        ε * ṁ * c^2 * (R_s / r)
+        WHERE ε = 0.1 -- Assumed radiative efficiency
+              R_s = 2 * G * M / c^2
+      }
+      
+      FUNC GravitationalLensing(α : Angle) -> Real {
+        LET r_g = G * M_value / c^2
+        LET x = tan(α / 2) * D_value / r_g
+        x / sqrt(x^2 + 4) + log(x / 2 + sqrt(1 + x^2 / 4))
+      }
+
+      ChandraFlux(E_low : Energy, E_high : Energy) -> Flux {
+        LET L = 2.4e33 * erg / s
+        LET Γ = 2.7
+        LET A = Power(E_high, 1-Γ) - Power(E_low, 1-Γ)
+        L * A / (4 * π * D_value^2 * (1-Γ))
+      }
+    }
+  }
+
+  PROPERTIES {
+    Mass : Mass = M_value
+    Distance : Length = D_value
+    AngularMomentum : SpecificAngularMomentum = G * Mass / c * sqrt(P_value)  
+    SpinAxis : UnitVector = {
+      sin(i_value) * cos(β_value),
+      sin(i_value) * sin(β_value), 
+      cos(i_value)
+    }
+    InclinationAngle : Angle = i_value
+    Spin : Real = SpinParameter(AngularMomentum, Mass)
+    ISCO : Length = ISCO_Radius(Spin) -- Innermost stable circular orbit
+    Efficiency : Real = 0.0563 * (1 + 0.98 * Spin^2) -- Radiative efficiency
+
+    Accretion : AccretionFlow = {
+      Model = RIAF  
+      BondiRadius = 0.072 * Parsec
+      BondiRate = 6e-6 * SolarMass / Year
+      InnerRadius = ISCO
+      OuterRadius = 10^5 * SchwarzschildRadius(Mass)
+      CoolingTime = 1e6 * Year
+      CoolingRate = 3e33 * erg / s  
+      Luminosity = Efficiency * BondiRate * c^2
+      
+      FUNC Temperature(r) {
+        1.5e11 * (SchwarzschildRadius(Mass) / r) * kelvin
+      }
+      FUNC Density(r) {
+        3e-18 * (SchwarzschildRadius(Mass) / r)^0.75 * kg / m^3  
+      }
+      FUNC AngularVelocity(r) {
+        sqrt(G * Mass / r^3)  
+      }
+      FUNC MagneticField(r) {
+        30 * (r / SchwarzschildRadius(Mass))^-1.05 * gauss
+      }
+      FUNC IonTemperature(r) {
+        2e10 * (r / SchwarzschildRadius(Mass))^-1 * kelvin
+      }
+      FUNC ElectronTemperature(r) {
+        5e9 * (r / SchwarzschildRadius(Mass))^-0.5 * kelvin  
+      }
+      FUNC Plasma_β(r) {
+        100 * (r / SchwarzschildRadius(Mass))^1.2  
+      }
+      FUNC HeatingRate(r) {
+        1e-3 * BondiRate * c^2 / r  
+      }  
+    }
+
+    Jet : Jet = {
+      LorentzFactor = 5
+      OpeningAngle = 0.1 * radian
+      PowerLawIndex = 2  
+      BasePressure = 3e-3 * pascal
+
+      FUNC MagneticField(z) {
+        0.1 * gauss * (z / SchwarzschildRadius(Mass))^-1  
+      }
+      FUNC ElectronDensity(z) {
+        1e6 * cm^-3 * (z / SchwarzschildRadius(Mass))^-2
+      }
+    }
+      
+    Wind : WindRegion = {
+      SonicRadius = 200 * SchwarzschildRadius(Mass) 
+      MassLossRate = 1e-3 * Accretion.BondiRate
+      TerminalVelocity = 0.1 * c
+
+      FUNC Density(r, θ) {
+        4e-19 * (r / SchwarzschildRadius(Mass))^-1.5 * sin(θ)^2 * kg / m^3  
+      }
+      FUNC Velocity(r, θ) {
+        Wind.TerminalVelocity * sqrt(1 - Wind.SonicRadius / r) * sin(θ)  
+      }
+    }
+
+    Torus : Torus = {
+      CenterRadius = 25000 * SchwarzschildRadius(Mass)
+      AspectRatio = 0.1
+      AngularMomentum = 1.8e56 * m^2 / s
+
+      FUNC Density(r, θ, φ) {
+        1e-17 * exp(-(r - Torus.CenterRadius)^2 / (2 * Torus.AspectRatio^2 * Torus.CenterRadius^2)) 
+              * sin(θ)^2 * kg / m^3
+      }
+      FUNC Temperature(r, θ, φ) {
+        8000 * kelvin  
+      }  
+    }
+
+    Radiation : RadiationModel = {
+      SynchrotronComponent = {
+        SpectralIndex = -0.7  
+        MinFrequency = 10^9 * Hz
+        PeakFrequency = 10^12 * Hz
+        FUNC FluxDensity(ν) {
+          0.8 * jansky * (ν / Radiation.SynchrotronComponent.PeakFrequency)^Radiation.SynchrotronComponent.SpectralIndex * 
+            exp(-ν / Radiation.SynchrotronComponent.PeakFrequency)
+        }
+      }
+
+      BremsstrahlungComponent = {
+        EmissionMeasure = 3e58 * cm^-3
+        ElectronTemperature = 3.5e10 * kelvin
+        FUNC FluxDensity(E) { 
+          1.4e-27 * sqrt(Radiation.BremsstrahlungComponent.ElectronTemperature) * 
+            Radiation.BremsstrahlungComponent.EmissionMeasure * exp(-E / (k_B * Radiation.BremsstrahlungComponent.ElectronTemperature))
+        }
+      }
+
+      ComptonizedComponent = {  
+        ComptonY = 0.5
+        SeedPhotonTemperature = 5e9 * kelvin
+        FUNC FluxDensity(E) {
+          LET Theta = k_B * Radiation.ComptonizedComponent.SeedPhotonTemperature / (me * c^2)
+          1e-8 * Power(E / (k_B * Radiation.ComptonizedComponent.SeedPhotonTemperature), -0.2) / (Theta^3 * (1 + 0.1*Theta) * exp(E / (k_B * Radiation.ComptonizedComponent.SeedPhotonTemperature)))
+        }
+      }
+
+      CyclotronComponent = {
+        MagneticField = 10 * gauss
+        PlasmaFrequency = 8.98e3 * sqrt(1e6) * Hz  
+        FUNC FluxDensity(ν) {
+          LET Ν = ν / (e * Radiation.CyclotronComponent.MagneticField / (2 * π * me))  -- Normalized frequency
+          LET J = BesselJ(2, 2*π*Ν)  -- Bessel function     
+          6.64e-30 * Ν^2 * J^2 / (2*π) * watts / m^2 / Hz  
+        }
+      }
+    }
+  }
+  
+  OBSERVABLES {
+    AstrometricMotion : STRUCTURE {
+      ProperMotionRA : AngularSpeed = -3.151 * mas / Year
+      ProperMotionDec : AngularSpeed = -5.547 * mas / Year
+      Acceleration : AngularAcceleration = 0.224 * mas / Year^2 
+    }
+    
+    EddingtonRatio : Real = Accretion.Luminosity / (4 * π * G * Mass * mp * c / σ_T)
+    
+    XrayBrightness : Real = 2.4e33 * (Range(2, 10) * keV) / (4 * π * Distance^2)
+    XrayVariability : STRUCTURE {
+      RmsAmplitude : Real = 0.3 * XrayBrightness
+      FUNC PowerSpectralDensity(ν) {
+        1e-3 / ν^2
+        WHERE ν : Frequency [Range(1e-4, 1) * Hz]
+      }
+    }
+
+    RadioSpectrum : STRUCTURE {
+      SpectralIndex : Real = -0.3
+      FluxDensity_90GHz : Real = 3.5 * jansky
+      FUNC FluxDensity(ν : Frequency) -> Real {
+        RadioSpectrum.FluxDensity_90GHz * (ν / (90 * GHz))^RadioSpectrum.SpectralIndex
+      }
+      Polarization : STRUCTURE {
+        Fraction : Real = 0.02
+        EVPA : Angle = 140 * degree
+      }
+    }
+
+    SubmillimeterBump : STRUCTURE {
+      PeakFrequency : Frequency = 850 * GHz 
+      PeakFluxDensity : Real = 3.0 * jansky
+      FUNC SpectralIndex(ν) {
+        IF ν < SubmillimeterBump.PeakFrequency THEN 0.5 ELSE -0.7
+      }
+    }
+
+    FaradayRotationMeasure : Real = -6e5 * rad / m^2
+
+    InfraredFlux : STRUCTURE {
+      Ks_magnitude : Real = 16.3
+      Ks_flux : Real = 6.7 * mJy
+      L_magnitude : Real = 12.9
+      M_magnitude : Real = 11.5
+    }
+
+    GravitationalLensing : STRUCTURE {
+      FirstOrderImage : STRUCTURE {
+        Radius : Angle = 28 * microarcsecond
+        Magnification : Real = 11 
+      }
+      SecondOrderImage : STRUCTURE {
+        Radius : Angle = 28 * microarcsecond / 3^(3/2)
+        Magnification : Real = -1.6
+      }
+      CausticCrossing : STRUCTURE {
+        FUNC LightCurve(t) {
+          LET r = sqrt((t - t0)^2 + t_E^2)
+          a * (r + r^3 / (8 * t_E^2))
+          WHERE t0 = 2018.39 * Year
+                t_E = 0.117 * Year  -- Einstein radius crossing time
+                a = 5 * mJy
+        } 
+      }
+    } 
+  }
+
+  EXPERIMENTS {
+    EHT : STRUCTURE {
+      Wavelength : Length = 1.3 * mm
+      AngularResolution : Angle = 20 * microarcsecond
+      FUNC VisibilityAmplitude(u : Number, v : Number) -> Real
+      FUNC ClosurePhase(u1, v1, u2, v2, u3, v3) -> Angle
+    }
+
+    GRAVITY : STRUCTURE {   
+      SgrA_StarOrbit : STRUCTURE {
+        Period : Time = 16.0 * Year  
+        Eccentricity : Real = 0.884
+        Inclination : Angle = 134.18 * degree
+        AscendingNode : Angle = 226.94 * degree
+        ArgumentOfPeriapsis : Angle = 66.13 * degree
+        TimeOfPeriapsis : Time = 2018.38 * Year
+        StarMass : Mass = 4.02e6 * SolarMass
+        StarDistance : Length = 8277 * Parsec
+      }
+
+      FlarePolarization : STRUCTURE {
+        Degree : Real = 0.3
+        EVPA : Angle = 80 * degree  
+      }
+    }
+    
+    XrayPolarization : STRUCTURE {
+      GRX1_Degree : Real = 0.6
+      GRX1_EVPA : Angle = 110 * degree
+      GRX2_Degree : Real = 0.7 
+      GRX2_EVPA : Angle = 125 * degree
+    }
+
+    XrayReflection : STRUCTURE {
+      FeKα_LineEnergy : Energy = 6.4 * keV
+      FeKα_EW : Energy = 1.3 * keV
+      FeKα_Flux : Real = 2.5e-5 * photons / cm^2 / s
+      Compton_hump : STRUCTURE {
+        PeakEnergy : Energy = 30 * keV
+        Flux : Real = 7e-12 * erg / cm^2 / s
+      }
+      PowerLawIndex : Real = 1.8
+    }
+
+    XrayQuasiPeriodicEruption : STRUCTURE { 
+      Period : Time = 131 * min
+      Duration : Time = 60 * min 
+      Fluence : Real = 1e40 * erg
+      PeakLuminosity : Real = 1e36 * erg / s
+      Temperature : Real = 15 * keV
+    }
+  }
+
+  MODELS {
+    Spacetime : STRUCTURE {
+      Metric : STRUCTURE {
+        FUNC LineElement(t : Time, r : Length, θ : Angle, φ : Angle) -> Real^2
+        AXIOM {
+          Metric.LineElement(t, r, θ, φ) = 
+            -(1 - 2*G*Mass/(c^2*r)) * c^2 * dt^2 
+            + (1 - 2*G*Mass/(c^2*r))^(-1) * dr^2
+            + r^2 * (dθ^2 + sin(θ)^2 * dφ^2) 
+            - (4*G*Mass*AngularMomentum*sin(θ)^2 / (c^2*r)) * dt * dφ
+            + (r^2 + AngularMomentum^2*cos(θ)^2 / c^2) * sin(θ)^2 * dφ^2
+        }
+      }
+      Geodesics : STRUCTURE {
+        FUNC RadialNull(λ) -> STRUCT {
+          t : Time
+          r : Length 
+        }
+        FUNC CircularOrbit(r : Length) -> STRUCT {
+          Ω_φ : AngularSpeed
+          E : Energy
+          L_z : AngularMomentum
+        }
+      } 
+    }
+
+    RadiativeTransfer : STRUCTURE {
+      Opacity : STRUCTURE {
+        FUNC Absorption(ν : Frequency, T : Temperature, ρ : Density) -> Real
+        FUNC Scattering(ν : Frequency, T : Temperature, ρ : Density) -> Real  
+      }
+      
+      FUNC SpecificIntensity(ν : Frequency, α : Angle, β : Angle) -> Real {
+        INTEGRAL(
+          Opacity.Absorption(ν, Torus.Temperature(r, θ, φ), Torus.Density(r, θ, φ)) *
+            Radiation.TotalSpectrum(ν) * exp(-τ)
+        )
+        WHERE τ = INTEGRAL(Opacity.Scattering(ν, Torus.Temperature(r, θ, φ), Torus.Density(r, θ, φ)))
+      }
+
+      PolarizedRadiativeTransfer : STRUCTURE {
+        StokesParameters : STRUCT {
+          I : Real
+          Q : Real
+          U : Real
+          V : Real
+        }
+        FUNC Polarization(ν : Frequency, α : Angle, β : Angle) -> StokesParameters {
+          -- Similar to SpecificIntensity but in Stokes formalism
+        } 
+      }
+    }
+    
+    FluidDynamics : STRUCTURE {
+      AXIOM NavierStokes {
+        ∂ρ/∂t + ∇•(ρ*v) = 0,
+        ρ*(∂v/∂t + (v•∇)v) = -∇P + ρ*g + ∇•T,
+        ∂ε/∂t + ∇•(ε*v) = -P*∇•v + T:∇v
+      }
+      
+      FUNC Velocity(r : Length, θ : Angle, φ : Angle) -> Velocity
+      FUNC Density(r : Length, θ : Angle, φ : Angle) -> Density
+      FUNC Pressure(r : Length, θ : Angle, φ : Angle) -> Pressure
+      FUNC Temperature(r : Length, θ : Angle, φ : Angle) -> Temperature
+      
+      MHD : STRUCTURE {  
+        AXIOM Induction {
+          ∂B/∂t = ∇×(v×B) + η*∇^2*B
+        }
+        FUNC MagneticField(r : Length, θ : Angle, φ : Angle) -> MagneticFluxDensity
+      }
+    }
+  }
+}

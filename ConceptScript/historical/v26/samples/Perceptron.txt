@@ -1,0 +1,101 @@
+CONCEPT Perceptron[InputDim] {
+  LANGUAGE {
+    TYPE ℝ[N] = Vector[ℝ, N]
+    TYPE Label = ℝ
+    TYPE Example = (ℝ[InputDim], Label)
+    TYPE Weights = ℝ[InputDim]
+    FUNC Activation(z) = IF z ≥ 0 THEN +1 ELSE -1
+    FUNC Classify(w, x) = Activation(DotProduct(w, x))
+    PRED Mistakes(w, X) = 𝚺_{(x,y) ∈ X} 𝟙[Classify(w, x) ≠ y]
+    PRED LinearSeparable(X) = ∃ (w : Weights) . ∀ ((x,y) : Example) ∈ X . DotProduct(w, x) · y > 0
+  }
+  
+  NOTATION {
+    "DotProduct(w,x)" ⇔ "𝚺_i w_i · x_i"
+    "w <- w + y · x" ⇔ "∀ i . w_i := w_i + y · x_i"
+    "X ~ 𝒟^m" ⇔ "X = Sample of m iid examples from distribution 𝒟"
+    "R[X]" ⇔ "𝔼_{(x,y) ~ 𝒟} [𝟙[Classify(w, x) ≠ y]]"  // True risk 
+    "R̂[w, X]" ⇔ "Mistakes(w, X) / |X|"  // Empirical risk
+  }
+  
+  TRANFORMERS {
+    PROC Train(X) -> Weights {
+      VAR w = [0, ..., 0]  // Initialize weights to zero
+      WHILE ∃ ((x,y) : Example) ∈ X . Classify(w, x) ≠ y:
+        LET (x̂, ŷ) = (x,y) ∈ X . Classify(w, x) ≠ y
+        w <- w + ŷ · x̂     // Update weights
+      RETURN w
+    }
+  }
+
+  PROOFS {
+    THEOREM Convergence {
+      STATEMENT:
+        ∀ (X : Set[Example]) . LinearSeparable(X) => 
+          ∃ (w : Weights) (T ≤ (max_{(x,_) ∈ X} |x|)²) . 
+            Train(X) returns w after at most T updates ∧ Mistakes(w, X) = 0
+
+      PROOF:
+        LET X : Set[Example], 
+            M = max_{(x,_) ∈ X} |x|,
+            γ = min_w min_{(x,y) ∈ X} y · DotProduct(w, x) / (|w| · M)
+        
+        ASSUME LinearSeparable(X), ŵ = argmin_w |w| . ∀ ((x,y) : Example) ∈ X . DotProduct(ŵ, x) · y > 0
+        
+        LET (x̂, ŷ) ∈ X . Classify(w, x̂) ≠ ŷ
+        
+        DotProduct(ŵ, w_{t+1})  
+          = DotProduct(ŵ, w_t) + ŷ · DotProduct(ŵ, x̂)
+          ≥ DotProduct(ŵ, w_t) + γ · |ŵ| · M         by defn of γ
+        
+        |w_{t+1}|² 
+          = |w_t|² + 2ŷ · DotProduct(w_t, x̂) + |x̂|²
+          ≤ |w_t|² + |x̂|²                            since Classify(w_t, x̂) ≠ ŷ
+          ≤ |w_t|² + M²                               by defn of M
+        
+        HENCE after T updates:
+          DotProduct(ŵ, w_T) ≥ T · γ · |ŵ| · M
+          |w_T|² ≤ T · M²  
+        
+        THEREFORE
+          T · γ² · |ŵ|² · M² 
+            ≤ DotProduct(ŵ, w_T)²
+            ≤ |ŵ|² · |w_T|²      by Cauchy-Schwarz
+            ≤ |ŵ|² · T · M²
+        HENCE T ≤ 1/γ²
+        
+        FURTHERMORE, Mistakes(w_T, X) = 0, otherwise ∃ ((x,y) : Example) ∈ X . Classify(w_T, x) ≠ y,
+          contradicting the termination condition of the algorithm.
+          
+        QED
+    }
+    
+    THEOREM GeneralizationBound {
+      STATEMENT:
+        ∀ (δ > 0) . ∀ (X ~ 𝒟^m) . ∀ (w : Weights) . 
+          Pr[|R[w] - R̂[w, X]| > √(log(2/δ) / (2m))] ≤ δ 
+
+      PROOF:
+        FUNC Risk(w) = 𝔼_X[R̂[w,X]]
+        
+        LET m = |X|, S = {w | Mistakes(w, X) = 0}
+        
+        log |S|
+          ≤ 2 · InputDim · log(e · m / InputDim)     by Sauer-Shelah Lemma
+          = O(InputDim · log(m / InputDim))
+        
+        ∀ (w ∈ S) . Pr[|R[w] - R̂[w, X]| > ε] 
+          ≤ 2 · exp(-2mε²)                            by Hoeffding's Inequality
+          
+        Pr[∃ (w ∈ S) . |R[w] - R̂[w, X]| > ε]
+          ≤ |S| · 2 · exp(-2mε²)                     by Union Bound
+          ≤ 2 · exp(log |S| - 2mε²)
+          ≤ δ                                       for ε = √(log(2/δ) + log |S|) / (2m)
+                                                         = O(√((InputDim · log(m/InputDim) + log(1/δ)) / m))
+        
+        HENCE with probability ≥ 1-δ, ∀ (w ∈ S) . |R[w] - R̂[w, X]| ≤ O(√((InputDim · log(m/InputDim) + log(1/δ)) / m))
+        
+        QED  
+    }
+  }
+}

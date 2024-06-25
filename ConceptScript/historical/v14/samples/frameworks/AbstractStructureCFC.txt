@@ -1,0 +1,124 @@
+CONCEPT AbstractStructureCFC_v1 {
+  LANGUAGE {
+    Structure := s(C, R, O) | Structure + Structure | Structure * Structure
+    C := c(P, A) | C + C | C * C  
+    R := r(S, T) | R + R | R * R
+    O := o(N, E) | O + O | O * O
+    
+    s(C, R, O): structure with components C, relations R, and operations O
+    c(P, A): component with properties P and actions A
+    r(S, T): relation between structures S and T
+    o(N, E): operation with name N and effects E
+    
+    P := p(K, V, T) | P + P | P * P
+    p(K, V, T): property with key K, value V, and type T
+    
+    A := a(N, E, C) | A + A | A * A  
+    a(N, E, C): action with name N, effects E, and conditions C
+    
+    N := n(T, P) | N + N | N * N
+    n(T, P): operation name of type T with parameters P
+    
+    E := e(S, O) | E + E | E * E
+    e(S, O): effect on structure S using operations O
+    
+    Consistent{s(C, R, O)} ⟺ 
+      ∀c ∈ C. Consistent{c} ∧ 
+      ∀r(S, T) ∈ R. S ⊆ s ∧ T ⊆ s ∧
+      ∀o(N, E) ∈ O. ∀e(S, O') ∈ E. S ⊆ s ∧ O' ⊆ O
+      
+    Consistent{c(P, A)} ⟺ 
+      ∀a(_, E, C) ∈ A. Satisfied{C, P} ⇒ Applied{E, c} = c'
+      
+    Satisfied{C, P} ⟺ ∀c ∈ C. Holds{c, P}
+    
+    Applied{E, c(P, A)} = c(ApplyAll{E, P}, A)
+    
+    ApplyAll{E, P} = {p(K, ApplyAny{E, V}, T) | p(K, V, T) ∈ P}
+    
+    ApplyAny{E, V} = V' ⇐ ∃e(_, O) ∈ E. ∃o(_, _) ∈ O. Apply{o, V} = V'
+                   | V  ⇐ otherwise
+                   
+    Holds{p(K, V, _), P} ⟺ ∃p(K, V', _) ∈ P. V = V' 
+    
+    Apply{o(_, E), S} = S' ⇐ ∀e(S'', O) ∈ E. S'' ⊆ S ⇒ S' = ApplyAll{O, S}  
+                      | S  ⇐ otherwise
+  }
+  
+  TACTIC {
+    ComponentExpansion{s(C, R, O), c(P, A)} ⊢ 
+      Consistent{s(C, R, O)} ⇒ s(C ∪ {c(P, A)}, R, O)
+      
+    RelationExpansion{s(C, R, O), r(S, T)} ⊢
+      Consistent{s(C, R, O)} ∧ S ⊆ s ∧ T ⊆ s ⇒ s(C, R ∪ {r(S, T)}, O)
+      
+    OperationExpansion{s(C, R, O), o(N, E)} ⊢
+      Consistent{s(C, R, O)} ∧ ∀e(S, _) ∈ E. S ⊆ s ⇒ s(C, R, O ∪ {o(N, E)})
+      
+    PropertyDerivation{c(P, A), p(K, V, T)} ⊢
+      ∃a(_, E, _) ∈ A. ∃e(_, O) ∈ E. ∃o(_, _) ∈ O. Apply{o, V} = V' ⇒
+        c(P ∪ {p(K, V', T)}, A)
+        
+    ActionExpansion{c(P, A), a(N, E, C)} ⊢
+      Consistent{c(P, A)} ∧ Satisfied{C, P} ⇒ 
+        Applied{E, c(P, A)} = c(P', A ∪ {a(N, E, C)})
+  }
+  
+  PROOF {
+    theorem ∀S, S'. (∃O. Apply{O, S} = S') ⇔ (∃R. Related{S, S', R})
+    {
+      assume ∃O. Apply{O, S} = S'  
+      let o(_, E) ∈ O such that ∀e(S'', _) ∈ E. S'' ⊆ S
+      let r(S, S') such that Consistent{r(S, S')}
+      hence ∃R. Related{S, S', R} by {
+        Related{S, S', {r(S, S')}} 
+      }
+      
+      conversely, 
+      assume ∃R. Related{S, S', R}
+      let r(S, S') ∈ R
+      let e(S', {}) and o(_, {e(S', {})})
+      hence ∃O. Apply{O, S} = S' by {
+        Apply{o(_, {e(S', {})}), S} = S'
+      }
+    }
+  
+    theorem ∀s. Consistent{s} ⇒ (∀S ⊆ s. ∃S' ⊆ s. ∃O ⊆ O{s}. Apply{O, S} = S')
+    {
+      assume Consistent{s} and let S ⊆ s
+      
+      s induces a partition on S by {
+        ∀r(S1, S2) ∈ R{s}. S1 ⊆ S ∧ S2 ⊆ S ⇒ S1 ∩ S2 = ∅   
+      }
+      
+      let S/~ denote the partition
+      
+      ∀A ∈ S/~. ∃c(P, _) ∈ C{s}. A ⊆ c by {
+        Consistent{s} ⇒ ∀r(S1, S2) ∈ R{s}. ∃c1, c2 ∈ C{s}. S1 ⊆ c1 ∧ S2 ⊆ c2  
+      }
+      
+      ∀A ∈ S/~. let cA denote some such c
+      
+      ∀A ∈ S/~. ∃OA ⊆ O{s}. ∀T ⊆ cA. Apply{OA, T} = T' ⊆ cA by {
+        Consistent{cA} ∧ Consistent{s} ⇒ 
+          ∀o(N, E) ∈ O{s}. ∀e(S, O) ∈ E. S ⊆ cA ⇒ O ⊆ O{cA}
+      }
+      
+      let O = ⋃{A ∈ S/~} OA
+      
+      Apply{O, S} = S' ⊆ s by {
+        S' = ⋃{A ∈ S/~} Apply{OA, A} ⊆ ⋃{A ∈ S/~} cA ⊆ s  
+      }
+    }
+  }
+}
+
+This Concept defines an abstract notion of Structure that generalizes across the various concrete structures in the example Concepts. A Structure consists of Components, Relations between those components, and Operations that can be applied to transform the structure.
+The language defines consistency conditions to ensure a Structure is well-formed. It also defines how Operations can be applied to Components to derive new Properties or enable new Actions.
+The tactics allow expanding a consistent Structure with new Components, Relations and Operations, as well as expanding a consistent Component with derived Properties and Actions.
+The proofs establish some key theorems:
+
+Applying operations to transform a structure is equivalent to asserting a relation between the original and transformed structures.
+Any consistent substructure of a consistent Structure can be transformed into another consistent substructure by applying available operations.
+
+The intention is to provide a generic framework to reason about structured objects and their transformations, which can then be instantiated to more specific domains.

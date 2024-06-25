@@ -1,0 +1,50 @@
+LambdaCalculus(
+    Terms:_,
+    EvaluationRules:_
+) :: {
+    DEF[
+        ⇒: Reduces,
+        FV: FreeVariables,
+        []: Substitution,
+        ≡: AlphaEquivalent
+    ]
+
+    Variable(Name:_) := Term
+    Abstraction(Variable:_, Body:Term) := Term
+    Application(Function:Term, Argument:Term) := Term
+
+    AlphaConversion := (
+        Abstraction(Variable:x, Body:M) ≡ Abstraction(Variable:y, Body:M[x := y])
+    )
+
+    BetaReduction := (
+        Application(Abstraction(Variable:x, Body:M), Argument:N) ⇒ M[x := N]
+    )
+
+    EtaConversion := (
+        Abstraction(Variable:x, Application(Function:M, Variable(Name:x))) ⇒ M
+        [FV(x) ∉ FV(M)]
+    )
+
+    Evaluate := (
+        Term |>
+        (AlphaConversion | BetaReduction | EtaConversion){*} |>
+        NormalForm
+    )
+}
+
+// Example usage
+[LambdaCalculus(
+    Terms:[
+        Abstraction(Variable:"x", Body:Abstraction(Variable:"y", Body:Application(Variable(Name:"x"), Variable(Name:"y")))),
+        Abstraction(Variable:"z", Body:Variable(Name:"z"))
+    ],
+    EvaluationRules:[AlphaConversion, BetaReduction, EtaConversion]
+) |>
+    [
+        Application(
+            Abstraction(Variable:"x", Body:Abstraction(Variable:"y", Body:Application(Variable(Name:"x"), Variable(Name:"y")))),
+            Abstraction(Variable:"z", Body:Variable(Name:"z"))
+        ) |> Evaluate
+    ] $ NormalForm(Abstraction(Variable:"y", Body:Application(Abstraction(Variable:"z", Body:Variable(Name:"z")), Variable(Name:"y"))))
+]

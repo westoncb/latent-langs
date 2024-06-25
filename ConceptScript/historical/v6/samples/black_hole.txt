@@ -1,0 +1,178 @@
+// Global definitions
+DEF[
+  🎚️: Mass,
+  🌀: AngularMomentum,
+  ⚡: Charge,
+  🔭: Observables,
+  🌑: EventHorizon,
+  🕳️: Singularity,
+  🍜: Spaghettification,
+  🏞️: AccretionDisk,
+  🌪️: Ergosphere,
+  🌋: HawkingRadiation,
+  >->: SpacetimeEvolution,
+  <-->: Interaction
+]
+
+Singularity := PointOfInfiniteDensity(
+  Density:Inf, 
+  VolumeElement:0,
+  CurvatureDivergence:True  
+){QuantumGravityDominated, InformationParadox} :: {
+  DEF[
+    |=>: QuantumGravityTransition,
+    <~>: Formation
+  ]
+  
+  [Density |=> Inf <~> Formation]
+  [QuantumGravity <-> GeneralRelativity $ UnificationProblem]
+}
+
+EventHorizon := BoundaryOfNoReturn(
+  Definition:Null{Generators:LightRays},
+  Crossing:Irreversible,
+  SurfaceGravity:Inversely[Mass] 
+){CausalDisconnect, InformationBarrier} :: {
+  DEF[
+    |->: Crossing,
+    <->: InformationFlow
+  ]
+
+  [EscapeVelocity > SpeedOfLight |-> Formation]  
+  [InformationParadox <-> HawkingRadiation $ BlackHoleThermodynamics]
+}
+
+AccretionDisk := Plasma(
+  Composition:Ionized{Elements:(Hydrogen, Helium, Metals)},
+  Temperature{Range:[10^4, 10^8] * Kelvin},
+  Density{Range:[10^-16, 10^-8] * Gram / CentimeterCubed}  
+){Turbulence:HighlySupersonic} :: {
+  DEF[
+    |->: Accretion,
+    |~>: AngularMomentumTransport
+  ]
+
+  [AngularMomentum <-> GravitationalAttraction |-> DiskFormation] 
+  [MaterialOrbitingBlackHole |-> HeatedByFriction |-> EmitsXRays]
+}
+
+Magnetosphere := (
+  MagneticFieldStrength{Range:[10^2, 10^8] * Gauss},
+  Topology:(PolarJets, EquatorialCurrent),
+  Dynamics:GRMHD{StressEnergyTensor, MaxwellEquations, ParticleMotion}  
+) :: {
+  DEF[
+    |*>: JetLaunching,
+    |=>: ParticleAcceleration
+  ]
+
+  [MagneticFields |*> JetLaunching{
+    LorentzFactor{Range:[1, 100]},
+    PowerSource:[BlandfordZnajekMechanism, MagnetoCentrifugalAcceleration],
+    Collimation{Range:[1, 10] * Degrees}
+  }]
+  
+  [MagneticReconnection |=> ParticleAcceleration{
+    HighestEnergy{Range:[10^18, 10^21] * ElectronVolt},
+    Mechanism:[ShockAcceleration, WaveDamping]
+  }]
+}
+
+BlackHole := AstronomicalObject(
+  Mass:Real{[0, Inf), Typical:SolarMass, DistributionPeak:10},
+  Radius:Real{Proportional:1/Mass, Typical:Kilometer, Minimum:0},
+  AngularMomentum:Real{[0, 1], DistributionPeak:0.7},
+  Charge:Real{[-1, 1]ElementaryCharge, DistributionPeak:0}
+) :: {
+  Formation:[
+    (MassiveStar |> CoreCollapse |> [Mass > ChandrasekharLimit] $ Singularity),
+    (QuantumFluctuation |> PrimordialCollapse)
+  ]
+  
+  [Singularity, EventHorizon] >-> SpacetimeStructure
+  Ergosphere := Region(Inner:EventHorizon, Outer:Surface(Radius:Length))
+
+  [Mass, AngularMomentum] <-> (
+    SchwarzchildRadius,    
+    KerrParameter,
+    ReissnerNordstromCharge,
+    HawkingTemperature
+  )
+
+  [AngularMomentum != 0] ⊢ (
+    FrameDragging,
+    ErgosphereSize,
+    AccretionDisk(Thickness:_)
+  )
+
+  [[Charge != 0] & [AngularMomentum = 0]] ⊢ ReissnerNordstrom  
+  [[Mass >= 10^5 * SolarMass] & [Mass <= 10^10 * SolarMass]] ⊢ Supermassive
+  [Mass < 10^15 * Kilogram] ⊢ Primordial
+}
+
+KerrBlackHole := BlackHole(🎚️:_, 🌀:_) :: {
+  [🌑 ^= SchwarzchildRadius(🎚️)]
+  [🕳️ ^= RingShape(🎚️, 🌀)] 
+  [ObjectApproaching(🌑) $ 🍜]
+  [InfallingMatter |> 🏞️ |> 🌀 |> 🕳️]
+  [FrameDragging ⊢ 🌪️]
+  [VirtualParticles |> 🌋 |> HawkingTemperature(🎚️)]  
+}
+
+ReissnerNordstrom := KerrBlackHole(🎚️:_, 🌀:0) + (⚡:_)
+
+RotatingBlackHole := KerrBlackHole(🎚️:_, 🌀:_) :: {  
+  [🌀 ⊢ ErgosphereSize]
+  [🌀 ⊢ 🏞️(Thickness:_)]
+  [🌀(ExtremeRotation) ⊢ NakedSingularity]
+}
+
+SupermassiveBlackHole := BlackHole(🎚️{10^5..10^10}, 🌀:_) :: {
+  [GalacticNucleus ⊢ 🔭(Orbits:_, Jets:_, GravitationalLensing:_)]
+  [HighAccretionRate ⊢ 🏞️(Luminosity:High) $ QuasarActivity]
+}
+
+PrimordialBlackHole := BlackHole(🎚️{<10^15 * Kg}) :: {  
+  [FormationEpoch = EarlyUniverse]
+  [🎚️(VeryLow) ⊢ QuantumEffects]
+  [🌋(High) ⊢ EvaporationTimescale(Short)]  
+}
+
+[BlackHole, Star] <--> TidalDisruption{  
+  DistanceThreshold:RocheLimit,
+  Frequency{Range:[10^-7, 10^-4] / Year},
+  Flare:XRay{Duration{[Months, Years]}, Luminosity{[10^43, 10^45] * Erg / Second}} 
+} :: {
+  DEF[
+    |->: PartialDisruption,
+    |~>: Spaghettification,
+    >->: Complete Disruption  
+  ]
+
+  [TidalForces |~> Spaghettification $ MatterDeformation]
+  [Spaghettification >-> AccretionDisk | Singularity]
+  [PartialDisruption |-> FlarePhenomena]
+}
+
+[BlackHole + BlackHole] >-> Merger :: {  
+  DEF[
+    |->: Inspiral |~> GravitationalWaveEmission,
+    >->: Coalescence    
+  ]
+  
+  [Inspiral |-> GravitationalWaveEmission{Strain{[10^-24, 10^-20]}, Chirp}]
+  [Coalescence >-> RemnantBlackHole{Mass:Intermediate}]
+  [Coalescence |~> GravitationalWaveEmission{Strain{[10^-20, 10^-18]}, Ringdown}]
+}
+    
+[BlackHole, HawkingRadiation] >-> Evaporation :: {
+  DEF[
+    |~>: HawkingRadiation,
+    >->: QuantumEvaporation    
+  ]
+  
+  [Temperature |~> Inversely:[Mass, Radius]]
+  [Luminosity |~> Directly:Temperature^4]
+  [Lifetime |~> Directly:Mass^3]
+  [BlackHole(Mass:Planck) >-> QuantumSpacetimeFluctuation]
+}

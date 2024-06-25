@@ -1,0 +1,75 @@
+CONCEPT BodyWithoutOrgans {
+  LANGUAGE {
+    type Body = {organs: Organ*, intensities: Intensity*, flows: Flow*}
+    type Organ = {function: Function, limit: Limit}
+    type Intensity = {affect: Affect, threshold: Threshold}
+    type Flow = {desire: Desire, direction: Direction}
+    
+    type BwO = {plateaus: Plateau*, intensities: Intensity*, flows: Flow*}
+    type Plateau = {level: Intensity, duration: Duration, consistency: Consistency}
+    
+    type Stratification = {form: Form, substance: Substance, organization: Organization}
+    type Destratification = {process: Process, intensity: Intensity, limit: Limit}
+    
+    pred hasBwO(body: Body): 𝔹 = 
+      foldl(∧, true, [i > organ.limit for organ in body.organs, i in body.intensities])
+    
+    func makeOrgan(plateau: Plateau): Organ = 
+      {function = circulate(plateau.flows), limit = plateau.consistency}
+      
+    pred isStratified(body: Body, strata: Stratification): 𝔹 =
+      foldl(∧, true, [organ.function ∈ strata.organization for organ in body.organs])
+      
+    func destratify(body: Body, strata: Stratification, intensity: Intensity): BwO =
+      {plateaus = [Plateau(i, Δt, c) for (i, Δt, c) in distribute(body.intensities, body.flows)],
+       intensities = [i for i in body.intensities if i > strata.form.threshold],
+       flows = [f for f in body.flows if f.direction ∉ strata.substance.directions]}
+  }
+  
+  STRUCTURE {
+    Multiplicity(BwO): ¬∃! b: BwO
+    
+    Continuum(BwO): ∀ b1, b2: BwO. ∃ f: Flow. connect(b1, f, b2)
+    
+    Immanence(BwO, desire): ∀ b: BwO. ∀ f: Flow. f ∈ b.flows ⇒ f.desire ∈ b.intensities
+    
+    AntiOrgans(BwO, organs): ∀ b: BwO. ∀ o: Organ. o ∉ b.organs
+    
+    Consistency(BwO): ∀ b: BwO. ∀ p: Plateau. p ∈ b.plateaus ⇒ consistent(p.intensities, p.flows)
+    
+    Stratification(body, organs): isStratified(body, Stratification) ⇒ ¬hasBwO(body)
+    
+    Destratification(body): ∀ body: Body. ∀ strata: Stratification.
+      isStratified(body, strata) ⇒ 
+        ∃ i: Intensity. hasBwO(destratify(body, strata, i))
+  }
+
+  PROOFS {
+    DestratificationProducesConsistency: ∀ body: Body. ∀ strata: Stratification. ∀ i: Intensity.
+      isStratified(body, strata) ∧ hasBwO(destratify(body, strata, i)) ⇒ 
+      Consistency(destratify(body, strata, i))
+    {
+      assume isStratified(body, strata), hasBwO(destratify(body, strata, i))
+      let b = destratify(body, strata, i)
+      have ∀ p: Plateau. p ∈ b.plateaus ⇒ p.intensities ⊆ b.intensities  ; by definition of destratify
+      have ∀ p: Plateau. p ∈ b.plateaus ⇒ p.flows ⊆ b.flows              ; by definition of destratify
+      have ∀ f: Flow. f ∈ b.flows ⇒ f.direction ∉ strata.substance.directions  ; by definition of destratify
+      hence ∀ p: Plateau. p ∈ b.plateaus ⇒ consistent(p.intensities, p.flows)  ; by definition of consistency
+      therefore Consistency(b)  ; by definition of Consistency(BwO)
+    }
+    
+    tactic OrganLimitExceeded(body: Body, organ: Organ, i: Intensity) =
+      have i > organ.limit             ; by premise
+      hence ¬(organ.function(i) = i)   ; by definition of Organ.limit
+      hence organ.function ∉ identity  ; by generalization
+      hence organ.function ∈ nonlinear ; by excluded middle
+
+    OrganFunctionNonlinearOnBwO: ∀ body: Body. ∀ organ: Organ. ∀ i: Intensity. 
+      hasBwO(body) ∧ (organ ∈ body.organs) ∧ (i ∈ body.intensities) ⇒ 
+      organ.function ∈ nonlinear
+    { 
+      assume hasBwO(body), (organ ∈ body.organs), (i ∈ body.intensities)
+      OrganLimitExceeded(body, organ, i)
+    }
+  }
+}

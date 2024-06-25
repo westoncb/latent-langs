@@ -1,0 +1,204 @@
+CONCEPT HVM2 {
+  LANGUAGE {
+    TYPE Tag = U3
+    TYPE Val = U29
+    TYPE Port = Tag × Val
+    TYPE Pair = Port × Port
+    TYPE APort = Atomic[Port]
+    TYPE APair = Atomic[Pair]
+    
+    TYPE Node = 
+      | VAR(name: Val) 
+      | REF(addr: Val, safe: Bool)
+      | ERA
+      | NUM(tag: NumTag, payload: U24)
+      | CON(fst: Port, snd: Port)  
+      | DUP(fst: Port, snd: Port)
+      | OPE(fst: Port, snd: Port)
+      | SWI(fst: Port, snd: Port)
+      
+    TYPE NumTag = 
+      | U24 | I24 | F24
+      | ADD | SUB | MUL | DIV | REM 
+      | EQ | NEQ | LT | GT
+      | AND | OR | XOR
+      | FLIP_SUB | FLIP_DIV | FLIP_REM
+      | SYM
+      
+    TYPE Def = (safe: Bool, root: Port, rbag: List[Pair], node: List[Pair])
+    TYPE Book = Map[String, Def]
+    
+    TYPE GNet = (node: Array[APair], vars: Array[APort], rbag: Array[APair])
+    
+    FUNC Alloc(gnet: GNet, nnodes: Nat, nvars: Nat, nrbag: Nat) : (ok: Bool, nodes: Nat, vars: Nat, rbag: Nat)
+    FUNC Create(gnet: GNet, idx: Nat, pair: Pair) : Unit
+    FUNC Take(gnet: GNet, idx: Nat) : Pair
+    FUNC CreateVar(gnet: GNet, idx: Nat, port: Port) : Unit
+    FUNC GetVar(gnet: GNet, idx: Nat) : Port
+    FUNC SetVar(gnet: GNet, idx: Nat, port: Port) : Port
+    FUNC PushRedex(gnet: GNet, pair: Pair) : Unit
+    FUNC PopRedex(gnet: GNet) : Pair
+    
+    FUNC Link(gnet: GNet, a: Port, b: Port) : Unit
+    FUNC Expand(book: Book, name: String, port: Port) : Unit
+    
+    PRED ValidPort(port: Port) = port.0 < 8 ∧ port.1 < 2^29
+    PRED ValidPair(pair: Pair) = ValidPort(pair.0) ∧ ValidPort(pair.1)
+    PRED ValidNode(node: Node) = match node with {
+      | VAR(name) => name < 2^29
+      | REF(addr, _) => addr < 2^29
+      | ERA => True  
+      | NUM(tag, payload) => tag < 16 ∧ payload < 2^24
+      | CON(fst, snd) | DUP(fst, snd) | OPE(fst, snd) | SWI(fst, snd) => 
+          ValidPort(fst) ∧ ValidPort(snd)
+    }
+    
+    AXIOM PortInjectivity {
+      ∀ (p q : Port) . ValidPort(p) ∧ ValidPort(q) ∧ (p = q) => (p.0 = q.0) ∧ (p.1 = q.1)  
+    }
+    
+    AXIOM PairInjectivity {
+      ∀ (p q : Pair) . ValidPair(p) ∧ ValidPair(q) ∧ (p = q) => (p.0 = q.0) ∧ (p.1 = q.1)
+    }
+    
+    AXIOM NodeInjectivity {
+      ∀ (n m : Node) . ValidNode(n) ∧ ValidNode(m) ∧ (n = m) => match (n, m) with {
+        | (VAR(a), VAR(b)) => a = b
+        | (REF(a, _), REF(b, _)) => a = b
+        | (ERA, ERA) => True
+        | (NUM(t, p), NUM(u, q)) => (t = u) ∧ (p = q) 
+        | (CON(a1, a2), CON(b1, b2))  
+        | (DUP(a1, a2), DUP(b1, b2))
+        | (OPE(a1, a2), OPE(b1, b2)) 
+        | (SWI(a1, a2), SWI(b1, b2)) => (a1 = b1) ∧ (a2 = b2)
+        | _ => False
+      }
+    }
+  }
+  
+  NOTATION {
+    "A ~ B" = Link(gnet, A, B)
+    "A ~> B" = Expand(book, A, B)
+    "alloc(N, V, R)" = Alloc(gnet, N, V, R)
+    "create(I, A, B)" = Create(gnet, I, (A, B))
+    "take(I)" = Take(gnet, I)
+    "create_var(I, P)" = CreateVar(gnet, I, P)
+    "get_var(I)" = GetVar(gnet, I)
+    "set_var(I, P)" = SetVar(gnet, I, P)
+    "push_redex(A, B)" = PushRedex(gnet, (A, B))
+    "pop_redex()" = PopRedex(gnet)
+  }
+  
+  TRANSFORMERS {
+    FUNC Operate(a: NUM, b: NUM) -> NUM = {
+      IF a.tag = SYM THEN NUM(b.tag, a.payload)
+      ELSE IF b.tag = SYM THEN NUM(a.tag, b.payload)  
+      ELSE IF a.tag ∈ {U24, I24, F24} ∧ b.tag ∈ {U24, I24, F24} THEN NUM(U24, 0)
+      ELSE match (a.tag, b.tag) with {
+        | (ADD, U24) => NUM(U24, a.payload + b.payload)
+        | (ADD, I24) => NUM(I24, signed(a.payload) + signed(b.payload))
+        | (ADD, F24) => NUM(F24, float(a.payload) + float(b.payload))
+        | (SUB, U24) => NUM(U24, a.payload - b.payload)
+        | (SUB, I24) => NUM(I24, signed(a.payload) - signed(b.payload))  
+        | (SUB, F24) => NUM(F24, float(a.payload) - float(b.payload))
+        | ...
+      }        
+    }
+  }
+  
+  STRUCTURE Evaluator {
+    gnet: GNet
+    book: Book
+    
+    FUNC Interact(redex: Pair) -> Unit = {
+      LET (a, b) = redex
+      LET (ta, va) = a
+      LET (tb, vb) = b
+      
+      IF ta = VAR THEN a ~ b
+      ELSE IF tb = VAR THEN b ~ a
+      ELSE match (ta, tb) with {
+        | (REF, _) => Expand(book, va, b)
+        | (_, REF) => Expand(book, vb, a)
+        | (ERA, _) => ERASE(a, b)  
+        | (_, ERA) => ERASE(b, a)
+        | (NUM, NUM) => OPERATE(a, b)
+        | (NUM, SWI) => SWITCH(a, b)
+        | (SWI, NUM) => SWITCH(b, a)  
+        | (CON, CON) => ANNIHILATE(a, b)
+        | (DUP, DUP) => ANNIHILATE(a, b)
+        | (OPE, OPE) => ANNIHILATE(a, b)
+        | (SWI, SWI) => ANNIHILATE(a, b)
+        | (CON, DUP) | (DUP, CON) 
+        | (CON, OPE) | (OPE, CON)
+        | (CON, SWI) | (SWI, CON)
+        | (DUP, OPE) | (OPE, DUP) 
+        | (DUP, SWI) | (SWI, DUP)
+        | (OPE, SWI) | (SWI, OPE) => COMMUTE(a, b)
+        | _ => ()
+      }
+      
+      WHERE {
+        ERASE(a, b) = {
+          LET (_, fst, snd) = take(vb)
+          a ~ fst
+          a ~ snd
+        }
+        
+        OPERATE(a, b) = {
+          LET n = Operate(NUM(ta, va), NUM(tb, vb))
+          create(alloc(1,0,0).2, n, b)
+        }
+        
+        SWITCH(a, b) = {
+          LET (_, fst, snd) = take(vb)
+          IF va = 0 THEN {
+            LET (_, zero, _) = take(fst)
+            zero ~ snd
+            a ~ ERA
+          }
+          ELSE {
+            LET (_, _, succ) = take(fst)
+            create(alloc(1,0,0).2, NUM(U24, va-1), succ)
+            a ~ ERA
+            succ ~ snd  
+          }
+        }
+        
+        ANNIHILATE(a, b) = {
+          LET (_, a1, a2) = take(va)
+          LET (_, b1, b2) = take(vb)
+          a1 ~ b1
+          a2 ~ b2
+        }
+        
+        COMMUTE(a, b) = {
+          LET (ok, n, v, r) = alloc(4, 4, 2)
+          IF !ok THEN ()
+          ELSE {
+            LET (_, a1, a2) = take(va)
+            LET (_, b1, b2) = take(vb)
+            create(n,   VAR(v), VAR(v+1))
+            create(n+1, VAR(v+2), VAR(v+3))
+            create(n+2, VAR(v), VAR(v+2))
+            create(n+3, VAR(v+1), VAR(v+3))
+            create_var(v, NONE)
+            create_var(v+1, NONE)
+            create_var(v+2, NONE)  
+            create_var(v+3, NONE)
+            push_redex(PORT(tb, n), a1)
+            push_redex(PORT(tb, n+1), a2)
+            push_redex(PORT(ta, n+2), b1)
+            push_redex(PORT(ta, n+3), b2)
+          }
+        }
+      }
+    }
+    
+    PROC Eval() -> Unit = {
+      WHILE gnet.rbag NOT EMPTY:
+        LET redex = pop_redex()
+        Interact(redex)
+    }
+  }
+}

@@ -1,0 +1,858 @@
+CONCEPT ShapeSpace {
+  LANGUAGE {
+    TYPE Shape <: CS(R^d)
+    TYPE Direction = S^(d-1)
+    TYPE Filtration = R
+    TYPE PersistenceDiagram = Dgm
+
+    FUNC PHT[d : Nat](M : Shape) : Direction -> PersistenceDiagram^d
+    FUNC PHTSheaf(M : Shape) : D^b(Shv(Direction * Filtration))
+    FUNC InterleavingDist(F G : D^b(Shv(Direction * Filtration))) : R^≥0
+    FUNC ShiftFunctor[ε : R^≥0](F : D^b(Shv(Direction * Filtration)))
+      : D^b(Shv(Direction * Filtration))
+    FUNC BottleneckDist(D E : PersistenceDiagram) : R^≥0
+    FUNC WassersteinDist[p : R^≥1](D E : PersistenceDiagram) : R^≥0
+
+    PRED FiniteCover(U : List[Shape], M : Shape) =
+      (⋃_{N ∈ U} N = M) ∧ Finite(U)
+    PRED ČechDescent(F : D^b(Shv(Direction * Filtration)), U : FiniteCover) =
+      F(⋃U) ≃ holim[ ∏_{N ∈ U} F(N) => ∏_{N,N' ∈ U} F(N ∩ N') -> ... ]
+
+    PRED ε-Interleaving(F G : D^b(Shv(Direction * Filtration)), ε : R^≥0) =
+      ∃ (φ : ShiftFunctor[ε](F) -> G) (ψ : ShiftFunctor[ε](G) -> F) .
+        φ ∘ ShiftFunctor[ε](ψ) = ShiftFunctor[2ε](ρ_G) ∧
+        ψ ∘ ShiftFunctor[ε](φ) = ShiftFunctor[2ε](ρ_F)
+
+    PRED ε-Homotopic(M N : Shape, ε : R^≥0) =
+      ∃ (φ : M -> N) (ψ : N -> M) .
+        (∀ m : M . |m - φ(m)| ≤ ε) ∧
+        (∀ n : N . |n - ψ(n)| ≤ ε) ∧
+        (φ ∘ ψ ≃ Id_N) ∧ (ψ ∘ φ ≃ Id_M)
+
+    AXIOM PHTGluing {
+      ∀ (M : Shape) (U : List[Shape]) .
+        FiniteCover(U, M) => ČechDescent(PHTSheaf(M), U)
+    }
+
+    AXIOM PHTPolyhedronNerve {
+      ∀ (M : Shape) (n : ℕ) . IsPolyhedron(M) =>
+        PHTSheaf(M)^n ≃ H^n[
+          0 -> ⊕_{I ⊂ 𝕀, |I|=1} PHTSheaf(M_I)^0
+            -> ⊕_{I ⊂ 𝕀, |I|=2} PHTSheaf(M_I)^0
+            -> ...
+        ]
+    }
+  }
+
+  NOTATION {  
+    "F =[ε]= G" = InterleavingDist(F, G) ≤ ε
+    "M ≃[ε] N" = ε-Homotopic(M, N, ε)
+    "ρ_F" = CanonicalMap(F, ShiftFunctor[ε](F))
+    "ρ_G" = CanonicalMap(G, ShiftFunctor[ε](G))
+    "𝕀" = {1..k}
+      WHERE k = |Triangulation(M)|
+    "M_I" = ⋂_{i ∈ I} Triangulation(M)[i]      
+  }
+
+  STRUCTURE Interleaving {
+    REQUIRE ∀ F G : D^b(Shv(Direction * Filtration)) .
+      InterleavingDist(F, G) = inf {ε | ε-Interleaving(F, G, ε)}
+  }
+
+  STRUCTURE PointSampling {
+    DEF ConditionNumber(M : Submanifold) : R^>0 =
+      inf {r | ∀ (p : M) . reach(p,M) ≥ r}
+
+    DEF SampleDense(M : Submanifold, ε δ : R^>0) : Shape =
+      {X ⊆ M | X is (ε/2)-dense in M with prob ≥ 1-δ}
+
+    FUNC AlphaComplex(X : Shape, ε : R^>0) -> Polyhedron =
+      LET U = ⋃_{x ∈ X} B_ε(x);  V = VoronoiCells(X)
+      IN Nerve(U ∩ V)
+  }
+
+  PROOFS {
+    TACTIC MayerVietoris(U : FiniteCover) = 
+      APPLY Mayer-Vietoris(U);
+      APPLY Seifert-van-Kampen(U)
+
+    TACTIC CechDerivedSS(U : FiniteCover, F : D^b(Shv(X))) = {
+      LET E^1, E^2 = spectral sequence of F w.r.t. U
+
+      REWRITE E^1_pq = ⊕_{I ⊆ 𝕀, |I|=p+1} H^q(F(U_I)),
+              E^2_pq = H^p[q ↦ ⊕_{I ⊆ 𝕀, |I|=p+1} F(U_I)^q]
+        
+      HAVE E^1 collapses => E^2 = E^∞  
+      HENCE H^n(F) ≃ H^n[C•(U;F^0)]
+    }
+
+    THEOREM StabilityOfPHT {
+      STATEMENT:
+        ∀ (M N : Shape) (ε : R^≥0) .
+          (M ≃[ε] N) <=> (PHTSheaf(M) =[ε]= PHTSheaf(N))
+      
+      PROOF:
+        LET M N : Shape, ε : R^≥0
+
+        SHOW (M ≃[ε] N) => (PHTSheaf(M) =[ε]= PHTSheaf(N)) BY {
+          ASSUME (H1) : M ≃[ε] N
+          LET φ, ψ = witnesses of H1
+          SHOW φ, ψ define an ε-interleaving of PHTSheaf(M), PHTSheaf(N)  
+        }
+
+        SHOW (PHTSheaf(M) =[ε]= PHTSheaf(N)) => (M ≃[ε] N) BY {
+          ASSUME (H2) : PHTSheaf(M) =[ε]= PHTSheaf(N)
+          LET φ, ψ = witnesses of ε-interleaving from H2
+          HAVE φ, ψ induce continuous maps M -> N, N -> M
+          SHOW these maps define an ε-homotopy equiv.
+        }
+
+        QED
+    }
+
+    THEOREM PHTGluingProof {
+      STATEMENT:
+        ∀ (M : Shape) (U : List[Shape]) .
+          FiniteCover(U, M) => ČechDescent(PHTSheaf(M), U)
+      
+      PROOF:
+        LET M : Shape, U : List[Shape] 
+        ASSUME (H) : FiniteCover(U, M)
+        LET F = PHTSheaf(M)
+
+        SUFFICES TO SHOW
+          F(⋃U) -> holim[∏F(U_i)|i]
+                |         |
+          F(⋃U ∩ Dir) -> holim[∏F(U_i ∩ Dir)|i]
+        is a homotopy pullback square
+
+        BY MayerVietoris(U)
+        
+        QED
+    }
+      
+    THEOREM PHTPolyhedronNerveProof {  
+      STATEMENT:
+        ∀ (M : Shape) (n : ℕ) . IsPolyhedron(M) =>
+          PHTSheaf(M)^n ≃ H^n[0 -> ⊕PHTSheaf(M_I)^0 -> ⊕PHTSheaf(M_I)^0 -> ...]
+      
+      PROOF:  
+        LET M : Shape, n : ℕ
+        ASSUME IsPolyhedron(M)
+        LET T = Triangulation(M)
+
+        HAVE (H) : FiniteCover(T, M)
+
+        BY CechDerivedSS(T, PHTSheaf(M))  
+        
+        HAVE ∀ (I : 𝕀^k, k>0) . H^n(PHTSheaf(M_I)) = 0  for n>0
+          BECAUSE M_I is contractible
+
+        HENCE spectral sequence collapses
+        
+        THUS PHTSheaf(M)^n ≃ H^n[C•(T;PHTSheaf(-)^0)]
+        
+        QED
+    }
+
+    THEOREM Approximation {
+      STATEMENT:
+        ∀ (M : Submanifold) (ε δ : R^>0) . ε < ConditionNumber(M)/2 =>
+          InterleavingDist(PHTSheaf(M), PHTSheaf(AlphaComplex(SampleDense(M,ε,δ), ε)))
+          ≤ ε/2 WITH PROBABILITY ≥ 1-δ
+    
+      PROOF:
+        LET M : Submanifold, ε δ : R^>0  
+        ASSUME ε < ConditionNumber(M)/2
+        LET X = SampleDense(M, ε, δ), U = ⋃_{x ∈ X} B_ε(x), K = AlphaComplex(X, ε)
+
+        HAVE (H1) : M ≃ U  BY Theorem 4.15
+        HAVE (H2) : U ≃ K  BY Nerve Lemma
+
+        DEFINE φ : M -> K = NearestPoint_K ∘ H_M(1,-)
+               ψ : K -> M = H_M(1,-) ∘ NearestPoint_U  
+          WHERE H_M(t,x) = (1-t)x + t(x - ε·grad dist_M(x)),
+                H_K(t,u) = u - t · line(u, NearestPoint_K(u))   
+
+        SHOW ∀ m : M . |m - φ(m)| ≤ ε,
+             ∀ k : K . |k - ψ(k)| ≤ ε
+        SHOW ψ ∘ φ ≃ Id_M,
+             φ ∘ ψ ≃ Id_K
+
+        HENCE M ≃[ε] K        
+        THUS PHTSheaf(M) =[ε/2]= PHTSheaf(K)  BY StabilityOfPHT
+        
+        QED
+    }  
+  }
+}
+
+
+
+
+
+
+CONCEPT ShapeSpace {
+  LANGUAGE {
+    TYPE Shape <: CS(R^d)
+    TYPE Direction = S^(d-1)
+    TYPE Filtration = R
+    TYPE PersistenceDiagram = Dgm
+
+    FUNC PHT[d : Nat](M : Shape) : Direction -> PersistenceDiagram^d
+    FUNC PHTSheaf(M : Shape) : D^b(Shv(Direction * Filtration))
+    FUNC InterleavingDist(F G : D^b(Shv(Direction * Filtration))) : R^≥0
+    FUNC ShiftFunctor[ε : R^≥0](F : D^b(Shv(Direction * Filtration)))
+      : D^b(Shv(Direction * Filtration))
+    FUNC BottleneckDist(D E : PersistenceDiagram) : R^≥0
+    FUNC WassersteinDist[p : R^≥1](D E : PersistenceDiagram) : R^≥0
+
+    PRED FiniteCover(U : List[Shape], M : Shape) : 𝔹 =
+      (⋃_{N ∈ U} N = M) ∧ Finite(U)
+    PRED ČechDescent(F : D^b(Shv(Direction * Filtration)), U : FiniteCover) : 𝔹 =
+      F(⋃U) ≃ holim[ ∏_{N ∈ U} F(N) => ∏_{N,N' ∈ U} F(N ∩ N') -> ... ]
+
+    PRED ε-Interleaving(F G : D^b(Shv(Direction * Filtration)), ε : R^≥0) : 𝔹 =
+      ∃ (φ : ShiftFunctor[ε](F) -> G) (ψ : ShiftFunctor[ε](G) -> F) .
+        φ ∘ ShiftFunctor[ε](ψ) = ShiftFunctor[2ε](ρ_G) ∧
+        ψ ∘ ShiftFunctor[ε](φ) = ShiftFunctor[2ε](ρ_F)
+      WHERE ρ_F : F -> ShiftFunctor[ε](F),
+            ρ_G : G -> ShiftFunctor[ε](G)
+
+    PRED ε-Homotopic(M N : Shape, ε : R^≥0) : 𝔹 =
+      ∃ (φ : M -> N) (ψ : N -> M) .
+        (∀ m : M . |m - φ(m)| ≤ ε) ∧
+        (∀ n : N . |n - ψ(n)| ≤ ε) ∧
+        (φ ∘ ψ ≃ Id_N) ∧ (ψ ∘ φ ≃ Id_M)
+
+    AXIOM PHTGluing :
+      ∀ (M : Shape) (U : List[Shape]) .
+        FiniteCover(U, M) ⇒ ČechDescent(PHTSheaf(M), U)
+
+    AXIOM PHTPolyhedronNerve :
+      ∀ (M : Shape) (n : ℕ) . IsPolyhedron(M) ⇒
+        PHTSheaf(M)^n ≃ H^n[
+          0 -> ⊕_{I ⊂ 𝕀, |I|=1} PHTSheaf(M_I)^0
+            -> ⊕_{I ⊂ 𝕀, |I|=2} PHTSheaf(M_I)^0
+            -> ...
+        ]
+        WHERE 𝕀 = {1..k}, k = |Triangulation(M)|,
+              M_I = ⋂_{i ∈ I} Triangulation(M)[i]
+
+    NOTATION "F =[ε]= G" = InterleavingDist(F, G) ≤ ε
+    NOTATION "M ≃[ε] N" = ε-Homotopic(M, N, ε)
+  }
+
+  STRUCTURE Interleaving {
+    REQUIRE ∀ F G : D^b(Shv(Direction * Filtration)) .
+      InterleavingDist(F, G) = inf {ε | ε-Interleaving(F, G, ε)}
+  }
+
+  STRUCTURE PointSampling {
+    DEF ConditionNumber(M : Submanifold) : R^>0 =
+      inf {r | ∀ (p : M) . reach(p,M) ≥ r}
+
+    DEF SampleDense(M : Submanifold, ε δ : R^>0) : Shape =
+      {X ⊆ M | X is (ε/2)-dense in M with prob ≥ 1-δ}
+
+    FUNC AlphaComplex(X : Shape, ε : R^>0) -> Polyhedron =
+      LET U = ⋃_{x ∈ X} B_ε(x);  V = VoronoiCells(X)
+      IN Nerve(U ∩ V)
+  }
+
+  PROOFS {
+    TACTIC MayerVietoris(U : FiniteCover) -> 𝔹 =
+      APPLY Mayer-Vietoris(U)
+      THEN Seifert-van-Kampen(U)
+
+    TACTIC CechDerivedSS(U : FiniteCover, F : D^b(Shv(X)) =
+      LET E^1, E^2 = spectral sequence of F w.r.t. U
+      REWRITE E^1_pq = ⊕_{I ⊆ 𝕀, |I|=p+1} H^q(F(U_I))
+              E^2_pq = H^p[q ↦ ⊕_{I ⊆ 𝕀, |I|=p+1} F(U_I)^q]
+      ARGUE E^1 collapses ⇒ E^2 = E^∞
+      CONCLUDE H^n(F) ≃ H^n[C•(U;F^0)]
+
+    THEOREM StabilityOfPHT {
+      STATEMENT:
+        ∀ (M N : Shape) (ε : R^≥0) .
+          (M ≃[ε] N) ⇔ (PHTSheaf(M) =[ε]= PHTSheaf(N))
+
+      PROOF:
+        (⇒) GIVEN M ≃[ε] N
+        CONSTRUCT φ, ψ from homotopy equiv.
+        SHOW they define an ε-interleaving
+
+        (⇐) GIVEN PHTSheaf(M) =[ε]= PHTSheaf(N)
+        LET φ, ψ witness the interleaving
+        SHOW they induce maps M -> N, N -> M
+        SHOW these maps are ε-homotopy equiv.
+    }
+
+    THEOREM PHTGluingProof {
+      STATEMENT:
+        ∀ (M : Shape) (U : List[Shape]) .
+          FiniteCover(U, M) ⇒ ČechDescent(PHTSheaf(M), U)
+
+      PROOF:
+        LET F = PHTSheaf(M)
+        SUFFICES TO SHOW
+          F(⋃U) -> holim[∏F(U_i)|i]
+                  |        |
+          F(⋃U ∩ Direction) -> holim[∏F(U_i ∩ Direction)|i]
+        is homotopy cartesian.
+
+        MayerVietoris(U)
+    }
+
+    THEOREM PHTPolyhedronNerveProof {
+      STATEMENT:
+        ∀ (M : Shape) (n : ℕ) . IsPolyhedron(M) ⇒
+          PHTSheaf(M)^n ≃ H^n[0 -> ⊕PHTSheaf(M_I)^0 -> ⊕PHTSheaf(M_I)^0 -> ...]
+
+      PROOF:
+        LET T = Triangulation(M)
+        HAVE FiniteCover(T,M)
+
+        CechDerivedSS(T, PHTSheaf(M))
+
+        ARGUE ∀ (I : 𝕀^k, k>0) . H^n(PHTSheaf(M_I)) = 0 for n>0
+          BY contractibility of M_I
+        
+        HENCE spectral sequence collapses  
+        THUS PHTSheaf(M)^n ≃ H^n[C•(T;PHTSheaf(-)^0)]
+    }
+    
+    THEOREM Approximation {
+      STATEMENT: 
+        ∀ (M : Submanifold) (ε δ : R^>0) . ε < ConditionNumber(M)/2 ⇒
+          InterleavingDist(PHTSheaf(M), PHTSheaf(AlphaComplex(SampleDense(M,ε,δ), ε))) 
+          ≤ ε/2 WITH PROBABILITY ≥ 1-δ
+      
+      PROOF:
+        LET τ = ConditionNumber(M), X = SampleDense(M, ε, δ), U = ⋃_{x ∈ X} B_ε(x)
+
+        HAVE M ≃ U BY Theorem 4.15
+        HAVE U ≃ AlphaComplex(X,ε) =: K BY Nerve Lemma
+
+        DEFINE φ : M -> K = NearestPoint_K ∘ H_M(1,-)
+               ψ : K -> M = H_M(1,-) ∘ NearestPoint_U  
+          WHERE H_M(t,x) = (1-t)x + t(x - ε·grad dist_M(x))
+                H_K(t,u) = u - t · line(u, NearestPoint_K(u))
+
+        SHOW ∀ m : M . |m - φ(m)| ≤ ε
+             ∀ k : K . |k - ψ(k)| ≤ ε  
+        SHOW ψ ∘ φ ≃ Id_M ∧ φ ∘ ψ ≃ Id_K
+
+        THUS M ≃[ε] K
+        HENCE PHTSheaf(M) =[ε/2]= PHTSheaf(K) BY StabilityOfPHT
+    }
+  }      
+}
+
+
+
+
+
+
+CONCEPT ShapeSpace {
+  LANGUAGE {
+    TYPE Shape <: CS(R^d)
+    TYPE Direction = S^(d-1)  
+    TYPE Filtration = R
+    TYPE PersistenceDiagram = Dgm
+    
+    FUNC PHT[d : Nat](M : Shape) : Direction -> PersistenceDiagram^d
+    FUNC PHTSheaf(M : Shape) : D^b(Shv(Direction * Filtration))
+    FUNC InterleavingDist(F G : D^b(Shv(Direction * Filtration))) : R^≥0
+    FUNC ShiftFunctor[ε : R^≥0](F : D^b(Shv(Direction * Filtration))) 
+      : D^b(Shv(Direction * Filtration))
+    FUNC BottleneckDist(D E : PersistenceDiagram) : R^≥0  
+    FUNC WassersteinDist[p : R^≥1](D E : PersistenceDiagram) : R^≥0
+    
+    PRED FiniteCover(U : List[Shape], M : Shape) : 𝔹 = 
+      (⋃_{N ∈ U} N = M) ∧ Finite(U)
+    PRED ČechDescent(F : D^b(Shv(Direction * Filtration)), U : FiniteCover) : 𝔹 =
+      F(⋃U) ≃ holim[ ∏_{N ∈ U} F(N) => ∏_{N,N' ∈ U} F(N ∩ N') -> ... ]
+      
+    AXIOM PHTGluing : 
+      ∀ (M : Shape) (U : List[Shape]) . 
+        FiniteCover(U, M) ⇒ ČechDescent(PHTSheaf(M), U)
+        
+    AXIOM PHTPolyhedronNerve :
+      ∀ (M : Shape) (n : ℕ) . IsPolyhedron(M) ⇒  
+        PHTSheaf(M)^n ≃ H^n[ 
+          0 -> ⊕_{I ⊂ 𝕀, |I|=1} PHTSheaf(M_I)^0
+            -> ⊕_{I ⊂ 𝕀, |I|=2} PHTSheaf(M_I)^0
+            -> ...  
+        ]
+        WHERE 𝕀 = {1..k}, k = |Triangulation(M)|, 
+              M_I = ⋂_{i ∈ I} Triangulation(M)[i]
+      
+    NOTATION "F =[ε]= G" = InterleavingDist(F, G) ≤ ε     
+    NOTATION "M ≃[ε] N" = 
+      ∃ (φ : M -> N) (ψ : N -> M) .
+        (∀ m : M . |m - φ(m)| ≤ ε) ∧ 
+        (∀ n : N . |n - ψ(n)| ≤ ε) ∧
+        (φ ∘ ψ ≃ Id_N) ∧ (ψ ∘ φ ≃ Id_M)
+  }
+
+  STRUCTURE Interleaving {  
+    DEF ε-Interleaving(F G : D^b(Shv(Direction * Filtration)), ε : R^≥0) = 
+      ∃ (φ : ShiftFunctor[ε](F) -> G) (ψ : ShiftFunctor[ε](G) -> F) . 
+        φ ∘ ShiftFunctor[ε](ψ) = ShiftFunctor[2ε](ρ_G) ∧
+        ψ ∘ ShiftFunctor[ε](φ) = ShiftFunctor[2ε](ρ_F)
+      WHERE ρ_F : F -> ShiftFunctor[ε](F), 
+            ρ_G : G -> ShiftFunctor[ε](G)
+        
+    REQUIRE ∀ F G : D^b(Shv(Direction * Filtration)) .
+      InterleavingDist(F, G) = inf {ε | ε-Interleaving(F, G, ε)}        
+  }
+  
+  STRUCTURE Stability {
+    THEOREM StabilityOfPHT {
+      STATEMENT: 
+        ∀ (M N : Shape) (ε : R^≥0) . 
+          (M ≃[ε] N) ⇔ (PHTSheaf(M) =[ε]= PHTSheaf(N))
+
+      PROOF:
+        (⇐) GIVEN M ≃[ε] N  
+        CONSTRUCT φ, ψ from homotopy equiv.
+        SHOW they define an ε-interleaving
+        
+        (⇒) GIVEN PHTSheaf(M) =[ε]= PHTSheaf(N)  
+        LET φ, ψ witness the interleaving
+        SHOW they induce maps M -> N, N -> M 
+        SHOW these maps are ε-homotopy equiv.
+    }
+  }
+
+  STRUCTURE PointSampling {
+    DEF ConditionNumber(M : Submanifold) : R^>0 =
+      inf {r | ∀ (p : M) . reach(p,M) ≥ r}
+        
+    DEF SampleDense(M : Submanifold, ε δ : R^>0) : Shape =
+      {X ⊆ M | X is (ε/2)-dense in M with prob ≥ 1-δ}  
+        
+    FUNC AlphaComplex(X : Shape, ε : R^>0) -> Polyhedron =
+      LET U = ⋃_{x ∈ X} B_ε(x);  V = VoronoiCells(X) 
+      IN Nerve(U ∩ V)
+          
+    THEOREM Approximation { 
+      STATEMENT:
+        ∀ (M : Submanifold) (ε δ : R^>0) . ε < ConditionNumber(M)/2  ⇒ 
+          InterleavingDist(PHTSheaf(M), PHTSheaf(AlphaComplex(SampleDense(M,ε,δ), ε)))
+          ≤ ε/2 WITH PROBABILITY ≥ 1-δ
+            
+      PROOF:  
+        LET τ = ConditionNumber(M), X = SampleDense(M, ε, δ), U = ⋃_{x ∈ X} B_ε(x)
+        
+        HAVE M ≃ U BY Theorem 4.15  
+        HAVE U ≃ AlphaComplex(X,ε) =: K BY Nerve Lemma
+        
+        DEFINE φ : M -> K = NearestPoint_K ∘ H_M(1,-) 
+               ψ : K -> M = H_M(1,-) ∘ NearestPoint_U
+          WHERE H_M(t,x) = (1-t)x + t(x - ε·grad dist_M(x))
+                H_K(t,u) = u - t · line(u, NearestPoint_K(u))  
+                  
+        SHOW ∀ m : M . |m - φ(m)| ≤ ε   
+             ∀ k : K . |k - ψ(k)| ≤ ε
+        SHOW ψ ∘ φ ≃ Id_M ∧ φ ∘ ψ ≃ Id_K
+        
+        THUS M ≃[ε] K
+        HENCE PHTSheaf(M) =[ε/2]= PHTSheaf(K) BY StabilityOfPHT
+    }
+  }
+
+  PROOFS {      
+    TACTIC MayerVietoris(U : FiniteCover) -> 𝔹 = 
+      APPLY Mayer-Vietoris(U) 
+      THEN Seifert-van-Kampen(U)
+        
+    TACTIC CechDerivedSS(U : FiniteCover, F : D^b(Shv(X)) = 
+      LET E^1, E^2 = spectral sequence of F w.r.t. U
+      REWRITE E^1_pq = ⊕_{I ⊆ 𝕀, |I|=p+1} H^q(F(U_I))  
+              E^2_pq = H^p[q ↦ ⊕_{I ⊆ 𝕀, |I|=p+1} F(U_I)^q]
+      ARGUE E^1 collapses ⇒ E^2 = E^∞  
+      CONCLUDE H^n(F) ≃ H^n[C•(U;F^0)]
+
+    THEOREM PHTGluingProof {
+      STATEMENT: 
+        ∀ (M : Shape) (U : List[Shape]) .
+          FiniteCover(U, M) ⇒ ČechDescent(PHTSheaf(M), U)
+
+      PROOF:  
+        LET F = PHTSheaf(M)  
+        SUFFICES TO SHOW  
+          F(⋃U) -> holim[∏F(U_i)|i] 
+                  |        |  
+          F(⋃U ∩ Direction) -> holim[∏F(U_i ∩ Direction)|i]
+        is homotopy cartesian.  
+          
+        MayerVietoris(U)
+    }
+      
+    THEOREM PHTPolyhedronNerveProof {
+      STATEMENT:
+        ∀ (M : Shape) (n : ℕ) . IsPolyhedron(M) ⇒
+          PHTSheaf(M)^n ≃ H^n[0 -> ⊕PHTSheaf(M_I)^0 -> ⊕PHTSheaf(M_I)^0 -> ...]
+      
+      PROOF:  
+        LET T = Triangulation(M)
+        HAVE FiniteCover(T,M)  
+
+        CechDerivedSS(T, PHTSheaf(M))
+
+        ARGUE ∀ (I : 𝕀^k, k>0) . H^n(PHTSheaf(M_I)) = 0 for n>0
+          BY contractibility of M_I
+        
+        HENCE spectral sequence collapses
+        THUS PHTSheaf(M)^n ≃ H^n[C•(T;PHTSheaf(-)^0)]
+    }
+  }      
+}
+
+
+
+
+
+
+
+CONCEPT ShapeSpace {
+  LANGUAGE {
+    TYPE Shape <: CS(R^d)
+    TYPE Direction = S^(d-1) 
+    TYPE Filtration = R
+    TYPE PersistenceDiagram <: Dgm
+    
+    FUNC PHT[M : Shape] : Direction -> PersistenceDiagram^d
+    FUNC PHTSheaf[M : Shape] : D^b(Shv(Direction * Filtration))  
+    FUNC InterleavingDist : (D^b(Shv(Direction * Filtration)), D^b(Shv(Direction * Filtration))) -> R^≥0
+    FUNC ShiftFunctor[ε : R^≥0] : D^b(Shv(Direction * Filtration)) -> D^b(Shv(Direction * Filtration))
+    FUNC BottleneckDist : (PersistenceDiagram, PersistenceDiagram) -> R^≥0
+    FUNC WassersteinDist[p : R^≥1] : (PersistenceDiagram, PersistenceDiagram) -> R^≥0
+
+    PRED FiniteCover[U : List[Shape], M : Shape] : 𝔹 = (⋃_{N ∈ U} N = M) ∧ Finite(U)
+    PRED ČechDescent[F : D^b(Shv(Direction * Filtration)), U : List[Shape]] : 𝔹 = 
+      F(⋃U) ≃ holim[ Π_{N ∈ U} F(N) => Π_{N,N' ∈ U} F(N ∩ N') -> ... ]
+      
+    AXIOM PHTInjective : ∀ (M N : Shape) . PHT[M] = PHT[N] => M = N
+    AXIOM PHTGluing : ∀ (M : Shape) (U : List[Shape]) . FiniteCover[U, M] => ČechDescent[PHTSheaf[M], U]  
+    AXIOM PHTPolyhedronNerve : ∀ (M : Shape | IsPolyhedron(M)) (n : ℕ) .
+      PHTSheaf[M]^n ≃ Hⁿ[ 0 -> ⊕_{I ⊂ {1..k} | |I|=1} PHTSheaf[M_I]⁰ 
+                            -> ⊕_{I ⊂ {1..k} | |I|=2} PHTSheaf[M_I]⁰
+                            -> ... ]
+      WHERE k = |Triangulation(M)|
+            M_I = ⋂_{i ∈ I} Triangulation(M)[i]
+            
+    NOTATION "F =[ε]= G" = InterleavingDist(F, G) ≤ ε     
+    NOTATION "M ≃[ε] N" = ∃ (φ : M -> N) (ψ : N -> M) .
+      (∀ (m : M) . |m - φ(m)| ≤ ε) ∧ 
+      (∀ (n : N) . |n - ψ(n)| ≤ ε) ∧
+      (φ ∘ ψ ≃ Id_N) ∧ (ψ ∘ φ ≃ Id_M)            
+  }
+   
+  STRUCTURE Interleaving {
+    DEF ε-Interleaving[F G : D^b(Shv(Direction * Filtration)), ε : R^≥0] = 
+      ∃ (φ : ShiftFunctor[ε](F) -> G) (ψ : ShiftFunctor[ε](G) -> F) . 
+        (φ ∘ ShiftFunctor[ε](ψ) = ShiftFunctor[2ε](ρ_G)) ∧ 
+        (ψ ∘ ShiftFunctor[ε](φ) = ShiftFunctor[2ε](ρ_F))
+      WHERE ρ_F : F -> ShiftFunctor[ε](F)  
+            ρ_G : G -> ShiftFunctor[ε](G)
+            
+    REQUIRE InterleavingDist(F, G) = inf { ε | ε-Interleaving[F, G, ε] }      
+  }
+   
+  STRUCTURE StabilityTheorem {
+    THEOREM Stability {
+      STATEMENT: ∀ (M N : Shape) (ε : R^≥0) . (M ≃[ε] N) <=> (PHTSheaf[M] =[ε]= PHTSheaf[N])
+      PROOF:
+        LET M N : Shape, ε : R^≥0
+        (==>) 
+          ASSUME M ≃[ε] N
+          OBTAIN φ : M -> N, ψ : N -> M SATISFYING ε-homotopy equivalence
+          CONSTRUCT interleaving maps via Fig 4.3 
+          HENCE PHTSheaf[M] =[ε]= PHTSheaf[N] 
+        (<==)  
+          ASSUME PHTSheaf[M] =[ε]= PHTSheaf[N]
+          LET v : Direction
+          HAVE PHTSheaf[M](v) =[ε]= PHTSheaf[N](v) in D^b(Shv(Filtration))
+          HAVE ∀ (i : ℕ) . BottleneckDist(PHT[M](v)_i, PHT[N](v)_i) ≤ ε BY IsometryTheorem
+          SHOW M ≃[ε] N
+        QED  
+    }
+    
+    THEOREM InterleavingBottleneckBound {
+      STATEMENT:
+        ∀ (M N : Shape) (i : ℕ) .
+          InterleavingDist(PHTSheaf[M], PHTSheaf[N]) ≥ sup_{v : Direction} BottleneckDist(PHT[M](v)_i, PHT[N](v)_i)
+      PROOF:  
+        LET ε = InterleavingDist(PHTSheaf[M], PHTSheaf[N])
+        LET v : Direction
+        HAVE PHTSheaf[M](v) =[ε]= PHTSheaf[N](v) in D^b(Shv(Filtration))  
+        THEN BottleneckDist(PHT[M](v)_i, PHT[N](v)_i) ≤ ε BY IsometryTheorem
+        HENCE sup_{v : Direction} BottleneckDist(...) ≤ ε
+    }
+  }
+
+  STRUCTURE PointSampling { 
+    LET ConditionNumber[M : Submanifold] : R^>0 = inf { r | ∀ (p : M) . reach(p, M) ≥ r }
+
+    DEF SampleDense[M : Submanifold, ε δ : R^>0] : Shape = {
+      X ⊆ M | (X is (ε/2)-dense in M) ∧ (ℙ[X ⊆ M] ≥ 1 - δ) 
+    }
+
+    FUNC AlphaComplex : (Shape, R^>0) -> Polyhedron
+    REWRITE AlphaComplex(X, ε) = Nerve(⋃_{x ∈ X} B_ε(x) ⋂ VoronoiCells(X))
+
+    THEOREM Approximation {  
+      STATEMENT:
+        ∀ (M : Submanifold) (ε δ : R^>0) . 
+          ε < ConditionNumber[M] / 2 =>
+          InterleavingDist(PHTSheaf[M], PHTSheaf[AlphaComplex(SampleDense[M, ε, δ], ε)]) ≤ ε/2
+        WITH PROBABILITY ≥ 1 - δ
+        
+      PROOF:  
+        LET τ = ConditionNumber[M], X = SampleDense[M, ε, δ]
+        HAVE M ≃ ⋃_{x ∈ X} B_ε(x) =: U BY Theorem 4.15
+        HAVE U ≃ AlphaComplex(X, ε) =: K BY NerveLemma
+        
+        CONSTRUCT φ : M -> K, ψ : K -> M WHERE
+          φ = NearestPoint_K ∘ H_M(1, -)  
+          ψ = H_M(1, -) ∘ NearestPoint_U
+          H_M(t, x) = (1-t)x + t · (x - ε·Grad(dist_M)(x))
+          H_K(t, u) = u - t · line(u, NearestPoint_K(u))
+        
+        SHOW ∀ (m : M) . |m - φ(m)| ≤ ε USING |H_M(1, x) - x| ≤ ε 
+        SHOW ∀ (k : K) . |k - ψ(k)| ≤ ε USING K ⊂ U, |H_U(1, u) - u| ≤ ε
+        SHOW ψ ∘ φ ≃ Id_M BY s ↦ H_M(s, φ(-))  
+        SHOW φ ∘ ψ ≃ Id_K BY s ↦ H_K(s, ψ(-))
+        
+        HENCE M ≃[ε] K  
+        THUS InterleavingDist(PHTSheaf[M], PHTSheaf[K]) ≤ ε/2 BY Stability 
+    }
+  }
+   
+  PROOFS {
+    TACTIC ČechDescends[F : D^b(Shv(Direction * Filtration)), U : FiniteCover] -> 𝔹 {
+      SUFFICES TO SHOW homotopy cartesian square:
+      
+        F(⋃U)           -> holim[ ⊕ F(N) | N ∈ U ]
+             restriction |             | restriction  
+        F(⋃U ⋂ Dirxn) -> holim[ ⊕ F(N ⋂ Dirxn) | N ∈ U ]            
+      
+      APPLY Mayer-Vietoris 
+      APPLY Seifert-van Kampen
+      CONCLUDE homotopy cartesian
+    }  
+      
+    TACTIC SpectralSequenceCollapse[M : Polyhedron] {  
+      LET T : List[Shape] = Triangulation(M)
+      LET (E¹_pq, E²_pq) be pages of spectral sequence PHTSheaf[M] w.r.t. T
+      
+      HAVE E¹_pq = ⊕_{I ⊂ {0..k} | |I|=p+1} Hq(PHTSheaf[M_I])  
+      HAVE E²_pq = Hp[q ↦ ⊕_{I ⊂ {0..k} | |I|=p+1} PHTSheaf[M_I]^q]
+        BY ČechDescent[PHTSheaf[M], T] 
+        
+      SHOW ∀ (p q > 0) (I : {0..k}^(p+1)) . Hq(PHTSheaf[M_I]) = 0
+        BY contractibility of M_I
+        
+      DEDUCE E²_pq = E^∞_pq for p,q > 0  
+      CONCLUDE spectral sequence collapses  
+    }
+         
+    THEOREM PHTGluingTheorem {
+      STATEMENT:
+        ∀ (M : Shape) (U : List[Shape]) . FiniteCover[U, M] => ČechDescent[PHTSheaf[M], U]
+      PROOF:
+        LET M : Shape, U : List[Shape]  
+        ASSUME FiniteCover[U, M]
+        SHOW ČechDescent[PHTSheaf[M], U] BY ČechDescends[PHTSheaf[M], U]
+    }
+      
+    THEOREM PolyhedronNerveTheorem {  
+      STATEMENT:  
+        ∀ (M : Polyhedron) (n : ℕ) .
+          PHTSheaf[M]^n ≃ Hn[ 0 -> ⊕_{I ⊂ {1..k} | |I|=1} PHTSheaf[M_I]⁰ 
+                               -> ⊕_{I ⊂ {1..k} | |I|=2} PHTSheaf[M_I]⁰
+                               -> ... ]  
+            WHERE k = |Triangulation(M)|
+                  M_I = ⋂_{i ∈ I} Triangulation(M)[i]
+      PROOF:
+        LET M : Polyhedron, n : ℕ  
+        LET T = Triangulation(M)
+        HAVE FiniteCover[T, M] BY def. of triangulation  
+        
+        APPLY SpectralSequenceCollapse[M]
+        CONCLUDE PHTSheaf[M]^n ≃ Hn[nerve complex]      
+    }
+  }
+}
+
+
+
+
+
+CONCEPT ShapeSpace {
+  LANGUAGE {
+    TYPE Shape <: CS(R^d)
+    TYPE Direction <: S^(d-1)
+    TYPE Filtration <: R 
+    TYPE PersistenceDiagram <: Dgm  
+    
+    FUNC PHT(M : Shape) : Direction -> PersistenceDiagram^d
+    FUNC PHTSheaf(M : Shape) : D^b(Shv(Direction x Filtration))
+    FUNC InterleavingDist(F G : D^b(Shv(Direction x Filtration))) : R^≥0
+    FUNC ShiftFunctor(ε : R^≥0) : 
+      D^b(Shv(Direction x Filtration)) -> D^b(Shv(Direction x Filtration))
+    FUNC BottleneckDist(D E : PersistenceDiagram) : R^≥0
+    FUNC WassersteinDist(p : R^≥1)(D E : PersistenceDiagram) : R^≥0
+
+    PRED FiniteCover(U : List[Shape])(M : Shape) <=>
+      (⋃_{N ∈ U} N = M) AND Finite(U) 
+    PRED ČechDescent(F : D^b(Shv(Direction x Filtration)))(U : FiniteCover) <=>
+      F(⋃U) ≃ holim[ Π_{N ∈ U} F(N) => Π_{N,N' ∈ U} F(N ∩ N') -> ... ] 
+      
+    AXIOM PHTInjective {
+      FORALL (M N : Shape) . PHT(M) = PHT(N) => M = N
+    }  
+    
+    AXIOM PHTGluing {
+      FORALL (M : Shape) (U : List[Shape]) . FiniteCover(U)(M) =>
+        ČechDescent(PHTSheaf(M))(U)
+    }
+
+    AXIOM PHTPolyhedronNerve {
+      FORALL (M : Shape) . IsPolyhedron(M) => FORALL (n : N) .
+        PHTSheaf(M)^n ≃ Hⁿ[ 
+          0 -> ⊕_{I ⊂ {1..k}, |I|=1} PHTSheaf(M_I)⁰ 
+            -> ⊕_{I ⊂ {1..k}, |I|=2} PHTSheaf(M_I)⁰
+            -> ...
+        ]   
+        WHERE k = |Triangulation(M)|
+        AND M_I = ⋂_{i ∈ I} Triangulation(M)[i]
+    }  
+    
+    NOTATION "F =[ε]= G" := InterleavingDist(F, G) ≤ ε   
+    NOTATION "M ≃[ε] N" := EXISTS (φ : M -> N) (ψ : N -> M) .
+        (FORALL m : M . |m - φ(m)| ≤ ε) AND
+        (FORALL n : N . |n - ψ(n)| ≤ ε) AND
+        (φ ∘ ψ ≃ Id_N) AND (ψ ∘ φ ≃ Id_M)
+  }
+
+  STRUCTURE Interleaving {
+    DEF ε-Interleaving(F G : D^b(Shv(Direction x Filtration)))(ε : R^≥0) <=>
+      EXISTS (φ : ShiftFunctor(ε)(F) -> G) (ψ : ShiftFunctor(ε)(G) -> F) . 
+        φ ∘ ShiftFunctor(ε)(ψ) = ShiftFunctor(2ε)(ρ_G) AND
+        ψ ∘ ShiftFunctor(ε)(φ) = ShiftFunctor(2ε)(ρ_F)
+      WHERE ρ_F : F -> ShiftFunctor(ε)(F) and ρ_G : G -> ShiftFunctor(ε)(G)
+         are the natural shift transformations.
+        
+    REQUIRE InterleavingDist(F, G) = inf { ε | ε-Interleaving(F, G)(ε) }
+  }
+
+  STRUCTURE StabilityTheorem {
+    THEOREM Stability {  
+      FORALL (M N : Shape) (ε : R^≥0) . M ≃[ε] N  <=>  
+        PHTSheaf(M) =[ε]= PHTSheaf(N)
+    }
+    PROOF {
+      (<==) Follow Fig 4.3 to construct interleaving
+      (==>) Evaluate interleaving on stalks & apply Isometry Thm  
+    }
+  
+    LEMMA InterleavingBottleneckBound {
+      FORALL (M N : Shape) (i : N) .
+        InterleavingDist(PHTSheaf(M), PHTSheaf(N)) ≥ 
+        sup_{v : Direction} BottleneckDist(PHT(M)(v)_i, PHT(N)(v)_i)   
+    }
+    PROOF {
+      Let ε = InterleavingDist(PHTSheaf(M), PHTSheaf(N)).
+      FORALL (v : Direction) . 
+        PHTSheaf(M)(v) =[ε]= PHTSheaf(N)(v) in D^b(Shv(Filtration))
+        => BottleneckDist(PHT(M)(v)_i, PHT(N)(v)_i) ≤ ε by Isometry Thm
+      HENCE sup_{v : Direction} BottleneckDist(...) ≤ ε.
+    }  
+  }
+  
+  STRUCTURE PointSampling {
+    DEF ConditionNumber(M : Submanifold) : R^>0 = 
+      inf { r | FORALL (p : M) . reach(p, M) ≥ r }
+
+    DEF SampleDense(M : Submanifold)(ε δ : R^>0) : Shape = {
+      X ⊂ M SUCH THAT X is (ε/2)-dense in M with prob. ≥ 1-δ   
+    }  
+    
+    FUNC AlphaComplex(X : Shape)(ε : R^>0) -> Polyhedron = {
+      LET U = ⋃_{x ∈ X} B_ε(x)
+      LET V = VoronoiCells(X)
+      RETURN Nerve(U ⋂ V) 
+    }
+      
+    THEOREM Approximation {
+      FORALL (M : Submanifold) (ε : R^>0) (δ : R^>0) .
+        ε < ConditionNumber(M) / 2  =>
+        InterleavingDist(PHTSheaf(M), 
+                         PHTSheaf(AlphaComplex(SampleDense(M, ε, δ), ε))) 
+        ≤ ε/2  
+      WITH PROBABILITY ≥ 1 - δ
+    }  
+    PROOF {
+      LET τ = ConditionNumber(M), X = SampleDense(M, ε, δ).
+      BY Theorem 4.15, HAVE M ≃ ⋃_{x ∈ X} B_ε(x) =: U   
+      BY Nerve Lemma, HAVE U ≃ AlphaComplex(X, ε) =: K  
+      
+      LET H_M(t, x) = (1-t)x + t · (x - ε·Grad(dist_M)(x)) // homotopy M -> U
+          H_K(t, u) = u - t · line(u, NearestPoint_K(u))  // homotopy U -> K
+          φ = NearestPoint_K ∘ H_M(1, -) : M -> K
+          ψ = H_M(1, -) ∘ NearestPoint_U : K -> M   
+      
+      FORALL (m : M) . |m - φ(m)| ≤ ε   // since H_M moves pts by ≤ ε  
+      FORALL (k : K) . |k - ψ(k)| ≤ ε   // since K ⊂ U, H_U moves pts by ≤ ε
+      
+      HAVE ψ ∘ φ ≃ Id_M by s ↦ H_M(s, φ(-)) for s ∈ [0,1]
+           φ ∘ ψ ≃ Id_K by s ↦ H_K(s, ψ(-)) for s ∈ [0,1]
+        
+      THUS M ≃[ε] K. Apply Stability Thm to get the result.
+    }
+  }
+  
+  PROOFS {  
+    THEOREM PHTGluing {
+      FORALL (M : Shape) (U : List[Shape]) . FiniteCover(U)(M) =>
+        ČechDescent(PHTSheaf(M))(U)  
+        
+      PROOF {
+        SUFFICES TO SHOW the following square is homotopy cartesian:
+        
+          PHTSheaf(M)(U)             -> holim[ ⊕ PHTSheaf(N)(U) | N ∈ U ]
+                        restriction |                          | restriction  
+          PHTSheaf(M)(U ⋂ Direction) -> holim[ ⊕ PHTSheaf(N)(U ⋂ Direction) | N ∈ U ]            
+        
+        BY repeated application of Mayer-Vietoris and Seifert-van Kampen.
+      }
+    }
+    
+    THEOREM PolyhedronNerve {  
+      FORALL (M : Shape) . IsPolyhedron(M) => FORALL (n : N) .
+        PHTSheaf(M)^n ≃ Hⁿ[...]   -- statement from axiom
+        
+      PROOF {
+        LET T : List[Shape] = Triangulation(M)        
+        WE HAVE FiniteCover(T)(M) BY def of triangulation
+        
+        LET E¹_*, E²_* = spectral sequence of PHTSheaf(M) w.r.t. T
+        
+        HAVE E¹_pq = ⊕_{I ⊂ {0..k}, |I|=p+1} Hq(PHTSheaf(M_I))
+             E²_pq = Hp[q ↦ ⊕_{I ⊂ {0..k}, |I|=p+1} PHTSheaf(M_I)^q]
+          BY ČechDescent(PHTSheaf(M))(T) and def. of Čech cochain complex.
+          
+        FORALL (p > 0) (q > 0) (I : {0..k}^(p+1)) . Hq(PHTSheaf(M_I)) = 0 
+          BY contractibility of M_I
+        
+        THUS E²_pq = E^∞_pq for p,q > 0. Spectral sequence collapses.  
+        
+        HENCE PHTSheaf(M)^n ≃ Hn[p ↦ ⊕_{I ⊂ {0..k}, |I|=p+1} PHTSheaf(M_I)⁰]
+      }
+    }
+  }
+}

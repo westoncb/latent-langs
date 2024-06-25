@@ -1,0 +1,109 @@
+CONCEPT SelfModifyingConcepts {
+  LANGUAGE {
+    type Concept = {name: String, language: Language, structure: Structure, proofs: Proofs}
+    type Language = {types: Type*, functions: Function*, predicates: Predicate*, notations: Notation*}  
+    type Structure = {axioms: Axiom*}
+    type Proofs = {theorems: Theorem*}
+
+    type ConceptTransformation = Concept -> Concept
+    type LanguageTransformation = Language -> Language
+    type StructureTransformation = Structure -> Structure 
+    type ProofsTransformation = Proofs -> Proofs
+
+    func AddType(L: Language, T: Type): Language =
+      {types = L.types ∪ {T}, functions = L.functions, predicates = L.predicates, notations = L.notations}
+
+    func MapTypes(L: Language, F: Type -> Type): Language =
+      {types = [F(T) for T in L.types], functions = L.functions, predicates = L.predicates, notations = L.notations}
+
+    func AddAxiom(S: Structure, A: Axiom): Structure = {axioms = S.axioms ∪ {A}}
+    
+    func MapAxioms(S: Structure, F: Axiom -> Axiom): Structure = {axioms = [F(A) for A in S.axioms]}
+
+    notation "C[X/Y]" = ConceptSubstitution(C: Concept, X: ConceptElement, Y: ConceptElement): Concept =
+      match (X, Y):
+        (T: Type,        T': Type)        => {C with language = MapTypes(C.language, λ t. t == T ? T' : t)}
+        (T: Type,        E: Expression)   => {C with language = MapTypes(C.language, λ t. t == T ? typeOf(E) : t)}  
+        (A: Axiom,       A': Axiom)       => {C with structure = MapAxioms(C.structure, λ a. a == A ? A' : a)}
+        (A: Axiom,       P: Proposition)  => {C with structure = MapAxioms(C.structure, λ a. a == A ? toAxiom(P) : a)}
+        ...
+  }
+
+  STRUCTURE {
+    Metacircularity(C): ValidConcept(C) ⇒ Expressible(C, C)
+
+    Extensibility(C): ValidConcept(C) ⇒ 
+      ∃ X: ConceptTransformation. ValidConcept(X(C)) ∧ ¬Expressible(C, X(C))
+
+    Interpretation(C, D, I): ValidConcept(C) ∧ ValidConcept(D) ⇒ 
+      ∃ I: C.Language -> D.Language. 
+        ∀ S ∈ C.Structure. D ⊢ I(S)
+  }
+
+  PROOFS {
+    SelfExpressibility: ∀ C: Concept. ValidConcept(C) ⇒ Expressible(C, C)
+    {
+      let SMC = SelfModifyingConcepts
+      suffices to show Expressible(SMC, SMC)
+
+      let SMC' = SMC[Concept/SelfModifyingConcepts.Concept]      
+                    [Language/SelfModifyingConcepts.Language]
+                    [Structure/SelfModifyingConcepts.Structure]
+                    [Proofs/SelfModifyingConcepts.Proofs]
+                    ...
+      
+      SMC' is a version of SMC with all its internal types/axioms substituted for their expansions
+
+      by Definition of Expressible
+      have Expressible(SMC', SMC)
+      hence Expressible(SMC, SMC)
+    }
+
+    ConceptualFreedom: ∀ C: Concept. ValidConcept(C) ⇒  
+      ∃ X: ConceptTransformation. ValidConcept(X(C)) ∧ ¬Expressible(C, X(C))
+    {
+      assume ValidConcept(C)
+      let EnhancedProofs = AddAxiom(C.proofs, "EnhancedAxiom: ...")
+      let EnhancedConcept = {C with proofs = EnhancedProofs}
+
+      by Structurality
+      have ValidConcept(EnhancedConcept) 
+
+      suppose for contradiction that Expressible(C, EnhancedConcept)
+      then ∃ P ∈ C.proofs. P ⊢ "EnhancedAxiom: ..."
+      but C.proofs cannot possibly prove an axiom it does not contain
+      contradiction
+
+      therefore ¬Expressible(C, EnhancedConcept)
+      therefore ∃ X: ConceptTransformation. ValidConcept(X(C)) ∧ ¬Expressible(C, X(C))
+    }
+
+    MeaningfulInterpretations: ∀ C, D: Concept. ValidConcept(C) ∧ ValidConcept(D) ⇒
+      ∃ I: C.Language -> D.Language. ∀ S ∈ C.Structure. D ⊢ I(S)  
+    {
+      assume ValidConcept(C), ValidConcept(D)
+   
+      define I: C.Language -> D.Language as:
+        T in C.Language.types       |-> I(T) = D.Language.types[0]         
+        f in C.Language.functions   |-> I(f) = (x => x)
+        p in C.Language.predicates  |-> I(p) = (x => true)  
+        n in C.Language.notations   |-> I(n) = n
+
+      have ∀ S ∈ C.Structure. D ⊢ I(S)
+      proof:
+        let S = "∀ x: T. P(x)" ∈ C.structure 
+        I(S) = "∀ x: D.types[0]. true"
+        which is trivially provable in D
+
+      hence ∃ I: C.Language -> D.Language. ∀ S ∈ C.Structure. D ⊢ I(S)
+    }
+  }
+}
+
+This SelfModifyingConcepts concept explores the meta-properties of concepts written in ConceptScript. Key ideas:
+
+Metacircularity: A valid concept can express itself within its own language. This is shown via a substitution operation that expands the concept's types/axioms.
+Extensibility: Given any valid concept, it's always possible to transform it into a new valid concept that the original could not express. This is shown by adding a new unprovable axiom.
+Interpretation: For any two valid concepts, there always exists a meaningful interpretation from one to the other, in the sense of mapping the first concept's structure to theorems provable in the second. A trivial example mapping is constructed.
+
+The proofs make use of custom notation like C[X/Y] for concept substitution, and tactics like Structurality (preservation of validity under transformation).

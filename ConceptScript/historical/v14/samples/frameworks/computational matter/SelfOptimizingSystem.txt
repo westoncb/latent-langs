@@ -1,0 +1,93 @@
+CONCEPT SelfOptimizingSystem {
+  IMPORT ComputationalMatter_v1.*, AdaptiveStructure_v1.*
+  
+  LANGUAGE {
+    System := (ST, DYN)
+    Structure := (COMP, TOPO)
+    Dynamics := (PROG, ENV)
+    Component := (MAT, CAP)
+    Topology := Graph(V, E)
+
+    (ST, DYN): system with structure ST and dynamics DYN
+    (COMP, TOPO): structure with components COMP and topology TOPO
+    (PROG, ENV): dynamics with program PROG and environment ENV
+    (MAT, CAP): component with matter MAT and capabilities CAP
+    
+    METRIC := (μ, <)
+    μ: System -> ℝ 
+    <: ℝ × ℝ -> Bool
+    
+    Optimized(S, M) ⟺ ∀S'. μ(S') < μ(S) ⇒ S = S'
+    SelfOptimizing(S, M) ⟺ ◇∀t. Optimized(S(t), M)
+    Adaptive(S) ⟺ ∀ENV. ◇Optimized(S, (_, ENV))
+
+    notation S(t) = (ST(t), DYN(t))
+    notation ⟨P⟩ = ∀t. P(t)
+  }
+
+  STRUCTURE {
+    COMP := {ci | i ∈ 1..N}
+    ci := (mi, CAPi)  
+    mi := ComputationalMatter_v1.Matter
+    
+    TOPO := AdaptiveStructure_v1.Assembly
+    
+    PROG := p(ALGO, OBJ)
+    ALGO := (SENSE, PLAN, ACT)
+    SENSE: ENV -> Observation 
+    PLAN: Observation -> Action
+    ACT: Action -> Effect
+    
+    ENV := (TASK, WORLD)
+    TASK := (GOAL, CONSTR)
+    WORLD := (DOMAIN, AGENTS, LAWS) 
+  }
+
+  TACTIC {
+    TopologyAdaptation{S, M, t} ⊢ ∃S'. μ(S') < μ(S) ⇐ ∃P. ⟨P⟩{TOPO{S}, AdaptiveStructure_v1.Target(ENV{S}(t), M)}
+    
+    ComponentOptimization{S, M} ⊢ ∀c ∈ COMP{S}. ∃P. ⟨P⟩{MAT{c}, CAP{c}} ∧ Optimized(MAT{c}, M) ⇒ Optimized(S, M)
+    
+    ProgramInference{S, M} ⊢ ∃P. ⟨P⟩{S, M} ⇐ ∃f: Observation -> Action. ∀t. Optimized(S(t+1), M) where S(t+1) = (ST{S}, (f ∘ SENSE{S}, ENV{S}))
+  }
+  
+  PROOF {
+    theorem SelfOptimizing((COMP, TOPO), M) ⇐ ∀c ∈ COMP. Programmable{MAT{c}} ∧ ∀t. ∃P. ⟨P⟩{TOPO, t(ENV(t), M)}
+    {
+      assume ∀c ∈ COMP. Programmable{MAT{c}} 
+            ∀t. ∃P. ⟨P⟩{TOPO, t(ENV(t), M)}
+      
+      ∀c. ∃P. ⟨P⟩{MAT{c}, CAP{c}} by ComputationalMatter_v1.Programmable
+      hence ∀t. Optimized(COMP(t), M) by ComponentOptimization
+      
+      ∀t. Optimized(TOPO(t), M) by TopologyAdaptation
+      hence ∀t. Optimized((COMP, TOPO)(t), M) by definition
+      
+      ∀t. ∃P. Optimized((COMP, TOPO)(t+1), M) by ProgramInference
+      hence SelfOptimizing((COMP, TOPO), M) by definition
+    }
+    
+    theorem Adaptive(S) ⇐ ∃M. SelfOptimizing(S, M) ∧ ∀m, m'. μ(S, (_, m)) = μ(S, (_, m'))
+    {
+      assume SelfOptimizing(S, M)
+             ∀m, m'. μ(S, (_, m)) = μ(S, (_, m'))
+      
+      let ENV be arbitrary
+      
+      ◇∀t. Optimized(S(t), (_, ENV)) by SelfOptimizing(S, M) 
+      ◇∀t. Optimized(S(t), M) by assumption
+      hence ◇∀t. Optimized(S(t), (ENV, M)) by definition
+      hence Adaptive(S) by definition      
+    } 
+  }
+}
+
+This Concept defines a self-optimizing adaptive system consisting of programmable matter components organized in an adaptive topology. The system has dynamics governed by a sense-plan-act program operating in an environment consisting of tasks and a world model.
+Key ideas synthesized from the prior Concepts include:
+
+Computational matter components from ComputationalMatter_v1
+Adaptive assembly topologies from AdaptiveStructure_v1
+Formalization of optimization with respect to a metric
+Tactics and theorems supporting component and topology optimization
+Inference of optimal programs from observation of system trajectories
+Proof of self-optimization and adaptivity under certain assumptions

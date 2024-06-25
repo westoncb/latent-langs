@@ -1,0 +1,69 @@
+CONCEPT CategoryOfCategories {
+  LANGUAGE {
+    type Cat = Category
+    type Functor = Cat -> Cat
+    type NaturalTransformation = Functor -> Functor
+
+    func Identity : Cat -> Functor
+    func Compose : Functor × Functor -> Functor
+    func Component : NaturalTransformation × Cat -> Functor
+    func Whisker : NaturalTransformation × Functor -> NaturalTransformation
+
+    notation "F ∘ G" = Compose(F, G)
+    notation "α ⋆ F" = Whisker(α, F)
+    notation "α_C" = Component(α, C)
+  }
+
+  STRUCTURE {
+    ; Category axioms
+    ∀C: Cat. Identity(C) ∘ F = F ∘ Identity(C) = F
+    ∀C: Cat. (F ∘ G) ∘ H = F ∘ (G ∘ H)
+
+    ; Functor axioms
+    ∀C, D: Cat. Identity(D) ∘ F = F ∘ Identity(C)
+    ∀C, D: Cat. (G ∘ F)(f ∘ g) = G(F(f)) ∘ G(F(g))
+
+    ; Natural transformation axioms  
+    ∀C: Cat. (α ∘ β)_C = α_C ∘ β_C
+    ∀C, D: Cat. (α_D ∘ F(f)) = (G(f) ∘ α_C)
+
+    ; Horizontal composition
+    ∀α, β: NaturalTransformation. (α ◯ β)_C = α_(G(C)) ∘ β_C
+    
+    ; Vertical composition  
+    ∀α: F -> G, β: G -> H. (β • α)_C = β_C ∘ α_C
+  }
+
+  PROOFS {
+    theorem CatIsoCat {
+      let ISO be the Category {
+        objects:  Functors
+        morphisms: Natural transformations
+        identity: λF. 1_F
+        compose:  λ(α, β). β • α
+      }
+      
+      ISO.IsCategory = {
+        ; Identity laws  
+        (λF. 1_F) • α = α • (λF. 1_F) = α
+        
+        ; Associativity
+        (α • β) • γ 
+          = λC. ((α • β)_C) ∘ γ_C
+          = λC. (α_(G(C)) ∘ β_C) ∘ γ_C  
+          = λC. α_(G(C)) ∘ (β_C ∘ γ_C)
+          = λC. α_(G(C)) ∘ (β • γ)_C
+          = α • (β • γ)
+      }
+      
+      hence Category of Categories is itself a Category
+    }
+  }
+}
+
+This Concept showcases several features of ConceptScript:
+
+The use of higher-order types and functions to define categories, functors, and natural transformations in a concise and abstract way.
+The use of mathematical notation to express composition, whiskering, and component operations.
+The formalization of key axioms of category theory, such as identity, associativity, and naturality, using equational reasoning.
+The use of a structured proof to show that the category of categories is itself a category, by verifying the categorical axioms using the defined operations and notations.

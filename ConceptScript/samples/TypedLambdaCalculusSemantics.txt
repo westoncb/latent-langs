@@ -1,0 +1,666 @@
+CONCEPT TypedLambdaCalculusSemantics {
+  PARAMETERS {
+    Var : TYPE
+    d : Nat  
+  }
+  
+  CONTEXT {
+    TYPES {
+      INDUCTIVE Type {
+        CASE Base
+        CASE Arrow(Type, Type)
+        CASE Tensor(Type, Type)
+      }
+      
+      INDUCTIVE Term {
+        CASE Var(Var)
+        CASE Abs(Var, Type, Term)  
+        CASE App(Term, Term)
+        CASE Pair(Term, Term)
+        CASE Proj1(Term)
+        CASE Proj2(Term)
+      }
+      
+      Value := Abs(_, _, _) | Pair(Value, Value)
+      
+      Env := MAP(Var, Value)
+      
+      Shape := R^d
+    }
+    
+    NOTATION {
+      "⊢" := TypeOf
+      "→" := Arrow
+      "⊗" := Tensor
+      "λ" := Abs
+      "," := Pair
+      "π1" := Proj1
+      "π2" := Proj2
+      "|_|" := Norm
+      "⟦_⟧" := Interpret
+    }
+    
+    STRUCTURES {
+      STRUCTURE Typing EXTENDS SimplyTypedLambdaCalculus.Typing {
+        TypeOf(env : Env, t : Term) -> Type
+          CASE Pair(t1, t2) => TypeOf(env, t1) ⊗ TypeOf(env, t2)
+          CASE Proj1(t) => (
+            LET T1 ⊗ T2 = TypeOf(env, t) 
+            T1
+          )
+          CASE Proj2(t) => (
+            LET T1 ⊗ T2 = TypeOf(env, t)
+            T2  
+          )
+      }
+      
+      STRUCTURE Semantics EXTENDS SimplyTypedLambdaCalculus.Semantics {
+        Interpret(env : Env, t : Term) -> Value  
+          CASE Var(x) => env(x)
+          CASE Abs(x, T, t) => Closure(x, t, env)
+          CASE App(t1, t2) => (
+            LET Closure(x, t, cenv) = Interpret(env, t1)
+            Interpret(cenv ∪ {x ↦ Interpret(env, t2)}, t)
+          )
+          CASE Pair(t1, t2) => (Interpret(env, t1), Interpret(env, t2))
+          CASE Proj1(t) => π1(Interpret(env, t)) 
+          CASE Proj2(t) => π2(Interpret(env, t))
+          
+        EmbedBase(v : Base) -> Shape
+        ProjectBase(s : Shape) -> Base  
+          
+        EmbedType(T : Type) -> Shape
+          CASE Base => EmbedBase(Base)
+          CASE Arrow(A, B) => Sigmoid(EmbedType(B) - EmbedType(A))
+          CASE Tensor(A, B) => EmbedType(A) * EmbedType(B)
+            
+        EmbedTerm(t : Term) : EmbedType(TypeOf({}, t)) 
+          CASE Var(x) => 0
+          CASE Abs(x, T, t) => EmbedTerm(t)
+          CASE App(t1, t2) => ReLU(EmbedTerm(t1) + EmbedTerm(t2))
+          CASE Pair(t1, t2) => (EmbedTerm(t1), EmbedTerm(t2))
+          CASE Proj1(t) => π1(EmbedTerm(t))
+          CASE Proj2(t) => π2(EmbedTerm(t))
+          
+        AXIOM EmbedInterpret {
+          |ProjectBase(EmbedTerm(t)) - ProjectBase(EmbedTerm(⟦t⟧_env))| <= ε  
+        }
+      }
+      
+      STRUCTURE Attention {
+        Alignment(k : Term, q : Term) -> Real
+          WITH exp(-|EmbedTerm(k) - EmbedTerm(q)|^2)
+
+        Attend(ks : Seq(Term), q : Term, vs : Seq(Term)) -> Term
+          WITH Σ_i SoftMax(Alignment(ks[i], q)) * vs[i]
+      }
+    }
+    
+    ASSERTIONS {
+      AXIOM InterpretType(T : Type, env : Env) -> Value SUCH_THAT
+        InterpretType(Base, _) = Base
+        InterpretType(A → B, env) = InterpretType(B, env) ^ InterpretType(A, env)        
+        InterpretType(A ⊗ B, env) = (InterpretType(A, env), InterpretType(B, env))
+        
+      AXIOM ArrowElimination {
+        env ⊢ App(s, t) : B <==> env ⊢ s : A → B ∧ env ⊢ t : A
+      }
+      
+      AXIOM TensorIntroduction {
+        env ⊢ Pair(s, t) : A ⊗ B <==> env ⊢ s : A ∧ env ⊢ t : B  
+      }
+      
+      AXIOM TensorElimination1 {
+        env ⊢ Proj1(t) : A <==> env ⊢ t : A ⊗ B
+      }
+      
+      AXIOM TensorElimination2 {
+        env ⊢ Proj2(t) : B <==> env ⊢ t : A ⊗ B
+      }
+    }
+  }
+  
+  PROOFS {
+    THEOREM InterpretationSoundness {
+      env ⊢ t : T => Interpret(env, t) : InterpretType(T, env) 
+    }
+    PROOF BY INDUCTION ON t {
+      CASE Var(x) => Interpret(env, Var(x)) = env(x) : InterpretType(TypeOf(env, Var(x)), env) [BY DEF]
+      CASE Abs(x, T, t) => 
+        Interpret(env, Abs(x, T, t)) = Closure(x, t, env)
+                                     : Interpret(TypeOf(env ∪ {x : T}, t), env)
+                                     = Interpret(T, env) -> Interpret(TypeOf(env ∪ {x : T}, t), env ∪ {x : Interpret(T, env)})
+                                     = InterpretType(T -> TypeOf(env ∪ {x : T}, t), env) 
+                                     = InterpretType(TypeOf(env, Abs(x, T, t)), env)
+                                     [BY IH, DEF]
+      CASE App(t1, t2) =>
+        LET Closure(x, t, cenv) = Interpret(env, t1) : Interpret(TypeOf(env, t1), env)
+        LET v2 = Interpret(env, t2) : Interpret(TypeOf(env, t2), env)
+        BY IH
+        Interpret(cenv ∪ {x ↦ v2}, t) : Interpret(TypeOf(cenv ∪ {x : TypeOf(env, t2)}, t), cenv ∪ {x ↦ v2})
+        = Interpret(TypeOf(env, App(t1, t2)), env)
+        [BY ArrowElimination, DEF]
+      CASE Pair(t1, t2) =>
+        Interpret(env, t1) : InterpretType(TypeOf(env, t1), env)
+        Interpret(env, t2) : InterpretType(TypeOf(env, t2), env)  
+        BY IH
+        (Interpret(env, t1), Interpret(env, t2)) 
+          : (InterpretType(TypeOf(env, t1), env), InterpretType(TypeOf(env, t2), env))
+          = InterpretType(TypeOf(env, t1) ⊗ TypeOf(env, t2), env)
+          = InterpretType(TypeOf(env, Pair(t1, t2)), env)
+        [BY TensorIntroduction, DEF]
+      CASE Proj1(t) =>
+        Interpret(env, t) : InterpretType(TypeOf(env, t), env)
+        BY IH  
+        TypeOf(env, t) IS_OF_FORM A ⊗ B
+        BY TensorElimination1
+        Interpret(env, t) : InterpretType(A ⊗ B, env) = (InterpretType(A, env), InterpretType(B, env))
+        π1(Interpret(env, t)) : InterpretType(A, env) = InterpretType(TypeOf(env, Proj1(t)), env)
+        [BY DEF]
+      CASE Proj2(t) => SIMILAR_TO Proj1(t)
+    }
+    QED
+    
+    THEOREM EmbeddingPreservesReduction {
+      t ~> t' => |EmbedTerm(t) - EmbedTerm(t')| <= ε'
+    }  
+    PROOF {
+      ASSUME t = (λx:T.s) u ~> s[x ↦ u] = t'
+      |EmbedTerm(t) - EmbedTerm(t')|
+        = |ReLU(EmbedTerm(λx:T.s) + EmbedTerm(u)) - EmbedTerm(s[x ↦ u])|
+        = |ReLU(EmbedTerm(s) + EmbedTerm(u)) - EmbedTerm(s[x ↦ u])|
+          [BY DEF EmbedTerm]
+        <= |ReLU(EmbedTerm(s) + EmbedTerm(u)) - ReLU(EmbedTerm(s[x ↦ u]) + EmbedTerm(u))|
+           + |EmbedTerm(s) - EmbedTerm(s[x ↦ u])|
+          [BY TRIANGLE INEQUALITY, IH] 
+        <= c|EmbedTerm(s) - EmbedTerm(s[x ↦ u])| + ε
+          [BY LIPSCHITZ PROPERTY OF ReLU]
+        <= c(|EmbedTerm(s) - EmbedTerm(s[x ↦ Var(x)])| + |EmbedTerm(Var(x)) - EmbedTerm(u)|) + ε
+          [BY TRIANGLE INEQUALITY, SUBSTITUTION LEMMA]
+        <= c(ε + ε') + ε
+        = ε'  
+      QED
+    }
+    
+    THEOREM AttentionInterpolates {
+      ∃ ks vs ∀ q . ⟦Attend(ks, q, vs)⟧ ≐_{ε} ⟦q⟧
+    }
+    PROOF {
+      TAKE ks = Seq(Variable(i) for i in Nat)
+      TAKE vs = Seq(Abs(x, TypeOf({x ↦ Variable(i)}, x), x) for i in Nat)
+      
+      ∀ q . LET Iq = ⟦q⟧
+            Attend(ks, q, vs) 
+              = Σ_i SoftMax(Alignment(Variable(i), q)) * Abs(x, TypeOf({x ↦ Variable(i)}, x), x)
+              = Σ_i SoftMax(exp(-|EmbedTerm(Variable(i)) - EmbedTerm(q)|^2))
+                     * Abs(x, TypeOf({x ↦ Variable(i)}, x), x)
+                [BY DEF Alignment]
+              ≐_ε Σ_i Iq(Variable(i)) * Abs(x, TypeOf({x ↦ Variable(i)}, x), x) -- BY ks ≐ orthonormal basis
+              = Σ_i Iq(Variable(i)) * (λx.x)[x ↦ Variable(i)]  
+              = Σ_i Iq(Variable(i)) * Variable(i)
+              = Iq
+              = ⟦q⟧
+              [BY DEF InterpretType, Abs, App, Substitution]
+      QED            
+    }
+  }
+  
+  EXAMPLES {
+    EXAMPLE BooleanCircuits {
+      True := Abs(t, Base, Abs(f, Base, t))
+      False := Abs(t, Base, Abs(f, Base, f))
+      
+      Not := λb:Base→Base→Base. λt:Base. λf:Base. b f t
+      And := λb:Base→Base→Base. λc:Base→Base→Base.
+               λt:Base. λf:Base. b (c t f) f
+      Or := λb:Base→Base→Base. λc:Base→Base→Base. 
+              λt:Base. λf:Base. b t (c t f)
+        
+      THEN {} ⊢ Not : (Base→Base→Base) → (Base→Base→Base)
+      AND {} ⊢ And : (Base→Base→Base) → (Base→Base→Base) → (Base→Base→Base)
+      AND {} ⊢ Or : (Base→Base→Base) → (Base→Base→Base) → (Base→Base→Base)
+        
+      AND ⟦Not True⟧ ~>* ⟦False⟧
+      AND ⟦And True False⟧ ~>* ⟦False⟧  
+      AND ⟦Or True False⟧ ~>* ⟦True⟧
+    }
+    
+    EXAMPLE TensorExamples {
+      LetPair := λx:Base. λy:Base. λf:Base⊗Base→Base. f (x,y)
+      TakePair := λf:Base→Base→Base. λx:Base. λy:Base. (f x y, f y x)
+      
+      Diagonal := λx:Base. (x, x)
+      Swap := λp:Base⊗Base. (π2 p, π1 p)
+      
+      THEN {} ⊢ LetPair : Base → Base → (Base ⊗ Base → Base) → Base
+      AND {} ⊢ TakePair : (Base → Base → Base) → Base → Base → (Base ⊗ Base)
+      AND {} ⊢ Diagonal : Base → (Base ⊗ Base)
+      AND {} ⊢ Swap : (Base ⊗ Base) → (Base ⊗ Base)  
+        
+      AND ⟦LetPair s t (λp. π1 p + π2 p)⟧ ~>* ⟦s + t⟧  
+      AND ⟦TakePair (λx y. x * y) s t⟧ ~>* ⟦(s * t, t * s)⟧
+      AND ⟦π1 (Diagonal t)⟧ ~>* ⟦t⟧
+      AND ⟦Swap (s, t)⟧ ~>* ⟦(t, s)⟧
+    }
+  }
+}
+
+
+
+
+CONCEPT TypeDirectedNeuralArchitectures {
+  PARAMETERS {
+    𝕜 : Field -- The scalar field for vectors and matrices
+  }
+
+  CONTEXT {
+    TYPES {
+      Tensor := INDUCTIVE {
+        CASE Scalar(𝕜)
+        CASE Vector(n : Nat, Tensor[n])
+        CASE Matrix(n m : Nat, Tensor[n][m])
+      }
+      
+      TensorExpr := INDUCTIVE {
+        CASE Var(id : String, type : Tensor)
+        CASE Const(value : Tensor)
+        CASE Add(left : TensorExpr, right : TensorExpr)
+        CASE Mul(left : TensorExpr, right : TensorExpr)
+        CASE Concat(left : TensorExpr, right : TensorExpr, axis : Nat)
+        CASE Transpose(expr : TensorExpr)
+        CASE Reshape(expr : TensorExpr, shape : Tensor)
+      } CONSTRAINT {
+        Add(a, b) REQUIRES a.type = b.type
+        Mul(a, b) REQUIRES a.type = Matrix(n, m, _) AND b.type = Vector(m, _)
+        Concat(a, b, axis) REQUIRES a.type.dim(axis) = b.type.dim(axis)
+        Transpose(a) REQUIRES a.type IS Matrix(_, _, _)
+        Reshape(a, shape) REQUIRES a.type.size = shape.size
+      }
+      
+      Network := INDUCTIVE {
+        CASE Input(type : Tensor)
+        CASE Constant(value : Tensor)
+        CASE Layer(
+          weights : TensorExpr, 
+          biases : TensorExpr, 
+          activation : ActivationFunction,
+          input : Network
+        )
+        CASE Compose(first : Network, second : Network)
+      } CONSTRAINT {
+        Layer(_, _, _, input).type = activation.outputType(weights.type, biases.type, input.type)
+        Compose(first, second) REQUIRES first.type = second.inputType
+      }
+      
+      ActivationFunction := INDUCTIVE {
+        CASE Relu
+        CASE Sigmoid
+        CASE Tanh  
+      } EQUIPPED_WITH {
+        outputType(weights : TensorExpr, biases : TensorExpr, input : Tensor) -> Tensor
+          CASE Relu => weights.type
+          CASE Sigmoid => weights.type
+          CASE Tanh => weights.type  
+      }
+    }
+    
+    ASSERTIONS {
+      AXIOM WeightInitializer(t : Tensor, random : Bool) -> TensorExpr
+        GENERATE random values of given tensor type if random, else zeros
+        
+      AXIOM DimensionType(T : Tensor) -> Nat^Nat
+        GENERATE a dimension type (list of dimensions) from a tensor type
+      
+      THEOREM DimensionsAgree(net : Network) -> Bool
+        FORALL l : Layer IN net 
+          l.weights.type.dim(0) = l.input.type.dim(-1) AND
+          l.weights.type.dim(1) = l.biases.type.dim(0)
+        AND
+        FORALL c : Compose IN net
+          c.first.type = c.second.inputType
+        
+      DEFINITION Loss(net : Network, data : (Tensor, Tensor)^N) -> TensorExpr
+        LET input : Tensor = RANDOM_CHOICE(data).1
+        LET output : Tensor = EVAL(net, input)
+        LET target : Tensor = CORRESPONDING_VALUE(data, input).2
+        SUM((output - target)^2) / N
+    }
+    
+    STRUCTURES {
+      IMPLEMENTATION MatMul(
+        a : TensorExpr WITH {type is Matrix(n, m, _)},
+        b : TensorExpr WITH {type is Vector(m, _)}
+      ) -> TensorExpr {
+        LET c_ij = SUM(k = 0 to m - 1, a_ik * b_kj)
+        Matrix(n, m, [[c_ij for j in 0..m-1] for i in 0..n-1]) 
+      }
+    }
+  }
+  
+  TRANSFORMERS {
+    DERIVE AutoDiff(net : Network, loss : TensorExpr) -> Network {
+      CASE Layer(w, b, f, i) =>
+        LET dw, db = 𝛁(loss, w, b) 
+        Layer(w - 𝛼 * dw, b - 𝛼 * db, f, AutoDiff(i, 𝛁(loss, i)))
+      CASE Compose(f, s) => Compose(AutoDiff(f, loss), AutoDiff(s, 𝛁(loss, s))) 
+      CASE Input(_) => Input(net.type)
+      CASE Constant(_) => Constant(net.value)
+    }
+  }
+  
+  PROOFS {  
+    THEOREM UniversalApproximation(
+      f : ℝ^n -> ℝ^m, 
+      𝜀 : TensorExpr WITH {type is Scalar}
+    ) {
+      ∃ net : Network . 
+        ∀ x : ℝ^n . 
+          |f(x) - Eval(net, x)| < 𝜀  
+    }
+    PROOF {
+      -- By the Universal Approximation Theorem for neural networks.
+      -- The key is that the Network type is expressive enough to
+      -- represent a network with arbitrary width and depth.
+      -- The proof relies on being able to construct a network
+      -- that approximates f on a compact set to arbitrary precision.
+      -- The size of the network will depend on the complexity of f
+      -- and the desired precision 𝜀.
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE MnistClassifier {
+      LET inputType = Vector(784, Scalar)
+      LET outputType = Vector(10, Scalar)
+      
+      LET mnistNet = 
+        Compose(
+          Layer(
+            WeightInitializer(Matrix(100, 784, Scalar), TRUE),
+            WeightInitializer(Vector(100, Scalar), TRUE), 
+            Sigmoid,
+            Input(inputType)  
+          ),
+          Layer(
+            WeightInitializer(Matrix(10, 100, Scalar), TRUE),
+            WeightInitializer(Vector(10, Scalar), TRUE),
+            Sigmoid,
+            Constant(outputType)  
+          )
+        )
+        
+      LET mnistLoss = Loss(mnistNet, mnistData)
+      
+      LET trainedMnistNet = REPEAT(10000, AutoDiff(mnistNet, mnistLoss))
+      
+      THEN
+        ∀ i . 
+          LET image, label = mnistData[i]
+          LET prediction = ARGMAX(Eval(trainedMnistNet, image))
+          prediction = label
+    }
+    
+    EXAMPLE LanguageModel {
+      TOKEN := Scalar
+      EMBEDDING := Vector(100, Scalar)
+      HIDDEN := Vector(200, Scalar)
+      
+      LET languageNet =
+        Compose(
+          Layer(
+            WeightInitializer(Matrix(200, 100, Scalar), TRUE),
+            WeightInitializer(Vector(200, Scalar), TRUE),
+            Tanh,
+            Compose(
+              Layer(
+                WeightInitializer(Matrix(100, 10000, Scalar), TRUE),
+                WeightInitializer(Vector(100, Scalar), TRUE),
+                Relu,
+                Input(Vector(10000, TOKEN))
+              ),
+              Layer(
+                Constant(Matrix(10000, 100, Scalar)),
+                Constant(Vector(10000, Scalar)),
+                Sigmoid, 
+                Constant(EMBEDDING)
+              )
+            )
+          ),
+          Layer(
+            WeightInitializer(Matrix(10000, 200, Scalar), TRUE),  
+            WeightInitializer(Vector(10000, Scalar), TRUE),
+            Sigmoid,
+            Constant(TOKEN)
+          )
+        )
+        
+      LET languageLoss = Loss(languageNet, textData)
+      
+      LET trainedLanguageNet = REPEAT(10000, AutoDiff(languageNet, languageLoss))
+      
+      THEN
+        ∀ i .
+          LET context, next = textData[i]
+          LET prediction = ARGMAX(Eval(trainedLanguageNet, context))
+          prediction = next            
+    }
+  }
+}
+
+
+
+CONCEPT NeuralProgramSynthesis {
+  PARAMETERS {
+    𝕜 : Field  -- The scalar field for embeddings
+    d : Nat    -- The dimension of the embedding space
+    n : Nat    -- The maximum number of tokens in a program
+    m : Nat    -- The size of the library of program components
+  }
+  
+  CONTEXT {
+    TYPES {
+      Program := Seq(Token)
+      
+      Token := INDUCTIVE {
+        CASE Variable(id : String)
+        CASE Constant(value : 𝕜)
+        CASE Operator(op : Operator)
+        CASE Function(name : String, arity : Nat)
+      }
+      
+      Operator := INDUCTIVE {
+        CASE Add, Sub, Mul, Div, Exp, Log, Sin, Cos, Tan  
+      }
+      
+      Embedding := INDUCTIVE {
+        CASE TokenEmbedding(token : Token, vector : Vector(d, 𝕜))
+        CASE ProgramEmbedding(program : Program, vector : Vector(d, 𝕜))  
+      }
+      
+      ProgramLibrary := Seq(Program) CONSTRAINT {
+        ∀ lib : ProgramLibrary . lib.length = m
+      }
+    }
+    
+    FUNCTIONS {
+      Embed(token : Token) -> Vector(d, 𝕜)
+        IMPLEMENTATION Lookup(TokenEmbeddingTable, token) 
+      
+      Embed(program : Program) -> Vector(d, 𝕜) 
+        IMPLEMENTATION Fold(program, ZeroVector(d), 
+          LAMBDA(acc : Vector(d, 𝕜), token : Token) ->
+            acc + Embed(token)
+        )
+      
+      Attend(query : Vector(d, 𝕜), keys : Seq(Vector(d, 𝕜))) -> Vector(m, 𝕜)
+        IMPLEMENTATION SoftMax(
+          [query ⋅ key for key in keys]  
+        )
+      
+      Synthesize(
+        query : Program, 
+        library : ProgramLibrary
+      ) -> Program
+        LET queryEmbedding = Embed(query)
+        LET libraryEmbeddings = [Embed(program) for program in library]
+        LET attentionWeights = Attend(queryEmbedding, libraryEmbeddings)
+        RETURN Weighted(library, attentionWeights)
+    }
+    
+    AXIOMS {
+      TokenEmbeddingTable : FUNC(Token, Vector(d, 𝕜)) {
+        FORALL token : Token . 
+          TokenEmbeddingTable(token) = Embed(token)
+      }
+      
+      ProgramEmbeddingHomomorphism {
+        FORALL program : Program .
+          Embed(program) = 
+            Fold(program, ZeroVector(d),
+              LAMBDA(acc : Vector(d, 𝕜), token : Token) ->
+                acc + Embed(token)
+            )
+      }  
+    }
+  }
+
+  TRANSFORMERS {
+    TRANSFORMER EmbedProgram(program : Program) -> ProgramEmbedding {
+      RETURN ProgramEmbedding(program, Embed(program))
+    }
+    
+    TRANSFORMER UnembedProgram(embedding : ProgramEmbedding) -> Program {
+      -- Approximately invert the embedding by finding the closest program
+      -- in the library.
+      LET programs = [program for (program, _) in ProgramLibrary]
+      LET embeddings = [Embed(program) for program in programs]  
+      LET distances = [EuclideanDistance(embedding.vector, e) for e in embeddings]
+      LET closestIndex = ArgMin(distances)
+      RETURN programs[closestIndex]
+    }
+  }
+  
+  PROOFS {
+    THEOREM EmbeddingInvariance {
+      FORALL program1 program2 : Program .
+        Permutation(program1, program2) =>
+        Embed(program1) = Embed(program2)
+    }
+    PROOF {
+      -- The embedding of a program is a sum of the embeddings of its tokens.
+      -- Permuting the tokens does not change the sum.
+      ASSUME Permutation(program1, program2)
+      
+      LET tokens1 = [token for token in program1]
+      LET tokens2 = [token for token in program2]
+      
+      HAVE MultisetEquality(tokens1, tokens2)
+      
+      LET embedding1 = Fold(tokens1, ZeroVector(d), 
+        LAMBDA(acc, token) -> acc + Embed(token))
+      LET embedding2 = Fold(tokens2, ZeroVector(d),
+        LAMBDA(acc, token) -> acc + Embed(token))
+      
+      HAVE embedding1 = embedding2 
+        BECAUSE MultisetEquality(tokens1, tokens2) AND Commutativity(Addition)
+      
+      THEREFORE Embed(program1) = embedding1 = embedding2 = Embed(program2)
+      QED  
+    }
+    
+    THEOREM AttentionLinearity {
+      FORALL query1 query2 : Vector(d, 𝕜), keys : Seq(Vector(d, 𝕜)),
+             alpha beta : 𝕜 .
+        Attend(alpha * query1 + beta * query2, keys) =
+          alpha * Attend(query1, keys) + beta * Attend(query2, keys)
+    }
+    PROOF {
+      -- Attention is a linear function of the query.
+      -- This follows from the linearity of dot product and softmax.
+      ASSUME query1 query2 : Vector(d, 𝕜), 
+             keys : Seq(Vector(d, 𝕜)),
+             alpha beta : 𝕜
+             
+      LET attention1 = Attend(query1, keys)
+      LET attention2 = Attend(query2, keys) 
+      LET attentionSum = Attend(alpha * query1 + beta * query2, keys)
+      
+      HAVE FORALL i . 
+        attention1[i] = SoftMax([query1 ⋅ key for key in keys])[i]
+      HAVE FORALL i .
+        attention2[i] = SoftMax([query2 ⋅ key for key in keys])[i]
+      HAVE FORALL i .
+        attentionSum[i] = SoftMax([(alpha * query1 + beta * query2) ⋅ key for key in keys])[i]
+                        = SoftMax([alpha * (query1 ⋅ key) + beta * (query2 ⋅ key) for key in keys])[i]
+                        -- Linearity of dot product
+                        = SoftMax(alpha * [query1 ⋅ key for key in keys] + beta * [query2 ⋅ key for key in keys])[i] 
+                        -- Linearity of softmax 
+                        = alpha * SoftMax([query1 ⋅ key for key in keys])[i] + beta * SoftMax([query2 ⋅ key for key in keys])[i]
+                        = alpha * attention1[i] + beta * attention2[i]
+                        
+      THEREFORE attentionSum = alpha * attention1 + beta * attention2
+               = alpha * Attend(query1, keys) + beta * Attend(query2, keys)
+      QED                  
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE SymbolicRegression {
+      LET Library = [
+        [Var("x")],
+        [Const(1.0)],
+        [Const(2.0)],
+        [Var("x"), Op(Mul), Var("x")],
+        [Var("x"), Op(Sin)],
+        [Var("x"), Op(Exp)],  
+        [Var("x"), Op(Exp), Op(Sin)],
+        [Var("x"), Op(Mul), Var("x"), Op(Add), Const(1.0)],
+        -- ...  
+      ]
+      
+      LET Problem = [
+        [Const(3.14), Op(Div), Const(2.0)], 
+        Op(Sin),
+        Var("x"),
+        Op(Mul) 
+      ]
+      
+      THEN Synthesize(Problem, Library) SHOULD_YIELD
+        [Var("x"), Op(Mul), Const(1.57), Op(Sin)]  
+    }
+    
+    EXAMPLE SumOfCubes {  
+      LET Library = [
+        [Var("x")],
+        [Var("y")],
+        [Var("z")],
+        [Var("x"), Op(Exp), Const(3.0)],
+        [Var("y"), Op(Exp), Const(3.0)],
+        [Var("z"), Op(Exp), Const(3.0)],
+        [Var("x"), Op(Add), Var("y")],  
+        [Var("y"), Op(Add), Var("z")],
+        [Var("x"), Op(Add), Var("z")],
+        -- ...
+      ]
+      
+      LET Problem = [
+        Var("x"), 
+        Op(Exp), 
+        Const(3.0),
+        Op(Add),
+        Var("y"),
+        Op(Exp),
+        Const(3.0),  
+        Op(Add),
+        Op(Add)
+      ]
+      
+      THEN Synthesize(Problem, Library) SHOULD_YIELD
+        [Var("x"), Op(Exp), Const(3.0), 
+         Op(Add),  
+         Var("y"), Op(Exp), Const(3.0),
+         Op(Add),
+         Var("z"), Op(Exp), Const(3.0)]
+    } 
+  }
+}

@@ -1,0 +1,277 @@
+CONCEPT MolecularShapeSpace {
+  IMPORTS {
+    ShapeSpace
+  }
+
+  LANGUAGE {
+    TYPE Molecule <: Shape
+    TYPE AtomType
+    TYPE BondType
+    TYPE PharmacophorePoint
+    TYPE BiologicalActivity
+
+    FUNC Atoms(M : Molecule) : List[AtomType]
+    FUNC Bonds(M : Molecule) : List[BondType]
+    FUNC Pharmacophore(M : Molecule) : List[PharmacophorePoint]
+    FUNC Activity(M : Molecule) : BiologicalActivity
+
+    PRED Isomorphic(M N : Molecule) : 𝔹
+    PRED Substructure(M N : Molecule) : 𝔹
+
+    AXIOM MolecularHomotopy :
+      ∀ (M N : Molecule) (ε : R^>0) .
+        M ≃[ε] N ⇔ ∃ (P : List[Molecule]) .
+          (P[0] = M) ∧ (P[|P|-1] = N) ∧
+          (∀ (i : 0..|P|-2) . Isomorphic(P[i], P[i+1]) ∨ 
+                               Substructure(P[i], P[i+1]) ∨
+                               Substructure(P[i+1], P[i]))
+
+    AXIOM PharmacophoreShapeCorrespondence :
+      ∀ (M N : Molecule) .
+        Pharmacophore(M) = Pharmacophore(N) ⇒ PHTSheaf(M) ≃ PHTSheaf(N)
+
+    AXIOM ActivityShapeCorrespondence :
+      ∀ (M N : Molecule) (ε : R^>0) .
+        M ≃[ε] N ⇒ |Activity(M) - Activity(N)| ≤ f(ε)
+        WHERE f : R^≥0 -> R^≥0 is a monotonically increasing function
+  }
+
+  STRUCTURE ConformerSpace {
+    DEF ConformerSpace(M : Molecule) : SubSpace(ShapeSpace) =
+      {N : Molecule | Isomorphic(M, N)}
+
+    REQUIRE ∀ (M : Molecule) . Bounded(ConformerSpace(M))
+  }
+
+  STRUCTURE ScaffoldHomotopy {
+    DEF ScaffoldHomotopy(M N : Molecule) : Homotopy =
+      {P : List[Molecule] | (P[0] = M) ∧ (P[|P|-1] = N) ∧
+                             (∀ (i : 0..|P|-2) . Substructure(P[i], P[i+1]) ∨ 
+                                                  Substructure(P[i+1], P[i]))}
+
+    REQUIRE ∀ (M N : Molecule) . 
+      (∃ (H : ScaffoldHomotopy(M, N)) . True) ⇔ M ≃ N
+  }
+
+  PROOFS {
+    THEOREM ConformerSpaceCompact {
+      STATEMENT:
+        ∀ (M : Molecule) . Compact(ConformerSpace(M))
+        
+      PROOF:
+        LET M : Molecule
+        WE KNOW Bounded(ConformerSpace(M))
+        SUFFICES TO SHOW Closed(ConformerSpace(M))
+        
+        LET (N_i : Molecule) be a sequence in ConformerSpace(M)
+            SUCH THAT N_i -> N 
+        
+        ARGUE Isomorphic(M, N)
+          USING continuity of PHTSheaf  
+        
+        HENCE N ∈ ConformerSpace(M)
+        THUS Closed(ConformerSpace(M))
+    }
+    
+    THEOREM PharmacophoreShapeMatching {
+      STATEMENT:
+        ∀ (M N : Molecule) .
+          Pharmacophore(M) = Pharmacophore(N) ⇒ ∃ (ε : R^>0) . M ≃[ε] N
+          
+      PROOF:
+        LET M N : Molecule
+        ASSUME Pharmacophore(M) = Pharmacophore(N)
+        
+        HAVE PHTSheaf(M) ≃ PHTSheaf(N)
+          BY PharmacophoreShapeCorrespondence  
+        
+        ARGUE ∃ (ε : R^>0) . M ≃[ε] N
+          USING ∃ (ε : R^>0) . PHTSheaf(M) =[ε]= PHTSheaf(N)
+            AND StabilityOfPHT
+    }
+    
+    THEOREM ActivityShapeInterpolation {
+      STATEMENT:
+        ∀ (M N : Molecule) (H : ScaffoldHomotopy(M, N)) .
+          |Activity(M) - Activity(N)| ≤ f(ε)
+            WHERE ε = sup {ε' | ∀ (i : 0..|H|-2) . H[i] ≃[ε'] H[i+1]}
+              AND f is from ActivityShapeCorrespondence
+
+      PROOF:
+        LET M N : Molecule, H : ScaffoldHomotopy(M, N)
+        
+        DEFINE ε_i = inf {ε' | H[i] ≃[ε'] H[i+1]} for i : 0..|H|-2
+        
+        HAVE |Activity(H[i]) - Activity(H[i+1])| ≤ f(ε_i) for i : 0..|H|-2
+          BY ActivityShapeCorrespondence
+        
+        LET ε = sup {ε_i | i : 0..|H|-2}
+        
+        ARGUE |Activity(M) - Activity(N)| ≤ ∑_{i=0}^{|H|-2} f(ε_i)
+          USING telescoping sum  
+        
+        HAVE ∑_{i=0}^{|H|-2} f(ε_i) ≤ |H| · f(ε)
+          BY monotonicity of f
+        
+        HENCE |Activity(M) - Activity(N)| ≤ |H| · f(ε)
+    }
+  }
+}
+
+In this Concept, we're leveraging the ShapeSpace framework to study molecular structures and their properties. The key ideas are:
+
+We introduce types for Molecule (a subtype of Shape), AtomType, BondType, PharmacophorePoint, and BiologicalActivity.
+The Atoms, Bonds, Pharmacophore, and Activity functions provide different ways of characterizing a Molecule.
+The Isomorphic and Substructure predicates capture key structural relationships between molecules.
+The MolecularHomotopy axiom characterizes homotopy equivalence for molecules in terms of isomorphism and substructure relationships.
+The PharmacophoreShapeCorrespondence axiom posits a correspondence between pharmacophore similarity and PHT sheaf equivalence.
+The ActivityShapeCorrespondence axiom posits a correspondence between shape similarity (homotopy equivalence) and similarity in biological activity.
+We define ConformerSpace as the subspace of ShapeSpace corresponding to conformers (isomorphic molecules) of a given molecule.
+We define ScaffoldHomotopy as a homotopy between molecules based on substructure relationships, and relate it to homotopy equivalence in ShapeSpace.
+The ConformerSpaceCompact theorem shows that the conformer space of a molecule is compact in ShapeSpace.
+The PharmacophoreShapeMatching theorem leverages the PharmacophoreShapeCorrespondence axiom to infer homotopy equivalence from pharmacophore equality.
+The ActivityShapeInterpolation theorem uses the ActivityShapeCorrespondence axiom and the ScaffoldHomotopy structure to bound changes in activity along a scaffold homotopy.
+
+This Concept showcases several unique advantages of the ShapeSpace framework in the context of molecular design:
+
+The ability to define homotopy equivalence for molecules in a chemically meaningful way, based on isomorphism and substructure relationships.
+The correspondence between pharmacophore similarity and PHT sheaf equivalence, which allows for efficient comparison of molecular shapes.
+The correspondence between shape similarity and activity similarity, which enables activity prediction and interpolation.
+The compactness of conformer spaces in ShapeSpace, which is important for computational tractability.
+The use of scaffold homotopies to study changes in activity across series of related molecules.
+
+These features suggest novel approaches to key challenges in drug discovery, such as pharmacophore mapping, activity prediction, lead optimization, and scaffold hopping.
+Of course, this is a high-level conceptual model and there are many details to be worked out. But it demonstrates the potential for the ShapeSpace framework to provide a powerful and unifying perspective on molecular shape and its relationship to biological activity.
+
+
+
+
+
+
+
+
+
+
+
+CONCEPT MolecularShapeSpace {
+  IMPORTS {
+    ShapeSpace
+  }
+
+  LANGUAGE {
+    TYPE Molecule <: Shape
+    TYPE AtomType
+    TYPE BondType
+    TYPE PharmacophorePoint
+    
+    FUNC Atoms(M : Molecule) : List[AtomType]
+    FUNC Bonds(M : Molecule) : List[BondType]
+    FUNC Pharmacophore(M : Molecule) : List[PharmacophorePoint]
+
+    PRED ActiveMolecule(M : Molecule) : 𝔹
+    PRED SimilarPharmacophore(P Q : List[PharmacophorePoint], ε : R^≥0) : 𝔹 =
+      ∃ (φ : P -> Q) . Bijective(φ) ∧ ∀ (p : P) . |p - φ(p)| ≤ ε
+
+    AXIOM PharmacophoreHypothesis :
+      ∀ (M N : Molecule) (ε : R^≥0) .
+        ActiveMolecule(M) ∧ ActiveMolecule(N)
+          ⇒ SimilarPharmacophore(Pharmacophore(M), Pharmacophore(N), ε)
+
+    AXIOM ShapeComplementarity :
+      ∀ (ε : R^≥0) .
+        ∃ (δ : R^>0) .
+          ∀ (M N : Molecule) .
+            ActiveMolecule(M) ∧ SimilarPharmacophore(Pharmacophore(M), Pharmacophore(N), ε)
+              ⇒ M ≃[δ] N
+  }
+
+  STRUCTURE PharmacophoreSpace {
+    DEF PharmacophoreDescriptor(M : Molecule) : PersistenceDiagram =
+      LET P = Pharmacophore(M)
+      IN PersistenceDiagram(VietorisRipsComplex(P))
+
+    DEF PharmacophoreDistance(M N : Molecule) : R^≥0 =
+      BottleneckDist(PharmacophoreDescriptor(M), PharmacophoreDescriptor(N))
+  }
+
+  STRUCTURE ShapeComplementaritySpace {
+    DEF MolecularShapeDescriptor(M : Molecule) : D^b(Shv(Direction * Filtration)) =
+      PHTSheaf(M)
+
+    DEF MolecularShapeDistance(M N : Molecule) : R^≥0 =
+      InterleavingDist(MolecularShapeDescriptor(M), MolecularShapeDescriptor(N))
+  }
+
+  PROOFS {
+    THEOREM ActiveMoleculeSimilarity {
+      STATEMENT:
+        ∀ (M N : Molecule) .
+          ActiveMolecule(M) ∧ ActiveMolecule(N)
+            ⇒ ∃ (ε : R^>0) . PharmacophoreDistance(M, N) ≤ ε ∧ MolecularShapeDistance(M, N) ≤ ε
+
+      PROOF:
+        ASSUME ActiveMolecule(M) ∧ ActiveMolecule(N)
+        
+        LET ε : R^>0 SUCH THAT SimilarPharmacophore(Pharmacophore(M), Pharmacophore(N), ε)
+          BY PharmacophoreHypothesis
+        
+        HAVE PharmacophoreDistance(M, N) ≤ ε
+          BY definition of PharmacophoreDistance and stability of PersistenceDiagrams
+        
+        LET δ : R^>0 SUCH THAT M ≃[δ] N WHENEVER 
+          SimilarPharmacophore(Pharmacophore(M), Pharmacophore(N), ε)
+          BY ShapeComplementarity
+        
+        HAVE MolecularShapeDistance(M, N) ≤ δ
+          BY StabilityOfPHT
+        
+        TAKE ε' = max(ε, δ)
+        THUS PharmacophoreDistance(M, N) ≤ ε' ∧ MolecularShapeDistance(M, N) ≤ ε'
+    }
+    
+    THEOREM NovelDrugDiscovery {
+      STATEMENT:
+        ∀ (T : Molecule) . ActiveMolecule(T)
+          ⇒ ∀ (ε : R^>0) .
+            ∃ (N : Molecule) .
+              ¬ActiveMolecule(N) ∧ PharmacophoreDistance(T, N) ≤ ε ∧ MolecularShapeDistance(T, N) ≤ ε
+
+      PROOF:
+        ASSUME ActiveMolecule(T)
+        
+        LET ε : R^>0
+        LET X = SampleDense(ShapeSpace, ε/2, ε/2)
+          ARGUE Finite(X) ∧ ∀ (S : Shape) . ∃ (Y : X) . S ≃[ε/2] Y
+
+        LET P = {M ∈ X | SimilarPharmacophore(Pharmacophore(T), Pharmacophore(M), ε/2)}
+        LET Q = {M ∈ P | ¬ActiveMolecule(M)}
+          ARGUE Q ≠ ∅
+            BY density of sampling and infinitude of shape space
+
+        TAKE N ∈ Q
+          HAVE PharmacophoreDistance(T, N) ≤ ε 
+            BY definition of P and stability of PersistenceDiagrams
+          HAVE T ≃[ε] N
+            BY definition of P and ShapeComplementarity
+          HENCE MolecularShapeDistance(T, N) ≤ ε
+            BY StabilityOfPHT
+    }
+  }
+}
+
+In this Concept, we're leveraging the ShapeSpace framework to study the shape complementarity and pharmacophore similarity of molecules, with the goal of discovering novel drug candidates. The key ideas are:
+
+We introduce types for Molecule (a subtype of Shape), AtomType, BondType, and PharmacophorePoint.
+The Atoms, Bonds, and Pharmacophore functions extract the relevant chemical information from a Molecule.
+The ActiveMolecule predicate identifies molecules that are known to be biologically active. The SimilarPharmacophore predicate compares pharmacophores up to a certain tolerance ε.
+The PharmacophoreHypothesis axiom states that active molecules have similar pharmacophores. The ShapeComplementarity axiom relates pharmacophore similarity to ε-homotopy of molecular shapes.
+We define PharmacophoreSpace and ShapeComplementaritySpace, which use persistence diagrams and sheaf interleavings, respectively, to compare molecular shapes.
+The ActiveMoleculeSimilarity theorem proves that active molecules are close in both pharmacophore and shape complementarity spaces.
+The NovelDrugDiscovery theorem uses the density of ShapeSpace to argue that for any active molecule T and tolerance ε, we can find a novel molecule N that is ε-close to T in both pharmacophore and shape complementarity spaces.
+
+This Concept showcases several unique advantages of the ShapeSpace framework:
+
+The use of sheaf interleavings provides a robust and stable way to compare molecular shapes, which is more flexible than rigid geometric comparisons.
+The density of ShapeSpace allows for a constructive proof of the existence of novel molecules with desired properties.
+The unification of pharmacophore and shape complementarity spaces within a single framework enables a multi-faceted analysis of molecular similarity.
+The stability and approximation results from ShapeSpace guarantee that these methods are computationally tractable and robust to perturbations.

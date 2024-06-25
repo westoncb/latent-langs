@@ -1,0 +1,103 @@
+Dynaformer := (
+  Encoder,
+  Layers(DynaformerLayer){NumLayers:_, LayerDimension:_},
+  Decoder
+) :: {
+  DEF[
+    |=>: ForwardPass,
+    <=|: BackwardPass,
+    |~>: AdaptiveTransfer,
+    |*>: ParallelProcessing,
+    -->: SequentialFlow,
+    ==>: ParallelComputation,
+    |@>: SignatureProjection,
+    |&>: AttentionWeightedAggregation
+  ]
+  
+  [InputSequence --> Encoder |~> Layers |~> Decoder $ OutputSequence]
+  [Encoder ==> Layers ==> Decoder $ ParallelComputation]
+}
+
+DynaformerLayer := (
+  SelectiveSSMAttention,
+  FeedForward,
+  ResidualConnection,
+  LayerNorm
+) :: {
+  [Input |~> SelectiveSSMAttention |&> ContextAwareRepresentation |~>
+   FeedForward |~> ResidualConnection |~> LayerNorm $ Output]
+}
+
+SelectiveSSMAttention := (
+  StateSpaceModel,
+  ContextEmphasis,
+  PositionalEncoding
+) :: {
+  [Input --> StateSpaceModel |@> SignatureProjection |~> ContextEmphasis |~> PositionalEncoding $ AttentionWeights]
+  [(LocalDependencies & GlobalDependencies) <~> SelectiveSSMAttention $ Dependencies]
+  
+  SelectivityMechanism :: {
+    InputControlledTransitions(
+      MultiplicativeInteractions(Input, HiddenState),
+      NonlinearTokenInteractions,
+      DistinctTimescales
+    )
+  }
+}
+
+StateSpaceModel := (
+  TransitionFunction,
+  EmissionFunction,
+  InitialState
+) :: {
+  [SequentialModeling |~> StateSpaceModel $ InformationPropagation]
+  
+  HiddenStateProjection :: {
+    SignatureOfInput(
+      LowDimensionalProjection,
+      NonlinearTokenInteractions, 
+      DistinctTimescales
+    )
+  }
+  
+  InputControlledTransitions{DynamicAdaptation, InputDependentBehavior}
+}
+
+ContextEmphasis := (
+  ContextVector,
+  EmphasisWeights,
+  TemporalDynamics  
+) :: {
+  [RelevanceAssessment(ContextVector, EmphasisWeights) |~> TemporalDynamics $ TemporalEmphasisModulation]
+}
+
+PositionalEncoding := RelativePositionEmbedding + TemporalOffsetEncoding
+
+FeedForward := (
+  Layer1:DenseLayer |>
+  Activation |>
+  Layer2:DenseLayer  
+) |=> NonlinearTransformation
+
+TrainingProcedure :: {
+  [Dynaformer |=> ForwardPass <=| BackwardPass]
+  LossFunction(Prediction, Target)
+  Optimizer{LearningRate:_, Momentum:_}
+  Regularization{L2Regularization, DropoutRegularization}
+  Hyperparameters{Iterations:_, BatchSize:_, GradientAccumulation:_}
+}
+
+InferenceOptimization := [
+  Dynaformer |*> (
+    ActivationCheckpointing &
+    AttentionMasking &
+    OperatorFusion
+  )  
+]
+
+UnifiedTransformerSSM ^= Dynaformer :: {
+  [SelectiveSSMAttention <~> AdaptiveAttentionMechanism]
+  [ContextEmphasis <~> DynamicContextEmphasis]  
+  [PositionalEncoding <~> PositionalEmbedding]
+  [Dynaformer.Encoder ==> Dynaformer.Decoder $ SequenceParallelization]
+}

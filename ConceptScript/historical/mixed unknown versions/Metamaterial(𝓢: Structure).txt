@@ -1,0 +1,324 @@
+STRUCTURE Metamaterial(𝓢: Structure) {
+  EffectiveProperty: Function(Structure, Properties)
+  
+  axiom Homogenization(𝓢: Structure, 𝓟: Properties):
+    ∃(𝓔: Environment, λ: Scale). 
+      EffectiveProperty(𝓢, 𝓟) = Homogenize(Heterogeneous(𝓢, 𝓟), 𝓔, λ)
+      
+  axiom StructureProperty(𝓢₁: Structure, 𝓢₂: Structure):
+    EffectiveProperty(𝓢₁) ≠ EffectiveProperty(𝓢₂) ⟹ 𝓢₁ ≠ 𝓢₂
+}
+
+STRUCTURE ResponsiveMaterial(𝓢: Structure, 𝓟: Properties) {
+  StimulusResponse: Function(Structure, Properties, Stimulus)
+  
+  axiom Reversibility(𝓢: Structure, 𝓟: Properties, s: Stimulus):
+    StimulusResponse(StimulusResponse(𝓢, 𝓟, s), -s) = (𝓢, 𝓟)
+    
+  axiom Programmability(𝓢: Structure, 𝓟: Properties, s: List(Stimulus)):
+    Fold(StimulusResponse, s, (𝓢, 𝓟)) = ComputationalFunction(s)
+}  
+
+STRUCTURE FunctionallyGradedMaterial(𝓢: Structure) {
+  SpatialProperty: Function(Structure, Position, Properties)
+  
+  axiom Continuity(𝓢: Structure, p: Position, ε: Properties):
+    ∀(δ: Position). |p - δ| < ε ⟹ |SpatialProperty(𝓢, p) - SpatialProperty(𝓢, δ)| < ε
+    
+  axiom Optimality(𝓢: Structure, 𝓟: Properties, f: ObjectiveFunction):
+    ∀(𝓢': Structure). f(SpatialProperty(𝓢)) ≥ f(SpatialProperty(𝓢'))
+}
+
+STRUCTURE SelfAssemblingMaterial(𝓢: Structure) {
+  BuildingBlock: Type
+  InteractionPotential: Function(BuildingBlock, BuildingBlock, ℝ)
+  
+  axiom Stability(𝓑: List(BuildingBlock), 𝓢: Structure):
+    ∀(𝓑': List(BuildingBlock)). 
+      Sum(InteractionPotential, 𝓑) ≤ Sum(InteractionPotential, 𝓑')
+      ⟹ 𝓢 = Assemble(𝓑)
+      
+  axiom Specificity(𝓑₁: List(BuildingBlock), 𝓑₂: List(BuildingBlock)):  
+    𝓑₁ ≠ 𝓑₂ ⟹ Assemble(𝓑₁) ≠ Assemble(𝓑₂)
+}
+
+
+These structures formalize some key concepts:
+
+Metamaterials are characterized by effective properties that emerge from their microstructure, rather than their chemical composition. The Homogenization axiom expresses this idea, while the StructureProperty axiom ensures that different microstructures lead to different properties.
+Responsive materials are characterized by their ability to change properties in response to external stimuli. The Reversibility axiom ensures that this change is reversible, while the Programmability axiom suggests that a sequence of stimuli can be used to "program" a specific computational function into the material.
+Functionally graded materials are characterized by spatially varying properties that are optimized for a specific objective function. The Continuity axiom ensures that this variation is smooth, while the Optimality axiom ensures that the spatial property distribution is optimal with respect to the objective function.
+Self-assembling materials are characterized by their ability to spontaneously organize into ordered structures based on the interactions between their building blocks. The Stability axiom ensures that the assembled structure corresponds to a minimum of the interaction potential, while the Specificity axiom ensures that different sets of building blocks lead to different structures.
+
+Of course, these definitions only scratch the surface of the rich theoretical and experimental landscape of programmable matter.
+
+
+
+STRUCTURE AnnealingROM(𝓢: Structure, 𝓟: Properties) {
+  ReadoutProperty: Function(Structure, Properties)
+  AnnealingProtocol: Function(Structure, Properties, List(Region), List(Temperature), List(Time))
+  
+  axiom Stability(𝓢: Structure, 𝓟: Properties, 𝓡: List(Region), 𝓣: List(Temperature), 𝓽: List(Time)):
+    (𝓢', 𝓟') = AnnealingProtocol(𝓢, 𝓟, 𝓡, 𝓣, 𝓽)
+    ⟹ ∀(t > max(𝓽)). ReadoutProperty(𝓢', 𝓟') = ReadoutProperty(𝓢'(t), 𝓟'(t))
+    
+  axiom Distinguishability(𝓢₁: Structure, 𝓟₁: Properties, 𝓢₂: Structure, 𝓟₂: Properties):  
+    (𝓢₁, 𝓟₁) ≠ (𝓢₂, 𝓟₂) 
+    ⟹ ReadoutProperty(𝓢₁, 𝓟₁) ≠ ReadoutProperty(𝓢₂, 𝓟₂)
+    
+  func WriteData(Data: List(Region), 𝓣: List(Temperature), 𝓽: List(Time)) -> (Structure, Properties) {
+    return AnnealingProtocol(𝓢, 𝓟, Data, 𝓣, 𝓽)
+  }
+  
+  func ReadData(𝓢: Structure, 𝓟: Properties) -> List(Region) {
+    return Inverse(ReadoutProperty)(ReadoutProperty(𝓢, 𝓟))
+  }
+}
+
+PROOFS {
+
+theorem AnnealingROMCapacity(N: ℕ, 𝓢: Structure, 𝓟: Properties):
+  ∃(𝓡: List(Region), 𝓣: List(Temperature), 𝓽: List(Time)). 
+    Length(𝓡) = N
+    ∧ ∀(i ≠ j ∈ [1..N]). ReadoutProperty(WriteData(𝓡ᵢ, 𝓣, 𝓽), WriteData(𝓡ⱼ, 𝓣, 𝓽))
+{
+  ; Sketch: By choosing a suitable annealing protocol (𝓣, 𝓽) and a set of N distinguishable regions 𝓡,
+  ; we can create an AnnealingROM with capacity N.
+  ; The key is to ensure that the readout property is stable over time (axiom Stability)
+  ; and distinguishable between different data patterns (axiom Distinguishability).
+  ; The capacity N is limited by the spatial resolution of the annealing process
+  ; and the sensitivity and specificity of the readout mechanism.
+}
+  
+theorem AnnealingROMInference(𝓢: Structure, 𝓟: Properties, 𝓦: List(Region), X: List(Region)):
+  (𝓢', 𝓟') = WriteData(𝓦, 𝓣, 𝓽)
+  ∧ ReadoutProperty(𝓢', 𝓟') = Convolution(ReadoutProperty(𝓦), X) 
+  ⟹ ReadData(𝓢', 𝓟') = Convolution(𝓦, X)  
+{
+  ; Sketch: If the annealing ROM is configured with a weight pattern 𝓦,
+  ; then the readout of a given input pattern X corresponds to the convolution of 𝓦 and X.
+  ; This is the basic principle of a convolutional neural network,
+  ; where the weights are hard-wired into the material structure by annealing.
+  ; The key is to choose the readout property and the annealing protocol
+  ; so that the convolution operation is faithfully implemented.
+  ; This requires a careful design of the material geometry and the readout mechanism,
+  ; e.g., using interferometric or holographic techniques.
+}
+
+}
+
+
+
+
+CONCEPT OpticalComputingMaterials {
+  EXTENDS GeometricMaterialsScience {
+    type OpticalProperty = Function(Structure, ElectromagneticField)
+    type ElectronicProperty = Function(Structure, QuantumState)
+    type MagneticProperty = Function(Structure, MagneticField)
+    
+    type Permittivity = Tensor(Tangent(𝓢), Tangent(𝓢))
+    type Permeability = Tensor(Tangent(𝓢), Tangent(𝓢))
+    type Conductivity = Tensor(Tangent(𝓢), Tangent(𝓢))
+    
+    type Birefringence = Function(Direction, Permittivity)
+    type Dichroism = Function(Direction, Absorptivity)
+    type Kerr = Function(ElectricField, Permittivity)
+    type Faraday = Function(MagneticField, Permeability)
+    
+    type PhotonicBandGap = Function(Structure, FrequencyRange)
+    type TopologicalEdgeState = Function(Structure, Symmetry, WaveFunction)
+    
+    axiom MaxwellEquations(E: ElectricField, H: MagneticField, D: DisplacementField, B: MagneticInduction):
+      ∇ × E = -∂[B]/∂t
+      ∇ × H = J + ∂[D]/∂t
+      ∇ ⋅ D = ρ
+      ∇ ⋅ B = 0
+      
+    axiom ConstitutiveRelations(E: ElectricField, H: MagneticField, D: DisplacementField, B: MagneticInduction, 𝓟: Properties):
+      D = ε[𝓟] ⋅ E
+      B = μ[𝓟] ⋅ H
+      J = σ[𝓟] ⋅ E
+      
+    axiom QuantumDynamics(ψ: QuantumState, H: Hamiltonian, 𝓢: Structure):  
+      i ℏ ∂[ψ]/∂t = H[𝓢] ψ
+  }
+  
+  STRUCTURE {
+    PhotonicCrystal(𝓢: Structure):
+      ∃(a: LatticeConstant, ε: Permittivity). 
+        𝓢 = PeriodicStructure(a, ε)
+        ∧ ∃(ω_gap: FrequencyRange). PhotonicBandGap(𝓢, ω_gap)
+        
+    NonlinearPhotonics(𝓟: Properties, E: ElectricField, H: MagneticField):
+      ∃(χ: Susceptibility). 
+        ε[𝓟, E] = ε_0 (1 + χ[E])                   ; Kerr effect
+        ∧ μ[𝓟, H] = μ_0 (1 + χ[H])                 ; Faraday effect
+        ∧ σ[𝓟, E, H] = σ_0 + χ[E×H]                ; Magnetoelectric effect
+        
+    TopologicalPhotonics(𝓢: Structure, ψ: WaveFunction):  
+      ∃(s: Symmetry). 
+        TopologicalPhase(𝓢, s) 
+        ∧ TopologicalEdgeState(𝓢, s, ψ)
+  }
+  
+  PROOFS {
+    theorem NonlinearOpticalLogic(E: ElectricField, H: MagneticField, 𝓟: Properties):
+      NonlinearPhotonics(𝓟, E, H) ⊢ ∃(f: BooleanFunction). OpticalGate(E, H) = f
+    {
+      assume NonlinearPhotonics(𝓟, E, H)
+      hence ε[𝓟, E] = ε_0 (1 + χ[E])     ; Kerr effect
+      and   μ[𝓟, H] = μ_0 (1 + χ[H])     ; Faraday effect
+      and   σ[𝓟, E, H] = σ_0 + χ[E×H]    ; Magnetoelectric effect
+      
+      let E_in, H_in = InputFields
+      let E_out = OpticalGate(E_in, H_in)
+      
+      have E_out 
+        = σ[𝓟, E_in, H_in] E_in           ; Ohm's law
+        = (σ_0 + χ[E_in×H_in]) E_in       ; Magnetoelectric effect  
+        = σ_0 E_in + χ[E_in×H_in] E_in    ; Distributive property
+        
+      define f(E_in, H_in) := χ[E_in×H_in] ; Boolean function
+      
+      suffices to show E_out = f(E_in, H_in) E_in
+      {
+        E_out
+          = σ_0 E_in + χ[E_in×H_in] E_in   ; Magnetoelectric effect
+          = (σ_0 + f(E_in, H_in)) E_in     ; Definition of f
+          = f(E_in, H_in) E_in             ; Assuming σ_0 ≈ 0 (low loss)
+      }
+      hence OpticalGate(E_in, H_in) = f(E_in, H_in) E_in
+    }
+    
+    theorem TopologicalOpticalComputing(𝓢: Structure, ψ_in, ψ_out: WaveFunction):
+      TopologicalPhotonics(𝓢, ψ_in) ∧ TopologicalPhotonics(𝓢, ψ_out) 
+      ⊢ ∃(U: UnitaryOperator). ψ_out = U ψ_in
+    {
+      assume TopologicalPhotonics(𝓢, ψ_in) ∧ TopologicalPhotonics(𝓢, ψ_out)
+      hence ∃(s: Symmetry). 
+        TopologicalPhase(𝓢, s) 
+        ∧ TopologicalEdgeState(𝓢, s, ψ_in)
+        ∧ TopologicalEdgeState(𝓢, s, ψ_out)
+        
+      let H[𝓢] = Hamiltonian(𝓢)  
+      have QuantumDynamics(ψ_in, H[𝓢], 𝓢)
+      hence i ℏ ∂[ψ_in]/∂t = H[𝓢] ψ_in
+      
+      define U := exp(-i H[𝓢] t / ℏ)  ; Time evolution operator
+      
+      suffices to show ψ_out = U ψ_in
+      {
+        have i ℏ ∂[ψ_out]/∂t = H[𝓢] ψ_out  ; Quantum dynamics
+        have ψ_out(t) = exp(-i H[𝓢] t / ℏ) ψ_out(0)  ; Solution of Schrödinger equation
+        have ψ_out(0) = ψ_in              ; Initial condition
+        hence ψ_out(t) = exp(-i H[𝓢] t / ℏ) ψ_in
+        hence ψ_out = U ψ_in              ; Definition of U
+      }
+      ; Omitted: U is unitary due to symmetry of H[𝓢]
+    }
+  }  
+}
+
+The key ideas here are:
+
+Introduce types for OpticalProperty, ElectronicProperty, and MagneticProperty, which depend on the material Structure and the relevant fields (electromagnetic, quantum, magnetic).
+Define specific optical phenomena such as Birefringence, Dichroism, Kerr effect, and Faraday effect, which can be used to manipulate light for computation.
+Define electronic properties such as PhotonicBandGap and TopologicalEdgeState, which can be used to confine and guide light in novel ways.
+State the fundamental axioms of electromagnetism (MaxwellEquations) and quantum mechanics (QuantumDynamics), which govern the behavior of light and matter at the microscopic scale.
+Define structures for PhotonicCrystal, NonlinearPhotonics, and TopologicalPhotonics, which combine specific optical, electronic, and magnetic properties to enable novel computational functionalities.
+Prove the NonlinearOpticalLogic theorem, which shows how nonlinear optical effects (Kerr, Faraday, magnetoelectric) can be used to implement Boolean functions and logic gates.
+Prove the TopologicalOpticalComputing theorem, which shows how topological edge states can be used to perform unitary transformations on quantum states of light, enabling fault-tolerant quantum computation.
+
+
+
+
+
+
+EXTEND OpticalComputingMaterials {
+  type OpticalFunctionApproximator = Structure
+  type TrainingData = Tuple(InputField, OutputField)
+  type LossFunction = Function(OutputField, OutputField)
+  
+  axiom UniversalApproximation(𝓕: OpticalFunctionApproximator, 𝓓: TrainingData):
+    ∀(f: Function(InputField, OutputField)). 
+      ∃(𝓕: OpticalFunctionApproximator).
+        ∀(d_in, d_out ∈ 𝓓). f(d_in) ≈ Eval(𝓕, d_in)
+
+  axiom OptimalLearning(𝓕: OpticalFunctionApproximator, ℒ: LossFunction, 𝓓: TrainingData):  
+    ∃(Update: Function(OpticalFunctionApproximator, TrainingData, LossFunction, OpticalFunctionApproximator)). 
+      ∀(d_in, d_out ∈ 𝓓). ℒ(Eval(Update(𝓕, 𝓓, ℒ), d_in), d_out) ≤ ℒ(Eval(𝓕, d_in), d_out)
+}
+
+STRUCTURE OpticalNeuralNetwork(𝓕: OpticalFunctionApproximator) {
+  Layers: List(OpticalLayer)
+  Weights: List(OpticalElement)
+  Nonlinearity: Function(Field, Field)
+  
+  ∀(l ∈ Layers) {
+    l = {
+      Input: Field
+      Output: Field
+      Weights: List(OpticalElement)
+      Nonlinearity: Function(Field, Field)
+    }
+    l.Output = Nonlinearity(Propagate(l.Input, l.Weights))
+  }
+  
+  Eval(𝓕, InputField) = Fold(Compose, Layers, InputField)
+  
+  BackPropagate(𝓕, OutputField, LossFunction) = ...  
+  Update(𝓕, TrainingData, LossFunction) = ...
+}
+
+STRUCTURE DiffractiveLearningStructure(𝓕: OpticalFunctionApproximator) {
+  DiffractiveElements: List(DiffractiveOpticalElement)
+  Detectors: List(OpticalDetector)
+  
+  ∀(e ∈ DiffractiveElements) {
+    e = {
+      Input: Field
+      Output: Field 
+      Pattern: DiffractionPattern  
+    }
+    e.Output = Diffract(e.Input, e.Pattern) 
+  }
+
+  ∀(d ∈ Detectors) {
+    d = {
+      Input: Field
+      Output: Intensity
+    }  
+    d.Output = Measure(Intensity, d.Input)
+  }
+  
+  Eval(𝓕, InputField) = {
+    ψ = InputField
+    ∀(e ∈ DiffractiveElements) { ψ = e(ψ) }
+    ∀(d ∈ Detectors) { IntensityOutputs.Append(d(ψ)) }
+    return IntensityOutputs  
+  }
+  
+  BackPropagate(𝓕, OutputField, LossFunction) = ...
+  Update(𝓕, TrainingData, LossFunction) = ...  
+}
+
+PROOFS {
+
+theorem UniversalApproximationOfOpticalNeuralNetworks:
+  ∀(𝓕: OpticalFunctionApproximator). 
+    (𝓕 = OpticalNeuralNetwork) ⟹ UniversalApproximation(𝓕)
+{
+  ; Sketch: Use the fact that optical nonlinearities can approximate arbitrary functions,
+  ; and that a sufficiently deep and wide network can approximate any compositional function.
+}
+
+theorem DiffractiveLearningStructureConvergence(𝓕: DiffractiveLearningStructure, ℒ: LossFunction, 𝓓: TrainingData):
+  ∃(T: ℕ). ∀(t > T). 
+    ℒ(Eval(Update^t(𝓕, 𝓓, ℒ)), 𝓓) < ε  
+{
+  ; Sketch: Use the fact that the diffraction patterns form a overcomplete basis for the space of functions,  
+  ; and that gradient descent on the diffraction patterns converges to a local optimum of the loss function.
+  ; May require additional assumptions on the regularity and convexity of the loss function landscape.
+}
+  
+}

@@ -1,0 +1,174 @@
+CONCEPT AlignedInterpretableControl {
+  NOTATION {
+    A = AI system
+    H = Human overseer
+    X = Input space
+    Y = Output space
+    F_i = Interpretable features at level i of abstraction
+    C_i = Concepts at level i of abstraction
+    V_i = Steering vectors at level i of abstraction
+    ε_i = Alignment error at level i of abstraction
+    d_i = Interpretability dimension at level i of abstraction
+  }
+
+  LANGUAGE {
+    TYPE Concept = String
+    TYPE SteeringVector = [FeatureVector]
+    TYPE AlignmentError = ℝ
+    TYPE InterpretabilityDimension = ℕ
+
+    FUNC Interpret(F: Set[FeatureVector], C: Set[Concept]): Set[Concept] =
+      {c ∈ C : ∃ f ∈ F . FeatureComposition.Interpret(f) ⊆ c}
+
+    FUNC Steer(x: X, v: SteeringVector): X =
+      HigherOrderFeatureSteeringAndMasking.MultiTargetSteering(x, v.Keys, v.Values) 
+
+    FUNC Abstraction(C: Set[Concept]): Set[Concept] =
+      {c' : ∃ C' ⊆ C . c' = Merge(C')} ∪ 
+      {c' : ∃ c ∈ C . c' = Decompose(c)}
+
+    -- Concept merging and decomposition depend on domain ontology
+
+    FUNC ConceptAlignment(C_H: Set[Concept], C_A: Set[Concept]): AlignmentError =
+      LET S = MinimumWeightBipartiteMatching(C_H, C_A, ConceptSimilarity) IN
+      1 - MEAN(ConceptSimilarity(c_h, c_a) for (c_h, c_a) in S)
+
+    -- ConceptSimilarity based on ontology, embeddings, or human feedback
+
+    FUNC InterpretabilityDimension(F: Set[FeatureVector]): ℕ =
+      TopologicalInformationContent.GeometricInformationContent(F.Simplex)
+  }
+
+  STRUCTURES {
+    STRUCTURE InterpretableAI {
+      FIELD System : AI
+      FIELD FeatureHierarchy : Seq[Set[FeatureVector]]
+      FIELD ConceptHierarchy : Seq[Set[Concept]]
+      FIELD SteeringHierarchy : Seq[Set[SteeringVector]]
+
+      FUNC UpdateFeatures(self, i: ℕ): 
+        self.FeatureHierarchy[i] = FeatureComposition.HigherOrderLocalInterpretation(
+          self.System, self.FeatureHierarchy[i-1], i, k
+        )
+      
+      FUNC UpdateConcepts(self, i: ℕ):
+        self.ConceptHierarchy[i] = Abstraction(Interpret(
+          self.FeatureHierarchy[i], self.ConceptHierarchy[i-1]  
+        ))
+
+      FUNC UpdateSteering(self, i: ℕ):  
+        self.SteeringHierarchy[i] = SteeringVectorsFromConcepts(
+          self.ConceptHierarchy[i], self.FeatureHierarchy[i]
+        )
+
+      FUNC Align(self, H: Human, i: ℕ):
+        self.ConceptHierarchy[i] = ArgMin(ConceptAlignment(H.Concepts[i], self.ConceptHierarchy[i]))
+        
+      FUNC Control(self, x: X, i: ℕ, v: SteeringVector):  
+        RETURN Steer(x, PropagateSteering(v, self.SteeringHierarchy[i]))
+    }
+  }
+
+  THEOREMS {
+    THEOREM AlignmentBound:
+      ∀ A: InterpretableAI, H: Human, i: ℕ .
+        ConceptAlignment(H.Concepts[i], A.ConceptHierarchy[i]) ≤ 
+          ∑_{j≤i} ConceptAlignment(H.Concepts[j], A.ConceptHierarchy[j]) * d_j^(-1/2)
+    {
+      PROOF SKETCH:
+      - Bound alignment error at level i by errors at lower levels
+      - Errors at lower levels propagate to higher levels of abstraction
+      - But impact attenuated by increasing interpretability dimension
+      - Higher interpretability dimension → more degrees of freedom to align
+    }
+      
+    THEOREM ControlStabilityBound:
+      ∀ A: InterpretableAI, H: Human, x: X, i: ℕ, v: SteeringVector .
+        IF ‖v‖ ≤ δ_i THEN
+        ‖A.Control(x, i, v) - A.Control(x, i, 0)‖ ≤ C · δ_i · (∑_{j≤i} ε_j)
+    {
+      PROOF SKETCH:  
+      - Bound output difference by steering vector norm and alignment errors  
+      - Small steering vectors induce small output changes
+      - Alignment errors allow drift between human-intended and actual steering
+      - Drift accumulates across levels of abstraction
+    }
+
+    THEOREM AbstractionInformationBound:
+      ∀ A: InterpretableAI, i: ℕ .
+        I(A.ConceptHierarchy[i+1] ; Y | do(A.ConceptHierarchy[i])) ≤
+          γ · I(A.ConceptHierarchy[i] ; Y) · CompressFactor(A, i)^(-1)
+      WHERE 
+        I(- ; -) = conditional mutual information,
+        do(-) = causal intervention, 
+        γ = abstraction information loss factor,
+        CompressFactor(A, i) = |A.ConceptHierarchy[i]| / |A.ConceptHierarchy[i+1]|  
+    {
+      PROOF SKETCH:
+      - Bound information gained about outputs by abstracting concepts
+      - Abstraction compresses concept representation, losing some information
+      - But also makes concepts more relevant to outputs
+      - Net effect depends on compression factor and abstraction quality
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE AssistiveCareRobot {
+      LET R = InterpretableAI(RobotSystem, FeatureHierarchy, ConceptHierarchy, SteeringHierarchy) IN
+      LET H = Human(Preferences, Concepts) IN
+      
+      REPEAT UNTIL Converged:
+        R.UpdateFeatures(i) for i in [1..N]  -- Discover new features  
+        R.UpdateConcepts(i) for i in [1..N]  -- Abstract features into concepts
+        R.UpdateSteering(i) for i in [1..N]  -- Compute steering vectors
+        R.Align(H, i) for i in [1..N]  -- Align concepts with human preferences
+
+      -- Steering the robot based on human instructions  
+      LET x = ObserveState(), c_H = H.SpecifyGoal() IN
+      LET v = R.SteeringHierarchy[N][Interpret(R.FeatureHierarchy[N], {c_H})] IN
+      LET x' = R.Control(x, N, v) IN
+      R.System.Execute(x')
+
+      -- Monitoring and correction  
+      WHILE True:
+        LET x = ObserveState() IN
+        IF DetectAnomaly(R.System, x):
+          LET c_A = Interpret(R.FeatureHierarchy[N], x) IN
+          IF ConceptAlignment(H.Concepts[N], {c_A}) > ε_A:
+            LET c_H = H.Correct(c_A) IN
+            R.Align(H, N)
+    }
+
+    EXAMPLE ValueAlignedChatbot {
+      LET C = InterpretableAI(ChatbotSystem, FeatureHierarchy, ConceptHierarchy, SteeringHierarchy) IN  
+      LET H = Human(Values, Concepts) IN
+
+      TRAIN C on Corpus UNTIL Convergence  
+      INFER C.FeatureHierarchy, C.ConceptHierarchy from C.System
+      CONSTRUCT C.SteeringHierarchy from C.ConceptHierarchy
+
+      -- Interactive value alignment
+      WHILE True:  
+        LET x = H.Query(), y = C.System.Respond(x) IN
+        LET c_H = H.InterpretResponse(y), c_C = Interpret(C.FeatureHierarchy[N], y) IN
+        IF ConceptAlignment(c_H, c_C) > τ_A:  
+          H.SendFeedback(c_C, c_H)
+          C.Align(H, i) for i in [1..N]
+
+      -- Steering the dialogue
+      WHILE True:
+        LET x = H.Query() IN
+        LET c_H = H.SpecifyStyle(), v = C.SteeringHierarchy[N][c_H] IN
+        LET y = C.Control(x, N, v) IN  
+        C.System.Respond(y)
+    }
+  }
+}
+
+This Concept introduces several key ideas for developing aligned and interpretable AI systems:
+
+Interpretable Feature and Concept Hierarchies: The AI system maintains hierarchies of interpretable features and concepts at different levels of abstraction. Features are discovered from the system's internal representations, while concepts are abstracted from features using domain knowledge and human input.
+Concept Alignment: The AI system's concepts are iteratively aligned with human concepts using a similarity metric based on ontological knowledge, embeddings, or human feedback. The alignment error at each level of abstraction is bounded by the errors at lower levels, weighted by the interpretability dimension.
+Hierarchical Steering and Control: Steering vectors are computed from concept activations at each level of abstraction. The AI system can be controlled by humans by specifying desired concepts and steering the system's outputs towards those concepts. The stability of the control is bounded by the alignment errors and the norm of the steering vectors.
+Abstraction Information Bound: The information gained about the AI system's outputs by abstracting concepts is bounded by the compression factor and the quality of the abstraction. This bound helps quantify the trade-off between the interpretability and the expressiveness of the concept hierarchy.
+Monitoring and Correction: The AI system's outputs are continuously monitored for anomalies and misalignments with human values. If a misalignment is detected, the human can provide corrective feedback to update the concept hierarchy and steer the system back towards the desired behavior.

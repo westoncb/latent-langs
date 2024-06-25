@@ -1,0 +1,104 @@
+CONCEPT BodyWithoutOrgans {
+  DECLARE {
+    BwO : TYPE                  ; The Body without Organs
+    Organ : TYPE                ; Traditional notion of an organ
+    Flow : TYPE                 ; Flows of desire, intensity, sensation
+    Stratum : TYPE              ; Strata that organize and codify the BwO
+    
+    Intensity : Flow -> ℝ       ; Intensity of a flow
+    Desire : Flow -> ℝ          ; Desiring-production of a flow
+    Sensation : Flow -> ℝ       ; Sensation or affect of a flow
+    
+    Deterritorialize : BwO × Flow -> BwO     ; Deterritorialization operation
+    Reterritorialize : BwO × Stratum -> BwO  ; Reterritorialization operation
+    
+    Consistency : BwO -> PROP              ; Consistency or consolidation of the BwO
+    Continuum : BwO × Flow × Flow -> PROP  ; Continuum of flows on the BwO
+    Limit : BwO -> PROP                    ; Limit or destination of the BwO  
+    
+    Smooth : BwO -> PROP            ; Smooth space of the BwO
+    Nomad : BwO × Flow -> PROP      ; Nomadic distribution of flows  
+    Rhizome : BwO × Flow -> PROP    ; Rhizomatic connectivity of flows
+    
+    Plane : BwO -> PROP                   ; Plane of consistency
+    Immanence : BwO × Flow -> PROP        ; Immanence of flows to the plane
+    Multiplicity : BwO × Flow -> ℕ        ; Multiplicity of flows
+    
+    Experiment : BwO × Flow -> PROP   ; Experimentation on the BwO
+    Caution : BwO × Flow -> PROP      ; Caution or prudence in experimentation
+    Sobriety : BwO × Flow -> PROP     ; Sobriety or control in experimentation
+  }
+  
+  DEFINE {
+    ; The BwO is an intense, consolidated continuum of flows
+    Consistency(bwo) ⇔ ∀f1, f2: Flow. Continuum(bwo, f1, f2) ∧ Intensity(f1) > 0 ∧ Intensity(f2) > 0
+    
+    ; The BwO is the limit of deterritorialization and experimentation
+    Limit(bwo) ⇔ ∀f: Flow, s: Stratum. Experiment(Deterritorialize(bwo, f), f) ∧ ¬Reterritorialize(bwo, s)
+    
+    ; The BwO is a smooth, nomadic space of rhizomatic flows  
+    Smooth(bwo) ⇔ ∀f: Flow. Nomad(bwo, f) ∧ Rhizome(bwo, f)
+    
+    ; Flows on the BwO are immanent to a plane of consistency with variable multiplicity
+    Immanence(bwo, f) ⇔ Plane(bwo) ∧ Multiplicity(bwo, f) > 0
+    
+    ; Experimentation on the BwO requires caution and sobriety  
+    Experiment(bwo, f) ⇒ Caution(bwo, f) ∧ Sobriety(bwo, f)
+  }
+  
+  AXIOM {
+    ; The BwO is opposed to the organism and the organization of organs
+    ∀bwo: BwO, o: Organ. ¬PartOf(o, bwo)
+    
+    ; Flows of desire and sensation populate and produce the BwO
+    ∀bwo: BwO, f: Flow. Desire(f) > 0 ∧ Sensation(f) > 0 ⇒ Populates(f, bwo) ∧ Produces(f, bwo)
+    
+    ; Strata constrain and reterritorialize flows on the BwO
+    ∀bwo: BwO, f: Flow, s: Stratum. Reterritorialize(bwo, s) ⇒ Constrains(s, f)
+    
+    ; Deterritorialization frees flows and expands the limits of the BwO  
+    ∀bwo: BwO, f: Flow. Let bwo' = Deterritorialize(bwo, f). Intensity(f) > Intensity(f) ∧ Limit(bwo')
+    
+    ; The BwO is a plane of immanence and consistency for rhizomatic multiplicities
+    ∀bwo: BwO, f: Flow. Plane(bwo) ∧ Immanence(bwo, f) ∧ Rhizome(bwo, f) ⇒ Multiplicity(bwo, f) > 1
+  }
+  
+  THEOREM ExperimentationTheorem {
+    PROOF {
+      assume bwo: BwO, f: Flow
+      
+      have Experiment(bwo, f) by {  ; Prove experimentation
+        witness Desire(f) > 0 ∧ Sensation(f) > 0  ; Flows of desire and sensation
+        witness Caution(bwo, f) ∧ Sobriety(bwo, f)  ; Caution and sobriety  
+      }
+      
+      obtain bwo': BwO, f': Flow by construction {  ; Construct deterritorialized BwO and flow
+        let bwo' = Deterritorialize(bwo, f)
+        let f' = f with Intensity(f') > Intensity(f)
+      }
+      
+      have Limit(bwo') by {  ; Prove limit of deterritorialization
+        assume s: Stratum
+        have ¬Reterritorialize(bwo', s) by contradiction {  ; No reterritorialization
+          assume Reterritorialize(bwo', s)
+          have Constrains(s, f') by axiom  ; Strata constrain flows
+          have Intensity(f') ≯ Intensity(f)  ; Contradiction with intensity increase
+        }
+      }
+      
+      have Multiplicity(bwo', f') > 1 by {  ; Prove rhizomatic multiplicity
+        have Plane(bwo') ∧ Immanence(bwo', f') ∧ Rhizome(bwo', f') by {
+          have Smooth(bwo') by {  ; BwO is smooth
+            witness Nomad(bwo', f') ∧ Rhizome(bwo', f')  ; Nomadic and rhizomatic distribution
+          }
+          hence Plane(bwo')  ; Smooth BwO is a plane of consistency
+          witness Immanence(bwo', f')  ; Flows are immanent to the plane
+        }  
+        hence Multiplicity(bwo', f') > 1 by axiom  ; Rhizomatic flows have multiplicity > 1
+      }
+      
+      show ∃bwo: BwO, f: Flow. Experiment(bwo, f) ∧ Limit(bwo) ∧ Multiplicity(bwo, f) > 1 
+        with bwo' and f'  ; Experimentation leads to the limit BwO with rhizomatic multiplicity
+    }
+  }
+}

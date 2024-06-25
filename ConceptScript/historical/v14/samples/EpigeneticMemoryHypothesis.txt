@@ -1,0 +1,90 @@
+CONCEPT EpigeneticMemoryHypothesis {
+  LANGUAGE {
+    type Neuron = {
+      epigenome: Epigenome,
+      synapses: Synapse*,
+      dendrites: Dendrite*,
+      axon: Axon
+    }
+    
+    type Epigenome = {
+      chromatinState: ChromatinState,
+      histoneModifications: HistoneModification*,
+      methylationPattern: DNAMethylation
+    }
+
+    type HistoneModification = Enum[Acetylation, Methylation, Phosphorylation, ...]
+    type DNAMethylation = BitVector
+    type ChromatinState = Enum[Euchromatin, Heterochromatin]
+
+    notation "⟦⟧" = EpigeneticEncoding
+    notation "⟬⟭" = EpigeneticDecoding
+    notation "⊛" = EpigeneticAssociation
+    notation "⧩" = NeuronalReactivation
+    
+    func EncodeMemory(m: Memory): Epigenome = ⟦m⟧
+    func DecodeMemory(e: Epigenome): Memory = ⟬e⟭
+      
+    axiom EpigeneticLearningRule(n: Neuron, m: Memory):
+      n.activity ⊛ m ⇒ n.epigenome := EncodeMemory(m)
+      
+    axiom EpigeneticRecallRule(n: Neuron):  
+      n.activity ⧩ ⟬n.epigenome⟭
+  }
+
+  STRUCTURE {
+    [MemoryTrace(m: Memory) = {n: Neuron | ⟦m⟧ ⊑ n.epigenome}
+      ↦ Set of neurons whose epigenome partially encodes a memory
+    ]
+
+    [AssociativeRecall(m1, m2: Memory) ⇔
+      ∃n: Neuron. n ∈ MemoryTrace(m1) ∧ n ∈ MemoryTrace(m2)  
+      ↦ Memories are associatively linked if they share a neuron in their traces
+    ]
+      
+    [CellularReconsolidation(n: Neuron, m: Memory) ⇔
+      n.activity ∧ (∃m': Memory. m' ≈ m ∧ n ∈ MemoryTrace(m'))
+        ⇒ n.epigenome := EncodeMemory(m)
+      ↦ Reactivated neurons re-encode associated memories
+    ]
+  }
+
+  PROOFS {
+    theorem MemoryStability:
+      ∀n: Neuron, m: Memory. n.epigenome = ⟦m⟧ ⇒ ◻(n.activity ⇒ n ⧩ m)
+    {
+      assume n: Neuron, m: Memory
+      assume n.epigenome = ⟦m⟧
+      
+      have n.activity ⇒ n ⧩ ⟬n.epigenome⟭ ; by EpigeneticRecallRule
+      have ⟬n.epigenome⟭ = ⟬⟦m⟧⟭ = m      ; by assumption and DecodeMemory
+      hence n.activity ⇒ n ⧩ m
+      
+      therefore, ◻(n.activity ⇒ n ⧩ m)   ; by temporal necessity
+    }
+    
+    tactic ConstructMemoryTrace(m: Memory) = {
+      let trace = {}
+      for n : Neuron do
+        if ⟦m⟧ ⊑ n.epigenome then trace := trace ∪ {n}
+      qed trace
+    }
+    
+    theorem AssociativeRecallFormation:
+      ∀m1, m2: Memory. (∃n: Neuron. n ⊛ m1 ∧ n ⊛ m2) ⇒ AssociativeRecall(m1, m2)
+    {
+      assume m1, m2: Memory
+      assume ∃n: Neuron. n ⊛ m1 ∧ n ⊛ m2
+      let n : Neuron such that n ⊛ m1 ∧ n ⊛ m2
+      
+      have n.epigenome := EncodeMemory(m1)  ; by EpigeneticLearningRule
+      have n ∈ ConstructMemoryTrace(m1)     ; by definition of MemoryTrace
+      
+      have n.epigenome := EncodeMemory(m2)  ; by EpigeneticLearningRule  
+      have n ∈ ConstructMemoryTrace(m2)     ; by definition of MemoryTrace
+      
+      hence ∃n: Neuron. n ∈ MemoryTrace(m1) ∧ n ∈ MemoryTrace(m2)
+      therefore, AssociativeRecall(m1, m2)  ; by definition
+    }
+  }
+}

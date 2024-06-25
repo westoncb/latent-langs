@@ -1,0 +1,1425 @@
+LANGUAGE InferenceLanguage {
+  SYNTAX {
+    Formula := Atom(name: Symbol, args: List(Term))
+             | Not(arg: Formula) 
+             | And(args: List(Formula))
+             | Or(args: List(Formula))
+             | Implies(lhs: Formula, rhs: Formula)
+             | Iff(lhs: Formula, rhs: Formula)  
+             | ForAll(vars: List(Var), body: Formula)
+             | Exists(vars: List(Var), body: Formula)
+             
+    Term := Const(value: Value) 
+          | Var(name: Symbol)
+          | Func(name: Symbol, args: List(Term))
+             
+    Statement := Definition(name: Symbol, params: List(Var), body: Formula)
+               | Axiom(name: Symbol, body: Formula) 
+               | Theorem(name: Symbol, body: Formula)
+               | Lemma(name: Symbol, body: Formula)
+               | Conjecture(name: Symbol, body: Formula)
+               
+    Proof := Assume(assm: Formula) 
+           | Given(stmt: Statement)
+           | Premise(stmt: Statement)  
+           | BecauseOf(stmt: Formula, prf: Proof)
+           | ByContradiction(assm: Formula, prf: Proof) 
+           | ByInduction(pred: Symbol, base: Proof, step: Proof)
+           | ByAxiom(name: Symbol)
+           | ByTheorem(name: Symbol)
+           | ByLemma(name: Symbol) 
+           | ByDefinition(name: Symbol, args: List(Term))
+           | ByInstantiation(stmt: Formula, subst: Map(Var, Term))
+           | QED
+           
+    Theory := Name(name: Symbol)
+            | Imports(names: List(Symbol))
+            | Statements(stmts: List(Statement))
+            | Proofs(prfs: List(Proof))
+            
+    Pattern := Template(tmpl: Formula)  
+             | Analogy(src: Theory, tgt: Theory, map: Map(Symbol, Symbol))
+             | Workflow(steps: List(Proof))
+  }
+
+  SEMANTICS {
+    Models(th: Theory, kb: List(Statement), model: Model) := 
+      FORALL stmt IN Statements(th):
+        MATCH stmt WITH
+        | Definition(_, _, body) => Entails(model, body) 
+        | Axiom(_, body) => Entails(model, body)
+        | Theorem(_, body) => Entails(model, body)
+        | _ => TRUE
+        
+    Entails(model: Model, frm: Formula) := 
+      MATCH frm WITH
+      | Atom(_, args) => model.Holds(Subst(frm, model))
+      | Not(arg) => NOT Entails(model, arg)  
+      | And(args) => FORALL arg IN args: Entails(model, arg)
+      | Or(args) => EXISTS arg IN args: Entails(model, arg)
+      | Implies(lhs, rhs) => 
+          NOT Entails(model, lhs) OR Entails(model, rhs)
+      | Iff(lhs, rhs) =>
+          Entails(model, Implies(lhs, rhs)) AND 
+          Entails(model, Implies(rhs, lhs))
+      | ForAll(vars, body) =>
+          FORALL subst IN Instantiations(vars, model):
+            Entails(model, Subst(body, subst))
+      | Exists(vars, body) => 
+          EXISTS subst IN Instantiations(vars, model):
+            Entails(model, Subst(body, subst))
+            
+    Subst(frm: Formula, subst: Map(Var, Term)) :=  
+      MATCH frm WITH
+      | Atom(name, args) => Atom(name, MAP(arg => Subst(arg, subst), args)) 
+      | Not(arg) => Not(Subst(arg, subst))
+      | And(args) => And(MAP(arg => Subst(arg, subst), args))
+      | Or(args) => Or(MAP(arg => Subst(arg, subst), args)) 
+      | Implies(lhs, rhs) => Implies(Subst(lhs, subst), Subst(rhs, subst))
+      | Iff(lhs, rhs) => Iff(Subst(lhs, subst), Subst(rhs, subst))
+      | ForAll(vars, body) => 
+          LET subst' = REMOVE_ALL(vars, subst)
+          IN ForAll(vars, Subst(body, subst'))
+      | Exists(vars, body) =>
+          LET subst' = REMOVE_ALL(vars, subst)  
+          IN Exists(vars, Subst(body, subst'))
+  }
+
+  PROOF_SYSTEM {
+    RULE Assumption {
+      FORALL th: Theory, kb: List(Statement), frm: Formula, prf: Proof
+        (th, kb, Assume(frm), prf) |- frm
+    }
+    
+    RULE ModusPonens {
+      FORALL th: Theory, kb: List(Statement), lhs rhs: Formula  
+        (th, kb |- lhs) AND (th, kb |- Implies(lhs, rhs)) INFER (th, kb |- rhs)
+    }
+    
+    RULE Generalization {  
+      FORALL th: Theory, kb: List(Statement), var: Var, frm: Formula
+        (th, kb |- frm) INFER (th, kb |- ForAll([var], frm))
+    }
+
+    RULE Specialization {
+      FORALL th: Theory, kb: List(Statement), var: Var, frm: Formula, term: Term  
+        (th, kb |- ForAll([var], frm)) INFER 
+        (th, kb |- Subst(frm, Map(var, term)))
+    }
+    
+    RULE ExistentialIntro {
+      FORALL th: Theory, kb: List(Statement), var: Var, frm: Formula, term: Term
+        (th, kb |- Subst(frm, Map(var, term))) INFER  
+        (th, kb |- Exists([var], frm))
+    }
+
+    RULE Contradiction {
+      FORALL th: Theory, kb: List(Statement), frms: List(Formula)  
+        (th, kb |- And(frms)) AND (EXISTS frm IN frms: th, kb |- Not(frm)) INFER
+        (th, kb |- FALSE)  
+    }
+    
+    RULE ByTheory {
+      FORALL kb: List(Statement), stmt: Statement
+        Name(name), Statements(stmts) |- stmt INFER
+        (Name(name), kb |- stmt) 
+    }
+    
+    RULE ByAnalogy {
+      FORALL th_s th_t: Theory, kb: List(Statement), map: Map(Symbol, Symbol), prf: Proof
+        (th_s, kb |- prf) INFER 
+        (th_t, kb |- Subst(prf, map))
+    }
+    
+    RULE ByWorkflow {
+      FORALL th: Theory, kb: List(Statement), prfs: List(Proof), concl: Formula
+        (FORALL prf IN prfs: (th, kb |- prf)) AND
+        (prfs |- concl) INFER
+        (th, kb |- concl)  
+    }
+  }
+  
+  REASONING_PATTERNS {
+    GuidedDecomposition {
+      MATCH Theorem(thm, _) 
+      CHOOSE vars: List(Var), ante: List(Formula), cons: Formula
+        SUCH_THAT thm = Implies(And(ante), ForAll(vars, cons))
+      CHOOSE stmts: List(Statement), prf: Proof, subst: Map(Var, Term)
+        SUCH_THAT (Name(dom), stmts |- Subst(And(ante), subst), prf)
+      RETURN Subst(cons, subst)
+    }
+
+    AnalogicalReasoning {
+      MATCH Conjecture(name, frm)  
+      CHOOSE th_s: Theory, map: Map(Symbol, Symbol)
+        SUCH_THAT Analog(Name(dom), th_s, map)
+      CHOOSE thm: Symbol, prf: Proof 
+        SUCH_THAT (Name(th_s.name), Statements(th_s) |- Theorem(thm, _), prf)
+      RETURN Subst(Theorem(name, frm), map), 
+             Subst(prf, map)
+    }
+    
+    WorkflowAbstraction {
+      LET prfs = QUERY Proof FROM Proofs(Name(dom))
+      LET wf = Generalize(prfs) 
+      RETURN Workflow(Name(dom), wf)
+    }
+  }
+
+  INTERFACE {
+    FUNC Elaborate(th: Theory, frm: Formula) -> List(Statement)  
+    FUNC Reconcile(th1: Theory, th2: Theory) -> Theory
+    FUNC GroundTruth(th: Theory, model: Model) -> Theory
+    
+    FUNC Derive(kb: List(Statement), claim: Formula) -> Proof?
+    FUNC Refute(kb: List(Statement), claim: Formula) -> Proof?
+    FUNC Explain(kb: List(Statement), claim: Formula) -> Proof?
+    
+    FUNC Analogy(th_s: Theory, th_t: Theory) -> Map(Symbol, Symbol)?
+    FUNC Unify(frm1: Formula, frm2: Formula) -> Map(Var, Term)?
+    
+    FUNC ApplyPattern(kb: List(Statement), pat: Pattern) -> List(Statement)
+    FUNC Discover(kb: List(Statement)) -> List(Pattern)
+  }
+}
+
+The key changes and additions in this version:
+
+Introduced a Theory construct to package related Statements and Proofs. This allows for modular organization of background knowledge and reasoning patterns.
+Added Pattern constructs for capturing reusable reasoning templates, analogies, and workflows. These aim to provide explicit guidance for the inference process.
+Extended the semantics to handle theory-based reasoning, with rules for using statements from imported theories (ByTheory), analogical reasoning (ByAnalogy), and reasoning via abstract workflows (ByWorkflow).
+Defined a set of high-level REASONING_PATTERNS that capture common strategies like guided decomposition, analogical problem solving, and workflow abstraction. These leverage the Pattern constructs to provide heuristic guidance for the inference process.
+Expanded the INTERFACE with functions for theory manipulation (Elaborate, Reconcile, GroundTruth), proof search and explanation (Derive, Refute, Explain), analogical reasoning (Analogy, Unify), and pattern application and discovery (ApplyPattern, Discover).
+
+The goal of these changes is to provide a richer structure for encoding and leveraging background knowledge, while still maintaining flexibility for open-ended reasoning.
+The Theory construct allows for packaging relevant knowledge into modular, reusable units. The Patterns provide templates for guiding the inference process, capturing abstract reasoning strategies that can be instantiated with domain-specific knowledge.
+The REASONING_PATTERNS and extended INTERFACE aim to capture some of the high-level strategies and capabilities that guide human-like problem solving, such as analogical reasoning, problem decomposition, and explanation generation. These build on the core inference rules to enable more structured and guided reasoning.
+At the same time, the language retains the ability to fall back on the broader latent knowledge of the underlying model, via constructs like Elaborate and GroundTruth that allow for expanding and grounding theories with additional knowledge.
+The hope is that this combination of explicit structure and implicit knowledge will enable a productive balance of focused reasoning and open-ended exploration, guiding the inference process while still leveraging the full power of the language model.
+Of course, this is still a work in progress, and there are many open questions and areas for refinement. Some key challenges include:
+
+How to effectively represent and acquire the background knowledge and reasoning patterns.
+How to guide the instantiation and application of abstract patterns to specific problems.
+How to integrate the explicit reasoning with the latent knowledge and capabilities of the language model.
+How to evaluate and improve the quality and effectiveness of the reasoning process.
+
+
+
+
+
+LANGUAGE InferenceLanguage {
+  SYNTAX {
+    Statement := 
+      | Definition(name: Symbol, params: List[Symbol], body: Expression)
+      | Axiom(name: Symbol, body: Expression)
+      | Theorem(name: Symbol, body: Expression)
+      | Conjecture(name: Symbol, body: Expression)
+      | Assumption(body: Expression)
+      | Observation(body: Expression)
+
+    Expression :=  
+      | Variable(name: Symbol)
+      | Constant(value: Value)  
+      | Application(function: Expression, arguments: List[Expression])
+      | Abstraction(parameters: List[Symbol], body: Expression)
+      | QuantifiedExpression(quantifier: Quantifier, variables: List[Symbol], body: Expression)
+      | LogicalExpression(operator: LogicalOperator, operands: List[Expression])
+      
+    Quantifier := ForAll | Exists
+    
+    LogicalOperator := And | Or | Implies | Iff | Not
+  }
+
+  SEMANTICS {
+    Model := Map[Symbol, Value]
+    
+    FUNCTION Evaluate(expr: Expression, model: Model, assignment: Map[Symbol, Value]): Value
+      MATCH expr WITH
+      | Variable(name) => assignment[name]
+      | Constant(value) => value
+      | Application(function, arguments) =>
+          LET functionValue = Evaluate(function, model, assignment)
+              argumentValues = MAP(arg => Evaluate(arg, model, assignment), arguments)
+          IN CALL(functionValue, argumentValues)  
+      | Abstraction(parameters, body) =>
+          LAMBDA(values => 
+            LET newAssignment = MERGE(assignment, ZIP(parameters, values))
+            IN Evaluate(body, model, newAssignment))
+      | QuantifiedExpression(quantifier, variables, body) =>
+          LET valueLists = MAP(v => model[v], variables)
+              valueCombinatinos = CARTESIAN_PRODUCT(valueLists)
+          IN MATCH quantifier WITH  
+             | ForAll => ALL(combination => 
+                 LET newAssignment = MERGE(assignment, ZIP(variables, combination))
+                 IN Evaluate(body, model, newAssignment))
+             | Exists => ANY(combination =>
+                 LET newAssignment = MERGE(assignment, ZIP(variables, combination))  
+                 IN Evaluate(body, model, newAssignment))
+      | LogicalExpression(operator, operands) =>
+          LET operandValues = MAP(op => Evaluate(op, model, assignment), operands)
+          IN MATCH operator WITH
+             | And => ALL(operandValues)
+             | Or => ANY(operandValues)
+             | Implies => NOT operandValues[0] OR operandValues[1]
+             | Iff => operandValues[0] = operandValues[1]  
+             | Not => NOT operandValues[0]
+
+    FUNCTION Entails(kb: List[Statement], query: Expression): Boolean
+      RETURN FORALL model: 
+        IF ALL(stmt IN kb, Satisfies(stmt, model))
+        THEN Satisfies(Assumption(query), model)
+
+    FUNCTION Satisfies(stmt: Statement, model: Model): Boolean 
+      MATCH stmt WITH
+      | Definition(name, params, body) => model[name] = Evaluate(Abstraction(params, body), model, EMPTY_MAP)
+      | Axiom(name, body) => Evaluate(body, model, EMPTY_MAP)
+      | Theorem(name, body) => Evaluate(body, model, EMPTY_MAP) 
+      | Conjecture(name, body) => EITHER Evaluate(body, model, EMPTY_MAP) OR Evaluate(Not(body), model, EMPTY_MAP)
+      | Assumption(body) => Evaluate(body, model, EMPTY_MAP)
+      | Observation(body) => Evaluate(body, model, EMPTY_MAP)
+  }
+
+  THEORY_GUIDE {
+    TheoryStructure := 
+      | EntityDefinition(name: Symbol, properties: List[Symbol])
+      | RelationDefinition(name: Symbol, arguments: List[Symbol])  
+      | ProcessDescription(name: Symbol, inputEntities: List[Symbol], outputEntities: List[Symbol], 
+                           preconditions: Expression, effects: Expression)
+      | HighLevelPrinciple(description: String)
+      | CoreMechanism(description: String)
+      | KeyQuestion(question: String)
+      
+    TheoryElement := Statement | TheoryStructure
+    
+    FUNCTION ConstructTheory(domainKnowledge: List[Expression], problemStatement: Expression): List[TheoryElement]
+      LET relevantKnowledge = FILTER(k => IsRelevant(k, problemStatement), domainKnowledge)
+          keyConcepts = ExtractConcepts(relevantKnowledge)
+          coreRelations = InferRelations(relevantKnowledge, keyConcepts)
+          generalPrinciples = InferPrinciples(relevantKnowledge)
+          specificMechanisms = InferMechanisms(relevantKnowledge, problemStatement)
+          openQuestions = IdentifyQuestions(relevantKnowledge, problemStatement)
+      IN 
+          MAP(c => EntityDefinition(c, InferProperties(c, relevantKnowledge)), keyConcepts) ++
+          MAP(r => RelationDefinition(r, InferArguments(r, keyConcepts)), coreRelations) ++  
+          MAP(p => ProcessDescription(p, InferInputs(p, coreRelations), InferOutputs(p, coreRelations), 
+                                         InferPreconditions(p, generalPrinciples), InferEffects(p, specificMechanisms)), 
+              IdentifyProcesses(specificMechanisms)) ++  
+          MAP(HighLevelPrinciple, generalPrinciples) ++
+          MAP(CoreMechanism, specificMechanisms) ++
+          MAP(KeyQuestion, openQuestions)
+      
+    FUNCTION IsRelevant(knowledge: Expression, problem: Expression): Boolean
+      -- Heuristic relevance criteria based on shared concepts, causal relations, explanatory power, etc.
+      
+    FUNCTION ExtractConcepts(knowledge: List[Expression]): List[Symbol]  
+      -- NLP-based concept extraction
+      
+    FUNCTION InferRelations(knowledge: List[Expression], concepts: List[Symbol]): List[Symbol]
+      -- Relation mining based on co-occurrence, dependency patterns, knowledge graphs, etc.
+      
+    FUNCTION InferPrinciples(knowledge: List[Expression]): List[String]
+      -- Principle abstraction based on recurring patterns, generalizations, analogies, etc.
+      
+    FUNCTION InferMechanisms(knowledge: List[Expression], problem: Expression): List[String] 
+      -- Abductive inference of specific causal mechanisms relevant to the problem
+      
+    FUNCTION IdentifyQuestions(knowledge: List[Expression], problem: Expression): List[String]
+      -- Identification of knowledge gaps, uncertainties, contradictions, and potential lines of inquiry
+  }
+}
+
+The key enhancements in this version:
+
+Expanded syntax and semantics to support a richer set of logical expressions, quantifiers, and abstractions. This allows for more expressive and precise formalization of domain knowledge and problem statements.
+Introduction of a THEORY_GUIDE section, which provides meta-level guidance on how to construct a productive theory for a given domain and problem. The ConstructTheory function takes in raw domain knowledge and a problem statement, and outputs a structured theory containing key entities, relations, processes, principles, mechanisms, and questions.
+The theory construction process is guided by heuristic functions for assessing relevance, extracting concepts, inferring relations and principles, abducing mechanisms, and identifying open questions. These functions aim to implement the kind of pattern-matching, abstraction, and questioning that we discussed as being crucial for guiding effective reasoning.
+The resulting theory structure includes not just basic statements, but also higher-level constructs like process descriptions, general principles, core mechanisms, and key questions. The goal is to provide a rich scaffold for organizing and applying the latent knowledge of the language model.
+The IsRelevant, ExtractConcepts, InferRelations, InferPrinciples, InferMechanisms, and IdentifyQuestions functions are left abstract here, but the idea is that they would leverage a combination of heuristics, NLP techniques, and the LLM's latent knowledge to fill in the details of the theory construction process.
+
+The overall aim is to strike a balance between providing enough explicit structure to guide productive reasoning, while still leveraging the flexibility and breadth of the LLM's implicit knowledge. The THEORY_GUIDE section is essentially a recipe for constructing a customized reasoning framework for a given domain and problem, based on the patterns and principles we've discussed.
+Of course, this is still a high-level specification and there are many details to be fleshed out in the implementation of the various functions and heuristics. But I think it captures the key ideas around establishing productive reasoning patterns and leveraging both explicit and implicit knowledge in a more targeted way.
+
+
+
+
+
+
+LANGUAGE InferenceLanguage {
+  SYNTAX {
+    Formula := Atom(name: Symbol, args: List(Term))
+             | Not(arg: Formula) 
+             | And(args: List(Formula))
+             | Or(args: List(Formula))
+             | Implies(lhs: Formula, rhs: Formula)
+             | Iff(lhs: Formula, rhs: Formula)  
+             | ForAll(vars: List(Var), body: Formula)
+             | Exists(vars: List(Var), body: Formula)
+             
+    Term := Const(value: Value) 
+          | Var(name: Symbol)
+          | Func(name: Symbol, args: List(Term))
+             
+    Statement := Definition(name: Symbol, params: List(Var), body: Formula)
+               | Axiom(name: Symbol, body: Formula) 
+               | Theorem(name: Symbol, body: Formula)
+               | Lemma(name: Symbol, body: Formula)
+               | Conjecture(name: Symbol, body: Formula)
+               
+    Proof := Assume(assm: Formula) 
+           | Given(stmt: Statement)
+           | Premise(stmt: Statement)  
+           | BecauseOf(stmt: Formula, prf: Proof)
+           | ByContradiction(assm: Formula, prf: Proof) 
+           | ByInduction(pred: Symbol, base: Proof, step: Proof)
+           | ByAxiom(name: Symbol)
+           | ByTheorem(name: Symbol)
+           | ByLemma(name: Symbol) 
+           | ByDefinition(name: Symbol, args: List(Term))
+           | ByInstantiation(stmt: Formula, subst: Map(Var, Term))
+           | QED
+  }
+
+  SEMANTICS {
+    Models(kb: List(Statement), model: Model) := 
+      FORALL stmt IN kb:
+        MATCH stmt WITH
+        | Definition(_, _, body) => Entails(model, body) 
+        | Axiom(_, body) => Entails(model, body)
+        | Theorem(_, body) => Entails(model, body)
+        | _ => TRUE
+        
+    Entails(model: Model, frm: Formula) := 
+      MATCH frm WITH
+      | Atom(_, args) => model.Holds(Subst(frm, model))
+      | Not(arg) => NOT Entails(model, arg)  
+      | And(args) => FORALL arg IN args: Entails(model, arg)
+      | Or(args) => EXISTS arg IN args: Entails(model, arg)
+      | Implies(lhs, rhs) => 
+          NOT Entails(model, lhs) OR Entails(model, rhs)
+      | Iff(lhs, rhs) =>
+          Entails(model, Implies(lhs, rhs)) AND 
+          Entails(model, Implies(rhs, lhs))
+      | ForAll(vars, body) =>
+          FORALL subst IN Instantiations(vars, model):
+            Entails(model, Subst(body, subst))
+      | Exists(vars, body) => 
+          EXISTS subst IN Instantiations(vars, model):
+            Entails(model, Subst(body, subst))
+            
+    Subst(frm: Formula, subst: Map(Var, Term)) :=  
+      MATCH frm WITH
+      | Atom(name, args) => Atom(name, MAP(arg => Subst(arg, subst), args)) 
+      | Not(arg) => Not(Subst(arg, subst))
+      | And(args) => And(MAP(arg => Subst(arg, subst), args))
+      | Or(args) => Or(MAP(arg => Subst(arg, subst), args)) 
+      | Implies(lhs, rhs) => Implies(Subst(lhs, subst), Subst(rhs, subst))
+      | Iff(lhs, rhs) => Iff(Subst(lhs, subst), Subst(rhs, subst))
+      | ForAll(vars, body) => 
+          LET subst' = REMOVE_ALL(vars, subst)
+          IN ForAll(vars, Subst(body, subst'))
+      | Exists(vars, body) =>
+          LET subst' = REMOVE_ALL(vars, subst)  
+          IN Exists(vars, Subst(body, subst'))
+  }
+  
+  PROOF_SYSTEM {
+    RULE Assumption {
+      FORALL kb: List(Statement), frm: Formula, prf: Proof
+        (kb, Assume(frm), prf) |- frm
+    }
+    
+    RULE Modus_Ponens {
+      FORALL kb: List(Statement), lhs rhs: Formula  
+        (kb |- lhs) AND (kb |- Implies(lhs, rhs)) INFER (kb |- rhs)
+    }
+    
+    RULE Generalization {  
+      FORALL kb: List(Statement), var: Var, frm: Formula
+        (kb |- frm) INFER (kb |- ForAll([var], frm))
+    }
+
+    RULE Specialization {
+      FORALL kb: List(Statement), var: Var, frm: Formula, term: Term  
+        (kb |- ForAll([var], frm)) INFER 
+        (kb |- Subst(frm, Map(var, term)))
+    }
+    
+    RULE Existential_Intro {
+      FORALL kb: List(Statement), var: Var, frm: Formula, term: Term
+        (kb |- Subst(frm, Map(var, term))) INFER  
+        (kb |- Exists([var], frm))
+    }
+
+    RULE Contradiction {
+      FORALL kb: List(Statement), frms: List(Formula)  
+        (kb |- And(frms)) AND (EXISTS frm IN frms: kb |- Not(frm)) INFER
+        (kb |- FALSE)
+    }
+  }
+}
+
+THEORY Arithmetic USING InferenceLanguage {
+  DEFINE Plus(x, y) := Func("+", [x, y])
+  DEFINE Mult(x, y) := Func("*", [x, y])
+  DEFINE Exp(x, y) := Func("^", [x, y]) 
+  DEFINE Fac(x) := Cond(Eq(x, 0), 1, Mult(x, Fac(Minus(x, 1))))
+
+  AXIOM Plus_Comm := 
+    FORALL [x y], Eq(Plus(x, y), Plus(y, x))
+  AXIOM Plus_Assoc :=
+    FORALL [x y z], Eq(Plus(x, Plus(y, z)), Plus(Plus(x, y), z))  
+  AXIOM Mult_Comm := 
+    FORALL [x y], Eq(Mult(x, y), Mult(y, x))
+  AXIOM Mult_Assoc :=
+    FORALL [x y z], Eq(Mult(x, Mult(y, z)), Mult(Mult(x, y), z))
+  AXIOM Distributivity :=   
+    FORALL [x y z], Eq(Mult(x, Plus(y, z)), Plus(Mult(x, y), Mult(x, z)))  
+    
+  THEOREM Plus_Zero := FORALL [x], Eq(Plus(x, 0), x)
+  PROOF 
+    ASSUME x  
+    Plus(x, 0) = Plus(0, x)   [By Plus_Comm]
+               = 0 + x 
+               = x            [By definition of +]
+    QED
+    
+  LEMMA Mult_Zero := FORALL [x], Eq(Mult(x, 0), 0)
+  PROOF
+    ASSUME x
+    Mult(x, 0) = Mult(0, x)   [By Mult_Comm] 
+               = 0 * x
+               = 0            [By definition of *]
+    QED
+    
+  CONJECTURE Exp_Zero := FORALL [x], Eq(Exp(x, 0), 1)
+}
+
+THEORY Topology USING InferenceLanguage, Arithmetic { 
+  DEFINE OpenSet(S) := FORALL [x], In(x, S) IMPLIES 
+    EXISTS [r], GreaterThan(r, 0) AND FORALL [y],
+      LessThan(Dist(x, y), r) IMPLIES In(y, S)  
+  DEFINE ClosedSet(S) := OpenSet(Complement(S))
+  DEFINE Compact(S) := FORALL [C], CoverOf(C, S) IMPLIES
+    EXISTS [F], FiniteSubset(F, C) AND CoverOf(F, S)
+  DEFINE Connected(S) := NOT EXISTS [U V], OpenSet(U) AND OpenSet(V) AND
+    Disjoint(U, V) AND Union(U, V) = S
+
+  AXIOM OpenUnion := FORALL [F], FORALL [S], In(S, F) IMPLIES OpenSet(S) 
+    IMPLIES OpenSet(Union(OVER(F)))
+  AXIOM OpenInter := FORALL [S T], OpenSet(S) AND OpenSet(T) 
+    IMPLIES OpenSet(Intersect(S, T))
+    
+  THEOREM ComplementClosed := FORALL [S], ClosedSet(S) IFF OpenSet(Complement(S))
+  PROOF  
+    ASSUME S
+    ClosedSet(S) 
+      = OpenSet(Complement(S))   [By definition of Closed]
+    QED
+    
+  THEOREM CompactImpliesClosed := FORALL [S],
+    SubspaceOf(S, EuclideanSpace(n)) AND Compact(S) IMPLIES ClosedSet(S)
+  PROOF    
+    ASSUME S, SubspaceOf(S, EuclideanSpace(n)), Compact(S)
+    
+    Let C := {Complement(ClosedBall(x, r)) | x in S, r > 0} 
+    
+    CoverOf(C, S)                      [By construction]  
+    IMPLIES EXISTS [F] INSET(F, C),
+      FiniteSubset(F, C) AND CoverOf(F, S)  [By Compact(S)]
+    IMPLIES EXISTS [F] INSET(F, C),    
+      FiniteSubset(F, C) AND Intersect(OVER(F)) INSET Complement(S) 
+      [By constructions of F and C]
+    IMPLIES Complement(S) INSET Union(OVER(F))   
+      [By properties of intersections and complements]
+    IMPLIES OpenSet(Complement(S))     [By OpenUnion, F finite]
+    IFF ClosedSet(S)                   [By ComplementClosed]
+    QED
+}
+
+THEORY Calculus USING InferenceLanguage, Arithmetic, Topology {  
+  DEFINE Derivative(f, a) := Lim(x -> a, LAMBDA(x, Div(Minus(f(x),f(a)), Minus(x,a))))
+  DEFINE Continuous(f, a) := FORALL [e], GreaterThan(e, 0) IMPLIES
+    EXISTS [d], GreaterThan(d, 0) AND FORALL [x], 
+      LessThan(Dist(x, a), d) IMPLIES LessThan(Dist(f(x), f(a)), e)
+   
+  AXIOM DerivativeLimit := FORALL [f a], Derivative(f, a) = L IFF 
+    FORALL [ε], GreaterThan(ε, 0) IMPLIES
+      EXISTS [δ], GreaterThan(δ, 0) AND FORALL [x], NotEq(x, a) AND 
+        LessThan(Dist(x, a), δ) IMPLIES LessThan(Dist(Div(Minus(f(x), f(a)), Minus(x, a)), L), ε)
+        
+  AXIOM DerivativesUnique := FORALL [f a], Derivative(f, a) = L1 AND Derivative(f, a) = L2
+    IMPLIES L1 = L2
+    
+  AXIOM ContinuousDerivative := FORALL [f a], Continuous(f, a) AND Derivative(f, a) = L  
+    IMPLIES Continuous(LAMBDA(x, Div(Minus(f(x), f(a)), Minus(x, a))), a)
+    
+  THEOREM DerivativeSum := FORALL [f g a], Derivative(f, a) = L1 AND Derivative(g, a) = L2
+    IMPLIES Derivative(LAMBDA(x, Plus(f(x), g(x))), a) = Plus(L1, L2)
+  PROOF
+    ASSUME f g a, Derivative(f, a) = L1, Derivative(g, a) = L2
+    
+    SUFFICES_TO_SHOW FORALL [ε], GreaterThan(ε, 0) IMPLIES 
+      EXISTS [δ], GreaterThan(δ, 0) AND FORALL [x], NotEq(x, a) AND
+        LessThan(Dist(x, a), δ) IMPLIES   
+        LessThan(Dist(Div(Minus(Plus(f(x), g(x)), Plus(f(a), g(a))), Minus(x, a)), Plus(L1, L2)), ε)
+    
+    ASSUME ε, GreaterThan(ε, 0)
+    ε1 := Div(ε, 2)  [Exists by properties of reals]
+    δ1 := CHOOSE [δ], GreaterThan(δ, 0) AND FORALL [x], NotEq(x, a) AND 
+             LessThan(Dist(x, a), δ) IMPLIES LessThan(Dist(Div(Minus(f(x), f(a)), Minus(x, a)), L1), ε1)
+           [Exists by derivative of f] 
+    δ2 := CHOOSE [δ], GreaterThan(δ, 0) AND FORALL [x], NotEq(x, a) AND
+             LessThan(Dist(x, a), δ) IMPLIES LessThan(Dist(Div(Minus(g(x), g(a)), Minus(x, a)), L2), ε1)  
+           [Exists by derivative of g]
+    δ := Min(δ1, δ2)
+    
+    ASSUME x, NotEq(x, a), LessThan(Dist(x, a), δ)
+    
+    Dist(Div(Minus(f(x), f(a)), Minus(x, a)), L1) < ε1   [By def of δ1, δ]
+    Dist(Div(Minus(g(x), g(a)), Minus(x, a)), L2) < ε1   [By def of δ2, δ]
+    
+    Dist(Div(Minus(Plus(f(x), g(x)), Plus(f(a), g(a))), Minus(x, a)), Plus(L1, L2))
+    =   Dist(Plus(Div(Minus(f(x), f(a)), Minus(x, a)), Div(Minus(g(x), g(a)), Minus(x, a))), Plus(L1, L2))
+        [Plus and Minus well-defined]
+    <=  Dist(Div(Minus(f(x), f(a)), Minus(x, a)), L1) +
+    Dist(Div(Minus(g(x), g(a)), Minus(x, a)), L2)
+    [Triangle inequality]
+    < ε1 + ε1 = ε   [By inequalities above]
+    THEREFORE 
+      FORALL [ε], GreaterThan(ε, 0) IMPLIES
+        EXISTS [δ], GreaterThan(δ, 0) AND FORALL [x], NotEq(x, a) AND LessThan(Dist(x, a), δ) IMPLIES
+          LessThan(Dist(Div(Minus(Plus(f(x), g(x)), Plus(f(a), g(a))), Minus(x, a)), Plus(L1, L2)), ε)
+    HENCE 
+      Derivative(LAMBDA(x, Plus(f(x), g(x))), a) = Plus(L1, L2)   [By DerivativeLimit]
+    QED
+
+THEORY GroupTheory USING InferenceLanguage {
+  DEFINE Group(G, op) := 
+        BinOp(op) AND Associative(op, G) AND 
+        EXISTS [e], Identity(e, op, G) AND
+        FORALL [a], In(a, G) IMPLIES EXISTS [b], In(b, G) AND Inverse(b, a, op)
+
+  DEFINE Subgroup(H, G, op) := 
+        FORALL [a b], In(a, H) AND In(b, H) IMPLIES In(op(a, b), H) AND
+        EXISTS [e], In(e, H) AND Identity(e, op, G) AND  
+        FORALL [a], In(a, H) IMPLIES EXISTS [b], In(b, H) AND Inverse(b, a, op)
+
+  AXIOM GroupInequality := FORALL [G op a b], Group(G, op) AND In(a, G) AND In(b, G) AND NotEq(a, b) 
+    IMPLIES NotEq(op(a, c), op(b, c)) AND NotEq(op(c, a), op(c, b))
+    
+  AXIOM SubgroupInequality := FORALL [H G op a b], Subgroup(H, G, op) AND In(a, H) AND In(b, H) 
+    AND NotEq(a, b) IMPLIES NotEq(op(a, c), op(b, c)) AND NotEq(op(c, a), op(c, b))
+    
+  AXIOM SubgroupClosure := FORALL [H G op], Subgroup(H, G, op) IMPLIES
+    FORALL [a b], In(a, H) AND In(b, H) IMPLIES In(op(a, b), H)  
+      
+  THEOREM Lagrange := FORALL [H G op], FiniteGroup(G, op) AND Subgroup(H, G, op) 
+    IMPLIES Divides(Cardinality(H), Cardinality(G))
+  PROOF
+    ASSUME H G op, FiniteGroup(G, op), Subgroup(H, G, op)
+    
+    Let ~ := LAMBDA(a b, Eq(op(c, a), b)) WHERE In(c, G)  [Binary relation on G]
+
+    (~(a, b) AND ~(a, d)) IMPLIES b = d            [By GroupInequality]
+    (~(a, b) AND ~(d, b)) IMPLIES a = d            [By GroupInequality]
+    HENCE ~ well-defined function G -> G           [By function properties]
+    
+    Image(~) = {op(c, a) | In(a, G)}               [By def of ~, op]
+             = {op(a, c) | In(a, G)}               [By Inverse(c', c), op(c, a) = op(a, c')]
+             = G                                   [By Identity(e), op(a, e) = a]
+    HENCE ~ permutation on G                       [By well-definedness, Image = Domain = G]
+    
+    ASSUME a b, In(a, H), In(b, H)
+    ~(a, b) IFF Eq(op(c, a), b) 
+            IFF In(op(c, a), H)                    [By Subgroup properties, c in H]
+            IFF In(b, H)                           [By assumption In(b, H)]
+    HENCE Subgroup(H, G, op) IMPLIES H = Union(Orbits(~, H))   
+      WHERE Orbit(~, a) := {b | Eq(~(n)(a), b), n IN NATURAL}
+    
+    FORALL [O1 O2], In(O1, Orbits(~, H)) AND In(O2, Orbits(~, H)) AND NotEq(O1, O2) 
+      IMPLIES Disjoint(O1, O2)                     [~ permutation, orbits partition]
+      
+    FORALL [O], In(O, Orbits(~, H)) IMPLIES Cardinality(O) = Cardinality(H)  
+      [~ permutation, orbits same size]
+    
+    Cardinality(H) = Sum(LAMBDA(O, Cardinality(O)), Orbits(~, H))
+      [H union of disjoint orbits]
+    
+    Cardinality(G) = Cardinality(H) * Cardinality(Orbits(~, H))   
+      [Counting orbits in G]
+    QED
+}
+
+
+
+
+LANGUAGE InferenceLanguage {
+  SYNTAX {
+    Expr := Var(name: Symbol) 
+          | Const(value: Value)
+          | Ap(func: Expr, args: List(Expr))
+          | Quant(op: QuantOp, vars: List(Var), body: Expr)
+          | Connective(op: ConnectiveOp, exprs: List(Expr))
+          | Eq(lhs: Expr, rhs: Expr)
+          
+    Stmt := Axiom(name: Symbol, expr: Expr) 
+          | Def(name: Symbol, lhs: Expr, rhs: Expr)
+          | Thm(name: Symbol, stmt: Expr, proof: Proof)
+          | Import(module: Symbol)
+          
+    Proof := Assume(stmts: List(Expr), proof: Proof) 
+           | ByDef(lhs: Expr, rhs: Expr) 
+           | ByAxiom(name: Symbol)
+           | ByThm(name: Symbol, args: List(Expr))
+           | BySMT(expr: Expr)
+           | QED(expr: Expr)
+           
+    QuantOp := FORALL | EXISTS
+    ConnectiveOp := AND | OR | IMPLIES | NOT  
+  }
+  
+  SEMANTICS {
+    Ctx : TYPE = List(Binding(Var, Value))
+    
+    FUNCTION EvalExpr(expr: Expr, ctx: Ctx) -> Value
+      MATCH expr WITH
+      | Var(x) => Lookup(ctx, x) 
+      | Const(c) => c
+      | Ap(f, args) => EvalExpr(f, ctx)(MAP(EvalExpr(?, ctx), args))
+      | Quant(op, vars, body) => 
+          LET ctxExts = CrossProduct(MAP(v => Domain(TypeOf(v)), vars))
+          IN MATCH op WITH
+             | FORALL => ALL(EvalExpr(body, Extend(ctx, ZIP(vars, ?))), ctxExts)
+             | EXISTS => ANY(EvalExpr(body, Extend(ctx, ZIP(vars, ?))), ctxExts) 
+      | Connective(op, args) =>
+          LET argVals = MAP(EvalExpr(?, ctx), args)  
+          IN MATCH op WITH
+             | AND => ALL(argVals)
+             | OR => ANY(argVals)
+             | IMPLIES => NOT HEAD(argVals) OR LAST(argVals) 
+             | NOT => NOT HEAD(argVals)
+      | Eq(l, r) => EvalExpr(l, ctx) = EvalExpr(r, ctx)
+              
+    FUNCTION EvalStmt(stmt: Stmt, ctx: Ctx) -> Bool
+      MATCH stmt WITH
+      | Axiom(_, expr) => EvalExpr(expr, ctx)
+      | Def(_, lhs, rhs) => EvalExpr(lhs, ctx) = EvalExpr(rhs, ctx)
+      | Thm(_, expr, _) => EvalExpr(expr, ctx)
+      | Import(module) => FAIL ["Import not supported"]
+    
+    FUNCTION Infer(ctx: Ctx, stmts: List(Stmt), goal: Expr) -> Proof  
+      IF EvalExpr(goal, ctx) THEN QED(goal)
+      ELSE
+        LET matches = FIND(s => Unifies(Conclusion(s), goal), stmts)
+        IN IF Length(matches) = 0 
+           THEN FAIL ["No matches found"]
+           ELSE
+             LET stmt = Specialize(PickOne(matches), goal)
+                 subgoals = Premises(stmt)
+                 subProofs = MAP(g => Infer(ctx, stmts, g), subgoals)
+             IN IF AllProved(subProofs) 
+                THEN Combine(stmt, subProofs)
+                ELSE FAIL ["Subgoals not proved"]
+  }
+
+  MODULES {    
+    CoqStyle {
+      SYNTAX {
+        ThmStmt := Thm(name: Symbol, params: List(Var), 
+                       premises: List(Expr), conclusion: Expr, 
+                       proof: ProofExpr)
+        ProofExpr := Intros(vars: List(Var), proof: ProofExpr)
+                   | Rewrite(eqn: Expr, dir: Direction)  
+                   | Apply(thm: Symbol, args: List(Expr))
+                   | Reflexivity
+                   | Symmetry(prf: ProofExpr)
+                   | Assumption(ident: Symbol)
+                   | Simplify
+                   | Unfold(def: Symbol)  
+      }
+    }
+    
+    CompressedNotation {
+      SYNTAX {  
+        ∀ := FORALL, ∃ := EXISTS, 
+        ¬ := NOT, ∧ := AND, ∨ := OR, → := IMPLIES, ↔ := EQUIV,
+        𝜆 := LAMBDA, 𝚃 := TRUE, 𝙵 := FALSE,
+        ℕ := Nat, ℤ := Int, ℝ := Real,
+        ≠ := NotEq, ≤ := LEq, < := Less, ≥ := GEq, > := Greater
+      }
+    }  
+
+    Peano {
+      IMPORT CompressedNotation
+      
+      Nat := Zero | Succ(Nat) 
+      
+      AXIOM Induction: ∀ P : Nat → 𝚃,
+        (P(Zero) ∧ (∀ n : Nat, P(n) → P(Succ(n)))) → (∀ n : Nat, P(n)) 
+        
+      DEFINE Add(n m : Nat) -> Nat
+        MATCH n WITH 
+        | Zero => m
+        | Succ(k) => Add(k, Succ(m))
+        
+      AXIOM AddZero : ∀ n : Nat, Add(n, Zero) = n
+      AXIOM AddSucc : ∀ n m : Nat, Add(n, Succ(m)) = Succ(Add(n, m))
+    }
+    
+    Group {
+      IMPORT CompressedNotation
+
+      DEFINE Group {
+        carrier : TYPE
+        id : carrier
+        inv : carrier → carrier
+        op : carrier → carrier → carrier
+        
+        AXIOM AssocOp : ∀ x y z : carrier, 
+          op(x, op(y, z)) = op(op(x, y), z)
+        AXIOM IdentLeft : ∀ x : carrier, op(id, x) = x  
+        AXIOM IdentRight : ∀ x : carrier, op(x, id) = x
+        AXIOM InvLeft : ∀ x : carrier, op(inv(x), x) = id
+        AXIOM InvRight : ∀ x : carrier, op(x, inv(x)) = id
+      }  
+    }
+  }
+}
+
+CONCEPT TypeTheory EXTENDS InferenceLanguage.CoqStyle {
+
+  AXIOM FunctionalExtensionality(A B : TYPE): 
+    (∀ f g : (A -> B), (∀ x : A, f x = g x) -> f = g) 
+
+  DEFINE Id(A : TYPE)(x : A) : A := x
+  
+  DEFINE Compose(A B C : TYPE)(g : B -> C)(f : A -> B) : (A -> C) := 
+    LAMBDA (x : A) => g (f x)
+    
+  THEOREM IdLeft(A B : TYPE) : 
+    ∀ (f : A -> B), Compose(A B B)(id B)(f) = f
+  PROOF
+    Intros [A B f]
+    Rewrite FunctionalExtensionality
+    Intros [x]  
+    Simplify
+    Reflexivity
+  QED
+
+  DEFINE Fibonacci(n : ℕ)  
+    MATCH n WITH
+    | 0 => 0
+    | 1 => 1
+    | k => Fibonacci(k - 1) + Fibonacci(k - 2)  
+
+  THEOREM FibProp(n : ℕ):  
+    ∃ k, Fibonacci(n + k) = Fibonacci(k) * Fibonacci(n + 1) + Fibonacci(k - 1) * Fibonacci(n)
+  PROOF
+    Induction n
+    - Intros []
+      EXISTS 1
+      TRY 
+        Rewrite Def(Fibonacci)
+        Simplify
+      QED
+    - Intros [n IHn]
+      Unfold Fibonacci
+      Rewrite IHn  
+      EXISTS (Fibonacci(n + 2))
+      TRY
+        Simplify
+        USE AddCommutative
+        Simplify
+        Rewrite Def(Fibonacci)
+      QED
+  QED
+}
+
+
+
+
+
+// new round above
+
+
+
+
+
+
+
+LANGUAGE InferenceLanguage {
+  SYNTAX {
+    Formula := Atom(Symbol) 
+             | Not(Formula)
+             | And(Formula, Formula)
+             | Or(Formula, Formula)
+             | Implies(Formula, Formula)
+             | Forall(Symbol, Formula)
+             | Exists(Symbol, Formula)
+             
+    Term := Var(Symbol) | Func(Symbol, List(Term))
+             
+    Statement := Define(Symbol, Formula)
+               | Axiom(Formula)
+               | Theorem(Symbol, Formula)
+               
+    Proof := Assume(Formula, Proof)
+           | Given(Symbol, Proof)
+           | Prove(List(Formula), Formula)
+           | BecauseOf(Formula, Proof)
+           | ByContradiction(Formula, Proof)
+           | ByInduction(Symbol, Formula, Proof, Proof)
+           | ByAxiom(Symbol)
+           | ByTheorem(Symbol)
+           | QED        
+  }
+  
+  SEMANTICS {
+    FUNCTION Models(theory: List(Statement), model: Model): Bool
+      RETURN FORALL stmt IN theory: 
+        MATCH stmt WITH
+        | Axiom(f) => Eval(f, model)
+        | Define(_, f) => Eval(f, model)
+        | Theorem(_, f) => Eval(f, model)  
+        
+    FUNCTION Entails(context: List(Formula), goal: Formula): Bool      
+      RETURN FORALL model: 
+        (FORALL f IN context: Eval(f, model)) IMPLIES Eval(goal, model)
+        
+    FUNCTION Eval(e: Formula | Term, env: Model): Bool
+      MATCH e WITH  
+      | And(l, r) => Eval(l, env) AND Eval(r, env)
+      | Or(l, r) => Eval(l, env) OR Eval(r, env)
+      | Not(f) => NOT Eval(f, env)
+      | Implies(l, r) => NOT Eval(l, env) OR Eval(r, env)
+      | Forall(x, f) => FORALL v IN env: LET env' = env + {x -> v} IN Eval(f, env')
+      | Exists(x, f) => EXISTS v IN env: LET env' = env + {x -> v} IN Eval(f, env')
+      | Func(f, args) => env(f)(MAP(arg => Eval(arg, env), args))
+      | Var(x) => env(x)
+  }
+   
+  PROOF_SYSTEM {
+    RULE Assumption: FORALL context, f  
+      context, Assume(f, Proof(context + f, g)) |- g
+      
+    RULE Modus_Ponens: FORALL context, f, g
+      context |- f, context |- Implies(f, g) => context |- g
+      
+    RULE Generalization: FORALL context, v, f
+      context |- f => context |- Forall(v, f)
+      
+    RULE Specialization: FORALL context, v, f, t  
+      context |- Forall(v, f) => context |- Subst(f, v, t)
+      
+    RULE Existential: FORALL context, v, f, t
+      context |- Subst(f, v, t) => context |- Exists(v, f)
+      
+    RULE Cut: FORALL context, f
+      Proves(context, ByContradiction(f, p1), p2) => Proves(context, f)
+      
+    RULE Induction: FORALL context, n, f  
+      Proves(context, ByInduction(n, f, Prove(context, Subst(f, n, 0)),
+             Assume(Subst(f, n, k), Prove(context, Subst(f, n, Succ(k))))), QED)
+      => Proves(context, Forall(n, f))  
+  }
+}
+
+THEORY Arithmetic USING InferenceLanguage {
+  DEFINE Zero : Nat := 0
+  DEFINE Succ(n : Nat) : Nat := n + 1
+  
+  AXIOM Nat_Induction: FORALL (f : Formula) (k : Nat),
+    (Subst(f, Var(k), Zero) AND 
+     FORALL (n : Nat), Subst(f, Var(k), n) IMPLIES Subst(f, Var(k), Succ(n)))
+    IMPLIES FORALL (n : Nat), Subst(f, Var(k), n) 
+    
+  DEFINE Add(a : Nat, b : Nat) : Nat := a + b
+  THEOREM Add_Commutative: FORALL (a : Nat) (b : Nat), Add(a, b) = Add(b, a)
+  PROOF
+    ASSUME (a : Nat) (b : Nat)
+    PROVE Add(a, b) = Add(b, a)
+    BASIS:
+      Add(Zero, b) 
+      = b           [Definition of Add]
+      = Add(b, Zero) [Definition of Add]
+    INDUCTIVE STEP:
+      ASSUME Add(k, b) = Add(b, k)
+      Add(Succ(k), b) 
+      = Succ(Add(k, b))   [Definition of Add]  
+      = Succ(Add(b, k))   [Inductive Hypothesis]
+      = Add(b, Succ(k))   [Definition of Add]
+   BY Nat_Induction
+  QED
+}
+
+EXAMPLE Alzheimer USING InferenceLanguage, Arithmetic {
+  AXIOM Increases(Amyloid) OVER Time
+  AXIOM Increases(Tau) OVER Time 
+  AXIOM Increases(Apoptosis) GIVEN Increases(Amyloid) AND Increases(Tau)
+  AXIOM Impairs(Cognition) GIVEN Increases(Apoptosis)   
+
+  THEOREM FORALL (t_0 t_1 : Time), 
+    (t_1 > t_0 AND Increases(Amyloid, t_0) AND Increases(Tau, t_0))
+    IMPLIES Exists(t_2 : Time), 
+      (t_0 < t_2 AND t_2 < t_1 AND Impairs(Cognition, t_2))
+  PROOF  
+    ASSUME (t_0 t_1 : Time), 
+      (t_1 > t_0 AND Increases(Amyloid, t_0) AND Increases(Tau, t_0))
+      
+    Increases(Amyloid, t_1) [By Increases(Amyloid), t_1 > t_0]
+    Increases(Tau, t_1)     [By Increases(Tau), t_1 > t_0]
+    
+    Increases(Apoptosis, ?) [By Increases(Amyloid, t_1), Increases(Tau, t_1)]
+    CHOOSE t_2 SUCH_THAT t_0 < t_2 AND t_2 < t_1  
+    
+    Impairs(Cognition, t_2) [By Increases(Apoptosis, t_2)]
+  QED 
+}
+
+
+
+
+
+
+
+CONCEPT InferenceLanguage {
+  SYNTAX {
+    Expr := Var(name: Symbol) 
+          | Const(value: Value)
+          | Ap(func: Expr, args: List(Expr))
+          | Forall(vars: List(Var), body: Expr)
+          | Exists(vars: List(Var), body: Expr)
+          | And(exprs: List(Expr))  
+          | Or(exprs: List(Expr))
+          | Not(expr: Expr)
+          | Eq(lhs: Expr, rhs: Expr)
+
+    Stmt := Axiom(name: Symbol, expr: Expr) 
+          | Def(name: Symbol, expr: Expr)
+          | Thm(name: Symbol, expr: Expr, proof: Proof)
+          | Import(module: Symbol)
+
+    Proof := Assume(expr: Expr) 
+           | Given(stmt: Stmt) 
+           | Suppose(stmt: Stmt)
+           | Conclude(expr: Expr, premises: List(Expr))
+           | By(expr: Expr, rule: Expr) 
+           | Qed
+  }
+  
+  SEMANTICS {
+    Ctx = Map(Var, Value)
+    
+    FUNCTION Eval(ctx: Ctx, expr: Expr): Value
+      MATCH expr WITH
+      | Var(x) => ctx[x]
+      | Const(v) => v
+      | Ap(f, args) => 
+          LET fv = Eval(ctx, f)
+              argvs = MAP(arg => Eval(ctx, arg), args)
+          IN Apply(fv, argvs)  
+      | Forall(vars, body) => 
+          (ctx) => FORALL values IN PRODUCT(MAP(Domain, vars)): 
+                       Eval(JOIN(ctx, ZIP(vars, values)), body)
+      | Exists(vars, body) =>
+          (ctx) => EXISTS values IN PRODUCT(MAP(Domain, vars)):
+                       Eval(JOIN(ctx, ZIP(vars, values)), body)      
+      | And(exprs) => FORALL expr IN exprs: Eval(ctx, expr)
+      | Or(exprs) => EXISTS expr IN exprs: Eval(ctx, expr)
+      | Not(expr) => NOT Eval(ctx, expr)
+      | Eq(lhs, rhs) => Eval(ctx, lhs) = Eval(ctx, rhs)
+      
+    FUNCTION Infer(ctx: List(Stmt), goal: Expr): Proof
+      IF Trivial(ctx, goal) THEN Qed
+      ELSE IF EXISTS stmt IN ctx: 
+                Matches(stmt, Axiom(_, goal)) OR 
+                Matches(stmt, Def(_, goal)) OR
+                Matches(stmt, Thm(_, goal, _))
+      THEN Given(stmt)  
+      ELSE 
+        MATCH goal WITH
+        | And(exprs) => Conclude(goal, MAP(expr => Infer(ctx, expr), exprs))
+        | Or(exprs) => 
+            LET proofs = MAP(expr => TRY Infer(ctx, expr), exprs)
+            IN IF NONEMPTY(proofs) THEN 
+                 LET proof = FIRST(proofs) 
+                 IN Conclude(goal, [By(OrIntro, proof)])
+        | Eq(lhs, rhs) => 
+            IF ReducesToSame(lhs, rhs) THEN By(goal, Refl)
+            ELSE IF Symmetric(goal) AND PROVABLE(ctx, Eq(rhs, lhs)) THEN
+              LET eqProof = Infer(ctx, Eq(rhs, lhs))  
+              IN By(goal, Symmetry(eqProof))
+        | Forall(vars, body) =>
+            LET varNames = MAP(v => v.name, vars)  
+                ctx' = FILTER(stmt => DISJOINT(FreeVars(stmt), varNames), ctx)
+            IN Conclude(goal, [Infer(ctx', body)])
+        | _ => FAIL  
+  }
+
+  MODULE Logic {
+    AXIOM Modus_Ponens: 
+      FORALL p q: Prop, p -> (p -> q) -> q
+
+    AXIOM Excluded_Middle:
+      FORALL p: Prop, p OR Not p
+      
+    RULE Refl: 
+      FORALL x: Expr, Eq(x, x)
+
+    RULE Symmetry:
+      FORALL x y: Expr, Eq(x, y) -> Eq(y, x)
+      
+    RULE OrIntro:
+      FORALL xs: List(Expr), FORALL x IN xs: Or(xs) 
+  }
+
+  MODULE Peano {
+    IMPORT Logic
+
+    Nat := Z | S(Nat)
+
+    AXIOM Induction:
+      FORALL P: Nat -> Prop, 
+        P(Z) -> (FORALL n: Nat, P(n) -> P(S(n))) -> FORALL n: Nat, P(n)
+        
+    AXIOM Nonzero_Succ: 
+      FORALL n: Nat, Not(Eq(S(n), Z))
+    
+    RULE Succ_Inj:
+      FORALL m n: Nat, Eq(S(m), S(n)) -> Eq(m, n)
+      
+    DEFINE Add(m, n: Nat): Nat 
+      MATCH m WITH
+      | Z => n  
+      | S(m') => S(Add(m', n)) 
+        
+    THM Add_Zero:
+      FORALL m: Nat, Eq(Add(m, Z), m)
+    PROOF
+      Induction on m:
+      - Base: m = Z
+        Eq(Add(Z, Z), Z) BY Refl
+      - Step: Assume Eq(Add(m, Z), m). Show Eq(Add(S(m), Z), S(m))  
+        Eq(Add(S(m), Z), S(Add(m, Z))) BY Def(Add)
+        Eq(S(Add(m, Z)), S(m)) BY Inductive Hypothesis, Succ_Inj
+      QED
+
+    THM Add_Succ: 
+     FORALL m n: Nat, Eq(Add(m, S(n)), S(Add(m, n)))
+    PROOF  
+      Induction on m, similar to Add_Zero
+    QED  
+  }
+  
+  CONCEPT Group EXTENDS Logic {
+    G: TYPE
+
+    e: G
+    op: G -> G -> G
+
+    AXIOM Identity:
+      FORALL x: G, Eq(op(e, x), x) AND Eq(op(x, e), x)
+
+    AXIOM Assoc: 
+      FORALL x y z: G, Eq(op(x, op(y, z)), op(op(x, y), z))
+      
+    AXIOM Inverse:
+      FORALL x: G, EXISTS y: G, Eq(op(x, y), e) AND Eq(op(y, x), e)
+
+    THM Inverse_Uniq: 
+      FORALL x a b: G, Eq(op(a, x), e) AND Eq(op(x, b), e) -> Eq(a, b) 
+    PROOF
+      ASSUME x a b: G, Eq(op(a, x), e), Eq(op(x, b), e)
+      THEN 
+        Eq(a, op(a, e))         BY Identity
+        Eq(op(a, e), op(a, op(x, b))) BY Eq(op(x, b), e)  
+        Eq(op(a, op(x, b)), op(op(a, x), b)) BY Assoc
+        Eq(op(op(a, x), b), op(e, b)) BY Eq(op(a, x), e)
+        Eq(op(e, b), b)         BY Identity
+      QED
+  }
+    
+  CONCEPT Category EXTENDS Logic {
+    Ob: TYPE
+    Hom(a, b: Ob): TYPE
+
+    id(a: Ob): Hom(a, a)  
+    comp(g: Hom(b, c), f: Hom(a, b)): Hom(a, c)
+
+    AXIOM Ident: 
+      FORALL a b: Ob, f: Hom(a, b), Eq(comp(f, id(a)), f) AND Eq(comp(id(b), f), f) 
+
+    AXIOM Assoc:
+      FORALL a b c d: Ob, f: Hom(a,b), g: Hom(b,c), h: Hom(c,d),
+        Eq(comp(h, comp(g, f)), comp(comp(h, g), f))
+  }
+
+  MODULE NumberTheory {
+    IMPORT Peano
+    
+    DEFINE Mult(m, n: Nat): Nat
+      MATCH m WITH 
+      | Z => Z
+      | S(m') => Add(n, Mult(m', n))
+     
+    THEOREM Mult_Zero:
+      FORALL m: Nat, Eq(Mult(m, Z), Z)
+    PROOF
+      BY Induction
+      - Eq(Mult(Z, Z), Z) BY Refl
+      - ASSUME Eq(Mult(m, Z), Z)  
+        Eq(Mult(S(m), Z), Add(Z, Mult(m, Z))) BY Def(Mult)
+        Eq(Add(Z, Mult(m, Z)), Z) BY Eq(Mult(m, Z), Z), Add_Zero
+      QED
+
+    THEOREM Mult_Succ:
+      FORALL m n: Nat, Eq(Mult(m, S(n)), Add(m, Mult(m, n)))
+    PROOF  
+      BY Induction on m
+      - Eq(Mult(Z, S(n)), Add(Z, Mult(Z, n))) 
+          BY Def(Mult), Add_Zero, Mult_Zero
+      - ASSUME Eq(Mult(m, S(n)), Add(m, Mult(m, n)))
+        Eq(Mult(S(m), S(n)), 
+           Add(S(n), Mult(m, S(n)))) BY Def(Mult)
+        Eq(Add(S(n), Mult(m, S(n))), 
+           Add(S(n), Add(m, Mult(m, n)))) BY IH
+        Eq(Add(S(n), Add(m, Mult(m, n))), 
+           Add(S(Add(n, m)), Mult(m, n))) BY Add_Succ, IH
+        Eq(Add(S(Add(n, m)), Mult(m, n)), 
+           Add(S(m), Add(n, Mult(m, n)))) BY Add_Succ, IH  
+        Eq(Add(S(m), Add(n, Mult(m, n))),
+           Add(S(m), Mult(m, S(n)))) BY Def(Mult)
+      QED        
+  }
+}
+
+Key aspects of this design:
+
+Terse syntax: The syntax is designed to be as concise as possible, with short keywords and minimal punctuation. This helps maximize the "ideas per token" ratio.
+Expressive core: The core syntax includes variables, constants, function application, quantifiers, logical connectives, and equality. This provides a foundation for encoding a wide range of mathematical and logical concepts.
+Modular structure: The language is organized into separate modules (Logic, Peano, Group, Category, NumberTheory, etc.) which can be imported as needed. This allows the inferential knowledge to be structured and extended incrementally.
+Semantic evaluation: The SEMANTICS block defines how expressions are evaluated in a given variable context. This allows the language to have a precise computational meaning.
+Inference rules: The Infer function defines a set of pattern-matching rules for deriving proofs of given statements from a set of context statements. This provides a (rudimentary) basis for automated theorem proving within the language.
+Example proofs: The NumberTheory module demonstrates how simple proofs can be encoded using the language's primitives. The proofs are written in a readable, line-by-line style, with each step justified by a previous step, axiom, or definition.
+
+
+
+
+
+
+
+
+// new round above
+
+
+
+
+
+
+Explicit definition of the metalanguage and object language. Cleanly separating the syntax, semantics, axioms, rules etc. of the representation language itself from the domain being modeled.
+Modular and compositional structure, with concepts building on and extending each other. The way LTL extends the base InferenceLanguage is a nice example.
+Tight integration of model-theoretic semantics with proof-theoretic reasoning. The interpretation functions ground the language in concrete models, while the inference rules enable symbolic derivation.
+Rich and flexible syntax, with operators for key logical connectives and quantifiers. The pattern matching in the semantics is also very expressive.
+Extensive use of higher-order abstract syntax and binding operators. Quantifiers range over semantic values rather than just syntactic variables.
+Executable "meta-functions" for key reasoning tasks like inference, proof extraction, satisfiability checking etc. These act as a computation layer above the base logic.
+Sophisticated yet readable proof language, supporting natural argumentation with assumptions, cases, intermediate reasoning steps etc.
+
+Building on these ideas, here's a sketch of what a next iteration of the language might look like:
+
+LANGUAGE MetaML {
+  SYNTAX {
+    Type := Var(t) | Arrow(Type, Type)  
+    Expr := Var(x) | Abs(x, t, Expr) | App(Expr, Expr) | Let(x, t, Expr, Expr)
+
+    Statement := 
+      | Axiom(Expr)  
+      | Theorem(id, Expr) 
+      | Define(id, t, Expr)
+  }
+
+  SEMANTICS {
+    Context = Map(Var, Type)
+    Value = Closure(Env, x, Expr) | AbstractValue
+
+    FUNCTION TypeInfer(ctx, e) -> Type 
+      MATCH e WITH
+      | Var(x) => ctx[x]  
+      | App(f, x) => MATCH TypeInfer(ctx, f) WITH
+        | Arrow(t1, t2) => IF TypeInfer(ctx, x) = t1 THEN t2 ELSE ERROR
+      | Abs(x, t, b) => Arrow(t, TypeInfer(ctx + {x => t}, b))
+      
+    FUNCTION Evaluate(env, e) -> Value
+      MATCH e WITH  
+      | Var(x) => env[x]
+      | App(f, x) => MATCH (Evaluate(env, f), Evaluate(env, x)) WITH
+        | (Closure(fEnv, var, body), arg) => Evaluate(fEnv + {var => arg}, body)  
+      | Abs(x, _, b) => Closure(env, x, b)
+      | Let(x, _, v, b) => Evaluate(env + {x => Evaluate(env, v)}, b)
+  }
+}
+
+TRAIT Logic {
+  Statement += 
+    | Entails(Set(Formula), Formula)
+    | Proves(Proof, Statement)
+
+  FUNCTION Models(ctx) -> Set(Model) 
+    RETURN {model | FORALL stmts IN ctx: IsSAT(stmt, model)}
+
+  FUNCTION IsSAT(stmt, model) 
+    MATCH stmt WITH 
+    | Axiom(expr) => Evaluate(model, expr) = True
+    | Theorem(_, expr) => Evaluate(model, expr) = True  
+    | Entails(assumptions, goal) => 
+        FORALL model: Models(assumptions, model) => Evaluate(model, goal)
+    | Proves(proof, stmt) => ValidProof(proof, stmt)
+}
+
+CONCEPT Mathematics {
+  EXTENDS Logic
+  
+  DEFINE Prop := Type  
+  AXIOM PropTrue : Prop := Abs(t, Prop, t)
+  AXIOM PropFalse : Prop := Abs(t, Prop, Abs(_, Prop, t))
+  
+  DEFINE Impl(p, q : Prop) -> Prop := Abs(_, p, q)
+  DEFINE And(p, q : Prop) -> Prop := Abs(c, Prop, App(App(c, p), q))
+  DEFINE Or(p, q : Prop) -> Prop := 
+    Abs(c, Prop, App(App(c, App(PropTrue, p)), App(PropFalse, q)))
+   
+  AXIOM EqRefl(a : Type) : Eq(a, a) 
+  THEOREM EqSymm(a b : Type) : Eq(a, b) IMPLIES Eq(b, a)
+  PROOF Refl : ASSUME Eq(a, b); App(Eq(a, a), Eq(a, b)) QED
+      
+  DEFINE Nat := Z | S(Nat)
+  AXIOM Induction(p : Nat => Prop) :
+    FORALL n : Nat | p(Z) AND FORALL n' | p(n') IMPLIES p(S(n')) IMPLIES p(n)
+    
+  DEFINE List(T : Type) := Nil | Cons(head : T, tail : List(T))  
+  
+  DEFINE Monoid(T: Type) {
+    e : T
+    op : T => T => T 
+    AXIOM LeftIdentity : FORALL (x : T) | op(e, x) = x
+    AXIOM RightIdentity : FORALL (x : T) | op(x, e) = x
+    AXIOM Associativity : FORALL (x y z : T) | op(x, op(y, z)) = op(op(x, y), z)
+  }
+
+  THEOREM MonoidHomomorphism(M N : Monoid) {
+    f : M.T => N.T  
+    ASSUME 
+      FORALL x : M.T | f(M.e) = N.e, 
+      FORALL x y : M.T | f(M.op(x, y)) = N.op(f(x), f(y))
+    PROVE
+      FORALL x : M.T | f(M.inverse(x)) = N.inverse(f(x))
+  } 
+}  
+  
+EXAMPLE GroupTheory EXTENDS Mathematics {
+  DEFINE Group EXTENDS Monoid { 
+    inverse : T => T
+    AXIOM InverseLeft : FORALL x | op(inverse(x), x) = e
+    AXIOM InverseRight : FORALL x | op(x, inverse(x)) = e  
+  }
+  
+  THEOREM Uniqueness_of_Inverses(G: Group) : FORALL x y z | 
+    (op(y, x) = e) AND (op(x, z) = e) IMPLIES (y = z)
+  PROOF 
+    ASSUME x y z | G.op(y, x) = G.e AND G.op(x, z) = G.e
+    
+    y = op(y, e)                          [RightIdentity]  
+      = op(y, op(x, z))                   [Assumption2]
+      = op(op(y, x), z)                   [Associativity]
+      = op(e, z)                          [Assumption1]
+      = z                                 [LeftIdentity]
+   QED
+}
+
+
+
+
+
+In terms of further iterations, here are a few thoughts:
+
+We could consider making the proof language even more expressive, e.g., by adding support for proof by induction, proof by contradiction, case analysis, etc. This would expand the range of theorems the system could establish.
+To enhance the natural language interaction, we might define a controlled natural language (CNL) that maps to the formal language. This would allow users to state assumptions, pose queries, and interpret results in a more user-friendly way.
+We could enrich the semantics to support probabilistic reasoning, e.g., by assigning weights or probabilities to formulas. This would enable the system to reason under uncertainty and learn from data.
+Another direction is to add more support for computational reasoning, e.g., by integrating a functional programming sublanguage. This would allow the system to not just deduce facts but to calculate new insights.
+Finally, to further boost the "ideas per token", we might introduce more mechanisms for reuse and abstraction, such as theorem schemas, proof tactics, and language extensions. The goal would be to build up powerful libraries of reusable reasoning patterns.
+
+Here's a sketch of what a further evolved language, call it "ReasonML", might look like:
+
+LANGUAGE ReasonML {
+  ONTOLOGY Predicate, Function, Proof, ...  
+
+  MODEL THEORY {
+    type Structure
+    satisfies: Formula * Structure -> Bool
+    entails: Structure * Formula -> Bool
+  }  
+
+  PROOF SYSTEM {
+    Axiom: Formula    
+    ModusPonens: Formula * Formula * Proof -> Proof
+    Contradiction: Formula * Proof -> Proof
+    Induction: (Nat -> Formula) * Proof -> Proof
+    ...
+
+    TACTIC Normalize: Formula -> Formula 
+    TACTIC SplitGoal: (Formula -> List(Formula)) -> Tactic
+    TACTIC Simplify: Formula -> Formula  
+    ...
+  }
+
+  COMPUTATION {  
+    datatype Nat = Zero | Succ(Nat)
+    datatype List(A) = Nil | Cons(A, List(A))
+    func map(A -> B, List(A)) -> List(B)
+    func fold(A * B -> B, B, List(A)) -> B
+    ...
+  }
+
+  UNCERTAINTY {
+    type Distribution(A)
+    func Bernoulli(p: Real): Distribution(Bool)
+    func LetRec(...): Distribution(A) 
+    ...
+  }
+
+  SEMANTICS NaturalLanguage {
+    Parse: String -> Formula 
+    CNL: Formula -> String
+    ...  
+  }
+
+  DEFINE MathWorld EXTENDS LIBRARY RealAnalysis, Topology, ... {
+    AXIOM LeastUpperBound: 
+      FORALL S: SET(Real). Bounded(S) => EXISTS x. UpperBound(S, x) AND 
+        FORALL y. UpperBound(S, y) => y >= x
+    ...
+  }
+}
+
+KNOWLEDGE BASE MedicalDomain USING ReasonML {
+  IMPORT MathWorld  
+  
+  ONTOLOGY Disease, Symptom, Patient, ...
+
+  AXIOM FevalHtSymptoms: FORALL p: Patient. 
+    (HasDisease(p, EpsteinBarr) AND HasDisease(p, HepatitisC))
+    IMPLIES RiskFactor(p, FatigueAndFever)
+
+  DEFINE SymptomsModel(ds: LIST(Disease)) -> Distribution(List(Symptoms)) {
+    LetRec(λmodel.
+      CASE ds OF
+      | Nil => ReturnDist(Nil)  
+      | Cons(d, rest) => 
+        LET subModel = model(rest) IN
+        LET symptomDist = SymptomModel(d) IN
+        Bind(subModel, λsymptoms. 
+          Bind(symptomDist, λnewSymptoms.  
+            ReturnDist(Union(symptoms, newSymptoms)))))
+  }
+
+  ...
+}

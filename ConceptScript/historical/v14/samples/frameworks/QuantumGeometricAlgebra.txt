@@ -1,0 +1,131 @@
+CONCEPT QuantumGeometricAlgebra {
+  LANGUAGE {
+    type QVec = QVec(H: Hilb) | QBivec(H: Hilb) | QTrivec(H: Hilb)
+    type QRot = Rotor(QBivec) | QRot(QRot, QRot)
+    type QAut = QAut(QRot) | QRefl(QVec) | Parity
+    
+    notation "U * V" = GeomProd(U: QVec, V: QVec)  ; Geometric product
+    notation "U ∧ V" = OuterProd(U: QVec, V: QVec) ; Outer product  
+    notation "U · V" = InnerProd(U: QVec, V: QVec) ; Inner product
+    notation "U × V" = CrossProd(U: QVec, V: QVec) ; Cross product
+    
+    notation "U ⌊V⌋" = Contract(U: QVec, V: QBivec)  ; Left contraction
+    notation "⌊U⌋ V" = Contract(V: QVec, U: QBivec)  ; Right contraction
+    notation "⟨B⟩" = Scalar(B: QBivec)
+    notation "⟨B⟩_k" = Grade(B: QBivec, k: ℕ) 
+    notation "rev(M)" = Reverse(M: QRot)
+    
+    pred Associates(A: QVec, B: QBivec) = A * B = A ∧ B
+    pred Commutes(A: QVec, B: QBivec) = A * B = B * A
+    pred Generates(B: QBivec, R: QRot) = exp(B) = R
+    pred Inverts(R: QRot, A: QVec) = R * A * rev(R) = -A
+    pred Rotates(R: QRot, A: QVec, α) = R * A * rev(R) = exp(-(α/2) B) * A * exp((α/2) B)
+    
+    R := R₁ | R * R | R⁻¹
+    where
+      R₁ = Rotor(B: QBivec)
+      R * R = GeomProd(R: QRot, R: QRot)
+      R⁻¹ = Inverse(R: QRot) 
+            
+    G := G₀ | -G | G * G | G^ | ⟨G⟩ | ⟨G⟩_k
+    where
+      G₀ = 𝟙        ; Multiplicative identity   
+      -G = Neg(G: QAut)
+      G * G = GeomProd(G: QAut, G: QAut)
+      G^ = Rev(G: QAut)
+      ⟨G⟩ = Scalar(G: QAut)
+      ⟨G⟩_k = Grade(G: QAut, k: ℕ) 
+  }
+  
+  STRUCTURE {
+    BladeAlgebraicConstructions: {
+      ⟨A · B⟩ = (A * B - A ∧ B) / 2     ; Inner product from geometric
+      A × B = ⟨A ∧ B⟩_2                 ; Cross prod from outer prod  
+      A ⌊B⌋ = (A * B - B * A) / 2       ; Left contraction
+      ⟨A * B * C⟩ = ⟨A ∧ B ∧ C⟩         ; Scalar triple product
+      (A ∧ B) · C = A · (B × C)         ; Scalar triple product identity
+      A ⌊(B ∧ C)⌋ = (A · B) C - (A · C) B  ; Left contraction identity
+    }
+    
+    RotorAlgebraicProperties: {      
+      Generates(B: QBivec, R: QRot) ⟺ ⟨R⟩ = cos(α/2) ∧ ⟨R⟩_2 = sin(α/2) B  
+      Inverts(R: QRot, A: QVec) ⟺ R * A = -A * R
+      Rotates(R: QRot, A: QVec, α) ⟺ ⟨R * A * rev(R)⟩_1 = A cos(α) + (A × B) sin(α)
+      R * (A + B) * rev(R) = R * A * rev(R) + R * B * rev(R)   ; Linearity
+      R₁ * (R₂ * A * rev(R₂)) * rev(R₁) = (R₁ * R₂) * A * rev(R₂ * R₁)  ; Composition
+    }
+             
+    VersorAlgebraicProperties: {
+      R = G ⟺ ⟨R⟩ = ⟨G⟩ ∧ ⟨R⟩_2 = ⟨G⟩_2 ∧ ⟨R⟩_4 = ⟨G⟩_4  ; Rotor-versor correspondence
+      ⟨-G⟩ = -⟨G⟩ ∧ ⟨-G⟩_k = -⟨G⟩_k                        ; Grade involution
+      G^ * G = ⟨G⟩                                   ; Reversal involution
+      (-G)^ = -G^                                    ; Conjugation
+      ⟨G * G⟩ = ⟨G⟩ ⟨G⟩                                ; Spinor norm  
+      G * X * G^ = ⟨G X G^⟩_1                         ; Versor theorem
+    }
+  }
+  
+  PROOFS {
+    theorem SandwichAnticommutes(R: QRot, A: QVec):
+      Inverts(R, A) ⊢ {R * A * R^, A} = 0
+    {
+      assume Inverts(R, A) 
+      have R * A * R^ = -A             ; by Inverts
+      have (R*A*R^)*A = -A*A = -|A|^2  ; by |A|^2 = A*A
+      have A*(R*A*R^) = -A*A = -|A|^2  ; by assumption
+      hence {R*A*R^, A} = (R*A*R^)*A + A*(R*A*R^) = 0
+    }
+    
+    theorem RotorInnerAntipode(R: QRot):
+      R * rev(R) = 1 ⊢ ⟨rev(R)⟩ = ⟨R⟩
+    {  
+      assume R * rev(R) = 1
+      have ⟨R * rev(R)⟩ = ⟨1⟩ = 1        ; taking grade-0 part
+      have ⟨R⟩ ⟨rev(R)⟩ = 1              ; by multiplicativity of ⟨-⟩
+      hence ⟨rev(R)⟩ = ⟨R⟩⁻¹ = ⟨R⟩       ; since ⟨R⟩ = ±1 for rotors
+    }
+    
+    theorem PlungeIdentity(A: QVec, B: QBivec):  
+      Associates(A, B) ⊢ A * X * A = (A ∧ X) · A - (A · X) * A
+    {
+      assume Associates(A, B)
+      have A * (A ∧ X) = (A * A) ∧ X = ⟨A * A⟩ X   ; by (Q1) and ⟨A*A⟩ ∈ ℝ  
+      have A * (A · X) = (A * A) · X = ⟨A * A⟩ X   ; by (Q1) and ⟨A*A⟩ ∈ ℝ
+      have (A ∧ X)· A = ⟨(A ∧ X)* A⟩_0 = ⟨A *(A ∧ X)⟩_0  ; by cyclic regrading 
+      have (A · X)* A = ⟨(A · X)* A⟩_0 = ⟨A *(A · X)⟩_0  ; by cyclic regrading
+      hence A * X * A = (A ∧ X)· A - (A · X) * A  ; by vector space expansion
+    }
+    
+    theorem EulerConstruction(R: QRot, B: QBivec, θ):
+      Generates(B, R) ⊢ R = exp(-θ/2 * B) = cos(θ/2) - sin(θ/2) B
+    {
+      assume Generates(B, R) 
+      let θ/2 = α  ; Half-angle
+      have exp(α B) = ∑_k (α B)^k / k!               ; exp definition
+      have (α B)^k = α^k B^k = α^k B for k odd       ; by B*B = -1
+      have (α B)^k = α^k (-1)^(k/2) for k even        ; by B*B = -1
+      have exp(α B) = (∑_j (-1)^j α^(2j) / (2j)!) + B (∑_j (-1)^j α^(2j+1) / (2j+1)!)
+      hence R = cos(α) + B sin(α) = cos(θ/2) - sin(θ/2) B  ; sum cos/sin series
+    }
+    
+    tactic VersorDecompose(G: QAut):
+      G = ⟨G⟩ + ⟨G⟩_2 + ⟨G⟩_4 ⊢ ⟨G⟩_k = ⟨G⟩_k / ⟨G⟩ for 0 < k ≤ 4
+    {
+      assume G = ⟨G⟩ + ⟨G⟩_2 + ⟨G⟩_4
+      have ⟨G⟩ ≠ 0  ; else G = 0
+      have ⟨G G^⟩ = ∑_k ⟨⟨G⟩_k ⟨G⟩_k⟩ = ⟨G⟩^2 + |⟨G⟩_2|^2 + |⟨G⟩_4|^2 = 1  ; by versor norm  
+      so ⟨G⟩^2 = 1 - |⟨G⟩_2|^2 - |⟨G⟩_4|^2
+      have ⟨(G/⟨G⟩)^2⟩ = (1 - |⟨G⟩_2|^2 - |⟨G⟩_4|^2) / ⟨G⟩^2 = 1
+      hence G/⟨G⟩ is rotor, so ⟨G⟩_k / ⟨G⟩ are its kth grades for 0 < k ≤ 4 
+    }
+  }    
+}
+
+This Concept blends ideas from geometric algebra, quantum mechanics, and Lie theory to define a notion of "quantum geometric algebra" centered around rotors, versors, and their algebraic properties and relationships to vectors and bivectors. Key elements include:
+
+Defining a graded vector space with vectors, bivectors, and trivectors, and products that generate rotations and reflections
+Proving how properties of rotors and versors relate to geometric and algebraic identities involving vectors and bivectors
+Tactics that expand and factor versors into their graded components
+Theorems about rotor decomposition, commutation relations, and connections to Lie groups
+
+The Concept aims to compactly express core ideas from geometric algebra in a form tailored to quantum applications, with an emphasis on mapping between different algebraic and geometric representations of rotations, reflections, and Hilbert space operators. The custom notation allows cleanly expressing many non-trivial identities and relationships.

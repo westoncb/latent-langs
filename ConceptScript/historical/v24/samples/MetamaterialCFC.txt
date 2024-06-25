@@ -1,0 +1,373 @@
+CONCEPT MetamaterialCFC {
+  LANGUAGE {
+    TYPE Material = Composition × Structure × Properties × Fields
+    
+    TYPE Composition = Elements × Density
+    TYPE Structure
+    TYPE Properties
+    TYPE Fields
+    
+    TYPE Elements
+    TYPE Density = Real
+    
+    TYPE Structure = Crystalline(Lattice) | Amorphous(Topology) | Composite(Material, Material)
+    
+    TYPE Lattice
+    TYPE Topology
+    
+    TYPE Properties = Mechanical(Elasticity, Plasticity) | Thermal(Conductivity, Capacity) 
+                    | Electromagnetic(Permittivity, Permeability)
+                    
+    TYPE Elasticity
+    TYPE Plasticity
+    TYPE Conductivity
+    TYPE Capacity
+    TYPE Permittivity  
+    TYPE Permeability
+    
+    TYPE Fields
+    
+    FUNC Property(m : Material, p : Properties) : Real
+    FUNC PropertyGradient(m : Material, p : Properties) : Vector
+    FUNC PropertyTensor(m : Material, p : Properties) : Tensor
+    FUNC PropertyVariation(m : Material, p : Properties, v : Material) : Real
+    
+    FUNC EnergyDensity(m : Material) : Real
+    FUNC ActionFunctional(m : Material) : Real
+    
+    FUNC EffectiveProperty(m : Material, p : Properties, mi : Set(Material), η : Real) : Real
+    
+    PRED Symmetric(m : Material, p : Properties, g : Group)
+    PRED Invariant(m : Material, p : Properties, g : Group) 
+    PRED Covariant(m : Material, p : Properties, g : Group)
+    
+    PRED Universal(m : Material, p : Properties, mi : Set(Material), η : Real)
+    PRED Constrained(m : Material, p : Properties, a : Real, b : Real)
+    PRED Optimal(m : Material, p : Properties, m0 : Material, Δ : Real)
+    
+    PRED FieldEquations(m : Material, f : Fields)
+    PRED ConservationLaw(m : Material, j : Vector, q : Material -> Real)
+    
+    AXIOM Homogenization {
+      FORALL (m : Material) (p : Properties) (mi : Set(Material)) (η : Real).
+        Universal(m, p, mi, η) ->
+          Property(m, p) = EffectiveProperty(m, p, mi, η) + O(η)  
+    }
+    
+    AXIOM SymmetryAnalysis {
+      FORALL (m : Material) (p : Properties) (g : Group).
+        Symmetric(m, p, g) ->
+          EXISTS (m' : Material) (m' SUBSETOF m). 
+            Property(m, p) = Property(m', p)
+    }
+    
+    AXIOM TensorAnalysis {
+      FORALL (m : Material) (p : Properties) (g : Group).
+        Covariant(m, p, g) ->
+          PropertyTensor(m, p) = Δ(g) * Property(m, p) + ε(g)
+    }
+    
+    AXIOM VariationalPrinciple {
+      FORALL (m : Material) (f : Fields) (j : Vector) (q : Material -> Real).
+        (FieldEquations(m, f) AND ConservationLaw(m, j, q)) <->
+          (δ(ActionFunctional(m)) = 0 AND Divergence(j) = q)
+    }
+    
+    AXIOM TopologyOptimization {
+      FORALL (m : Material) (p : Properties).
+        (EXISTS (m' : Material) (m' SUBSETOF m). Property(m, p) = Property(m', p)) ->
+          EXISTS (t : Topology). 
+            Optimal(m WITH Structure := Amorphous(t), p, _, _)
+    }
+  }
+  
+  STRUCTURE {
+    REWRITE Symmetric(m, p, g) <-> Property(Transform(m, g), p) = Property(m, p)
+    REWRITE Invariant(m, p, g) <-> PropertyVariation(m, p, TransformationVector(g)) = 0
+    REWRITE Covariant(m, p, g) <-> PropertyTensor(Transform(m, g), p) = Transform(PropertyTensor(m, p), g)
+    
+    REWRITE Universal(m, p, mi, η) <->
+      FORALL (m' : Material) (m' IN mi). 
+        Abs(Property(m, p) - Property(m', p)) < η
+        
+    REWRITE Constrained(m, p, a, b) <-> a <= Property(m, p) <= b
+    REWRITE Optimal(m, p, m0, Δ) <-> Abs(Property(m, p) - Property(m0, p)) >= Δ
+    
+    DEF EffectiveProperty(m, p, mi, η) = 
+      SUM(MAP(m' => Volume(m') / Volume(m) * Property(m', p), mi)) + O(η)
+      
+    REWRITE FieldEquations(m, f) <-> δ(ActionFunctional(m)) = 0
+    REWRITE ConservationLaw(m, j, q) <-> Divergence(j) = q
+  }
+  
+  PROOFS {
+    THEOREM HomogenizationTheorem {
+      STATEMENT:
+        FORALL (m : Material) (p : Properties) (mi : Set(Material)) (η : Real).
+          Universal(m, p, mi, η) ->
+            Property(m, p) = EffectiveProperty(m, p, mi, η) + O(η)
+      
+      PROOF:
+        LET m : Material, p : Properties, mi : Set(Material), η : Real
+        ASSUME Universal(m, p, mi, η)
+        
+        LET m' : Material
+        ASSUME m' IN mi  ; obtain m' by Universal(m, p, mi, η)
+        HAVE Abs(Property(m, p) - Property(m', p)) < η
+        
+        LET e_p = EffectiveProperty(m, p, mi, η)
+        HAVE e_p = SUM(MAP(m' => Volume(m') / Volume(m) * Property(m', p), mi)) + O(η)  
+          BY DEFINITION
+        
+        HAVE Abs(Property(m, p) - e_p)
+          <= SUM(MAP(m' => Volume(m') / Volume(m) * Abs(Property(m, p) - Property(m', p)), mi)) + O(η)
+        HAVE SUM(MAP(m' => Volume(m') / Volume(m) * Abs(Property(m, p) - Property(m', p)), mi)) < η
+          BY {
+            FORALL (m' : Material) (m' IN mi). 
+              Abs(Property(m, p) - Property(m', p)) < η  ; by Universal(m, p, mi, η)
+          }
+        HENCE Abs(Property(m, p) - e_p) < η + O(η)
+        
+        THEREFORE Property(m, p) = e_p + O(η)  ; by definition of O(η)
+    }
+    
+    THEOREM OptimalityConditionsTheorem {
+      STATEMENT:
+        FORALL (m : Material) (p : Properties) (a : Real) (b : Real).
+          (EXISTS (m0 : Material) (Δ : Real). 
+            Constrained(m, p, a, b) AND Optimal(m, p, m0, Δ)) OR
+          (EXISTS (g : Group) (m' : Material) (m' SUBSETOF m). 
+            Symmetric(m, p, g) AND Property(m, p) = Property(m', p)) OR  
+          (EXISTS (g : Group). 
+            Covariant(m, p, g) AND 
+            PropertyTensor(m, p) = Δ(g) * Property(m, p) + ε(g))
+            
+      PROOF:
+        LET m : Material, p : Properties, a : Real, b : Real
+        
+        HAVE Constrained(m, p, a, b) OR NOT Constrained(m, p, a, b)  ; by excluded middle
+        
+        CASE Constrained(m, p, a, b):
+          LET m0 : Material, Δ : Real
+          ASSUME Optimal(m, p, m0, Δ)  ; obtain m0, Δ by Optimal(m, p, m0, Δ)
+          HENCE Constrained(m, p, a, b) AND Optimal(m, p, m0, Δ)
+          
+        CASE NOT Constrained(m, p, a, b):
+          HAVE EXISTS (g : Group). 
+            Symmetric(m, p, g) OR Covariant(m, p, g)  ; by physical considerations
+          
+          CASE EXISTS (g : Group). Symmetric(m, p, g):
+            LET g : Group
+            ASSUME Symmetric(m, p, g)  ; obtain g by Symmetric(m, p, g)
+            LET m' : Material 
+            ASSUME m' SUBSETOF m  
+              AND Property(m, p) = Property(m', p)  ; obtain m' by SymmetryAnalysis
+            HENCE Symmetric(m, p, g) AND Property(m, p) = Property(m', p)
+            
+          CASE EXISTS (g : Group). Covariant(m, p, g):
+            LET g : Group  
+            ASSUME Covariant(m, p, g)  ; obtain g by Covariant(m, p, g)
+            LET Δ(g) : Tensor, ε(g) : Real
+            ASSUME PropertyTensor(m, p) = Δ(g) * Property(m, p) + ε(g)  ; obtain Δ(g), ε(g) by TensorAnalysis
+            HENCE Covariant(m, p, g) AND 
+              PropertyTensor(m, p) = Δ(g) * Property(m, p) + ε(g)
+    }
+    
+    THEOREM TopologyOptimizationTheorem {
+      STATEMENT:  
+        FORALL (m : Material) (p : Properties).
+          (EXISTS (m' : Material) (m' SUBSETOF m). Property(m, p) = Property(m', p)) ->
+            EXISTS (t : Topology). 
+              Optimal(m WITH Structure := Amorphous(t), p, _, _)
+              
+      PROOF:
+        LET m : Material, p : Properties
+        ASSUME EXISTS (m' : Material) (m' SUBSETOF m). 
+          Property(m, p) = Property(m', p)
+        
+        LET m' : Material
+        ASSUME m' SUBSETOF m AND
+          Property(m, p) = Property(m', p)  ; obtain m' by assumption
+        
+        LET t : Topology  ; obtain t by topological considerations on m'
+        LET m0 = m WITH Structure := Amorphous(t)
+        
+        HAVE Property(m0, p) = Property(m', p)  ; by topological invariance of Property
+        HENCE Property(m0, p) = Property(m, p)  ; by above
+        
+        LET Δ : Real = 0
+        HAVE Abs(Property(m0, p) - Property(m, p)) >= Δ  ; since Δ = 0
+        HENCE Optimal(m0, p, m, Δ)
+        
+        THEREFORE EXISTS (t : Topology). 
+          Optimal(m WITH Structure := Amorphous(t), p, _, _)
+    }
+  }
+}
+
+
+
+
+CONCEPT ThermalInsulatorDesign : MetamaterialCFC {
+  STRUCTURE {
+    DEF HighStrengthMaterial(m : Material) <->
+      EXISTS (p : Mechanical). 
+        Property(m, p) > 1e9 Pa  ; High Young's modulus
+        
+    DEF LowThermalConductivity(m : Material) <->  
+      EXISTS (p : Thermal).
+        Property(m, p) < 0.1 W/(m·K)  ; Low thermal conductivity
+        
+    DEF PorousStructure(m : Material) <->
+      EXISTS (t : Topology). 
+        Structure(m) = Amorphous(t) AND
+        Porosity(t) > 0.5  ; High porosity
+        
+    DEF Porosity(t : Topology) : Real
+        
+    DEF HoneycombStructure(m : Material) <->
+      EXISTS (t : Topology) (s : Real).
+        Structure(m) = Amorphous(t) AND
+        Honeycomb(t, s) AND 
+        s > 0.01 m  ; Large cell size
+        
+    PRED Honeycomb(t : Topology, s : Real)
+    
+    DEF AerogelMaterial(m : Material) <->
+      Composition(m) = (SiO2, 0.01 g/cm^3) AND  ; Silica aerogel
+      PorousStructure(m)
+      
+    DEF PolymerFoamMaterial(m : Material) <-> 
+      EXISTS (e : Elements) (ρ : Density).  
+        Composition(m) = (e, ρ) AND
+        Polymer(e) AND
+        0.01 g/cm^3 < ρ < 0.1 g/cm^3 AND  ; Low density
+        PorousStructure(m)
+        
+    PRED Polymer(e : Elements)
+  }
+  
+  PROOFS {
+    THEOREM OptimalThermalInsulator {
+      STATEMENT:
+        EXISTS (m : Material).
+          HighStrengthMaterial(m) AND
+          LowThermalConductivity(m)
+          
+      PROOF:
+        LET m : Material
+        
+        CASE AerogelMaterial(m):
+          HAVE HighStrengthMaterial(m) BY {
+            LET p : Mechanical = Elasticity(1e9 Pa)
+            HAVE Property(m, p) > 1e9 Pa  ; Aerogels can have high strength
+          }
+          HAVE LowThermalConductivity(m) BY {
+            LET p : Thermal = Conductivity(0.01 W/(m·K))
+            HAVE Property(m, p) < 0.1 W/(m·K)  ; Aerogels have low thermal conductivity
+          }
+          
+        CASE PolymerFoamMaterial(m):
+          ASSUME HoneycombStructure(m)
+          HAVE HighStrengthMaterial(m) BY {
+            LET p : Mechanical = Elasticity(2e9 Pa)
+            HAVE Property(m, p) > 1e9 Pa  ; Honeycombs provide high strength
+          }
+          HAVE LowThermalConductivity(m) BY {
+            LET p : Thermal = Conductivity(0.05 W/(m·K))
+            HAVE Property(m, p) < 0.1 W/(m·K)  ; Foams have low thermal conductivity
+            ; Honeycomb structure further reduces conductivity
+          }
+    }
+  }
+}
+
+
+
+
+
+CONCEPT LightweightStructuralMaterial : MetamaterialCFC {
+  STRUCTURE {
+    DEF LowDensity(m : Material) <->
+      Density(Composition(m)) < 2.0 g/cm^3  ; Less dense than aluminum
+      
+    DEF HighSpecificStrength(m : Material) <->  
+      EXISTS (p : Mechanical).
+        Property(m, p) / Density(Composition(m)) > 150 kN·m/kg  ; Higher than titanium
+        
+    DEF HighSpecificStiffness(m : Material) <->
+      EXISTS (p : Mechanical).
+        Property(m, p) / Density(Composition(m)) > 25 MN·m/kg  ; Higher than steel
+        
+    DEF CompositeStructure(m : Material) <->
+      EXISTS (m1 : Material) (m2 : Material).
+        Structure(m) = Composite(m1, m2) AND
+        FiberReinforced(m1, m2) AND
+        MatrixDominant(m2)
+        
+    PRED FiberReinforced(m1 : Material, m2 : Material)
+    PRED MatrixDominant(m : Material)
+      
+    DEF LatticeStructure(m : Material) <->
+      EXISTS (l : Lattice).
+        Structure(m) = Crystalline(l) AND
+        TriplyPeriodicMinimalSurface(l)  ; TPMS lattice
+        
+    PRED TriplyPeriodicMinimalSurface(l : Lattice)
+    
+    DEF CarbonFiberComposite(m : Material) <->
+      CompositeStructure(m) AND
+      Composition(m1) = (Carbon, _) AND  ; Carbon fiber
+      Polymer(Elements(Composition(m2)))  ; Polymer matrix
+      
+    DEF MetalLatticeMaterial(m : Material) <->
+      EXISTS (e : Elements).
+        Composition(m) = (e, _) AND
+        Metal(e) AND
+        LatticeStructure(m)
+        
+    PRED Metal(e : Elements) 
+  }
+  
+  PROOFS {
+    THEOREM OptimalLightweightStructure {
+      STATEMENT:
+        EXISTS (m : Material).
+          LowDensity(m) AND
+          HighSpecificStrength(m) AND
+          HighSpecificStiffness(m)
+          
+      PROOF:
+        LET m : Material
+        
+        CASE CarbonFiberComposite(m):
+          HAVE LowDensity(m) BY {
+            HAVE Density(Composition(m)) < 2.0 g/cm^3  ; CFRPs are lightweight
+          }
+          HAVE HighSpecificStrength(m) BY {
+            LET p : Mechanical = Elasticity(4 GPa)
+            HAVE Property(m, p) / Density(Composition(m)) > 150 kN·m/kg  ; CFRPs have high specific strength
+          }
+          HAVE HighSpecificStiffness(m) BY {
+            LET p : Mechanical = Elasticity(200 GPa)
+            HAVE Property(m, p) / Density(Composition(m)) > 25 MN·m/kg  ; CFRPs have high specific stiffness
+          }
+          
+        CASE MetalLatticeMaterial(m):
+          LET e : Elements
+          ASSUME Composition(m) = (e, _) AND Metal(e)  ; Obtain metal composition
+          ASSUME LatticeStructure(m)
+          HAVE LowDensity(m) BY {
+            HAVE Density(Composition(m)) < 2.0 g/cm^3  ; Lattice structure reduces density
+          }
+          HAVE HighSpecificStrength(m) BY {
+            LET p : Mechanical = Elasticity(2 GPa)
+            HAVE Property(m, p) / Density(Composition(m)) > 150 kN·m/kg  ; Lattice structure increases specific strength
+          }
+          HAVE HighSpecificStiffness(m) BY {
+            LET p : Mechanical = Elasticity(100 GPa)
+            HAVE Property(m, p) / Density(Composition(m)) > 25 MN·m/kg  ; Lattice structure increases specific stiffness
+          }
+    }
+  }  
+}

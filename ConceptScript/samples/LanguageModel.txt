@@ -1,0 +1,212 @@
+CONCEPT LanguageModel {
+  PARAMETERS {
+    Tok : TYPE -- Token type 
+    N : Nat -- Context length
+    d_k d_q d_v h : Nat -- Attention dimensions and heads
+    τ : Real -- Attention temperature 
+  }
+
+  CONTEXT {
+    TYPES {
+      INDUCTIVE Expr {
+        CASE Tok(Tok)
+        CASE Seq(List(Expr))  
+        CASE Attn(Expr, Expr, Expr)
+        CASE Proj(Expr, Matrix)
+        CASE Sum(Expr, Expr)
+        CASE Prod(Expr, Expr)
+      }
+
+      Dist := Distribution(LEN(Tok))
+
+      Feat := Real^d_k
+      
+      ENV := Map(Tok, Feat)
+    }
+
+    STRUCTURES {
+      STRUCTURE Model {
+        FIELD Embed : Tok -> Feat
+        FIELD Att : CrossAttention(d_k, d_q, d_v, h)  
+        FIELD Unembedd : Feat -> Dist
+
+        FIELD Interp(env : ENV, e : Expr) -> Dist
+          CASE Tok(t) => env(t)
+          CASE Seq(es) => 
+            LET ks = Seq(Interp(env, e) for e in es)
+            LET vs = ks
+            LET lk = Seq(Att.Heads[i].Alignment(k/√τ, env(Last(es))) for k in ks, i in Fin(h)) 
+            IN SoftMax(Mean(lk))
+          CASE Attn(Q, K, V) =>   
+            LET q = Interp(env, Q)
+            LET ks = Seq(Interp(env, k) for k in K)
+            LET vs = Seq(Interp(env, v) for v in V)
+            IN Unembedd(Att(q, ks, vs))
+          CASE Proj(E, M) => 
+            LET v = Interp(env, E)  
+            IN Unembedd(M * v)
+          CASE Sum(A, B) => Interp(env, A) + Interp(env, B)  
+          CASE Prod(A, B) => Interp(env, A) * Interp(env, B)
+          
+        AXIOM EnvUpdate(env, t, f) {
+          Interp(env[t -> f], e) = Interp(env, e[t := Tok(t)]) 
+        }
+      }
+      
+      STRUCTURE GroundTruth EXTENDS Model {
+        FIELD P : Dist^(List(Tok))
+        AXIOM Consistency {
+          ∀ env xs . Interp(env, Seq(Tok(x) for x in xs)) = P(xs)
+        }
+      }
+    }
+    
+    NOTATION {
+      "_[_ -> _]" := Update(_, _, _)
+      "_[_ := _]" := Subst(_, _, _)  
+    }
+  }
+  
+  PROOFS {
+    THEOREM UniversalApproximation(M : Model, G : GroundTruth) {
+      ∀ ε . ∃ δ . 
+        (∀ t f . |M.Embed(t) - G.Embed(t)| < δ ∧ |M.Unembedd(f) - G.Unembedd(f)|_∞ < δ) ⇒
+        ∀ env e . |M.Interp(env, e) - G.Interp(env, e)|_∞ < ε
+    }
+    PROOF {
+      SUFFICES_TO_SHOW 
+        ∀ γ . ∃ δ . 
+        (∀ t f . |M.Embed(t) - G.Embed(t)| < δ ∧ |M.Unembedd(f) - G.Unembedd(f)|_∞ < δ) ⇒
+        ∀ env k q v . 
+          |M.Att.Alignment(M.Embed(k), M.Embed(q)) - G.Att.Alignment(G.Embed(k), G.Embed(q))| < γ ∧
+          |M.Unembedd(M.Att(M.Embed(q), M.Embed(k), M.Embed(v))) - 
+           G.Unembedd(G.Att(G.Embed(q), G.Embed(k), G.Embed(v)))|_∞ < γ
+      
+      PROVE ∀ env e . |M.Interp(env, e) - G.Interp(env, e)|_∞ < ε BY INDUCTION e
+        CASE Tok(t):
+          |M.Interp(env, Tok(t)) - G.Interp(env, Tok(t))|_∞  
+            = |env(t) - env(t)|_∞ [BY DEF Interp]
+            = 0 < ε TRIVIAL
+            
+        CASE Seq(es):
+          ASSUME ∀ e ∈ es . |M.Interp(env, e) - G.Interp(env, e)|_∞ < γ
+          
+          M.Interp(env, Seq(es))
+            = M.Unembedd(SUM(SoftMax(Seq(
+                M.Att.Alignment(M.Embed(Last(es)), M.Embed(e)) for e in es))
+                  * M.Interp(env, e) for e in es))
+          G.Interp(env, Seq(es))  
+            = G.Unembedd(SUM(SoftMax(Seq(
+                G.Att.Alignment(G.Embed(Last(es)), G.Embed(e)) for e in es))
+                  * G.Interp(env, e) for e in es))
+                
+          |M.Interp(env, Seq(es)) - G.Interp(env, Seq(es))|_∞
+            ≤ |M.Unembedd(SUM(SoftMax(Seq(
+                 M.Att.Alignment(M.Embed(Last(es)), M.Embed(e)) for e in es))
+                   * M.Interp(env, e) for e in es)) -
+               M.Unembedd(SUM(SoftMax(Seq(
+                 G.Att.Alignment(G.Embed(Last(es)), G.Embed(e)) for e in es)) 
+                   * M.Interp(env, e) for e in es))|_∞ [BY TRIANGLE_INEQUALITY] 
+            + |M.Unembedd(SUM(SoftMax(Seq(
+                 G.Att.Alignment(G.Embed(Last(es)), G.Embed(e)) for e in es))
+                   * M.Interp(env, e) for e in es)) - 
+               G.Unembedd(SUM(SoftMax(Seq(
+                 G.Att.Alignment(G.Embed(Last(es)), G.Embed(e)) for e in es))
+                   * G.Interp(env, e) for e in es))|_∞ 
+            ≤ |SUM(SoftMax(Seq(
+                 M.Att.Alignment(M.Embed(Last(es)), M.Embed(e)) for e in es))
+                   * M.Interp(env, e) for e in es) -
+               SUM(SoftMax(Seq(
+                 G.Att.Alignment(G.Embed(Last(es)), G.Embed(e)) for e in es))
+                   * M.Interp(env, e) for e in es)|_∞ [BY δ-CONDITION]
+            + |M.Unembedd(SUM(SoftMax(Seq(
+                 G.Att.Alignment(G.Embed(Last(es)), G.Embed(e)) for e in es)) 
+                   * M.Interp(env, e) for e in es)) -
+               G.Unembedd(SUM(SoftMax(Seq( 
+                 G.Att.Alignment(G.Embed(Last(es)), G.Embed(e)) for e in es))
+                   * G.Interp(env, e) for e in es))|_∞
+            ≤ γ * N + δ [BY γ-CONDITION, INDUCTIVE_HYPOTHESIS]
+            < ε [TAKING γ < ε/(2N), δ < ε/2]
+            
+        CASE Attn(Q, K, V):  
+          |M.Interp(env, Attn(Q, K, V)) - G.Interp(env, Attn(Q, K, V))|_∞
+            = |M.Unembedd(M.Att(M.Interp(env, Q), 
+                Seq(M.Interp(env, k) for k in K),
+                Seq(M.Interp(env, v) for v in V))) -
+               G.Unembedd(G.Att(G.Interp(env, Q),
+                Seq(G.Interp(env, k) for k in K), 
+                Seq(G.Interp(env, v) for v in V)))|_∞
+            ≤ |M.Unembedd(M.Att(M.Interp(env, Q),
+                 Seq(M.Interp(env, k) for k in K),
+                 Seq(M.Interp(env, v) for v in V))) - 
+               M.Unembedd(M.Att(G.Interp(env, Q),
+                 Seq(G.Interp(env, k) for k in K),
+                 Seq(G.Interp(env, v) for v in V)))|_∞ [BY TRIANGLE_INEQUALITY]
+            + |M.Unembedd(M.Att(G.Interp(env, Q),
+                 Seq(G.Interp(env, k) for k in K),
+                 Seq(G.Interp(env, v) for v in V))) -
+               G.Unembedd(G.Att(G.Interp(env, Q), 
+                 Seq(G.Interp(env, k) for k in K),
+                 Seq(G.Interp(env, v) for v in V)))|_∞
+            ≤ γ [BY γ-CONDITION, INDUCTIVE_HYPOTHESIS]
+            + δ [BY δ-CONDITION]
+            < ε [TAKING γ < ε/2, δ < ε/2]
+
+        CASE Proj(E, M):
+          SIMILAR_TO Attn(Q, K, V) 
+          
+        CASE Sum(A, B):  
+          |M.Interp(env, Sum(A, B)) - G.Interp(env, Sum(A, B))|_∞
+            = |M.Interp(env, A) + M.Interp(env, B) - (G.Interp(env, A) + G.Interp(env, B))|_∞  
+            ≤ |M.Interp(env, A) - G.Interp(env, A)|_∞ + |M.Interp(env, B) - G.Interp(env, B)|_∞
+            < ε [BY INDUCTIVE_HYPOTHESIS]
+        
+        CASE Prod(A, B):
+          SIMILAR_TO Sum(A, B)
+
+      QED  
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE ContextMixing {
+      LET Ctx(es) = Seq(es)
+      LET Mix(Q, K, V) = Attn(Q, K, V)
+      
+      DEFINE ContextMix(c : List(Expr), env : ENV) -> Dist
+        WITH Interp(env, Mix(Last(c), Ctx(c), Ctx(c)))
+        
+      THEN 
+        ContextMix(
+          [Tok("The"), Tok("dog"), Tok("chased"), Tok("the"), Tok("cat")],
+          INIT_ENV)
+        = Interp(INIT_ENV,
+            Attn(Tok("cat"), 
+              Seq([Tok("The"), Tok("dog"), Tok("chased"), Tok("the"), Tok("cat")]),
+              Seq([Tok("The"), Tok("dog"), Tok("chased"), Tok("the"), Tok("cat")])))
+        ~ P(["The", "dog", "chased", "the", "cat", "_"])  
+    }
+
+    EXAMPLE LayerNorm {
+      DEFINE γ : Feat, β : Feat
+      LET Ctx(es) = Seq(es)  
+      LET Mix(Q, K, V) = Attn(Q, K, V)
+      LET Norm(E, γ, β) = Proj(Sum(Prod((E - Mean(E)) / StdDev(E), γ), β), Id)
+
+      DEFINE LayerNorm(c : List(Expr), env : ENV) -> Dist  
+        WITH Interp(env, Norm(Mix(Last(c), Ctx(c), Ctx(c)), γ, β))
+
+      THEN  
+        LayerNorm(
+          [Tok("The"), Tok("dog"), Tok("chased"), Tok("the"), Tok("cat")], 
+          INIT_ENV)
+        = Interp(INIT_ENV,
+            Norm(
+              Attn(Tok("cat"),
+                Seq([Tok("The"), Tok("dog"), Tok("chased"), Tok("the"), Tok("cat")]),  
+                Seq([Tok("The"), Tok("dog"), Tok("chased"), Tok("the"), Tok("cat")])),
+              γ, β))
+        ~ P(["The", "dog", "chased", "the", "cat", "_"])
+    }
+  }
+}

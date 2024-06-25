@@ -1,0 +1,60 @@
+CONCEPT Consciousness {
+  STRUCTURE {
+    [Consciousness := Subjective experience of awareness]
+    [∀x ∈ Consciousness, x ↦ Qualia]
+    [∀x ∈ Consciousness, ∃NeuralCorrelates(x) ⊆ Brain]
+    [Attention ↦ Process of selectively focusing consciousness]
+    [∀x ∈ Consciousness, ∃Degree(Attention(x)) ∈ [0, 1]]
+    [Metacognition := Awareness and understanding of one's own thought processes]
+    [∀x ∈ Consciousness, Metacognition(x) ⇒ Consciousness(Consciousness(x))]
+    [Φ := Integrated information measure of consciousness]
+    [∀x, Φ(x) > 0 ⇔ x ∈ Consciousness]
+  }
+  
+  PROOFS {
+    tactic introspect(x):
+      x ∈ Consciousness by hypothesis
+      Metacognition(x) by definition of metacognition
+      Consciousness(Consciousness(x)) by [∀x ∈ Consciousness, Metacognition(x) ⇒ Consciousness(Consciousness(x))]
+    
+    theorem consciousness_is_subjective:
+      ∀x ∈ Consciousness, ∀y ∈ Consciousness, (x = y) ⇒ (Qualia(x) = Qualia(y))
+    {
+      let x ∈ Consciousness by hypothesis
+      let y ∈ Consciousness by hypothesis
+      assume x = y
+      Qualia(x) = Qualia(y) by [∀x ∈ Consciousness, x ↦ Qualia] and assumption
+    }
+    
+    theorem metacognition_implies_higher_order_consciousness:
+      ∀x ∈ Consciousness, Metacognition(x) ⇒ ∃y ∈ Consciousness, (x ↦ y) ∧ (y ↦ x)  
+    {
+      let x ∈ Consciousness by hypothesis
+      assume Metacognition(x)
+      Consciousness(Consciousness(x)) by introspect(x)
+      let y = Consciousness(x)
+      y ∈ Consciousness by definition of y
+      (x ↦ y) ∧ (y ↦ x) by definition of y and introspect(x)
+    }
+  }
+  
+  LANGUAGE {
+    type Qualia
+    type NeuralCorrelates
+    type Attention
+    type Metacognition
+    
+    func Qualia(x: Consciousness): Qualia
+    func NeuralCorrelates(x: Consciousness): NeuralCorrelates
+    func Attention(x: Consciousness): Attention  
+    func Degree(a: Attention): [0, 1]
+    func Metacognition(x: Consciousness): Metacognition
+    func Φ(x: Any): ℝ
+    
+    pred is_conscious(x) = Φ(x) > 0
+    pred is_self_aware(x: Consciousness) = Metacognition(x)
+    
+    func Contents(x: Consciousness) = { q : Qualia | (x ↦ q) }
+    func ConsciousnessOf(x: Consciousness) = { y : Consciousness | (x ↦ y) }
+  }
+}

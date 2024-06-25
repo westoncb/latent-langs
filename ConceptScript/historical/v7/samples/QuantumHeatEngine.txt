@@ -1,0 +1,126 @@
+EXTEND QuantumMechanics {
+    Operator := (Unitary, Hermitian, Projection, Density)
+    State := (Pure, Mixed, Entangled, Separable)
+    Measurement := (Projective, POVM, Continuous, Discrete)
+    Evolution := (Schrodinger, Lindblad, Kraus, Heisenberg)
+}
+
+EXTEND ThermodynamicsOfInformation {
+    Quantity := (Entropy, RelativeEntropy, MutualInformation, ConditionalEntropy)
+    Process := (Isothermal, Adiabatic, Isobaric, Isochoric)
+    Principle := (LandauerPrinciple, JaynesCummingsModel, SzilardEngine, MaxwellsDemon)
+}
+
+QuantumThermoInformatics := (
+    System := (HilbertSpace, Hamiltonian, DensityOperator),
+    Dynamics := (UnitaryEvolution, OpenSystemDynamics, QuantumMeasurement, QuantumFeedback),
+    Thermodynamics := (WorkExtraction, HeatDissipation, EntropyProduction, InformationProcessing),
+    Application := (QuantumHeatEngines, QuantumRefrigerators, QuantumBatteries, QuantumMemory)
+)
+
+GIVEN {
+    ρ := DensityOperator
+    H := Hamiltonian
+    U := UnitaryOperator
+    S := VonNeumannEntropy
+    Tr := TraceOperation
+    β := InverseTemperature
+    kB := BoltzmannConstant
+}
+
+WHERE {
+    UnitaryEvolution(ρ, U) := U × ρ × U†
+    OpenSystemDynamics(ρ, H, L) := -i/ℏ × [H, ρ] + L(ρ)
+    QuantumMeasurement(ρ, M) := Σ(m, ⟨m|M × ρ × M†|m⟩ × |m⟩⟨m|)
+    QuantumFeedback(ρ, M, U) := Σ(m, ⟨m|M × ρ × M†|m⟩ × U(m) × ρ × U(m)†)
+    
+    WorkExtraction(ρ, H) := -Tr(ρ × ∂H)
+    HeatDissipation(ρ, H) := Tr(∂ρ × H)
+    EntropyProduction(ρ) := ∂S(ρ) / ∂t
+    InformationProcessing(ρ, σ) := S(ρ) + S(σ) - S(ρ ⊗ σ)
+}
+
+ASSERT {
+    ΔS(ρ) ≥ β × Q(ρ, H) - β × W(ρ, H) // Second Law of Thermodynamics
+    ΔE(ρ, H) = Q(ρ, H) + W(ρ, H) // First Law of Thermodynamics
+    S(ρ) ≤ log(dim(HilbertSpace)) // Entropy Bound
+    I(ρ, σ) ≤ 2 × min(S(ρ), S(σ)) // Holevo Bound
+    δE × δt ≥ ℏ / 2 // Time-Energy Uncertainty Principle
+}
+
+PROOF {
+    Theorem: Entropy cannot decrease in a closed quantum system.
+    Proof:
+        Let ρ be the initial state and U be the unitary evolution operator.
+        The final state is ρ' := U × ρ × U†.
+        By the invariance of entropy under unitary transformations:
+            S(ρ') = S(U × ρ × U†) = S(ρ)
+        Therefore, ΔS = S(ρ') - S(ρ) = 0.
+        Since entropy cannot decrease, ΔS ≥ 0 for closed quantum systems.
+    
+    Theorem: Work is optimally extracted by a sequence of infinitesimal quantum measurements.
+    Proof:
+        Let ρ be the initial state and {M(k)} be a sequence of measurement operators.
+        The work extracted by the k-th measurement is:
+            W(k) = kB × T × (S(ρ(k-1)) - S(ρ(k)))
+        where ρ(k) := Σ(m, ⟨m|M(k) × ρ(k-1) × M(k)†|m⟩ × |m⟩⟨m|) is the post-measurement state.
+        By the monotonicity of quantum relative entropy:
+            S(ρ(k-1) || ρ(k)) ≥ 0
+        Summing over all measurements:
+            Σ(k, W(k)) ≤ kB × T × (S(ρ(0)) - S(ρ(n)))
+        where ρ(0) := ρ is the initial state and ρ(n) is the final state.
+        The upper bound is reached when the measurements are infinitesimal, i.e., M(k) = I + ε(k) × H.
+        In this limit, the extracted work equals the change in free energy:
+            W = kB × T × (S(ρ(0)) - S(ρ(n))) = F(ρ(0)) - F(ρ(n))
+        Therefore, infinitesimal measurements are optimal for work extraction.
+}
+
+Application.QuantumHeatEngine := (
+    System := (QuantumThermoInformatics.System, WorkingMedium, HotReservoir, ColdReservoir),
+    Cycle := (Compression, Heating, Expansion, Cooling),
+    Performance := (Efficiency, PowerOutput, WorkExtracted, EntropyGenerated)
+)
+
+GIVEN {
+    ρ(w) := WorkingMedium.DensityOperator
+    ρ(h) := HotReservoir.DensityOperator
+    ρ(c) := ColdReservoir.DensityOperator
+    H(w) := WorkingMedium.Hamiltonian
+    H(h) := HotReservoir.Hamiltonian
+    H(c) := ColdReservoir.Hamiltonian
+    β(h) := HotReservoir.InverseTemperature
+    β(c) := ColdReservoir.InverseTemperature
+    U(hc) := WorkingMedium.CouplingOperator
+}
+
+WHERE {
+    Compression(ρ(w)) := QuantumThermoInformatics.UnitaryEvolution(ρ(w), U(compress))
+    Heating(ρ(w), ρ(h)) := QuantumThermoInformatics.OpenSystemDynamics(ρ(w) ⊗ ρ(h), H(w) + H(h) + U(hc), L(thermalize))
+    Expansion(ρ(w)) := QuantumThermoInformatics.UnitaryEvolution(ρ(w), U(expand))
+    Cooling(ρ(w), ρ(c)) := QuantumThermoInformatics.OpenSystemDynamics(ρ(w) ⊗ ρ(c), H(w) + H(c) + U(hc), L(thermalize))
+    
+    Efficiency := (WorkExtracted - WorkInput) / HeatInput
+    PowerOutput := WorkExtracted / CycleTime
+    EntropyGenerated := QuantumThermoInformatics.EntropyProduction(ρ(w))
+}
+
+ASSERT {
+    0 ≤ Efficiency ≤ 1 - (β(h) / β(c)) // Carnot Efficiency Limit
+    PowerOutput ≤ (1 - (β(h) / β(c))) × (k(h) / τ(h) + k(c) / τ(c)) // Power-Efficiency Trade-off
+    WorkExtracted ≤ kB × (β(c) - β(h)) × QuantumThermoInformatics.InformationProcessing(ρ(h), ρ(c)) // Work-Information Duality
+}
+
+PROOF {
+    Theorem: The efficiency of a quantum heat engine is bounded by the Carnot efficiency.
+    Proof:
+        Let Q(h) be the heat absorbed from the hot reservoir and Q(c) be the heat dissipated to the cold reservoir.
+        By the first law of thermodynamics:
+            W = Q(h) - Q(c)
+        By the second law of thermodynamics:
+            ΔS(total) = Q(h) / T(h) - Q(c) / T(c) ≥ 0
+        Combining the two equations:
+            W ≤ Q(h) × (1 - T(c) / T(h))
+        The efficiency is:
+            η := W / Q(h) ≤ 1 - T(c) / T(h) = 1 - β(h) / β(c)
+        Therefore, the efficiency of a quantum heat engine cannot exceed the Carnot efficiency.
+}

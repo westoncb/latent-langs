@@ -1,0 +1,143 @@
+CONCEPT GradientDescent {
+  NOTATION {
+    ∇f(x) = Gradient of f at x
+    x_i = i-th iterate 
+    α_i = Learning rate at i-th step
+    ⟨u,v⟩ = Dot product of vectors u and v
+    ‖v‖ = Euclidean norm of vector v
+    𝔼[X] = Expected value of random variable X
+    𝕍[X] = Variance of random variable X
+  }
+
+  LANGUAGE {
+    TYPE Vector = [Real]
+    TYPE Function = Vector → Real
+    TYPE Trajectory = [Vector]
+
+    FUNC GradientStep(f: Function, x: Vector, α: Real): Vector =
+      x - α * ∇f(x)
+
+    FUNC GradientDescent(f: Function, x_0: Vector, 
+                         α: Real, T: Int): Trajectory =
+      GENERATE(T, i => GradientStep(f, x_{i-1}, α), x_0)
+                    
+    PRED StronglyConvex(f: Function, m: Real) = 
+      ∀ x,y . f(y) ≥ f(x) + ⟨∇f(x), y-x⟩ + (m/2)*‖y-x‖²
+                    
+    PRED LipschitzSmooth(f: Function, L: Real) =
+      ∀ x,y . ‖∇f(x) - ∇f(y)‖ ≤ L*‖x-y‖
+                  
+    FUNC OptimalLR(m: Real, L: Real): Real = 2/(m+L) 
+                    
+    CONST x^*_f = ARGMIN_x f(x)
+  }
+           
+  STRUCTURES {
+    STRUCTURE StochasticGradientDescent {
+      FIELD f: Function
+      FIELD x_0: Vector  
+      FIELD α: Real
+      FIELD T: Int
+      FIELD B: Int       # Mini-batch size
+      
+      COMPUTE Trajectory: Trajectory = GENERATE(T, t => {
+        LET g = ∇f(x_t) ESTIMATED BY 
+          (1/B) * ∑_{i=1..B} ∇f_i(x_t) on SAMPLE {f_i}  
+        GradientStep(f, x_t, α) USING g
+      }, x_0)
+    }
+                
+    STRUCTURE AcceleratedGradientDescent {
+      FIELD f: Function
+      FIELD x_0: Vector
+      FIELD α: Real > 0
+      FIELD β: Real ∈ [0,1) 
+      FIELD T : Int
+        
+      COMPUTE Trajectory : Trajectory = GENERATE(T, t => {
+        LET y_t = x_t + β*(x_t - x_{t-1})  # Momentum  
+        GradientStep(f, y_t, α)
+      }, x_0)
+    }
+  }
+           
+  TRANSFORMERS {  
+    REWRITE GradientDescentRecurrence:
+      x_{i+1} -> GradientStep(f, x_i, α)
+    
+    REWRITE StepsToRate:
+      GradientDescent(f, x_0, α, T) 
+        -> {x_i}_i WHERE 
+             x_{i+1} = GradientStep(f, x_i, 1/√i), x_0
+             
+    REWRITE VarianceReduction:
+      𝕍[∇f(x) ESTIMATED BY (1/B)*∑ ∇f_i(x)] 
+        -> (1/B) * 𝕍[∇f_i(x)]
+             
+    SIMPLIFY SeparableSum:  
+      ∑_i f(a_i, b_i) -> ∑_i f(a_i, •) + ∑_i f(•, b_i)
+        IF f separable
+  }
+   
+  PROOFS {
+    PROOF GradientDescentConvergence:
+      ASSUM StronglyConvex(f, m), LipschitzSmooth(f, L), 
+        α = OptimalLR(m, L), {x_i} = GradientDescent(f, x_0, α, •)
+      PROVE f(x_i) - f(x^*_f) ≤ (L/2) * ‖x_0 - x^*_f‖² * (1-m/L)^i
+    {
+      f(x_i) - f(x^*_f)
+        ≤ (1/2α) * ‖x_i - x^*_f‖² - (1/2α) * ‖x_{i+1} - x^*_f‖²  
+            BY StronglyConvex, LipschitzSmooth, GradientStep
+        ≤ (L/2) * ‖x_0 - x^*_f‖² * (1-m/L)^i
+            BY INDUCTION, BASE CASE i=0 
+      QED
+    }   
+         
+    PROOF StochasticGDConvergence:
+      ASSUM StronglyConvex(f, m), {f_i} i.i.d. from 𝒟_f,
+        𝔼[∇f_i(x)] = ∇f(x), 𝕍[∇f_i(x)] ≤ σ²,
+        {x_i} = StochasticGD(f, x_0, α, T, B)
+      PROVE 𝔼[f(x_T)] - f(x^*_f) ≤ O(exp(-mαT)) + O(α(σ²/B))  
+    {
+      𝔼‖x_{i+1} - x^*_f‖²  
+        = 𝔼‖x_i - α*g_i - x^*_f‖²
+        ≤ (1-2mα+α²L²)*𝔼‖x_i - x^*_f‖² + 2α²σ²/B  
+          BY g_i = (1/B)*∑ ∇f_j(x_i), 𝔼‖g_i-∇f(x_i)‖² ≤ σ²/B   
+      ⇒ 𝔼‖x_T - x^*_f‖²     
+        ≤ (1-2mα+α²L²)^T * ‖x_0 - x^*_f‖² + 2α(σ²/B)/(2m-αL²)
+          UNROLLING recursion, BOUNDING sum of geometric series
+      ⇒ 𝔼[f(x_T)] - f(x^*_f) 
+        ≤ (m/2) * 𝔼‖x_T - x^*_f‖²
+        ≤ O(exp(-mαT)) + O(α(σ²/B))    
+          CHOOSING α = O(1/√T)
+      QED  
+    }
+  }
+       
+  EXAMPLES {
+    EXAMPLE LogisticRegressionWithSGD:
+      LET X: [Real]^{N × d} = DATASET  
+      LET Y: [Real]^N = LABELS
+      DEFINE f_i(θ) = LogLoss(θ; (x_i, y_i)) 
+        = -y_i*⟨θ,x_i⟩ + log(1 + exp(⟨θ,x_i⟩))
+      LET Trajectory = StochasticGradientDescent(
+        f(θ) = (1/N)*∑_i f_i(θ),
+        x_0 = 0^d, 
+        α = 0.1/√T,
+        T = 10000, 
+        B = 100
+      ).Trajectory
+         
+    EXAMPLE AcceleratedGradientForSparseRegression:
+      LET X: [Real]^{N × d} = DATASET
+      LET Y: [Real]^N = RESPONSE  
+      DEFINE f(β) = (1/2N)‖Y - Xβ‖² + λ‖β‖_1
+      LET Trajectory = AcceleratedGradientDescent(
+        f = f, 
+        x_0 = 0^d,
+        α = 1/‖X‖²,  
+        β = 0.9,
+        T = 1000
+      ).Trajectory
+  }
+}

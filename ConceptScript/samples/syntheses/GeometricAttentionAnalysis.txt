@@ -1,0 +1,183 @@
+CONCEPT GeometricAttentionAnalysis {
+  PARAMETERS {
+    d : Nat -- Dimension of embedding space
+    h : Nat -- Number of attention heads
+    N : Nat -- Sequence length
+  }
+
+  CONTEXT {
+    TYPES {
+      INDUCTIVE Type {
+        CASE Base
+        CASE Arrow(Type, Type)
+        CASE TensorProduct(Type, Type)
+      }
+      
+      INDUCTIVE Term {
+        CASE Var(String)
+        CASE Abs(String, Type, Term)
+        CASE App(Term, Term)
+        CASE AttentionOp(Term, Term, Term) -- Query, Key, Value
+      }
+      
+      Embedding := ℝ^d
+      AttentionMap := Embedding → Embedding → ℝ
+      
+      Shape := CS(ℝ^d)
+      DIR := 𝕊^(d-1)
+      MPD := Multiset(Δ)
+      Δ := {(b, d) | b ≤ d}
+    }
+    
+    STRUCTURES {
+      STRUCTURE TypedAttention {
+        FIELD TypeOf : Term → Type
+          CASE Var(x) → Base
+          CASE Abs(x, T, t) → Arrow(T, TypeOf(t))
+          CASE App(f, t) → (
+            LET S = TypeOf(f)
+            LET T = TypeOf(t)
+            REQUIRE S IS Arrow(U, V)
+            REQUIRE U = T
+            V
+          )
+          CASE AttentionOp(q, k, v) → (
+            REQUIRE TypeOf(q) = TypeOf(k) = TypeOf(v) = TensorProduct(Base, Base)
+            TensorProduct(Base, Base)
+          )
+        
+        AXIOM SubjectReduction {
+          TypeOf(t) = T ∧ t ~> t' ⇒ TypeOf(t') = T
+        }
+      }
+      
+      STRUCTURE AttentionGeometry {
+        FIELD A : AttentionMap
+        FIELD Z_A := {(x, y, t) ∈ Embedding × Embedding × ℝ | A(x)(y) ≤ t}
+        FIELD f_A : Z_A → DIR × ℝ
+        FIELD PHT_A := R(f_A)_*𝕜_Z_A IN D^b(Shv(DIR × ℝ))
+        FIELD PHT^i_A := H^i(PHT_A) IN Shv(DIR × ℝ)
+        FIELD Dgm_A(i, v) → MPD
+          WHERE ∃ p : ℝ → MPD . Dgm_A(i, v) = p(v) AND p = Dgm(PHT^i_A|_{v}×ℝ)
+        
+        AXIOM ContinuityOfAttention {
+          ∀ ε > 0, ∃ δ > 0, ∀ x y x' y' ∈ Embedding .
+            ‖x - x'‖ < δ ∧ ‖y - y'‖ < δ ⇒ |A(x)(y) - A(x')(y')| < ε
+        }
+      }
+      
+      STRUCTURE MultiheadAttentionGeometry {
+        FIELD Heads : Fin(h) → AttentionGeometry
+        FIELD CombinedPHT := ⊕_{i ∈ Fin(h)} PHT_{Heads[i]}
+        
+        AXIOM OrthogonalHeads {
+          ∀ i j ∈ Fin(h), x y ∈ Embedding . i ≠ j ⇒ 
+            ⟨Heads[i].A(x)(y), Heads[j].A(x)(y)⟩ = 0
+        }
+      }
+    }
+    
+    NOTATION {
+      ~> := Reduces
+      ⊕ := DirectSum
+      ⟨_, _⟩ := InnerProduct
+      Shv := Shv(DIR × ℝ, ℝ)
+      D^b := D^b(Shv)
+      R := DerivedDirectImage
+      H^i := CohomologyFunctor(_, i)
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE BetaReduction {
+      App(Abs(x, T, t), s) ~> t[x ↦ s]
+    }
+    
+    REWRITE AttentionComputation {
+      AttentionOp(q, k, v) ~> 
+        LET α = SoftMax(Seq(⟨Embed(k[i]), Embed(q)⟩ / √d for i in Fin(N)))
+        IN Sum(i in Fin(N), α[i] * Embed(v[i]))
+    }
+    
+    SIMPLIFY PersistenceDiagramDecomposition(A : AttentionMap) {
+      Dgm_A(i, v) = ∐_{I ∈ π₀(BCT_A(v, ?))} GenDgm(β_i(A_I))
+        WHERE A_I := {(x, y) ∈ Embedding × Embedding | A(x)(y) ∈ I}
+    }
+  }
+
+  PROOFS {
+    THEOREM TypeSoundness {
+      ∀ t : Term, T : Type . TypeOf(t) = T ⇒ (t ~>* v ∧ TypeOf(v) = T) ∨ (t ↑)
+    }
+    PROOF BY TypedAttention.SubjectReduction, Progress, Preservation {
+      PROVE TypeOf(t) = T ⇒ (t ~>* v ∧ TypeOf(v) = T)
+      PROVE TypeOf(t) = T ⇒ t IS_VALUE ∨ (∃ t' . t ~> t')
+      PROVE TypeOf(t) = T ∧ t ~> t' ⇒ TypeOf(t') = T   
+    }
+    
+    THEOREM AttentionStability ∀ A B : AttentionMap . 
+      dI(PHT_A, PHT_B) ≤ sup_{x, y ∈ Embedding} |A(x)(y) - B(x)(y)| {
+      GIVEN A B : AttentionMap
+      
+      LET ε = sup_{x, y ∈ Embedding} |A(x)(y) - B(x)(y)|
+      
+      HAVE ∀ x y t . (x, y, t) ∈ Z_A ⇔ (x, y, t+ε) ∈ Z_B
+      HENCE ∃ f : Z_A ↪ Z_B, g : Z_B ↪ Z_A . 
+        f((x, y, t)) = (x, y, t+ε) ∧ g((x, y, t)) = (x, y, t-ε)
+      
+      SHOW dI(PHT_A, PHT_B) ≤ ε
+        BY InterleaveEquivalence(f, g)
+      QED
+    }
+    
+    THEOREM GeometricInterpretationOfAttention 
+      ∀ A : AttentionMap, i : Nat, v : DIR .
+        Dgm_A(i, v) CHARACTERIZES AttentionFlow(A, v) {
+      GIVEN A : AttentionMap, i : Nat, v : DIR
+      
+      DEFINE AttentionFlow(A, v) := 
+        {(x, y) ∈ Embedding × Embedding | ∇_y A(x)(y) = λv, λ > 0}
+      
+      <1> SHOW Dgm_A(i, v) CAPTURES ConnectedComponents(AttentionFlow(A, v))
+        BY PersistenceDiagramDecomposition(A)
+      
+      <2> SHOW ConnectedComponents(AttentionFlow(A, v)) CHARACTERIZES 
+            AttentionPatterns(A, v)
+        WHERE AttentionPatterns(A, v) := 
+          {S ⊆ Embedding × Embedding | ∀ (x, y) ∈ S . A(x)(y) >> A(x)(y') ∀ y' ∉ S}
+      
+      CONCLUDE Dgm_A(i, v) CHARACTERIZES AttentionFlow(A, v)
+      QED
+    }
+  }
+  
+  EXAMPLES {
+    EXAMPLE SelfAttentionAnalysis {
+      LET sa = SelfAttention(512, 8)
+      LET mag = MultiheadAttentionGeometry WITH {
+        Heads = λ i . AttentionGeometry WITH {
+          A = λ x y . sa.Heads[i].Alignment(x, y) / √512
+        }
+      }
+      
+      THEN ∀ i ∈ Fin(8), v ∈ DIR . 
+        Dgm_{mag.Heads[i]}(0, v) CHARACTERIZES KeyValueRelationships(sa.Heads[i], v)
+        WHERE KeyValueRelationships(h, v) := 
+          {(k, v) | h.Alignment(k, q) >> h.Alignment(k', q) ∀ k' ≠ k, ⟨q, v⟩ ≈ 1}
+    }
+    
+    EXAMPLE CrossModalAttentionAnalysis {
+      LET ca = CrossAttention(512, 128, 512, 8)
+      LET mag = MultiheadAttentionGeometry WITH {
+        Heads = λ i . AttentionGeometry WITH {
+          A = λ x y . ca.Heads[i].Alignment(x, y) / √(512 * 128)
+        }
+      }
+      
+      THEN ∀ i ∈ Fin(8), v ∈ DIR . 
+        Dgm_{mag.Heads[i]}(1, v) CHARACTERIZES CrossModalAlignments(ca.Heads[i], v)
+        WHERE CrossModalAlignments(h, v) := 
+          {(q, k) | h.Alignment(k, q) >> h.Alignment(k', q) ∀ k' ≠ k, ⟨q, v⟩ ≈ 1}
+    }
+  }
+}

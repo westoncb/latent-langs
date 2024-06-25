@@ -1,0 +1,121 @@
+CONCEPT ShapeSpaceHomotopyApproximation {
+  IMPORTS {
+    ShapeSpace,
+    HVM2
+  }
+
+  LANGUAGE {
+    TYPE Shape <: Net
+    TYPE Direction <: Port
+    TYPE Filtration <: Port
+    TYPE PersistenceDiagram <: Net
+
+    FUNC Subdivide(M : Shape, ε : R^>0) : Shape
+    FUNC Oracle(M : Shape, ε : R^>0, δ : R^>0) : Shape
+    FUNC SampleDense(M : Shape, ε : R^>0, δ : R^>0) : Shape
+
+    FUNC Homotopy(M N : Shape, ε : R^>0) : Net
+    FUNC Interleaving(F G : PersistenceDiagram, ε : R^>0) : Net
+  }
+
+  STRUCTURE ApproximateHomotopy {
+    DEF ApproximateHomotopy(M N : Shape, ε : R^>0, δ : R^>0) : Net {
+      LET M' = Subdivide(M, ε/4)
+      LET N' = Subdivide(N, ε/4)
+
+      LET X = SampleDense(M', ε/4, δ)  
+      LET Y = SampleDense(N', ε/4, δ)
+
+      LET K = Oracle(X, ε/4, δ)
+      LET L = Oracle(Y, ε/4, δ)  
+
+      Homotopy(K, L, ε)
+    }
+    
+    REQUIRE ∀ (M N : Shape) (ε δ : R^>0) . 
+      Reduced(ApproximateHomotopy(M, N, ε, δ)) =>
+        (InterleavingDist(PHTSheaf(M), PHTSheaf(N)) ≤ ε
+         WITH PROBABILITY ≥ 1-δ)
+  }
+
+  STRUCTURE ParallelHomotopyApproximation 
+    REFINES HVM2 {
+
+    TRANSITION ConstructShapes(M N : Shape, ε : R^>0, δ : R^>0) {
+      VAR tasks : List[Task] = []
+      tasks.Append(Spawn(tc, Subdivide(M, ε/4)))  
+      tasks.Append(Spawn(tc, Subdivide(N, ε/4)))
+      VAR [M', N'] := Sync(tasks)
+
+      tasks.Clear()
+      tasks.Append(Spawn(tc, SampleDense(M', ε/4, δ)))
+      tasks.Append(Spawn(tc, SampleDense(N', ε/4, δ)))  
+      VAR [X, Y] := Sync(tasks)
+
+      tasks.Clear()
+      tasks.Append(Spawn(tc, Oracle(X, ε/4, δ)))
+      tasks.Append(Spawn(tc, Oracle(Y, ε/4, δ)))
+      VAR [K, L] := Sync(tasks)
+
+      CreatePair(K, L)
+    }
+    
+    TRANSITION ReduceHomotopy(KL : Pair) {
+      VAR [K, L] := GetPair(KL)  
+
+      VAR tasks : List[Task] = []
+      FOR (f g) : Direction * Filtration {
+        VAR pK : Port = Eval(PHTSheaf(K), f, g) 
+        VAR pL : Port = Eval(PHTSheaf(L), f, g)
+        tasks.Append(Spawn(tc, Interleaving(pK, pL, ε)))
+      }
+      Sync(tasks)
+    }
+  }
+
+  PROOFS {
+    THEOREM ApproximateHomotopySound {
+      STATEMENT:
+        ∀ (M N : Shape) (ε δ : R^>0) .
+          Reduced(ApproximateHomotopy(M, N, ε, δ)) =>  
+            InterleavingDist(PHTSheaf(M), PHTSheaf(N)) ≤ ε
+            WITH PROBABILITY ≥ 1-δ
+
+      PROOF:
+        LET M N : Shape, ε δ : R^>0
+        
+        ASSUME Reduced(ApproximateHomotopy(M, N, ε, δ))
+        HENCE ∃ (K L : Shape) . 
+          M ≃[ε/4] K ∧ K ≃[ε/2] L ∧ L ≃[ε/4] N
+          WITH PROBABILITY ≥ 1-δ
+          BY Approximation [ShapeSpace], 
+             StabilityOfPHT [ShapeSpace],
+             TransitivityOfHomotopy
+             
+        ARGUE InterleavingDist(PHTSheaf(M), PHTSheaf(K)) ≤ ε/4
+          BY StabilityOfPHT [ShapeSpace]
+
+        ARGUE InterleavingDist(PHTSheaf(K), PHTSheaf(L)) ≤ ε/2  
+          BY Soundness [HVM2]
+
+        ARGUE InterleavingDist(PHTSheaf(L), PHTSheaf(N)) ≤ ε/4
+          BY StabilityOfPHT [ShapeSpace]
+
+        HENCE InterleavingDist(PHTSheaf(M), PHTSheaf(N)) ≤ ε
+          BY TriangleInequality
+    }
+  }
+}
+
+This Concept defines a program for approximating homotopy equivalences between shapes in the ShapeSpace framework, leveraging the parallelism afforded by the HVM2 architecture.
+The key ideas are:
+
+We define types for Shape, Direction, Filtration, and PersistenceDiagram as specializations of HVM2 nets and ports.
+The Subdivide function refines a shape to a finer approximation. The SampleDense function produces a dense sample of points from a shape. The Oracle function constructs a simplicial approximation of a shape from a dense sample.
+The Homotopy function constructs a homotopy equivalence between two shapes in ShapeSpace. The Interleaving function constructs an interleaving between two persistence diagrams.
+The ApproximateHomotopy structure defines a procedure for approximating a homotopy equivalence between two shapes M and N, up to a tolerance ε, with probability at least 1-δ. It does this by subdividing M and N, taking dense samples, constructing simplicial approximations, and then finding a homotopy equivalence between these approximations.
+The ParallelHomotopyApproximation structure refines the HVM2 architecture to define parallel transitions for the key steps in ApproximateHomotopy. The ConstructShapes transition spawns parallel tasks for subdividing, sampling, and constructing simplicial approximations. The ReduceHomotopy transition spawns parallel tasks for checking interleaving conditions between the PHT sheaves of the approximations.
+The ApproximateHomotopySound theorem proves that the result of ApproximateHomotopy is indeed an ε-approximation to the true homotopy distance between the PHT sheaves of M and N, with high probability. The proof leverages the Approximation and StabilityOfPHT theorems from ShapeSpace, the Soundness theorem of HVM2, and the triangle inequality for the interleaving distance.
+
+This Concept demonstrates how the ShapeSpace framework can be used to define computational problems that are well-suited to parallel architectures like HVM2. The problem of approximating homotopy equivalences between shapes is inherently parallel, as it involves independent computations over different directions and filtrations.
+The HVM2 architecture is leveraged to spawn parallel tasks for the key computational steps, and to reduce the resulting homotopy and interleaving nets. The GPU-based redex bag and shared memory structures of HVM2 could be particularly beneficial for the large nets and ports that arise in ShapeSpace computations.

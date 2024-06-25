@@ -1,0 +1,111 @@
+BodyWithoutOrgans := (
+  Multiplicity(Intensities(flows : List(Flow(Σ(source : Organ, destination : Organ, intensity : R))), 
+                           resonances : List(Resonance(Σ(o1 : Organ, o2 : Organ, Coupled(o1, o2))))),
+               Assemblage(parts : List(Organ), 
+                          relations : Fun(List(Organ), Eff(Connecting, Eff(Disconnecting, Assemblage))))),
+  Plateau(Consistency(substance : Matter, state : State), 
+          Continuum(Intensive(field : Fun(Point(x : R, y : R, z : R), Potential)))),
+  {*Egg(Ovo, Cosmic, Intense, Alive)},
+  Rhizome(Nodes(multiplicities : List(Multiplicity)), 
+          Edges(connections : Fun(Multiplicity, Fun(Multiplicity, Eff(Connecting, Eff(Disconnecting, Rhizome)))))),
+  Affect(Force(Virtual | Actual, direction : Vector, magnitude : R⁺),
+         Becoming(transition : Fun(BodyWithoutOrgans, Eff(Affecting, BodyWithoutOrgans))))
+) :: {
+  Organ := Σ(function : Fun(Flow, Flow), 
+              structure : Σ(shape : Geometry, composition : Matter))
+  Flow := Eff(Flowing : Matter -> Matter, Matter)
+  Resonance := Eff(Resonate : (Organ, Organ) -> (), (Organ, Organ))
+  Coupled(o1 : Organ, o2 : Organ) := Σ(f : Flow, 
+                                        Eq(o1.function(f), o2.function(f)))
+  Connecting := Eff(Connect : (Organ, Organ) -> Assemblage, (Organ, Organ))
+  Disconnecting := Eff(Disconnect : (Organ, Organ) -> Assemblage, (Organ, Organ))
+  Matter := Σ(particles : List(Particle), 
+               fields : List(Field(Σ(name : String, strength : R))))
+  State := Solid | Liquid | Gas | Plasma
+  Point(x : R, y : R, z : R) := Σ(position : (x, y, z), 
+                                  potential : Potential)
+  Potential := Σ(energy : R, 
+                 trajectory : Fun(Point, Eff(Moving, Point)))                      
+  Affecting := Eff(Affect : BodyWithoutOrgans -> BodyWithoutOrgans,
+                          BodyWithoutOrgans)
+  
+  // Concept combination operators
+  ⊕ := Fun(b1 : BodyWithoutOrgans, b2 : BodyWithoutOrgans, 
+           Rhizome(b1.Multiplicity ++ b2.Multiplicity, 
+                   Fun(m1 : b1.Multiplicity, 
+                       Fun(m2 : b2.Multiplicity, 
+                           Eff(Connecting, Eff(Disconnecting, Rhizome))))))
+  ⊖ := Fun(b : BodyWithoutOrgans, o : Organ,
+           Assemblage(b.Multiplicity.Assemblage.parts - o,
+                      Fun(p : b.Multiplicity.Assemblage.parts - o,
+                          Eff(Connecting, Eff(Disconnecting, Assemblage)))))
+  ⊗ := Fun(b : BodyWithoutOrgans, a : Affect,
+           Becoming(Fun(b, Eff(a.Affecting, BodyWithoutOrgans))))
+           
+  // Process concepts                    
+  Desiring := (
+    Production(Machines(parts : List(Organ),
+                        flows : Fun(List(Organ),
+                                    Eff(Connecting, Eff(Producing, Machines))))),
+    Interruption(Antiproduction(blockages : List(Organ),
+                                breakdowns : Fun(List(Organ), 
+                                                 Eff(Disconnecting, 
+                                                     Eff(Interrupting, 
+                                                         Antiproduction)))))                 
+  ) |> Producing
+  
+  Schizophrenizing := (
+    Decoding(Meanings(signs : List(Sign),
+                      interpretations : Fun(List(Sign), 
+                                            Eff(Signifying, Meanings)))),
+    Recoding(Subjectification(subjects : List(Subject),
+                              becomings : Fun(List(Subject),
+                                              Eff(Identifying,
+                                                  Eff(Transforming, 
+                                                      Subjectification)))))                                                                                                 
+  ) |> Signifying ⊕ Identifying
+  
+  Nomadizing := (
+    Deterritorializing(Territories(boundaries : List(Boundary),
+                                   markings : Fun(List(Boundary),
+                                                  Eff(Bordering,
+                                                      Eff(Coding,
+                                                          Territories))))),
+    Reterritorializing(Refrains(rhythms : List(Rhythm),
+                                motifs : Fun(List(Rhythm),
+                                             Eff(Repeating,
+                                                 Eff(Grounding,
+                                                     Refrains)))))                                                                                        
+  ) |> Bordering ⊖ Grounding
+  
+  // Operator definitions
+  DEF[
+    ≀: Coupling,
+    ↩: Folding,
+    ↷: Resonating,
+    ⤰: Gestating,
+    ⟐: Transversing,
+    ⦿: Holing  
+  ]
+}
+
+In this expression of BodyWithoutOrgans, we use a combination of the extended and original ConceptScript features to capture the key aspects and processes of this complex philosophical concept:
+
+The main components of the BodyWithoutOrgans are modeled using dependent record types, such as Multiplicity, Plateau, and Rhizome. These types express the structural relationships and constraints between the various elements, such as the coupling of organs through flows in a multiplicity, or the consistency of matter and continuum of intensities in a plateau.
+Higher-order functions are used to represent the dynamic processes and transformations that occur within and between the components, such as the connecting and disconnecting of organs in an assemblage, or the becoming of a BodyWithoutOrgans through the action of affects.
+Algebraic effects are employed to model the non-deterministic and context-dependent aspects of the processes, such as the flowing of matter through organs, the resonance between coupled organs, or the deterritorialization and reterritorialization of the BodyWithoutOrgans.
+Concept combination operators, such as ⊕ (rhizomatic connection), ⊖ (organ subtraction), and ⊗ (affective becoming), are defined to express the ways in which BodyWithoutOrgans can be composed, decomposed, and transformed.
+Process concepts, such as Desiring, Schizophrenizing, and Nomadizing, are used to capture the key productive, semiotic, and spatial dynamics of the BodyWithoutOrgans, respectively. These processes are modeled using sequences of effects and transformations, and can be composed using the |> operator.
+Flexible operator definitions, such as ≀ (coupling), ↩ (folding), ↷ (resonating), ⤰ (gestating), ⟐ (transversing), and ⦿ (holing), are introduced to express the specific operations and relations that are relevant to the BodyWithoutOrgans concept.
+Annotations, such as {*Egg(Ovo, Cosmic, Intense, Alive)}, are used to attach additional semantic information and qualities to the components of the BodyWithoutOrgans, providing a richer and more evocative description.
+The resulting expression captures the BodyWithoutOrgans as a complex, dynamic, and open-ended system, composed of multiple interacting components, processes, and transformations. The use of dependent types, higher-order functions, and algebraic effects allows for a precise and flexible modeling of the structural and behavioral aspects of the concept, while the concept combination operators, process concepts, and annotations provide a means of expressing its compositional, temporal, and semantic dimensions.
+
+Of course, this is just one possible way of expressing the BodyWithoutOrgans concept in ConceptScript, and there are many other aspects and interpretations that could be explored and formalized. The key is to use the language features in a way that captures the essential characteristics and insights of the concept, while remaining true to its philosophical and theoretical foundations.
+
+Some potential extensions and variations that could be considered:
+
+Incorporating more detailed models of the various types of BodyWithoutOrgans, such as the full BodyWithoutOrgans, the empty BodyWithoutOrgans, and the cancerous BodyWithoutOrgans, and expressing their specific properties and transformations.
+Exploring the relationships and interactions between the BodyWithoutOrgans and other related concepts, such as the desiring-machines, the plane of consistency, and the abstract machine, using concept combination operators and process composition.
+Developing a library of reusable components, processes, and operators that capture the key insights and techniques of schizoanalysis, which could be used to analyze and construct BodyWithoutOrgans in different domains and contexts.
+Integrating the ConceptScript expression with other formal models and tools, such as category theory, process algebra, or machine learning, to enable more rigorous analysis, simulation, and visualization of the BodyWithoutOrgans and its dynamics.
+Ultimately, the goal is to use the expressive power of ConceptScript to deepen our understanding and appreciation of the BodyWithoutOrgans concept, and to facilitate new insights, connections, and applications across different fields and practices. By leveraging the language features in a creative and principled way, we can explore the full potential of this fascinating and challenging concept.

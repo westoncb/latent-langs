@@ -1,0 +1,135 @@
+CONCEPT GradientFlow {
+  NOTATION {
+    ∇f = Grad(f)
+    γ_t = Curve(γ, t)
+    γ' = Velocity(γ)
+    ϕ_t = Flow(ϕ, t)
+    ⟨v, w⟩ = InnerProduct(v, w)
+    ‖v‖ = Norm(v)
+  }
+
+  LANGUAGE {
+    TYPE Manifold
+    TYPE Point = Manifold
+    TYPE TangentVector = (Point, Vector)
+    TYPE Vector = [Real]
+    TYPE VectorField = Point -> TangentVector
+    TYPE RealValuedFunction = Manifold -> Real
+    TYPE Curve = Real -> Manifold
+    TYPE Flow = Real -> Manifold -> Manifold
+
+    FUNC Grad(f: RealValuedFunction) : VectorField
+    FUNC Velocity(γ: Curve) : VectorField
+    FUNC IntegralCurve(X: VectorField, p: Point) : Curve
+    FUNC InnerProduct(v: TangentVector, w: TangentVector) : Real
+    FUNC Norm(v: TangentVector) : Real
+
+    AXIOM InnerProductSymmetric : ∀ v w . ⟨v, w⟩ = ⟨w, v⟩
+    AXIOM InnerProductBilinear : ∀ u v w a b . ⟨a*u + b*v, w⟩ = a*⟨u, w⟩ + b*⟨v, w⟩
+    AXIOM NormFromInnerProduct : ∀ v . ‖v‖ = SQRT(⟨v, v⟩)
+  }
+
+  STRUCTURES {
+    STRUCTURE GradientFlowDynamics {
+      FIELD M : Manifold
+      FIELD f : RealValuedFunction
+      
+      COMPUTE GradientVectorField : VectorField = - ∇f
+
+      COMPUTE Trajectory(p : Point, t0 : Real) : Curve = γ 
+        WHERE γ_t0 = p AND ∀ t . γ' = GradientVectorField(γ_t)
+      
+      COMPUTE FlowMap(t : Real) : Manifold -> Manifold = ϕ_t
+        WHERE ∀ p . ϕ_0(p) = p AND ∀ s . D/dt[ϕ_s](p) = GradientVectorField(ϕ_s(p))
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE GradInnerProduct : ⟨∇f(p), v⟩ -> D/dt[f(γ_t)] WHERE γ_0 = p AND γ' = v
+    SIMPLIFY NormGrad : ‖∇f(p)‖^2 -> - D/dt[f(γ_t)] WHERE γ_0 = p AND γ' = - ∇f(γ_t)  
+  }
+  
+  PROOFS {
+    THEOREM GradientFlowMinimizesFunction : ∀ γ : Curve . (
+        (∀ t . γ' = - ∇f(γ_t))
+      ⇒ ∀ t1 t2 . t1 ≤ t2 ⇒ f(γ_t1) ≥ f(γ_t2)
+    ) {
+      GIVEN γ : Curve ASSUME ∀ t . γ' = - ∇f(γ_t)
+      
+      SUFFICES_TO_SHOW ∀ t . D/dt[f(γ_t)] ≤ 0
+      
+      DERIVE D/dt[f(γ_t)] 
+        = ⟨∇f(γ_t), γ'⟩         BY GradInnerProduct
+        = ⟨∇f(γ_t), - ∇f(γ_t)⟩  BY Assumption  
+        = - ‖∇f(γ_t)‖^2         BY NormGrad
+        ≤ 0                     BY NormFromInnerProduct, InnerProductBilinear 
+      
+      QED  
+    }
+    
+    THEOREM FlowConservesFunction : ∀ (flow : GradientFlowDynamics, t : Real) .
+      flow.f ∘ flow.FlowMap(t) = flow.f
+    {
+      GIVEN flow : GradientFlowDynamics, t : Real
+      
+      SUFFICES_TO_SHOW ∀ p . (flow.f ∘ flow.FlowMap(t))(p) = flow.f(p)  
+
+      LET p : Point, ϕ_t = flow.FlowMap(t), γ_s = ϕ_s(p)
+
+      DERIVE D/dt[(flow.f ∘ ϕ_t)(p)]
+        = D/dt[flow.f(γ_t)]
+        = ⟨∇(flow.f)(γ_t), γ'⟩    BY GradInnerProduct
+        = ⟨∇(flow.f)(γ_t), - ∇(flow.f)(γ_t)⟩  
+            BY DEF of ϕ_t and GradientVectorField
+        = - ‖∇(flow.f)(γ_t)‖^2    BY NormGrad
+        = 0                       BY DEF of γ and GradientVectorField
+      
+      HENCE ∀ t . (flow.f ∘ ϕ_t)(p) = (flow.f ∘ ϕ_0)(p) = flow.f(p)
+
+      QED
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE QuadraticBowl : GradientFlowDynamics {
+      M = R^n
+      f(x) = ‖x‖^2 = ⟨x, x⟩
+
+      GradientVectorField(x) = 2*x
+      Trajectory(x0, t0)(t) = exp(-2*(t-t0)) * x0
+      FlowMap(t)(x) = exp(-2*t) * x
+    } PROOF {
+      ∇f(x)
+        = D/dt[f(x + t*v)]|_{t=0}  FOR ANY v
+        = D/dt[‖x + t*v‖^2]|_{t=0}
+        = D/dt[⟨x + t*v, x + t*v⟩]|_{t=0}
+        = D/dt[⟨x, x⟩ + 2*t*⟨x, v⟩ + t^2*⟨v, v⟩]|_{t=0}
+        = 2*⟨x, v⟩
+        = ⟨2*x, v⟩   THEREFORE ∇f(x) = 2*x
+
+      Trajectory(x0, t0)(t)
+        = γ_t  WHERE γ_t0 = x0 AND ∀ t . γ' = - ∇f(γ_t) 
+        ⇒ γ_t0 = x0 AND ∀ t . γ' = -2*γ_t
+        ⇒ γ' + 2*γ = 0
+        ⇒ γ_t = c*exp(-2*t)  FOR SOME c
+        ⇒ x0 = γ_t0 = c*exp(-2*t0)
+        ⇒ c = exp(2*t0)*x0
+        ⇒ γ_t = exp(2*t0)*x0*exp(-2*t) = exp(-2*(t-t0))*x0
+
+      FlowMap(t)(x) 
+        = ϕ_t(x)  WHERE ϕ_0(x) = x AND ∀ s . D/dt[ϕ_s](x) = - ∇f(ϕ_s(x))
+        = ϕ_t(x)  WHERE ϕ_0(x) = x AND ∀ s . D/dt[ϕ_s](x) = -2*ϕ_s(x)  
+        ⇒ ϕ_t(x) = Trajectory(x, 0)(t) = exp(-2*t)*x
+    }
+
+    EXAMPLE Rosenbrock : GradientFlowDynamics {
+      M = R^2
+      f(x, y) = (1 - x)^2 + 100*(y - x^2)^2
+
+      GradientVectorField(x, y) = (
+        -2*(1-x) - 400*x*(y-x^2),
+        200*(y-x^2)
+      )
+    } 
+  }
+}

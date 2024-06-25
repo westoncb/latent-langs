@@ -1,0 +1,151 @@
+CONCEPT CategoryOfQuantumOperatorAlgebras {
+  LANGUAGE {
+    type Hilb = FinDim(Hilb) | SepHilb | Hilb(S: Space)   ; Hilbert spaces
+    type Alg = C*-Alg | vN-Alg | QAlg(S: Space) | Heis(S: Symplectic)
+    type Ideal = Left(Ideal) | Right(Ideal) | Bi(Ideal)  
+    type Rep = BddRep | UnitaryRep | ProjRep | IrrRep
+    
+    notation "𝐴 ⊗ 𝐵" = TensorProd(𝐴: Alg, 𝐵: Alg)
+    notation "𝐴 ⋊ G" = CrossedProd(𝐴: Alg, G: Grp) 
+    notation "𝐴 ⋈ L" = Smash(𝐴: Alg, L: Lie) 
+    notation "𝐴 ⋉ V" = Semidirect(𝐴: Alg, V: 𝐴-Mod)
+    notation "𝐴 / ℐ" = Quotient(𝐴: Alg, ℐ: Ideal) 
+    
+    π: Rep(𝐴, H)             ; Representation of 𝐴 on H
+    notation "π[𝑎]" = π(𝑎: 𝐴) ; Action of representation  
+    notation "⟨π⟩" = Subspace(H, {ψ: H | ∀ 𝑎: 𝐴. π[𝑎](ψ) = 0})
+    
+    E := E₀ | E + E | E ⊗ E | E ⊂ E | E ≅ E | E ⊥ E
+    where
+      E₀ = 𝟙                ; Trivial effect   
+      E + E = ProjSum(E, E)  ; Sum of effects
+      E ⊗ E = ProjProd(E, E) ; Product of effects
+      E ⊂ E = Refines(E, E)  ; Refinement order
+      E ≅ E = Equiv(E, E)    ; Equivalence of effects  
+      E ⊥ E = Orthog(E, E)   ; Orthogonality of effects
+      
+    ℳ := ℳ₀ | ℳ + ℳ | ℳ ⊗ ℳ | ℳ ∘ ℳ | ℳ*    
+    where
+      ℳ₀ = Id             ; Identity channel
+      ℳ + ℳ = CoProd(ℳ, ℳ)  ; Coproduct of channels  
+      ℳ ⊗ ℳ = Prod(ℳ, ℳ)    ; Product of channels
+      ℳ ∘ ℳ = Compose(ℳ, ℳ) ; Composition of channels
+      ℳ* = Adjoint(ℳ)      ; Adjoint of channel
+    
+    σ := σ₀ | σ + σ | p·σ | Tr(σ) | Purify(σ) | Restrict(σ)
+    where  
+      σ₀ = |ψ⟩⟨ψ|              ; Pure state
+      σ + σ = Sum(σ, σ)         ; Convex mixture 
+      p·σ = Scale(p: ℝ⁺, σ)     ; Rescaling by probability p
+      Tr(σ) = PureTr(σ)         ; Pure contraction of state 
+      Purify(σ) = Embed(σ ↪ σ ⊗ E₀)  ; Purification by ancilla  
+      Restrict(σ) = ProjEmbed(σ ↪ E⁺·σ)  ; State restriction by effect
+      
+    pred IsCP(ℳ: 𝐴 -> 𝐵) = ∀ ψ: 𝐴 ⊗ E. ⟨ψ| (ℳ ⊗ 1ₑ)[|ψ⟩⟨ψ|] |ψ⟩ ≥ 0
+    pred IsTP(ℳ: 𝐴 -> 𝐵) = Tr(ℳ[σ]) = Tr(σ) ∀ σ: 𝐴      
+    pred IsCPTP(ℳ: 𝐴 -> 𝐵) = IsCP(ℳ) ∧ IsTP(ℳ)  ; Quantum channel 
+  }
+  
+  STRUCTURE {
+    QuantumOperations: {
+      (𝐴, +, ·, *) is a *-algebra  ; Involutive algebra
+      (𝐴, ∥-∥) is a C*-algebra     ; Norm complete *-algebra
+      (𝐴, +, ·, *, ∥-∥, ⊂) is a W*-algebra  ; Weak operator closed C*-algebra 
+      𝐴 ⊗ 𝐵 is tensor product of algebras
+      𝐴 ⋊ G is crossed product by group action
+      𝐴 ⋈ L is smash product with Lie action
+      𝐴 ⋉ V is semidirect product by module
+      𝐴 / ℐ is quotient by (closed) ideal ℐ
+    }
+    
+    QuantumSpaces: {
+      H = Hilb over ℂ  ; Complex Hilbert space
+      E ⊆ {0 ≤ A ≤ 1 | A ∈ 𝐴}  ; Effect space
+      𝒮 = {ρ ∈ 𝐴 | ρ ≥ 0, Tr(ρ) = 1}  ; State space
+      ℰ = {Φ: E → [0,1] | Φ(E₀) = 1, Φ(E + F) = Φ(E) + Φ(F)}  ; Probability measure space
+    }
+    
+    QuantumMappings: {
+      π: 𝐴 → 𝐵(H)  ; Representation as bounded linear operators 
+      ℳ: 𝐴 → 𝐵  ; Completely positive map
+      σ: 𝒜 → 𝒮  ; State preparation
+      E: 𝒮 → ℰ  ; Effect measurement  
+      c = (ℳᵢ: 𝐴 → 𝐴)ᵢ  ; Quantum instrument
+    }
+  }
+  
+  PROOFS {
+    theorem Stinespring(Φ: 𝐴 → 𝐵):
+      IsCPTP(Φ) ⊢ ∃ (π: 𝐴 → 𝐵(H), V: H → K). Φ = AdV ∘ π
+    {
+      assume IsCPTP(Φ) 
+      have Φ[σ] ≥ 0 ∀ σ ≥ 0  ; Φ is positive
+      have IsCP(Φ ⊗ Id_𝐵) ∀ 𝐵  ; Φ is completely positive
+      let C = im(Φ) ⊆ 𝐵  ; Φ factors through its image
+      let ι: C ↪ 𝐵  ; Inclusion of image
+      have ∃ ρ: 𝐴 → C. ι ∘ ρ = Φ  ; Φ factors as ι ∘ ρ
+      have ρ is CP and ρ(1ₐ) = 1_C  ; ρ is unital
+      let (π, H, ξ) = GNS(C, ρ)  ; GNS construction for ρ 
+      let V: H → K with V(ξ) = 1  ; Isometry from GNS space to K
+      have Φ[𝑎] = V*π(𝑎)V ∀ 𝑎: 𝐴  ; Stinespring form of Φ
+    }
+    
+    theorem Tomography(𝒜: C*-Algebra):  
+      ∀ ω₁, ω₂: 𝒮(𝒜). (∀ E: ℰ(𝒜). ω₁(E) = ω₂(E)) ⊢ ω₁ = ω₂
+    {
+      assume ∀ E: ℰ(𝒜). ω₁(E) = ω₂(E)
+      suffices to show ω₁(𝑎) = ω₂(𝑎) ∀ 𝑎 ∈ 𝒜
+      let 𝑎 = 𝑎* = ∑ᵢ λᵢ Eᵢ  ; Spectral decomposition
+      have ωᵢ(𝑎) = ∑ᵢ λᵢ ωᵢ(Eᵢ)  ; Linearity
+      have ω₁(Eᵢ) = ω₂(Eᵢ) ∀ i  ; Assumption
+      hence ω₁(𝑎) = ∑ᵢ λᵢ ω₁(Eᵢ) = ∑ᵢ λᵢ ω₂(Eᵢ) = ω₂(𝑎)  
+    }
+    
+    theorem WignerTheorem(π₁, π₂: ProjRep(𝒜, H)):
+      ∀ ω₁, ω₂: 𝒮(𝒜). (π₁ ≅ π₂ ⟺ ∃ U: H ≅ H. π₂ = AdU ∘ π₁)
+    {
+      assume π₁ ≅ π₂  
+      let ω₁ = ⟨ψ₁| π₁(-) |ψ₁⟩, ω₂ = ⟨ψ₂| π₂(-) |ψ₂⟩  ; GNS states
+      have ω₁ ≅ ω₂  ; Unitary equivalence of reps
+      Tomography(𝒜)
+      so ∃ U: H ≅ H. |ψ₂⟩ = U |ψ₁⟩  ; Wigner unitary
+      have π₂(𝑎) = ⟨ψ₂| π₂(𝑎) |ψ₂⟩ = ⟨ψ₁| U* π₂(𝑎) U |ψ₁⟩ ∀ 𝑎  
+      hence π₂ = AdU ∘ π₁
+      
+      conversely, assume ∃ U: H ≅ H. π₂ = AdU ∘ π₁
+      so π₁ ≅ π₂
+    }
+    
+    tactic Universality(𝒜: QAlg, ℋ: Hilb, π: Rep(𝒜, ℋ), ξ: ℋ):
+      (∀ φ: 𝒮(𝒜). ∃! V: ℋ → ℋ. ⟨ξ| π(𝑎) |ξ⟩ = φ(𝑎) ∀ 𝑎: 𝒜) ⊢ 
+        π is irreducible ∧ (π(𝒜)'' = 𝐵(ℋ))
+    {
+      assume ⟨ξ| π(𝑎) |ξ⟩ = φ(𝑎) ∀ 𝑎: 𝒜 ∃! V
+      let σ = |ξ⟩⟨ξ|, γ = Tr(σ π(-))  ; Construct states
+      suffices to show π is irreducible   
+      { 
+        let S ⊆ ℋ be π(𝒜)-invariant
+        have PS ∈ π(𝒜)'              ; Projection onto S
+        have φ(𝑎) = ⟨ξ| π(𝑎) |ξ⟩ = γ(𝑎) ∀ 𝑎  ; by construction
+        so ⟨ξ| (1-PS) |ξ⟩ = 0        ; PS acts like identity
+        hence PS = 1 or PS = 0      ; by invariance
+      }
+      so π is irreducible
+      have π(𝒜) ⊆ 𝐵(ℋ)              ; π(𝒜) is concrete  
+      have π(𝒜)' = ℂ1               ; by Schur's lemma
+      have π(𝒜)'' = 𝐵(ℋ)            ; by von Neumann bicommutant
+    }
+  }
+}
+
+This Concept synthesizes elements from the various example Concepts to formalize the category of quantum operator algebras and their representations, which underlies algebraic quantum mechanics and quantum information theory.
+The key elements are:
+
+Defining quantum operator algebras as C*-algebras and W*-algebras (von Neumann algebras), generalizing classical algebras of observables.
+Constructing new algebras via various products (tensor, crossed, smash, semidirect) and quotients, analogous to constructions on groups and spaces.
+Specifying quantum effects, states, and probability measures associated to an algebra, generalizing classical probability.
+Characterizing quantum channels and instruments as completely positive maps between algebras, analogous to classical stochastic maps.
+Proving structural theorems about quantum channels (Stinespring dilation), states (tomographic completeness), and representations (Wigner's theorem).
+Defining a universal representation tactic based on the GNS construction, analogous to the Stone-Čech compactification in topology.
+
+The Concept tries to systematically port over ideas from groups, algebras, and differential geometry to capture the essential structures of noncommutative probability underlying quantum mechanics. The syntax is meant to be suggestive of the analogies at play.

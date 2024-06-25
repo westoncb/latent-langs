@@ -1,0 +1,136 @@
+CONCEPT PersistentStatisticalShapeAnalysis {
+  NOTATION {
+    𝒮 = {S_i} = Collection of shapes
+    μ_𝒮 = Fréchet mean of 𝒮
+    Σ_𝒮 = Fréchet covariance of 𝒮
+    T_μ𝒮 = Tangent space to shape space at μ
+    exp_μ : T_μ𝒮 → 𝒮 = Exponential map  
+    log_μ : 𝒮 → T_μ𝒮 = Log map
+    N(μ,Σ) = Gaussian on T_μ𝒮 with mean μ, covariance Σ
+  }
+
+  LANGUAGE {
+    TYPE Shape = Constructible subset of ℝ^d
+    TYPE ShapeCollection = Finite set of shapes
+    TYPE ShapeSpace = Metric space of shapes with d_I
+    TYPE PHTSpace = Space of PHTs with interleaving distance
+    TYPE Mean = Shape
+    TYPE Covariance = Positive-definite operator on T_μ𝒮
+    TYPE GaussianProcess = Stochastic process N(μ_𝒮,Σ_𝒮) on 𝒮
+
+    FUNC FrechetMean(𝒮: ShapeCollection): Mean = 
+      argmin_{S ∈ 𝒮} ∑_{S_i ∈ 𝒮} d_I(S, S_i)^2
+
+    FUNC FrechetCovariance(𝒮: ShapeCollection, μ_𝒮: Mean): Covariance =
+      ∑_{S_i ∈ 𝒮} log_μ(S_i) ⊗ log_μ(S_i) / |𝒮|
+
+    FUNC ExpMap(v: T_μ𝒮, μ: Mean): Shape = 
+      Geodesic(μ, v) = γ_μ^v(1) 
+
+    FUNC LogMap(S: Shape, μ: Mean): T_μ𝒮 =
+      v such that γ_μ^v(1) = S
+
+    FUNC SampleGP(GP: GaussianProcess, n: Int): ShapeCollection =
+      {S_i = exp_μ(v_i) | v_i ~ N(0,Σ_𝒮), i=1..n}  
+  }
+
+  STRUCTURES {
+    STRUCTURE StatisticalShapeModel {
+      FIELD μ: Mean
+      FIELD Σ: Covariance
+      FIELD GP: GaussianProcess = N(μ,Σ)
+
+      COMPUTE FitToData(𝒮: ShapeCollection): StatisticalShapeModel = {
+        μ := FrechetMean(𝒮)
+        Σ := FrechetCovariance(𝒮, μ)
+        GP := N(μ,Σ)
+        RETURN StatisticalShapeModel{μ,Σ,GP}
+      }
+
+      COMPUTE Sample(n: Int): ShapeCollection =
+        SampleGP(SELF.GP, n)
+
+      COMPUTE Likelihood(S: Shape): Real =
+        PDF(SELF.GP, LogMap(S, SELF.μ))
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE FrechetMeanViaPHT: 
+      FrechetMean(𝒮) ≈ argmin_{S ∈ 𝒮} ∑_{S_i ∈ 𝒮} d_I(PHT(S), PHT(S_i))^2
+      
+    REWRITE FrechetCovarianceViaPHT:
+      FrechetCovariance(𝒮, μ_𝒮) ≈ ∑_{S_i ∈ 𝒮} log_μ(PHT(S_i)) ⊗ log_μ(PHT(S_i)) / |𝒮|
+      WHERE log_μ(PHT(S_i)) := v such that exp_μ(v) ≈ PHT(S_i)
+
+    SIMPLIFY ExpMapViaPHT: 
+      exp_μ(v) ≈ PHT^(-1)(ShiftPHT(PHT(μ),v))
+      WHERE ShiftPHT(ℱ,v)(x,t) := ℱ(x,t-⟨v,x⟩)
+
+    SIMPLIFY LogMapViaPHT:
+      log_μ(S) ≈ v such that ShiftPHT(PHT(μ),v) ≈ PHT(S)
+  }
+
+  PROOFS {
+    PROOF FrechetMeanConsistency: 
+      lim_{|𝒮|→∞} FrechetMean(𝒮) = μ_𝒮 a.s. if S_i ~ N(μ_𝒮,Σ_𝒮) i.i.d.
+    {
+      DEFINE empirical Fréchet functional:
+        F_𝒮(S) := (1/|𝒮|) ∑_{S_i ∈ 𝒮} d_I(S, S_i)^2
+        
+      OBSERVE that minimizers of F_𝒮 are empirical Fréchet means:
+        μ̂_𝒮 = argmin F_𝒮 = FrechetMean(𝒮)
+        
+      DEFINE population Fréchet functional: 
+        F(S) := 𝔼[d_I(S,S_i)^2], S_i ~ N(μ_𝒮,Σ_𝒮)
+        
+      OBSERVE that minimizer of F is population Fréchet mean:
+        μ_𝒮 = argmin F
+        
+      F_𝒮 → F uniformly as |𝒮|→∞ by law of large numbers
+      
+      ⇒ μ̂_𝒮 → μ_𝒮 by argmin continuous mapping theorem
+    }
+
+    PROOF FrechetCovarianceConsistency:
+      lim_{|𝒮|→∞} FrechetCovariance(𝒮,μ̂_𝒮) = Σ_𝒮 a.s. if S_i ~ N(μ_𝒮,Σ_𝒮) i.i.d.  
+    {
+      DEFINE empirical covariance:
+        Σ̂_𝒮 := FrechetCovariance(𝒮, μ̂_𝒮) 
+             = (1/|𝒮|) ∑_i log_μ̂(S_i) ⊗ log_μ̂(S_i)
+             
+      log_μ̂(S_i) → log_μ(S_i) as μ̂_𝒮 → μ_𝒮 by continuity of log
+      
+      ⇒ Σ̂_𝒮 → 𝔼[log_μ(S_i) ⊗ log_μ(S_i)], S_i ~ N(μ_𝒮,Σ_𝒮)
+            = Σ_𝒮 by definition
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE DigitShapes {
+      DEFINE 𝒮 = {S_i} = 1000 images of handwritten '3' digits
+      DEFINE μ_𝒮 = FrechetMean(𝒮)
+      DEFINE Σ_𝒮 = FrechetCovariance(𝒮, μ_𝒮)
+      DEFINE GP = GaussianProcess{μ_𝒮, Σ_𝒮}
+
+      SAMPLE S_new ~ GP 
+      ASSERT S_new looks like a valid '3'
+
+      SAMPLE S_anomaly ~ Uniform(ℝ^{256x256})
+      ASSERT Likelihood(GP, S_anomaly) ≈ 0
+    }
+
+    EXAMPLE ToothShapes {
+      DEFINE 𝒮 = {S_i} = 100 CT scans of mandibular molars
+      DEFINE μ_𝒮 = FrechetMean(𝒮)
+      DEFINE Σ_𝒮 = FrechetCovariance(𝒮, μ_𝒮)  
+      DEFINE GP = GaussianProcess{μ_𝒮, Σ_𝒮}
+
+      DEFINE S_patient = Segmented molar from new patient
+      DEFINE S_reconstruction = ExpMap(LogMap(S_patient, μ_𝒮), μ_𝒮)
+
+      ASSERT S_reconstruction captures key features of S_patient
+      ASSERT S_reconstruction more regular than S_patient
+    }
+  }
+}

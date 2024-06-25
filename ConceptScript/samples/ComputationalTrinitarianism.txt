@@ -1,0 +1,204 @@
+CONCEPT ComputationalTrinitarianism {
+  PARAMETERS {
+    L : TYPE  -- Logic language
+    T : TYPE  -- Type theory language
+    C : TYPE  -- Category theory language
+  }
+
+  CONTEXT {
+    TYPES {
+      Proposition := L
+      Type := T
+      Object := C
+      
+      Proof := FUNC(Proposition) -> Bool
+      Term := FUNC(Type) -> Value
+      Morphism := FUNC(Object, Object) -> C
+      
+      LogicSystem := STRUCTURE {
+        FIELD propositions : SET(Proposition)
+        FIELD inference_rules : SET(FUNC(SET(Proposition)) -> Proposition)
+        FIELD axioms : SET(Proposition)
+      }
+      
+      TypeSystem := STRUCTURE {
+        FIELD types : SET(Type)
+        FIELD typing_rules : SET(FUNC(Context, Term) -> Type)
+        FIELD type_constructors : SET(FUNC(SET(Type)) -> Type)
+      }
+      
+      Category := STRUCTURE {
+        FIELD objects : SET(Object)
+        FIELD morphisms : SET(Morphism)
+        FIELD composition : FUNC(Morphism, Morphism) -> Morphism
+        FIELD identity : FUNC(Object) -> Morphism
+      }
+      
+      Correspondence := UNION {
+        PropTypeObj(Proposition, Type, Object),
+        ProofTermMorph(Proof, Term, Morphism)
+      }
+    }
+
+    STRUCTURES {
+      STRUCTURE Topos EXTENDS Category {
+        FIELD subobject_classifier : Object
+        FIELD power_objects : FUNC(Object) -> Object
+        
+        AXIOM CartesianClosed {
+          FORALL (A B : Object) . 
+            EXISTS (exp_obj : Object) . 
+              FORALL (X : Object) . 
+                Hom(X, exp_obj) ≅ Hom(X × A, B)
+        }
+        
+        AXIOM SubobjectClassifier {
+          EXISTS (Ω : Object) . 
+            FORALL (A : Object, m : Morphism) . 
+              IsMonomorphism(m) <=> EXISTS! (χ : Morphism) . 
+                IsTerminal(T) AND IsPullback(m, χ, true : T → Ω)
+        }
+      }
+    }
+
+    ASSERTIONS {
+      AXIOM CurryHowardLambek {
+        FORALL (p : Proposition, t : Type, o : Object) .
+          Correspondence.PropTypeObj(p, t, o) =>
+            (IsTheorem(p) <=> IsInhabited(t) <=> IsIsomorphism(o))
+      }
+      
+      AXIOM NaturalDeductionLambdaCalculusCategoryTheory {
+        FORALL (p : Proof, t : Term, m : Morphism) .
+          Correspondence.ProofTermMorph(p, t, m) =>
+            (IsValid(p) <=> IsWellTyped(t) <=> IsCommutative(m))
+      }
+    }
+
+    NOTATION {
+      A ⊢ B := Entailment in logic
+      a : A := Typing judgment
+      f : A → B := Morphism in category
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE PropToType(p : Proposition) -> Type {
+      MATCH p WITH
+        | A AND B => Product(PropToType(A), PropToType(B))
+        | A OR B => Sum(PropToType(A), PropToType(B))
+        | A IMPLIES B => Function(PropToType(A), PropToType(B))
+        | NOT A => Function(PropToType(A), VoidType)
+        | FORALL x. P(x) => DependentProduct(x, PropToType(P(x)))
+        | EXISTS x. P(x) => DependentSum(x, PropToType(P(x)))
+    }
+    
+    REWRITE TypeToObject(t : Type) -> Object {
+      MATCH t WITH
+        | A × B => Product(TypeToObject(A), TypeToObject(B))
+        | A + B => Coproduct(TypeToObject(A), TypeToObject(B))
+        | A → B => ExponentialObject(TypeToObject(A), TypeToObject(B))
+        | Σ(x:A). B(x) => DependentSum(TypeToObject(A), x ↦ TypeToObject(B(x)))
+        | Π(x:A). B(x) => DependentProduct(TypeToObject(A), x ↦ TypeToObject(B(x)))
+    }
+  }
+
+  PROOFS {
+    THEOREM LogicTypeEquivalence {
+      FORALL (L : LogicSystem, T : TypeSystem) .
+        EXISTS (F : FUNC(L.propositions) -> T.types) .
+          IsTheorem(p) <=> IsInhabited(F(p))
+    }
+    PROOF {
+      GIVEN L : LogicSystem, T : TypeSystem
+      
+      <1>. DEFINE F = PropToType
+      <2>. FORALL p IN L.propositions
+        <2.1>. IsTheorem(p) => EXISTS (proof : Proof) . proof(p) = true
+        <2.2>. IsInhabited(F(p)) <=> EXISTS (term : Term) . term : F(p)
+        <2.3>. proof(p) = true <=> term : F(p) BY CurryHowardLambek
+      <3>. HENCE IsTheorem(p) <=> IsInhabited(F(p))
+      
+      QED
+    }
+
+    THEOREM TypeCategoryEquivalence {
+      FORALL (T : TypeSystem, C : Category) .
+        EXISTS (G : FUNC(T.types) -> C.objects) .
+          IsInhabited(t) <=> IsIsomorphism(G(t))
+    }
+    PROOF {
+      GIVEN T : TypeSystem, C : Category
+      
+      <1>. DEFINE G = TypeToObject
+      <2>. FORALL t IN T.types
+        <2.1>. IsInhabited(t) <=> EXISTS (term : Term) . term : t
+        <2.2>. IsIsomorphism(G(t)) <=> EXISTS (inv : Morphism) . G(t) ○ inv ≅ id AND inv ○ G(t) ≅ id
+        <2.3>. term : t <=> EXISTS (inv : Morphism) . G(t) ○ inv ≅ id AND inv ○ G(t) ≅ id BY CurryHowardLambek
+      <3>. HENCE IsInhabited(t) <=> IsIsomorphism(G(t))
+      
+      QED
+    }
+
+    THEOREM ToposModelsHigherOrderLogic {
+      FORALL (E : Topos) . EXISTS (L : LogicSystem) .
+        FORALL (p : L.propositions) .
+          Provable(L, p) <=> Satisfied(E, Interpret(p))
+    }
+    PROOF {
+      GIVEN E : Topos
+      
+      <1>. DEFINE L = HigherOrderLogic(E.subobject_classifier)
+      <2>. DEFINE Interpret(p) = SubobjectCorrespondingTo(p)
+      <3>. FORALL p IN L.propositions
+        <3.1>. Provable(L, p) <=> EXISTS (proof : Proof) . proof(p) = true
+        <3.2>. Satisfied(E, Interpret(p)) <=> IsomorphicToTerminal(Interpret(p))
+        <3.3>. proof(p) = true <=> IsomorphicToTerminal(Interpret(p)) BY ToposSemantics
+      <4>. HENCE Provable(L, p) <=> Satisfied(E, Interpret(p))
+      
+      QED
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE SimpleTypeTheory {
+      LET prop = Proposition("A AND B IMPLIES B AND A")
+      LET type = Type("(a : Type) × (b : Type) → (b : Type) × (a : Type)")
+      LET obj = Object("A × B → B × A")
+      
+      ASSERT Correspondence.PropTypeObj(prop, type, obj)
+      
+      LET proof = NaturalDeductionProof(prop)
+      LET term = LambdaTerm("λ (a, b) . (b, a)")
+      LET morph = CategoryMorphism("π_2 × π_1")
+      
+      ASSERT Correspondence.ProofTermMorph(proof, term, morph)
+      
+      COMPUTE type_interpretation = PropToType(prop)
+      ASSERT type_interpretation = type
+      
+      COMPUTE category_interpretation = TypeToObject(type)
+      ASSERT category_interpretation = obj
+    }
+    
+    EXAMPLE DependentTypeTheory {
+      LET prop = Proposition("FORALL n : Nat . EXISTS m : Nat . m > n")
+      LET type = Type("Π (n : Nat) . Σ (m : Nat) . IsGreaterThan(m, n)")
+      LET obj = Object("Π_{n : N} Σ_{m : N} (m > n)")
+      
+      ASSERT Correspondence.PropTypeObj(prop, type, obj)
+      
+      LET proof = ConstructiveProof(prop)
+      LET term = DependentLambdaTerm("λ n . (n + 1, succIsGreater n)")
+      LET morph = DependentMorphism("λ n . ⟨successor n, proof_of_successor_greater⟩")
+      
+      ASSERT Correspondence.ProofTermMorph(proof, term, morph)
+      
+      COMPUTE type_interpretation = PropToType(prop)
+      ASSERT type_interpretation = type
+      
+      COMPUTE category_interpretation = TypeToObject(type)
+      ASSERT category_interpretation = obj
+    }
+  }
+}

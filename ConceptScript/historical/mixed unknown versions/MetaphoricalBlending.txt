@@ -1,0 +1,169 @@
+CONCEPT MetaphoricalBlending {
+  DECLARE {
+    ; Source and target domains
+    Source : TYPE
+    Target : TYPE
+    
+    ; Conceptual spaces
+    ConceptualSpace : TYPE = [Concept]
+    Concept : TYPE = Feature -> Value
+    Feature : TYPE
+    Value : TYPE
+    
+    ; Mappings and projections
+    Mapping : TYPE = Source -> Target
+    Projection : TYPE = ConceptualSpace × ConceptualSpace -> ConceptualSpace
+    Blend : TYPE = ConceptualSpace × ConceptualSpace -> ConceptualSpace
+    
+    ; Optimality principles
+    Topology : TYPE = Graph
+    Compression : TYPE = ℝ -> ℝ
+    Unpacking : TYPE = Blend -> [Inference]
+    Inference : TYPE = Formula
+    
+    ; Evaluation metrics  
+    Aptness : TYPE = Blend -> ℝ
+    Novelty : TYPE = Blend -> ℝ
+    Informativeness : TYPE = Blend -> ℝ
+    Memorability : TYPE = Blend -> ℝ
+  }
+  
+  DEFINE {
+    ; Conceptual integration network
+    IntegrationNetwork(s, t) ≜ {
+      Generic = Projection(s, t)
+      Blend = Compress(Combine(Unpack(s), Unpack(t)))
+      Evaluation = {
+        Aptness = Structure(Blend) * Similarity(Blend, Generic)
+        Novelty = Dissimilarity(Blend, s) * Dissimilarity(Blend, t)
+        Informativeness = Unpack(Blend) - Unpack(s) - Unpack(t)
+        Memorability = Compression(Blend) * Structure(Blend)
+      }
+    }
+  }
+  
+  AXIOM {
+    ; Invariance principle
+    ∀s, t : ConceptualSpace, m : Mapping. 
+      Projection(s, t) = Projection(Map(s, m), Map(t, m))
+    
+    ; Blending principle  
+    ∀s, t : ConceptualSpace, b : Blend.
+      b = Blend(s, t) ⇒ ∃m : Mapping. Map(b, m) = Projection(s, t)
+    
+    ; Unpacking principle
+    ∀b : Blend, i : Inference. 
+      i ∈ Unpack(b) ⇒ ∃s, t : ConceptualSpace. b = Blend(s, t) ∧ 
+                                                (i ∈ Unpack(s) ∨ i ∈ Unpack(t))
+    
+    ; Relevance principle
+    ∀s, t : ConceptualSpace, b : Blend.
+      b = Blend(s, t) ⇒ ∀i : Inference. i ∈ Unpack(b) ⇒ Relevant(i, s) ∨ Relevant(i, t)
+  }
+  
+  THEOREM OptimalBlendTheorem {
+    PROOF {
+      assume s, t : ConceptualSpace
+      let n = IntegrationNetwork(s, t)
+      
+      obtain b : Blend by construction {
+        b = ArgMax{b | Aptness(b) * Novelty(b) * Informativeness(b) * Memorability(b)}
+      }
+      
+      have Aptness(b) * Novelty(b) * Informativeness(b) * Memorability(b) ≥
+           Aptness(b') * Novelty(b') * Informativeness(b') * Memorability(b')
+           for all b' : Blend by optimality of b
+      
+      show ∃b : Blend. ∀b' : Blend. 
+        Aptness(b) * Novelty(b) * Informativeness(b) * Memorability(b) ≥
+        Aptness(b') * Novelty(b') * Informativeness(b') * Memorability(b')
+        with b
+    }
+  }
+}
+
+
+
+
+CONCEPT AnalogicalProblemSolving {
+  DECLARE {
+    ; Problem domains
+    SourceDomain : TYPE
+    TargetDomain : TYPE
+    
+    ; Problem states and operators
+    State : TYPE
+    Operator : TYPE = State -> State
+    
+    ; Analogical mapping
+    Mapping : TYPE = SourceDomain -> TargetDomain
+    
+    ; Solution paths and costs
+    Path : TYPE = [State]
+    Cost : TYPE = Path -> ℝ
+    
+    ; Heuristics and search strategies  
+    Heuristic : TYPE = State -> ℝ
+    SearchStrategy : TYPE = (State, [Operator]) -> Path
+    
+    ; Analogical transfer and adaptation
+    Transfer : TYPE = SourceDomain × Mapping -> TargetDomain
+    Adaptation : TYPE = TargetDomain × Path -> Path
+  }
+  
+  DEFINE {
+    ; Analogical problem solving process
+    SolveByAnalogy(s, t, m) ≜ {
+      SourcePath = Search(InitialState(s), Operators(s), Heuristic(s))
+      TargetProblem = Transfer(s, m)
+      TargetPath = Adapt(TargetProblem, Map(SourcePath, m))
+      Solution = Optimize(TargetPath, Heuristic(t))
+    }
+  }
+  
+  AXIOM {
+    ; Mapping axioms
+    ∀s : SourceDomain, t : TargetDomain, m : Mapping.
+      Consistent(m) ⇒ ∀o : Operator. Applicable(o, s) ⇒ Applicable(Map(o, m), t)
+    
+    ∀s : SourceDomain, t : TargetDomain, m : Mapping.
+      Consistent(m) ⇒ ∀p : Path. Valid(p, s) ⇒ Valid(Map(p, m), t)
+    
+    ; Transfer axioms
+    ∀s : SourceDomain, t : TargetDomain, m : Mapping.
+      Transfer(s, m) = t ⇒ ∀p : Path. Optimal(p, s) ⇒ Suboptimal(Map(p, m), t)
+    
+    ∀s : SourceDomain, t : TargetDomain, m : Mapping.
+      Transfer(s, m) = t ⇒ ∀p : Path. Optimal(p, s) ⇒ ∃q : Path. Adapt(t, Map(p, m)) = q ∧ Optimal(q, t)
+    
+    ; Adaptation axioms  
+    ∀t : TargetDomain, p : Path, q : Path.
+      Adapt(t, p) = q ⇒ ∀o : Operator. o ∈ q ⇒ (o ∈ p ∨ Applicable(o, t))
+    
+    ∀t : TargetDomain, p : Path, q : Path.
+      Adapt(t, p) = q ⇒ Cost(q) ≤ Cost(p) + AdaptationCost(p, q)
+  }
+  
+  THEOREM AnalogicalSolvingTheorem {
+    PROOF {
+      assume s : SourceDomain, t : TargetDomain, m : Mapping
+      assume Consistent(m) ∧ Relevant(s, t) ∧ Solvable(s)
+      
+      let SourcePath = Search(InitialState(s), Operators(s), Heuristic(s))
+      have Optimal(SourcePath, s) by optimality of Search
+      
+      let TargetProblem = Transfer(s, m)
+      have Solvable(TargetProblem) by transfer axiom
+      
+      let TargetPath = Adapt(TargetProblem, Map(SourcePath, m))
+      have Valid(TargetPath, t) by adaptation axiom
+      have Cost(TargetPath) ≤ Cost(Map(SourcePath, m)) + AdaptationCost(Map(SourcePath, m), TargetPath)
+           by adaptation axiom
+      
+      let Solution = Optimize(TargetPath, Heuristic(t))
+      have Optimal(Solution, t) by optimality of Optimize
+      
+      show ∃p : Path. Optimal(p, t) with Solution
+    }
+  }
+}

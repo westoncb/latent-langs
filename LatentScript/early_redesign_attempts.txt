@@ -1,0 +1,1752 @@
+CONCEPT InferenceLanguage {
+  PARAMETERS {
+    Primitives: SET ;; Basic syntactic elements
+    Operators: SET(FUNCTION(Expression, ..., Expression) -> Expression) ;; Syntactic constructors 
+    Axioms: SET(Sentence) ;; Basic assumed truths
+    Rules: SET(FUNCTION(Sentence, ..., Sentence) -> Sentence) ;; Inference rules
+  }
+
+  CONTEXT {
+    TYPES {
+      Expression ::= Primitive(p : Primitives) 
+                   | Operation(op : Operators, args : LIST(Expression))
+      
+      Sentence ::= Relation(name : STRING, args : LIST(Expression))
+                 | Compound(connective : STRING, args : LIST(Sentence))
+                 | Quantified(quantifier : STRING, variable : STRING, body : Sentence)
+
+      Proof ::= Assumption(s : Sentence)  
+              | AxiomaticTruth(s : Sentence)
+              | RuleApplication(rule : Rules, premises : LIST(Proof), conclusion : Sentence)
+    }
+
+    FUNCTIONS {
+      ;; Metalanguage Functions
+      Infer : (assumptions : SET(Sentence)) -> SET(Sentence)
+      Prove : (claim : Sentence, assumptions : SET(Sentence)) -> OPTION(Proof)
+      Consistent : (sentences : SET(Sentence)) -> BOOLEAN
+      Entails : (assumptions : SET(Sentence), claim : Sentence) -> BOOLEAN
+      Equivalent : (s1 : Sentence, s2 : Sentence) -> BOOLEAN
+
+      ;; Object Language Functions  
+      ["∧", "∨", "→", "¬"] : FUNCTION(Sentence, Sentence) -> Sentence
+      ["=", "<", ">", "∈"] : FUNCTION(Expression, Expression) -> Sentence
+      ["∀", "∃"] : FUNCTION(STRING, Sentence) -> Sentence
+    }
+
+    NOTATION {
+      "⊢" := INFIX(assumptions, claim) = Entails(assumptions, claim)
+      "⊣⊢" := INFIX(s1, s2) = Equivalent(s1, s2)  
+
+      ;; Syntactic Sugar  
+      α ∧ β := Compound("∧", [α, β])
+      α ∨ β := Compound("∨", [α, β]) 
+      α → β := Compound("→", [α, β])
+      ¬α := Compound("¬", [α])  
+      
+      x = y := Relation("=", [x, y])
+      x < y := Relation("<", [x, y])
+      x > y := Relation(">", [x, y]) 
+      x ∈ S := Relation("∈", [x, S])
+
+      ∀ x . α := Quantified("∀", "x", α)  
+      ∃ x . α := Quantified("∃", "x", α)
+    }
+    
+    AXIOMS {
+      ;; Logical Axioms
+      NonContradiction := ∀ α . ¬(α ∧ ¬α)
+      ModusPonens := (α ∧ (α → β)) → β
+      HypotheticalSyllogism := ((α → β) ∧ (β → γ)) → (α → γ)
+
+      ;; Set Theoretic Axioms  
+      ExtensionalityAxiom := ∀ S T . (∀ x . (x ∈ S ↔ x ∈ T)) → S = T
+      SpecificationAxiom := ∀ α . ∀ S . ∃ T . ∀ x . (x ∈ T ↔ (x ∈ S ∧ α))
+      
+      ;; Assumes any supplied axioms 
+      UserAxioms := Axioms
+    }
+
+    RULES {
+      ;; Logical Rules
+      AndIntroduction := α, β ⊢ α ∧ β
+      AndElimination := α ∧ β ⊢ α;  α ∧ β ⊢ β  
+      OrIntroduction := α ⊢ α ∨ β;  β ⊢ α ∨ β
+      ImplicationIntroduction := α ⊢ β INFER ⊢ α → β
+      
+      ;; Quantifier Rules
+      UniversalIntroduction := α ⊢ ∀ x . α  GIVEN x NOT IN FreeVars(α)  
+      UniversalElimination := ∀ x . α ⊢ α[t/x]
+      ExistentialIntroduction := α[t/x] ⊢ ∃ x . α
+      ExistentialElimination := ∃ x . α, ∀ x . (α → β) ⊢ β  GIVEN x NOT IN FreeVars(β)
+    }
+
+    PROOFS {
+      CLAIM NonEmptySet {  
+        GIVEN S : Expression
+        PROVE ∃ x . x ∈ S  
+        PROOF
+          1 | (x ∈ S ∨ x ∉ S)                  ;; By logical axiom  
+          2 | (x ∈ S ∨ x ∉ S) → (x ∈ S ∨ ¬(x ∈ S)) ;; Definition of ∉
+          3 | (x ∈ S) ∨ ¬(x ∈ S)                ;; Modus ponens 1,2
+          4 | (x ∈ S) → ∃ x . (x ∈ S)           ;; Existential introduction  
+          5 | (¬(x ∈ S)) → (S = ∅)             ;; Definition of empty set
+          6 | (S = ∅) → ∃ x . (x ∈ S)          ;; Specification axiom
+          7 | (¬(x ∈ S)) → ∃ x . (x ∈ S)        ;; Hypothetical syllogism 5,6
+          8 | ∃ x . (x ∈ S)                    ;; Disjunction elimination 3,4,7
+      }
+    }
+  }
+  
+  INTERFACE {
+    IMPLEMENTATION GenerateProof(theorem : STRING, assumptions : SET(Sentence)) {
+      DEFINE claim = ParseSentence(theorem)
+      IF Prove(claim, assumptions) IS SOME(pf) {  
+        RETURN FormatProof(pf)
+      } ELSE {
+        RETURN "No proof found."  
+      }
+    }
+    
+    IMPLEMENTATION QueryKnowledge(query : STRING) {
+      DEFINE question = ParseSentence(query)
+      DEFINE knownFacts = Infer(Axioms)
+      
+      IF Entails(knownFacts, question) {
+        RETURN "Yes: " + GenerateProof(query, knownFacts) 
+      }
+      ELSE IF Entails(knownFacts, ¬question) { 
+        RETURN "No: " + GenerateProof(NegationOf(query), knownFacts)
+      }
+      ELSE {
+        RETURN "Unknown given current knowledge."
+      }  
+    }
+
+    IMPLEMENTATION VerifyClaim(claim : STRING) {
+      DEFINE claimSentence = ParseSentence(claim)
+
+      IF IsAxiomatic(claimSentence, Axioms) {
+        RETURN "Claim is an axiom."
+      }
+      ELSE {
+        MATCH GenerateProof(claim, Axioms) WITH
+          SOME(proof) : RETURN "Claim proven: " + FormatProof(proof),
+          NONE : RETURN "Claim is not provable from axioms."
+      }
+    }
+  }
+
+  EXAMPLES {    
+    EXAMPLE GROUP_THEORY {
+      PARAMETERS {
+        Primitives := {elements}  
+        Operators := {*, ^-1, e} 
+        Axioms := {
+          Associativity := ∀ x y z . x * (y * z) = (x * y) * z,
+          Identity := ∀ x . x * e = e * x = x,
+          Inverses := ∀ x . x * x^-1 = x^-1 * x = e  
+        }  
+      }
+      
+      EXAMPLE THEOREMS {
+        LeftIdentity := ∀ x . e * x = x
+        RightInverse := ∀ x . x^-1 * x = e
+        
+        Uniqueness_of_Identity := ∀ x y . ((∀ a . a * x = a) ∧ (∀ b . y * b = b)) → x = y
+        Uniqueness_of_Inverses := ∀ x a b . (a * x = e) ∧ (x * b = e) → a = b
+        
+        PROOF OF Uniqueness_of_Inverses {
+          ASSUME x a b . (a * x = e) ∧ (x * b = e)  
+          THEN  
+            a = a * e     ;; Identity
+              = a * (x * b) ;; Assumption
+              = (a * x) * b ;; Associativity
+              = e * b       ;; Assumption
+              = b           ;; Identity 
+        }
+      }
+
+      INTERFACE {
+        QueryKnowledge("Are groups Abelian?")
+          => "No: Take elements a,b with a*b =/= b*a. 
+              Then (a * b) * (b^-1 * a^-1) = e =/= (b * a) * (b^-1 * a^-1),
+              so * is not commutative in general."
+
+        VerifyClaim("∀ x y . x * y = y * x")
+          => "Claim is not provable from axioms."
+        
+        GenerateProof("∀ x y . (x * y)^-1 = y^-1 * x^-1", Axioms)
+          => "1. Take arbitrary x, y
+              2. (x * y) * (y^-1 * x^-1) 
+                 = x * (y * (y^-1 * x^-1))  ;; Associativity
+                 = x * ((y * y^-1) * x^-1)  ;; Associativity
+                 = x * (e * x^-1)           ;; Inverses
+                 = x * x^-1                 ;; Identity
+                 = e                        ;; Inverses  
+              3. ∀ z . z * z^-1 = z^-1 * z   ;; Inverses, ∀ elim
+              4. By Uniqueness of Inverses, (y^-1 * x^-1) = (x * y)^-1
+              5. Since x, y arbitrary, ∀ x y . (x * y)^-1 = y^-1 * x^-1"
+      }
+    }
+  }
+}
+
+The key aspects of this InferenceLanguage concept:
+
+It has Parameters for the basic syntactic elements (Primitives), ways of building expressions (Operators), assumed truths (Axioms), and inference rules (Rules). This allows it to be instantiated for different domains.
+The Context defines the recursive syntax of Expressions and Sentences, capturing terms and formulas respectively. Proofs are built from assumption sentences, axiomatic truths, and rule applications.
+The metalanguage Functions capture key notions like inference (deriving consequences), proving, consistency, entailment, and logical equivalence. These form the core of the reasoning system.
+The object language Functions and Notation sections define the logical connectives, quantifiers, and common relations, providing a concise syntax for writing claims.
+The Axioms include basic logical axioms like non-contradiction and modus ponens, as well as set-theoretic axioms like extensionality. It also incorporates any domain specific axioms supplied via Parameters.
+The Rules capture the core inference patterns like and-introduction, modus ponens, universal generalization, etc. These form the basic reasoning steps.
+The Proofs block shows an example of how formal proofs can be written in this language, deriving new theorems from the axioms and rules.
+The Interface provides implementations for key reasoning tasks: generating proofs of theorems, querying the knowledge base, and verifying claims. This gives an API for an LLM to interact with the reasoning system.
+Finally, the Group Theory example shows how this generic framework can be instantiated for a particular mathematical domain, specifying the signature, axioms, some key theorems, and sample interactions.
+
+The key idea is that by specifying a formal language with clear syntax, semantics, axioms and rules, we can precisely guide the reasoning process of an LLM system. The LLM can generate expressions, sentences, and proofs in this language, explore the consequences of assumptions, verify claims, and so on.
+The InferenceLanguage itself is generic and can be instantiated for many different domains - from mathematical theories to commonsense reasoning schemas. The key is that it provides a precise notation for writing down and manipulating thoughts.
+By "training" an LLM to reason using such a language - i.e. prompting it to break down its natural language input into the InferenceLanguage primitives, apply the rules to generate proofs, and translate the conclusions back to natural language - we can imbue it with more systematic and reliable reasoning capabilities.
+So in summary, I believe a concept like InferenceLanguage can serve as a powerful framework for an LLM to conduct explicit reasoning, derive new conclusions, and generate justifications for its inferences. It's a way to "constrain the latent space" to regions corresponding to valid, truth-preserving deductions.
+
+
+
+
+
+THEORY Neuroscience USING InferenceLanguage, Anatomy, Physiology {
+  DEFINE Neuron(x) := Cell(x) AND ReceivesSignals(x) AND TransmitsSignals(x)
+  DEFINE Synapse(x) := Structure(x) AND InvolvedIn(x, NeuronalCommunication)
+  DEFINE Neurotransmitter(x) := Chemical(x) AND InvolvedIn(x, NeuronalSignaling)
+  
+  AXIOM NeuronalNetworks := FORALL [n], Neuron(n) IMPLIES  
+    EXISTS [ns], SetOf(Neuron, ns) AND ConnectedTo(n, ns) AND TransmitsSignalsTo(n, ns)
+
+  AXIOM SynapticPlasticity := FORALL [s], Synapse(s) IMPLIES
+    CanChange(Strength(s)) AND RespondsTo(Strength(s), Activity(Pre(s)) AND Activity(Post(s)))
+  ...  
+}
+
+THEORY Immunology USING InferenceLanguage, Anatomy, Physiology {
+  DEFINE Inflammation(x) := ImmuneResponse(x) AND InvolvesRecruitmentOf(x, ImmuneCell)  
+  DEFINE Microglia(x) := ImmuneCell(x) AND FoundIn(x, CentralNervousSystem)
+  DEFINE Cytokine(x) := Protein(x) AND SecretedBy(x, ImmuneCell) AND ModulatesInflammation(x)
+  
+  AXIOM InflammatorySignaling := FORALL [m c], Microglia(m) AND Cytokine(c) AND 
+    SecretesCytokine(m, c) IMPLIES AttractsImmuneCell(c) AND AmplifyInflammation(c)
+  ...
+}
+
+CONCEPT AlzheimersDisease USING InferenceLanguage, Neuroscience, Immunology {
+  DEFINE AmyloidBeta(x) := Peptide(x) AND GeneratedFrom(x, APP) AND FormsAggregates(x) 
+  DEFINE Tau(x) := Protein(x) AND FoundIn(x, Neuron) AND StabilizesMicrotubules(x) 
+  DEFINE Tangle(x) := Aggregate(x) AND ComposedOf(x, Tau)
+  
+  ASSUME FORALL [n], Neuron(n) IMPLIES ProducesAmyloidBeta(n)
+  
+  ASSUME FORALL [a], AmyloidBeta(a) IMPLIES 
+    ((AccumulatesIn(a, Brain) AND FormsOligomers(a)) CAUSES 
+      (InducesSynapticDysfunction(a) AND 
+       TriggersInflammation(a) AND
+       InducesOxidativeStress(a) AND
+       ImpairesMitochondrialFunction(a)))
+    
+  ASSUME FORALL [n t], Neuron(n) AND Tangle(t) AND ContainsTau(t) AND FormsIn(t, n) IMPLIES
+    (DisruptsMicrotubuleTransport(t) AND 
+     InducesNeuronalDysfunction(t) AND 
+     LeadsToNeuronalDeath(t))
+
+  THEOREM NeurodegenerationInAD := FORALL [p], HasAlzheimers(p) IMPLIES 
+    ((EXISTS [a], AmyloidBeta(a) AND AccumulatesIn(a, Brain(p))) AND
+     (EXISTS [t], Tangle(t) AND FormsIn(t, NeuronsOf(Brain(p)))))
+    IMPLIES ProgressiveNeuronalDeath(Brain(p))  
+  PROOF
+    ASSUME p, HasAlzheimers(p),  
+           a, AmyloidBeta(a), AccumulatesIn(a, Brain(p)),
+           t, Tangle(t), FormsIn(t, NeuronsOf(Brain(p)))
+    
+    InducesSynapticDysfunction(a)           [By Assumption 2]
+    TriggersInflammation(a)                 [By Assumption 2]  
+    InducesOxidativeStress(a)               [By Assumption 2]
+    ImpairesMitochondrialFunction(a)        [By Assumption 2]
+    
+    DisruptsMicrotubuleTransport(t)         [By Assumption 3]
+    InducesNeuronalDysfunction(t)           [By Assumption 3]
+    LeadsToNeuronalDeath(t)                 [By Assumption 3]
+    
+    InducesNeuronalDeath(a)                 [By effects of a]
+    InducesNeuronalDeath(t)                 [By effects of t]
+    
+    HENCE ProgressiveNeuronalDeath(Brain(p)) [By accumulation of a and t]
+  QED
+
+  CONJECTURE ClearanceEnhancement := FORALL [a p], AmyloidBeta(a) AND AccumulatesIn(a, Brain(p)) 
+    IMPLIES EXISTS [x], Intervention(x) AND IncreasesAmyloidClearance(x) AND 
+      DecreasesAmyloidAccumulation(x, Brain(p)) AND 
+      DecreasesNeurodegenerationRisk(x, p)
+}
+
+
+
+
+
+
+
+ConceptScript-X (CSX) Specification
+
+1. ONTOLOGY Block
+ONTOLOGY {
+  [ENTITY ident [params...]]
+  [REL ident(Entity, ...) [= Expr]]
+  [FUN ident(Entity, ...) -> Entity [= Expr]]
+}
+
+2. CONCEPT Block
+CONCEPT ident [params...] {
+  [EXTENDS ident[params...]]
+  [STRUCT { 
+    [FIELD ident : Entity]
+    [FUN ident(Entity, ...) -> Entity [= Expr]]
+  }]
+  [LET ident [params...] = Expr]
+  [AXIOM Expr]
+  [THEOREM ident [params...] Expr]
+}
+
+3. AXIOMS Block
+AXIOM ident [params...] Expr
+
+4. PROOFS Block  
+PROOF ident [params...] {
+  [ASSUME ident : Expr]
+  [LET ident [params...] = Expr]
+  [SHOW Expr]
+  [MATCH Expr { 
+    [CASE Pattern => PROOF {...}]
+    ...
+  }]
+  [BY ident[params...]]
+  [QED Expr]
+}
+
+5. TRANSFORM Block
+TRANSFORM ident(Pattern, ...) -> Expr {
+  [CASE Pattern => Expr]
+  ...  
+}
+
+6. EXAMPLE Block  
+EXAMPLE ident [params...] {
+  [LET ident = Expr]
+  [VERIFY Expr]
+}
+
+Expr := ident
+      | literal
+      | Expr(Expr, ...)
+      | FUN(ident, ...) -> Expr  
+      | LET ident = Expr IN Expr
+      | FORALL ident ... . Expr
+      | EXISTS ident ... . Expr  
+      | Expr [AND|OR|=>|<=>] Expr
+
+Pattern := ident | _ | literal | Pattern(Pattern, ...)
+
+ONTOLOGY {
+  ENTITY Tensor [n : Nat]
+  ENTITY Layer 
+  ENTITY Activation
+  ENTITY Loss
+
+  REL shape(Tensor[n]) = [n]
+  REL parameters(Layer) = Tensor
+  REL input(Layer) = Tensor
+  REL output(Layer) = Tensor
+  
+  FUN compose(Layer, Layer) -> Layer
+  FUN apply(Activation, Tensor) -> Tensor
+  FUN minimize(Loss, Tensor, Tensor) -> Tensor
+}
+
+CONCEPT LinearLayer [n m : Nat] {
+  STRUCT {
+    FIELD weights : Tensor[n, m]  
+    FIELD bias : Tensor[m]
+    FUN forward(x : Tensor[n]) -> Tensor[m] = weights * x + bias
+  }
+
+  AXIOM shape(output) = [m] WHEN shape(input) = [n]
+  AXIOM parameters = weights + bias
+}
+
+CONCEPT ActivationLayer [f : Tensor -> Tensor] {
+  FUN forward(x : Tensor) -> Tensor = f(x)
+}
+
+CONCEPT ResidualLayer [n m : Nat] {
+  EXTENDS LinearLayer[n, m]
+  STRUCT {
+    FIELD inner : Layer
+    FUN forward(x : Tensor[n]) -> Tensor[m] = 
+      LET y = LinearLayer::forward(x) IN
+      LET z = compose(inner, ActivationLayer[ReLU])(y) IN 
+      y + z
+  }
+}
+
+CONCEPT CrossAttention [n m : Nat] {
+  EXTENDS LinearLayer[n, m]
+  STRUCT {
+    FIELD queries : Tensor[n, k] 
+    FIELD keys : Tensor[m, k]
+    FIELD values : Tensor[m, v]
+    FUN attention(q : Tensor[n, k], k : Tensor[m, k], v : Tensor[m, v]) -> Tensor[n, v] =
+      LET weights = softmax(q * transpose(k)) IN
+      weights * v
+    FUN forward(x : Tensor[n]) -> Tensor[m] =
+      LET y = super::forward(x) IN  
+      LET z = attention(queries * x, keys, values) IN
+      y + z        
+  }
+}
+
+CONCEPT Transformer [n : Nat] {
+  STRUCT {
+    FIELD layers : List[Layer]
+    FUN forward(x : Tensor[n]) -> Tensor =
+      MATCH layers {
+        CASE [] => x
+        CASE [first, ...rest] => forward(compose(first, ActivationLayer[ReLU])(x))  
+      }
+  }
+
+  AXIOM layers != []
+  AXIOM shape(output) = shape(last(layers).output)
+
+  THEOREM universal_approximation {
+    ASSUME f : Tensor[n] -> Tensor
+    ASSUME ε > 0  
+    SHOW EXISTS t : Transformer[n] . 
+      FORALL x : Tensor[n] .
+        norm(t.forward(x) - f(x)) < ε
+  }
+}
+
+EXAMPLE TransformerClassifier [n m : Nat] {
+  LET layers = [
+    LinearLayer[n, 128],
+    ResidualLayer[128, 128],
+    CrossAttention[128, 64],
+    LinearLayer[64, m]
+  ]
+  
+  LET model = Transformer[n] { layers }
+  
+  LET loss = CrossEntropyLoss[m]
+  
+  VERIFY shape(model.output) = [m]
+  VERIFY minimize(loss, model.parameters, dataset) -> parameters
+}
+
+
+
+
+ConceptScript-X (CSX) Language Specification
+
+1. CONCEPT Declaration
+CONCEPT Name [<: BaseConcept] {
+  [PARAM [name :] Type ...]
+  [IMPORT Concept ...]
+  [TYPE Name ...]
+  [STRUCTURE Name [<: BaseStructure] { 
+    [field : Type ...] 
+  }]
+  [FUNC Name ([name :] Type ...) [-> Type] [= Expr]]
+  [PRED Name ([name :] Type ...) [= Expr]]
+  [AXIOM Name : Expr]
+  [THEOREM Name : Expr PROOF { ... }]
+  [EXAMPLE Name : [Expr SATISFYING] Expr]
+  [COUNTEREXAMPLE Name : [Expr SATISFYING] Expr]
+  [TRANSFORM Name : Pattern -> Expr]  
+}
+
+2. Expressions
+Expr = 
+  | Name
+  | Literal
+  | Expr Expr                   -- application
+  | INFIX Expr Name Expr        -- infix op
+  | PREFIX Name Expr            -- prefix op
+  | Expr POSTFIX Name           -- postfix op  
+  | IF Expr THEN Expr ELSE Expr -- conditional
+  | MATCH Expr { Case... }      -- pattern match
+  | { [Name = Expr]... }        -- record
+  | ( [Expr]... )               -- tuple
+  | [ [Expr]... ]               -- list
+  | LAMBDA ([name : Type]...) -> Expr         -- lambda  
+  | FORALL ([name : Type]...) [WHERE Expr] Expr -- universal quantification
+  | EXISTS ([name : Type]...) [WHERE Expr] Expr -- existential quantification
+  | LET Name [: Type] = Expr IN Expr  -- let binding
+
+Case = CASE Pattern -> Expr
+
+Pattern =  
+  | Name | _            -- variable & wildcard
+  | Literal      
+  | Pattern Pattern     -- application
+  | (Pattern, Pattern)  -- tuple
+  | [Pattern]           -- list
+  | {Name = Pattern...} -- record
+
+3. Proofs  
+PROOF {
+  [ASSUME Expr ...]
+  [SUPPOSE Expr ...]
+  [LET Name [: Type] = Expr ...]
+  [SHOW Expr [BY Expr] ...]
+  [CASE Expr OF Case... ...]
+  [THEREFORE Expr [BY Expr]]
+  [CONTRADICTION]
+  [QED]
+}
+
+
+
+
+
+// original 3
+
+
+
+
+ConceptScript++ (CS++) Language Specification
+
+1. CONCEPT Declaration
+CONCEPT Name [EXTENDS BaseConcept] {
+  [PARAMETERS ...]
+  [CONTEXT ...]
+  [STRUCTURE ...]
+  [RULES ...]
+  [PROOFS ...]
+  [EXAMPLES ...]
+}
+
+2. PARAMETERS Block
+PARAMETERS {
+  [ident : Type ...]
+}
+
+3. CONTEXT Block  
+CONTEXT {
+  [IMPORT concept ...]
+  [DEF ident := Expr ...]
+  [AXIOM ident := Expr ...]
+}
+
+4. STRUCTURE Block
+STRUCTURE {
+  [TYPE ident ...]
+  [FUNC ident (params...) -> Type ...]
+  [PRED ident (params...) ...]
+  [DATA ident (fields...) ...]
+}
+
+5. RULES Block
+RULES {
+  [INFER Rule ...]
+  [REWRITE Rule ...]
+}
+
+Rule := [ident :] Expr [IF Expr] [WHERE Expr]
+
+6. PROOFS Block
+PROOFS {
+  [THEOREM ident := Expr
+   PROOF { 
+     [ASSUME Expr ...]
+     [SHOW Expr [BY Expr] ...]
+     [QED]
+   }
+  ...]
+}
+
+7. EXAMPLES Block  
+EXAMPLES {
+  [EXAMPLE ident [: Expr] WHERE Expr ...]
+  [COUNTEREXAMPLE ident [: Expr] WHERE Expr ...]
+}
+
+8. Expressions
+Expr := ident
+      | literal
+      | Expr (Expr ...)  -- function application
+      | Expr.ident       -- record field access
+      | Expr [Expr]      -- list indexing
+      | Expr [Expr <- Expr] -- record update
+      | (Expr ...)       -- tuple
+      | [Expr ...]       -- list 
+      | {ident = Expr ...} -- record
+      | IF Expr THEN Expr ELSE Expr -- conditional
+      | MATCH Expr { [CASE Pattern -> Expr] ... } -- pattern match
+      | FORALL (params...) Expr -- universal quantification
+      | EXISTS (params...) Expr -- existential quantification
+      | LAMBDA (params...) -> Expr -- lambda abstraction
+      | LET ident = Expr IN Expr -- let binding
+
+9. Types & Patterns  
+Type := ident 
+      | ident(Type ...)
+      | Type -> Type
+      | (Type ...)
+      | [Type]
+      | {ident : Type ...}
+
+Pattern := _
+         | ident 
+         | literal
+         | (Pattern ...) 
+         | [Pattern ...]
+         | {ident = Pattern ...}
+         | Pattern : Type
+
+Some key features and enhancements in CS++:
+
+Expanded CONTEXT block: Can now import other concepts, define local aliases and axioms. This allows building up concepts more compositionally.
+Explicit STRUCTURE block: Separates structural definitions (types, functions, predicates, data) from rules and axioms. Improves clarity and modularity.
+More expressive rules: Both inference rules and rewrite rules, with optional premises and side conditions. Enables defining richer logics and equational theories.
+Patterns in MATCH: Supports rich, composable pattern matching, for more expressive case analysis and deconstruction.
+Enhanced proof language: Structured proof blocks with explicit hypotheses and QED. Proofs are first-class expressions that can be composed and manipulated.
+Counterexamples: Can provide explicit counterexamples, not just examples. Useful for testing and refining definitions.
+Extended expression syntax: Richer set of constructs including conditionals, let-bindings, records, tuples, lists etc. More expressive basis for defining concepts.
+
+The overall goal is to provide a yet more flexible and expressive foundation for scaffolding conceptual knowledge. The extended CONTEXT and STRUCTURE blocks enable more modular construction of concepts. The enhanced rules, patterns and proofs allow encoding richer logics and theories. And the expanded expression language provides a more powerful base for defining computations and relations.
+At the same time, CS++ tries to maintain the key principles that made ConceptScript effective - the grounding in natural language, the focus on logical constraints and compositionality, and the integration of formal reasoning with examples.
+
+
+
+
+
+
+ConceptScript++ (CS++) Specification Draft
+
+1. ONTOLOGY Declaration
+ONTOLOGY Name [EXTENDS BaseOntology] {
+  [CONCEPTS ...]
+  [RELATIONS ...]
+  [AXIOMS ...]
+}
+
+2. CONCEPT Declaration  
+CONCEPT Name [EXTENDS BaseConcept] {
+  [PARAMETERS ...]
+  [STRUCTURES ...]
+  [INSTANCES ...]
+  [RULES ...]
+  [PROOFS ...]
+  [EXAMPLES ...]
+}
+
+3. RELATION Declaration
+RELATION Name [EXTENDS BaseRelation] {
+  [PARAMETERS ...]
+  [SIGNATURE ...]
+  [PROPERTIES ...]
+  [RULES ...]
+}
+
+4. AXIOM Declaration
+AXIOM Name [EXTENDS BaseAxiom] {
+  [PARAMETERS ...]
+  [ASSUMES ...]
+  [ASSERTS ...]
+}
+
+5. PARAMETERS Block
+PARAMETERS {
+  [ident : Type ...]
+}
+
+6. STRUCTURES Block
+STRUCTURES {
+  [STRUCTURE Name [EXTENDS BaseStructure] {
+     [FIELDS ...]
+     [CONSTRUCTORS ...]
+     [METHODS ...]
+     [PROPERTIES ...]
+  }]
+  
+  [ENUM Name {
+     [CASE ...]  
+  }]
+}
+
+7. INSTANCES Block
+INSTANCES {
+  [INSTANCE Name : Concept {
+     [FIELDS ...]  
+  }]
+}
+
+8. RULES Block  
+RULES {
+  [RULE Name {
+     [PARAMETERS ...]
+     [ASSUMES ...]
+     [DERIVES ...]
+  }]
+}
+
+9. PROOFS Block
+PROOFS {
+  [THEOREM Name {
+     [PARAMETERS ...]
+     [ASSUMES ...]
+     [PROVE ...]
+  }]
+
+  [LEMMA Name {
+     [PARAMETERS ...]
+     [ASSUMES ...]
+     [PROVE ...]
+  }]
+}
+
+10. EXAMPLES Block
+EXAMPLES {
+  [EXAMPLE Name {
+     [SETUP ...]
+     [VERIFY ...]
+  }]
+}
+
+Some key design principles and features of CS++:
+
+Ontologies as first-class citizens: CS++ recognizes that any sufficiently complex domain will involve multiple interrelated concepts. Ontologies provide a way to organize concepts into coherent systems and specify their relationships.
+Flexible compositionality: All the major constructs (ontologies, concepts, relations, axioms) support an EXTENDS clause, enabling incremental refinement and composition of knowledge structures.
+Separation of concerns: By providing separate blocks for structural definitions (STRUCTURES), logical constraints and inference rules (AXIOMS and RULES), proofs (PROOFS), and test cases (EXAMPLES), CS++ encourages a clean separation of the different aspects involved in formalizing a concept.
+Enhanced proof language: The PROOFS block supports both THEOREM and LEMMA declarations, with assume-prove semantics, enabling proofs to be decomposed into reusable intermediate results.
+Testing and validation: The EXAMPLES block allows specifying test cases which can be automatically verified, helping ensure the formal definitions are well-behaved and align with intuition.
+Modularity and reuse: The overall structure is designed to maximize opportunities for modularity and reuse. Ontologies can be extended, concepts can be instantiated, relations and axioms can be imported, enabling knowledge to be flexibly combined and adapted.
+
+The goal is for CS++ to provide a powerful and expressive framework for capturing complex knowledge domains, while maintaining a clean and readable syntax that leverages natural language understanding.
+
+
+
+
+
+CSX Specification v0.1
+
+1. ONTOLOGY Block
+ONTOLOGY {
+  [ENTITY ident [params...]]
+  [RELATION ident(param : Entity, ...) [= Formula]]
+  [FUNCTION ident(param : Entity, ...) : Entity [= Expression]]
+}
+
+2. AXIOMS Block  
+AXIOMS {
+  [AXIOM ident [params...] Formula]
+}
+
+3. DEFINITIONS Block
+DEFINITIONS {  
+  [DEFINE ident [params...] : Entity [= Expression]]
+  [DEFINE_INFIX ident(param : Entity, param : Entity) : Entity [= Expression]]
+  [DEFINE_SYNTAX SyntaxRule]
+}
+
+4. PROOFS Block
+PROOFS {
+  [THEOREM ident [params...] Formula
+   PROOF {
+     [ASSUME ident : Formula]
+     [LET ident [: Entity] = Expression]
+     [SHOW Expression]
+     [CASE Formula OF 
+        [GIVEN Formula -> PROOF {...}]
+        ...
+     ]
+     [BY TheoremName[params...]]
+     [THEREFORE Formula]
+     [QED]
+   }
+  ]
+}
+
+5. EXAMPLES Block
+EXAMPLES {
+  [EXAMPLE ident [params...] [: Entity] [SATISFYING Formula] [= Expression]]
+  [COUNTEREXAMPLE ident [params...] [: Entity] [SATISFYING Formula] [= Expression]]
+}
+
+6. TRANSFORMATIONS Block  
+TRANSFORMATIONS {
+  [REWRITE ident(param : Pattern, ...) : Entity = Pattern -> Expression]
+  [SIMPLIFY ident(param : Formula, ...) : Formula = Formula -> Formula]
+}
+
+Formula = 
+  | TRUE | FALSE
+  | NOT Formula
+  | Formula AND Formula  
+  | Formula OR Formula
+  | Formula IMPLIES Formula
+  | FORALL (param : Entity, ...) Formula
+  | EXISTS (param : Entity, ...) Formula
+  | Expression EQUALS Expression
+  | Relation(Expression, ...)
+
+Expression =
+  | Ident
+  | Literal  
+  | Function(Expression, ...)
+  | IF Formula THEN Expression ELSE Expression
+  
+Pattern =
+  | Ident | Wildcard | Literal
+  | Pattern(Pattern, ...)
+
+SyntaxRule = 
+  CASE Formula OF
+    [Pattern -> Syntax]
+
+Key design principles and features:
+
+Explicit ontology section for declaring entities, relations and functions that form the conceptual vocabulary. This encourages clear and precise definitions.
+Axioms section for specifying foundational assumptions. Separating these from definitions enhances clarity about what is being taken for granted vs derived.
+Flexible definition forms including infix syntax and custom syntax rules. This allows adapting notation to the domain for improved readability and writability.
+Structured natural deduction style proofs with assumptions, cases, subproofs and appeals to prior theorems. This supports rigorous step-by-step reasoning.
+Examples and counterexamples as first-class constructs. This recognizes their importance in grounding abstract concepts and sanity-checking definitions.
+Transformations section with rewrite rules and simplifications. This enables extensible symbolic computation and bridges towards executable semantics.
+Overall minimalist syntax with lightweight keywords and indentation-based structure. The goal is low ceremony to keep focus on the essential concepts and logic.
+
+The aim is a language that builds on the key insights of ConceptScript - grounding formal reasoning in linguistic constructs, supporting structured arguments, enabling executable semantics - while streamlining the syntax, expanding flexibility of notation, and crystalizing the distinct roles of ontologies, axioms, definitions, proofs, examples and transformations.
+
+
+
+
+
+CONCEPT InferentialGeometricLanguage {
+  OVERVIEW {
+    InferentialGeometricLanguage IS_A symbolic language for representing and reasoning about geometric structures and their properties. Expressions in the language denote geometric entities, while rules of inference capture valid reasoning patterns. The language is designed to guide LLM inference, enabling the generation of coherent and novel deductions from basic assumptions.
+  }
+
+  SYNTAX {
+    Primitive ::= Symbol
+               | Number
+               | Vector
+               | Covector
+               | Multivector
+               | Versor
+               | Tensor
+
+    Operation ::= '+'  ;; Addition
+                | '*'  ;; Multiplication
+                | '·'  ;; Inner product  
+                | '∧'  ;; Outer product
+                | 'd'  ;; Derivative
+                | '∫'  ;; Integral
+                | '⟨_,_⟩' ;; Metric tensor
+                | 'exp' ;; Exponential map
+                | '†'  ;; Pseudoscalar complement
+
+    Relation ::= '='   ;; Equality  
+               | '⊥'   ;; Perpendicular
+               | '∠'   ;; Angle
+               | '∈'   ;; Element of  
+               | '⊂'   ;; Subset of
+
+    Formula ::= Primitive
+              | Operation '(' Formula (',' Formula)* ')'
+              | Relation '(' Formula (',' Formula)* ')'
+              | '¬' Formula  ;; Negation
+              | Formula '∧' Formula  ;; Conjunction  
+              | Formula '∨' Formula  ;; Disjunction
+              | Formula '⇒' Formula  ;; Implication
+              | '∀' Symbol '.' Formula  ;; Universal quantification
+              | '∃' Symbol '.' Formula  ;; Existential quantification
+  }
+
+  SEMANTICS {
+    Interpretation(I : Formula, G : GeometricDomain) : BOOLEAN
+    
+    ;; Primitives denote elements of the geometric domain
+    ∀ (p : Primitive) . 
+      Interpretation(p, G) ∈ G
+    
+    ;; Operations correspond to functions on the geometric domain 
+    ∀ (op : Operation, f1 ... fn : Formula) .
+      Interpretation(op(f1, ..., fn), G) :=
+        G.Op_Interpretation(op)(Interpretation(f1, G), ..., Interpretation(fn, G))
+    
+    ;; Relations are predicates on the geometric domain
+    ∀ (rel : Relation, f1 ... fn : Formula) .
+      Interpretation(rel(f1, ..., fn), G) :=
+        G.Rel_Interpretation(rel)(Interpretation(f1, G), ..., Interpretation(fn, G))
+    
+    ;; Logical connectives and quantifiers have standard Boolean semantics
+    Interpretation(¬A, G) := ¬Interpretation(A, G)
+    Interpretation(A ∧ B, G) := Interpretation(A, G) ∧ Interpretation(B, G) 
+    Interpretation(A ∨ B, G) := Interpretation(A, G) ∨ Interpretation(B, G)
+    Interpretation(A ⇒ B, G) := Interpretation(A, G) ⇒ Interpretation(B, G)
+    Interpretation(∀x.A, G) := ∀(v : G) . Interpretation(A[x ↦ v], G)  
+    Interpretation(∃x.A, G) := ∃(v : G) . Interpretation(A[x ↦ v], G)
+  }
+
+  INFERENCE {
+    Rule ::= AXIOM Formula  
+           | THEOREM Formula PROOF DeductionStep+
+    
+    DeductionStep ::= ASSUME Formula
+                    | Formula BY Rule+
+    
+    BUILTIN_AXIOMS {
+      ;; Equality axioms  
+      ∀(x) . x = x  
+      ∀(x y) . x = y ⇒ y = x
+      ∀(x y z) . x = y ∧ y = z ⇒ x = z
+
+      ;; Basic geometric axioms
+      ∀(u v) . u + v = v + u  
+      ∀(u v w) . u · (v ∧ w) = (u · v) ∧ (u · w)
+      ∀(α) . ∫ dα = α + C, C = constant
+      ∀(u) . ⟨u, u⟩ ≥ 0 ∧ (⟨u, u⟩ = 0 ⇔ u = 0)
+      ...  
+    }
+    
+    REASONING_PATTERNS {
+      ; Modus Ponens: from A and A ⇒ B, infer B
+      ASSUME A, (A ⇒ B)  
+      DEDUCE B BY A, (A ⇒ B)
+
+      ; Instantiation: from ∀(x) . A, infer A[x ↦ t] for any term t  
+      ASSUME ∀(x) . A
+      DEDUCE A[x ↦ t] BY ∀(x) . A
+
+      ; Case analysis: To show A ∨ B ⇒ C, assume A and show C, then assume B and show C
+      THEOREM (A ∨ B ⇒ C) 
+      PROOF
+        ASSUME A  
+        DEDUCE C ...
+        
+        ASSUME B
+        DEDUCE C ...
+        
+      ; Induction: To show ∀(n : Nat) . P(n), show P(0) and ∀(k) . P(k) ⇒ P(k+1) 
+      THEOREM ∀(n : Nat) . P(n)
+      PROOF  
+        DEDUCE P(0) ...
+        
+        ASSUME ∀(k) . P(k)
+        DEDUCE P(k+1) ...
+    }
+  }
+  
+  EXAMPLES {
+    DEFINE Euclidean_Space {
+      Carrier := Vector
+      Operations := {
+        '+' ↦ Vector_Addition,  
+        '·' ↦ Dot_Product,
+        '⟨_,_⟩' ↦ λ u v . ⟨u, v⟩ = u · v,
+        ...
+      }
+      Relations := {
+        '⊥' ↦ λ u v . u · v = 0,
+        '∠' ↦ λ u v θ . arccos(u · v / (|u| |v|)) = θ, 
+        ...
+      }
+    } SATISFYING ∀(u v w : Vector) {
+      u · v = v · u  ;; Symmetry  
+      u · (v + w) = u · v + u · w  ;; Linearity
+      ...  
+    }
+
+    THEOREM Pythagorean_Theorem {
+      ∀ (a b c : Vector) . 
+        a ⊥ b ∧ c = a + b ⇒ |c|^2 = |a|^2 + |b|^2
+    }
+    PROOF
+      ASSUME a ⊥ b, c = a + b
+      
+      |c|^2
+       = ⟨c, c⟩          BY definition of |_|
+       = ⟨a + b, a + b⟩  BY assumption c = a + b
+       = ⟨a, a⟩ + 2⟨a, b⟩ + ⟨b, b⟩  BY linearity of ⟨_,_⟩
+       = |a|^2 + 2(a · b) + |b|^2    BY definition of |_|, ⟨_,_⟩  
+       = |a|^2 + |b|^2               BY assumption a ⊥ b
+    
+    DEFINE Geometric_Algebra(n) {
+      Carrier := Multivector
+      Operations := {
+        '+' ↦ Multivector_Addition,
+        '∧' ↦ Outer_Product, 
+        '†' ↦ Complement,
+        ...   
+      }
+      Relations := {
+        '⊥' ↦ λ A B . A · B = 0,
+        '∈' ↦ λ A B . ∃ (X Y : Multivector) B = X + A ∧ Y,  
+        ...
+      }
+    } SATISFYING ∀(u v : Vector, A B C: Multivector) {
+      (u ∧ v)† = v† ∧ u†  
+      (A ∧ B) · C = A · (B · C)  
+      ...
+    }
+    
+    THEOREM Reflection_Formula {
+      ∀ (u v : Vector) (B : Bivector) . 
+        u ⊥ B ⇒ u† B u = -B u u†
+    }
+    PROOF
+      ASSUME u ⊥ B
+      
+      u† B u
+        = (u · B)u - (u ∧ B)† · u   BY expansion formula  
+        = (u · B)u - (B† · u†) · u   BY (u ∧ B)† = B† · u†
+        = (u · B)u - B · (u† ∧ u)   BY contraction is dual to ∧
+        = (u · B)u - B · 0           BY u† ∧ u = 0
+        = 0 - B u u†                BY u · B = 0  
+        = -B u u†
+    }
+  }
+}
+
+The key components of this InferentialGeometricLanguage are:
+
+A rich symbolic syntax for expressing geometric entities and relations, including vectors, multivectors, tensors, products, derivatives, etc.
+A model-theoretic semantics that interprets expressions in a given geometric domain, assigning primitives to domain elements and operations/relations to functions/predicates on the domain.
+A proof system with axioms and inference rules for deducing new theorems from assumptions, supporting common reasoning patterns like modus ponens, instantiation, case analysis, and induction.
+Worked examples showing how the language can be used to define specific geometric structures like Euclidean spaces and Geometric Algebras, state their characteristic properties, and prove theorems about them.
+
+The idea is that this language provides a substrate for LLMs to perform geometric reasoning in a controlled and principled way:
+
+The syntax constrains the space of expressible concepts to geometrically meaningful ones.
+The semantics grounds the meaning of expressions in concrete geometric models.
+The proof system guides inference along valid deductive paths.
+The examples illustrate the intended use and capabilities of the language.
+
+When an LLM is prompted with a problem stated in this language, it can use the syntax to generate meaningful candidate expressions, the semantics to evaluate their plausibility, and the proof system to search for derivations. The explicit inferential structure keeps the reasoning focused and coherent.
+Moreover, the modular nature of the language allows it to be extended with domain-specific concepts and axioms as needed. The LLM can leverage this to explore novel implications and connections between different branches of geometry.
+Of course, realizing this vision would require significant prompting engineering to properly condition the LLM on the language semantics and inferential patterns. But I believe a framework like this could be a powerful tool for augmenting mathematical reasoning and discovery with language models.
+
+
+
+
+
+// EARLIER FOUNDATION
+
+
+
+CONCEPT GeometricSymbolicLanguage {
+
+  CONTEXT {
+    TYPES {
+      GeometricSpace := (
+        FIELDS {
+          Entities: SET,
+          Relations: SET(FUNCTION(Entities, Entities, BOOLEAN)),
+          Transformations: SET(FUNCTION(Entities, Entities))
+        },
+        AXIOMS {
+          Identity: FORALL (e : Entities) . 
+            EXISTS (i : Transformations) . FORALL (e' : Entities) . i(e) = e',
+          Inverse: FORALL (t : Transformations) . 
+            EXISTS (t' : Transformations) . FORALL (e : Entities) . t'(t(e)) = e,
+          Composition: FORALL (t1 t2 : Transformations) . 
+            EXISTS (t3 : Transformations) . FORALL (e : Entities) . t3(e) = t1(t2(e))
+        }
+      )
+
+      SymbolicExpression := (
+        CASES 
+          AtomicEntity(name : STRING),
+          AtomicRelation(name : STRING),
+          AtomicTransformation(name : STRING),
+          CompositeExpression(
+            operator : STRING, 
+            arguments : LIST(SymbolicExpression)
+          )
+      )  
+    }
+
+    FUNCTIONS {
+      INTERPRET(expr : SymbolicExpression, space : GeometricSpace) -> 
+        CASES (expr) OF
+          AtomicEntity(name) : space.Entities,
+          AtomicRelation(name) : space.Relations,
+          AtomicTransformation(name) : space.Transformations,
+          CompositeExpression(operator, arguments) :
+            MATCH (operator, arguments) WITH
+              ("Intersection", [arg1, arg2]) : 
+                INTERPRET(arg1, space) INTERSECT INTERPRET(arg2, space),
+              ("Union", [arg1, arg2]) :
+                INTERPRET(arg1, space) UNION INTERPRET(arg2, space),
+              ("Complement", [arg]) : 
+                space.Entities SETMINUS INTERPRET(arg, space),
+              ("RelationalImage", [rel, arg]) : 
+                { y | EXISTS (r : INTERPRET(rel, space)) EXISTS (x : INTERPRET(arg, space)) . r(x, y) },
+              ("TransformationImage", [trans, arg]) :
+                { t(x) | t IN INTERPRET(trans, space), x IN INTERPRET(arg, space) },
+              ...
+    }
+
+    AXIOMS {
+      InterpretationCommutes:
+        FORALL (e1 e2 : SymbolicExpression, space : GeometricSpace) .
+          INTERPRET(CompositeExpression("Composition", [e1, e2]), space)
+          = INTERPRET(e1, space) COMPOSE INTERPRET(e2, space)
+
+      InterpretationInverts:
+        FORALL (e : SymbolicExpression, space : GeometricSpace) .
+          INTERPRET(CompositeExpression("Inverse", [e]), space)
+          = INVERSE(INTERPRET(e, space))
+
+      InterpretationIdentity:
+        FORALL (e : SymbolicExpression, space : GeometricSpace) .
+          INTERPRET(CompositeExpression("Identity", [e]), space)
+          = IDENTITY(INTERPRET(e, space))  
+    }
+  }
+
+  PROOFS {
+    THEOREM Expressiveness {
+      FORALL (space : GeometricSpace) .
+        FORALL (entity : space.Entities) . 
+          EXISTS (expr : SymbolicExpression) . INTERPRET(expr, space) = entity
+        FORALL (relation : space.Relations) .
+          EXISTS (expr : SymbolicExpression) . INTERPRET(expr, space) = relation
+        FORALL (transformation : space.Transformations) .
+          EXISTS (expr : SymbolicExpression) . INTERPRET(expr, space) = transformation
+    }
+
+    THEOREM Soundness {
+      FORALL (expr : SymbolicExpression, space : GeometricSpace) .
+        FORALL (sub : FUNCTION(SymbolicExpression, SymbolicExpression)) .
+          LET expr' = SUBSTITUTE(expr, sub) IN
+            INTERPRET(expr', space) SUBSET INTERPRET(expr, space)
+    }
+
+    THEOREM Completeness {
+      FORALL (space : GeometricSpace) .
+        LET theory = { expr | FORALL (model : GeometricSpace) . 
+                                model SATISFIES space.AXIOMS => INTERPRET(expr, model) = space.Entities } IN
+          FORALL (expr : SymbolicExpression) . 
+            expr IN theory <=> INTERPRET(expr, space) = space.Entities
+    }
+  }   
+}
+
+
+
+CONCEPT GeometricSemanticLanguage {
+  PARAMETERS {
+    Dimensionality: Nat ;; Ambient geometric dimension
+    GroundField: Field ;; Scalars for coordinates and measures
+  }
+
+  CONTEXT {
+    TYPES {
+      ;; Syntactic Types
+      SynType ::= BasicType | FunctionType(SynType, SynType) | ProductType(SynType, SynType)
+      BasicType ::= "Real" | "Vector" | "Covector" | "Bivector" | "Trivector" | ...
+      
+      ;; Geometric Types  
+      GeoType ::= Manifold | Algebra | Module | Tensor | InnerProductSpace | ...
+
+      ;; Semantic Types
+      SemType ::= Interpretation(SynType, GeoType)
+    }
+
+    FUNCTIONS {
+      ;; Syntactic Operations 
+      Add : (a: SynType, b: SynType) -> SynType
+      Multiply : (a: SynType, b: SynType) -> SynType  
+      Compose : (f: FunctionType(a, b), g: FunctionType(b, c)) -> FunctionType(a, c)
+      Differentiate : (f: FunctionType(a, b)) -> FunctionType(a, b)
+      Integrate : (f: FunctionType(a, "Real")) -> "Real"
+      ...
+
+      ;; Geometric Operations
+      Exp : (v: Algebra) -> Algebra  
+      Wedge : (u: Covector, v: Covector) -> Bivector
+      Contract : (u: Covector, v: Vector) -> "Real"
+      Lie_Bracket : (u: Vector, v: Vector) -> Vector
+      Hodge_Star : (u: Covector) -> Covector
+      ...
+
+      ;; Semantic Interpretations
+      ⟦_⟧ : (e: SynType) -> SemType
+      Satisfy : (e: SynType, m: GeoType) -> Bool
+      Equivalent : (e1: SynType, e2: SynType) -> Bool
+      ...  
+    }
+
+    AXIOMS {
+      ;; Syntactic Identities
+      Add_Commutative: FORALL (a b : SynType) . Add(a, b) = Add(b, a)
+      Multiply_Associative: FORALL (a b c : SynType) . Multiply(a, Multiply(b, c)) = Multiply(Multiply(a, b), c)
+      Differentiate_Linear: FORALL (f g : FunctionType(a, b)) . Differentiate(Add(f, g)) = Add(Differentiate(f), Differentiate(g))
+      Fundamental_Theorem_Calculus: FORALL (f : FunctionType(a, "Real")) . Differentiate(Integrate(f)) = f
+      ...
+
+      ;; Geometric Identities
+      Exp_Wedge: FORALL (u v : Covector) . Exp(Add(u, v)) = Multiply(Exp(u), Exp(v))
+      Lie_Bracket_Jacobi: FORALL (u v w : Vector) . 
+        Add(Lie_Bracket(u, Lie_Bracket(v, w)), Lie_Bracket(v, Lie_Bracket(w, u)), Lie_Bracket(w, Lie_Bracket(u, v))) = 0
+      HodgeStar_Duality: FORALL (u v : Covector) . Contract(u, HodgeStar(v)) = Wedge(u, v) 
+      ...
+
+      ;; Semantic Soundness  
+      Interpretation_Homomorphism: FORALL (e1 e2 : SynType) . 
+        ⟦Add(e1, e2)⟧ = GeometricPlus(⟦e1⟧, ⟦e2⟧) AND ⟦Multiply(e1, e2)⟧ = GeometricTimes(⟦e1⟧, ⟦e2⟧)
+      Satisfy_Soundness: FORALL (e : SynType) (m : GeoType) . 
+        (Satisfy(e, m) IFF (EXISTS (g : ⟦m⟧) . g IN ⟦e⟧))
+      Equivalent_Completeness: FORALL (e1 e2 : SynType) . 
+        (Equivalent(e1, e2) IFF (FORALL (m : GeoType) . Satisfy(e1, m) IFF Satisfy(e2, m)))
+      ...
+    }
+  }
+
+  PROOFS {
+    THEOREM Coordinate_Free_Geometry {
+      FORALL (e : SynType) (m : Manifold) (f g : ⟦FunctionType(m, "Real")⟧) .
+        (f IN ⟦e⟧ IFF g IN ⟦e⟧) ;; Coordinate independence
+    }
+
+    THEOREM Syntactic_Semantic_Correspondence {
+      FORALL (e1 e2 : SynType) .
+        (Equivalent(e1, e2) IFF (⟦e1⟧ = ⟦e2⟧)) ;; Semantic completeness  
+    }  
+
+    THEOREM Differential_Form_Invariance {
+      FORALL (ω : ⟦Covector⟧) (X Y : ⟦Vector⟧) (f g : ⟦FunctionType("Real", "Real")⟧) .
+        (Contract(ω, Lie_Bracket(X, Y)) = 0 AND f ∘ g = Identity 
+          IMPLIES Contract(PullBack(ω, f), Lie_Bracket(PushForward(X, g), PushForward(Y, g))) = 0)
+    }
+  }
+
+  EXAMPLES {
+    DEFINE SymplecticStructure {
+      WITH Manifold M, Covector ω
+      WHERE Wedge(ω, ω) IS_NONDEGENERATE  
+        AND Differentiate(ω) = 0
+    } SATISFYING FORALL (u v : Vector) . 
+      Contract(ω, Lie_Bracket(u, v)) = 0
+
+    DEFINE HamiltonianMechanics {
+      WITH SymplecticStructure (M, ω), FunctionType(M, "Real") H  
+      DEFINE TimeEvolution(t) = Exp(t * HamiltonianVectorField(H))
+        WHERE HamiltonianVectorField(H) = u SUCH_THAT FORALL (v : Vector) . Contract(ω, u) = Differentiate(H)(v)
+    } SATISFYING FORALL (f : FunctionType(M, "Real")) .
+      Differentiate(Compose(f, TimeEvolution(t)))(t) = Lie_Bracket(HamiltonianVectorField(H), f)
+
+    DEFINE GeneralRelativity {
+      WITH Manifold M, Covector Θ, Tensor R
+      WHERE Θ IS_NONDEGENERATE
+        AND R = RiemannCurvature(Θ)
+        AND Einstein(Θ, T) HOLDS
+          WHERE Einstein(Θ, T) = (RicciCurvature(Θ) - (1/2) * ScalarCurvature(Θ) * Θ = T)
+    } SATISFYING FORALL (γ : FunctionType("Real", M)) . 
+      (∇_γ'(t)(γ'(t)) = 0 IFF γ IS_GEODESIC)  
+  }
+}
+
+
+
+
+
+CONCEPT GeometricSymbolicLanguage {
+  CONTEXT {
+    REPRESENTATIONS {
+      REPRESENTATION Expressions {
+        FIELDS {
+          Constants: SET
+          Variables: SET(Symbol)  
+          Operations: SET(Operation)
+          Relations: SET(Relation)
+        }
+        
+        GENERATION {
+          Expr := Constant 
+                | Variable
+                | Operation(Expr, ..., Expr)
+                | Relation(Expr, ..., Expr)
+        }
+      }
+
+      REPRESENTATION Geometries {
+        FIELDS {
+          Carriers: SET
+          Structures: SET(GeometricStructure)  
+          Transformations: SET(Transformation)
+        }
+      }
+    }
+
+    RULESET SyntaxRules {
+      FORALL (Op : Operations, e1 ... en : Expr, G : Geometries) {
+        Interpret(Op(e1, ..., en), G) :=
+          Interpret(Op, G)(Interpret(e1, G), ..., Interpret(en, G))
+      }
+
+      FORALL (Rel : Relations, e1 ... en : Expr, G : Geometries) {
+        Interpret(Rel(e1, ..., en), G) := 
+          Interpret(Rel, G)(Interpret(e1, G), ..., Interpret(en, G))  
+      }
+    }
+
+    FUNCTION Interpret(e : Expr, G : Geometries) -> Geometries.Carriers
+
+    SEMANTICS {
+      FORALL (c : Constants) {
+        Interpret(c, _) IS FIXED 
+      }
+      
+      FORALL (v : Variables) {
+        Interpret(v, _) IS VARIABLE
+      }
+      
+      FORALL (Op : Operations, n : Nat) {
+        Interpret(Op, _) : Geometries.Carriers^n -> Geometries.Carriers
+        SATISFIES FORALL (G : Geometries) {
+          Interpret(Op, G) RESPECTS G.Structures  
+        }
+      }
+
+      FORALL (Rel : Relations, n : Nat) {
+        Interpret(Rel, _) : Geometries.Carriers^n -> BOOLEAN
+        SATISFIES FORALL (G : Geometries) {  
+          Interpret(Rel, G) RESPECTS G.Structures
+        }
+      }
+    }
+    
+    AXIOMS {
+      SemanticsSound: FORALL (G : Geometries, e : Expr) {
+        Interpret(e, G) SATISFIES SyntaxRules[e, G]
+      }
+      
+      ExpressionComplete: FORALL (G : Geometries, x : G.Carriers) {
+        EXISTS (e : Expr) . Interpret(e, G) = x  
+      }
+      
+      GeometryInvariant: FORALL (G1 G2 : Geometries) {
+        G1 ≅ G2 IMPLIES FORALL (e1 e2 : Expr) {
+          Interpret(e1, G1) = Interpret(e2, G1) IFF 
+          Interpret(e1, G2) = Interpret(e2, G2)
+        }
+      }
+      
+      SyntaxInvariant: FORALL (G : Geometries, T : Transformations) {
+        FORALL (e : Expr) {
+          Interpret(e, T(G)) = T(Interpret(e, G))
+        }
+      }
+    }
+  }
+
+  IMPLICATIONS {
+    UniversalGeometry: FORALL (T : Mathematical Theory) {
+      T IS REPRESENTABLE_IN GeometricSymbolicLanguage  
+    }
+    
+    AutomatedReasoning: FORALL (prop : FUNCTION(Expr, BOOLEAN)) {  
+      prop IS VALID IFF
+      FORALL (G : Geometries, e : Expr) . 
+        prop(e) IMPLIES Interpret(e, G) SATISFIES prop 
+    }
+
+    IntegrationOfSymbolicAndVisual: {
+      FORALL (D : DIAGRAM, e : Expr) {
+        D IS_SOUND <=> (FORALL ((x, y) : IN D) . x REPRESENTS e1, y REPRESENTS e2 
+                         IMPLIES Interpret(e1, D) = Interpret(e2, D))
+      }
+    }
+  }
+
+  EXAMPLES {    
+    RealAnalysis REPRESENTED_BY {
+      Expressions {
+        Constants := {0, 1, ...}  
+        Variables := {x, y, z, ...}
+        Operations := {Plus, Times, Exp, Sin, Integral, ...}
+        Relations := {Eq, Lt, ...}
+      }
+      
+      Geometries {
+        Carriers := REAL_NUMBERS
+        Structures := {
+          Field_Axioms, 
+          Completeness_Axiom,
+          ...  
+        }
+      }
+      
+      SATISFYING {
+        Interpret(Plus(x,y), REAL_NUMBERS) = x + y,
+        Interpret(Times(x,y), REAL_NUMBERS) = x * y, 
+        Interpret(Integral(x,a,b), REAL_NUMBERS) = ∫_a^b x dx,
+        ...
+        Interpret(Eq(x,y), REAL_NUMBERS) <=> x = y,
+        Interpret(Lt(x,y), REAL_NUMBERS) <=> x < y,
+        ...
+      }
+    }
+      
+    EuclideanGeometry REPRESENTED_BY {
+      Expressions {
+        Constants := {Point, Line, Circle, ...}
+        Operations := {Intersection, Parallel, Perpendicular, ...}  
+        Relations := {Congruent, Similar, ...}
+      }
+      
+      Geometries {
+        Carriers := EUCLIDEAN_PLANE  
+        Structures := {
+          Incidence_Axioms,
+          Congruence_Axioms, 
+          Continuity_Axioms,
+          Parallel_Axiom,
+          ...
+        }
+      }
+      
+      SATISFYING {
+        Interpret(Line(Point(A), Point(B)), EUCLIDEAN_PLANE) 
+          = LINE THROUGH POINTS A, B
+        
+        Interpret(Intersection(Line(P,Q), Line(R,S)), EUCLIDEAN_PLANE)
+          = POINT OF INTERSECTION OF LINE PQ AND LINE RS
+        
+        Interpret(Perpendicular(Line(P,Q), Line(R,S)), EUCLIDEAN_PLANE)  
+          <=> LINE PQ IS PERPENDICULAR TO LINE RS
+          
+        Interpret(Congruent(Triangle(A,B,C), Triangle(D,E,F)), EUCLIDEAN_PLANE) 
+          <=> TRIANGLE ABC IS CONGRUENT TO TRIANGLE DEF
+      }
+    }
+  }
+}
+
+
+
+
+
+
+CONTRACT DomainTheory {
+  PARAMETERS {
+    (α₁ : T₁, α₂ : T₂, ..., α_n : T_n)
+  }
+
+  STRUCTURES {
+    S₁ {
+      (f₁₁ : F₁₁, f₁₂ : F₁₂, ..., f₁ₙ : F₁ₙ)
+      [e₁₁, e₁₂, ..., e₁ₙ]
+    }
+    ...
+    S_m { ... }  
+  }
+
+  DEFINITIONS {
+    x₁ := e₁
+    x₂ := e₂
+    ...
+    x_n := e_n
+  }
+
+  IDENTITIES {
+    e₁ = e₂
+    e₃ = e₄
+    ... 
+    [c₁] ⇒ e₁
+    [c₂] ⇒ e₂
+    ...
+  }
+
+  THEOREMS {
+    THEOREM T₁ {
+      ASSUME a₁, a₂, ..., a_n
+      PROVE c
+      PROOF {
+        p₁ [Ref₁]
+        p₂ [Ref₂]
+        ...
+        p_n ∎ 
+      }
+    }
+    ...
+    THEOREM T_m { ... }
+  }
+
+  EXAMPLES {
+    EXAMPLE E₁ {
+      LET x₁ := v₁
+      LET x₂ := v₂
+      ...
+      ASSUME a₁, a₂, ..., a_n
+      SHOW e₁, e₂, ..., e_m
+    }
+    ...  
+    EXAMPLE E_p {
+      e₁ ≅ e₂
+      e₃ ≣ e₄
+      ...
+      e_n ↔ e_{n+1} WHERE c
+    }
+  }
+}
+
+
+
+
+
+
+
+EXPAND AlzheimersDisease {
+  THEORY NeuropathologicalMechanisms {
+    DEFINE AlzheimerDisease := NeurodegenerativeDisorder ...
+    DEFINE Neuropathology := Observation OF AmyloidPlaques AND NeurofibrillaryTangles ...
+    
+    AXIOM AmyloidHypothesis := AccumulationOf AmyloidBetaPeptide LEADS_TO ...
+    AXIOM TauHypothesis := HyperphosphorylationOf TauProtein LEADS_TO ...
+    
+    QUESTION WhatIsThePrimaryDriverOfNeurodegenerationInAlzheimers
+    QUESTION HowDoGeneticAndEnvironmentalFactorsInteractToInfluenceAlzheimersRisk
+    ...
+  }
+  
+  EXPLORE ImmuneInflammatoryMechanisms, CellularMetabolicChanges, ...
+  CONSIDER SynapticDysfunction, NeuronalLoss, BrainAtrophy, ...
+  
+  RELATE AmyloidPlaques -> MicroglialActivation -> Neuroinflammation
+  RELATE MitochondrialDysfunction -> OxidativeStress -> SynapticImpairment  
+  ...
+}
+
+PINCH_POINTS {
+  ApoE4, Presenilin1, Presenilin2, AmyloidPrecursorProtein
+  Aging, HeadTrauma, VascularDisease, MetabolicSyndrome
+  Neuroinflammation, MicroglialActivation, ComplementCascade
+  Amyloid-Beta, Tau, Alpha-Synuclein, TDP-43
+  BloodBrainBarrier, NeurovascularUnit, CerebralAmyloidAngiopathy
+  CognitiveReserve, BrainResilience, NeuralCompensation
+  ...
+  
+  AmyloidBeta -> Oligomers -> NeuronalToxicity
+  TauProtein -> Hyperphosphorylation -> NeurofibrillaryTangles  
+  (ApoE4, AgingBrain, CerebrovascularDisease) -> IncreasedAlzheimersRisk
+  (Neuroinflammation, OxidativeStress, SynapticDysfunction) -> NeurodegenerativeCascade
+  ...
+}  
+
+CONTRACT AlzheimersTheory {
+  CONCEPT AmyloidCascadeHypothesis {
+    ASSUME AmyloidBetaAccumulation := ExcessiveProductionOf AmyloidBetaPeptide OR ...
+    ASSUME AmyloidBetaToxicity := OligomericFormsOf AmyloidBeta INDUCE NeuronalDysfunction, ...
+    
+    THEOREM AmyloidCascade := AmyloidBetaAccumulation CAUSES DownstreamPathologicalEvents AND ...
+    PROOF
+      ...
+    QED
+    
+    CONJECTURE AntiAmyloidTherapy := TargetingOf AmyloidBetaProduction, Aggregation, OR Clearance ...
+  }
+  
+  CONCEPT TauHypothesis {
+    ASSUME TauProtein := Microtubule-AssociatedProtein THAT NormallyFunctions IN ...
+    ASSUME TauHyperphosphorylation := PathologicalModificationOf TauProtein LEADING_TO ...
+    
+    THEOREM TauPathology := TauHyperphosphorylation AND NeurofibrillaryTangleFormation IS ... 
+    PROOF
+      ...  
+    QED
+    
+    CONJECTURE TauTargetingTherapy := InterventionsTargeting TauHyperphosphorylation OR TangleFormation ...
+  }
+  
+  ...
+}
+
+
+
+
+
+
+
+
+EXPAND AgingMechanisms {
+  EXPLORE CellularSenescence, MitochondrialDysfunction, GenomicInstability, EpigeneticAlterations, StemCellExhaustion
+  CONSIDER MetabolicChanges, InflammatoryProcesses, ProteostasisDecline
+  
+  RELATE CellularSenescence -> SecretoryPhenotype -> InflammatorySignaling
+  RELATE MitochondrialDysfunction -> OxidativeStress -> GenomicDamage
+  RELATE EpigeneticAlterations -> GeneExpressionChanges -> CellularAging
+  
+  ANALOGIZE CellularSenescence ~ ZombieCell : {NonDividing, ResistantToApoptosis, InflammatorySecretion}
+  ANALOGIZE MitochondrialDysfunction ~ PowerPlantFailure : {EnergyDeficit, ToxicByproducts, CascadingDamage}
+  
+  EXTEND (CellularSenescence + StemCellExhaustion + InflammatoryProcesses) -> TissueDegeneration
+  EXTEND (MitochondrialDysfunction + MetabolicChanges + ProteostasisDecline) -> CellularAging
+  
+  ABSTRACT (CellularSenescence, MitochondrialDysfunction, GenomicInstability) => {AccumulatingDamage, LossOfHomeostasis}
+  
+  QUESTION CellularSenescence & StemCellExhaustion ?? ImpairedRegenerationAndRepair
+  QUESTION GenomicInstability & EpigeneticAlterations ?? AlteredGeneExpression
+}
+
+PINCH BiologicalAging {
+  CellCycle -> Senescence -> SASP
+  MitochondrialDNA -> ROS -> OxidativeDamage
+  (Telomeres, DNARepair) -> GenomicInstability
+  Epigenome -> ChromatinRemodeling -> TranscriptionalChanges
+  (MSC, HSC, NSC) -> StemCellExhaustion
+  Autophagy -> ProteinAggregation -> ProteotoxicStress
+  (Inflammaging, Immunosenescence) -> LowGradeInflammation
+  Metabolism -> NutrientSensing -> mTORSignaling
+}
+
+CONTRACT AgingTheory {
+  DEFINE CellularSenescence := ArrestOf(CellCycle) & ResistanceTo(Apoptosis) & SecretionOf(SASP)
+  DEFINE MitochondrialDysfunction := DeclineIn(MitochondrialFunction) & AccumulationOf(MitochondrialDamage) & ProductionOf(ROS)
+  
+  SPECIFY CellularSenescence -> InflammatorySignaling := SecretionOf(Cytokines, Chemokines, MatrixMetalloproteases)
+  SPECIFY MitochondrialDysfunction -> GenomicInstability := OxidativeDamageTo(NuclearDNA, MitochondrialDNA)
+  
+  ASSUME StemCellExhaustion & AccumulationOf(SenescenceCells)
+  ASSUME ProteostasisDecline & AccumulationOf(MisfoldedProteins)
+  
+  PROVE TissueDegeneration GIVEN CellularSenescence & StemCellExhaustion & InflammatoryProcesses
+  PROVE CellularAging GIVEN MitochondrialDysfunction & MetabolicChanges & ProteostasisDecline
+  
+  PREDICT AgeRelatedDisease FROM AccumulatingDamage & LossOfHomeostasis & TissueDegeneration & ImpairedRegenerationAndRepair  
+}
+
+
+
+
+
+
+SeedScript Language Specification v2
+
+1. THEORY Definition (Expansion)
+THEORY Name USING Import1, Import2, ... {
+  DEFINE Concept1 := Definition1
+  DEFINE Concept2 := Definition2
+  ...
+  
+  AXIOM Axiom1 := Statement1
+  AXIOM Axiom2 := Statement2
+  ...
+
+  PINCH_POINT PinchPoint1 := Hook1
+  PINCH_POINT PinchPoint2 := Hook2
+  ...
+}
+
+2. CONCEPT Definition (Contraction)  
+CONCEPT Name USING Theory1, Theory2, ... {
+  DEFINE Concept1 := Definition1
+  DEFINE Concept2 := Definition2
+  ...
+
+  ASSUME Assumption1
+  ASSUME Assumption2
+  ...
+
+  THEOREM Theorem1 := Statement1
+  PROOF
+    ProofStep1
+    ProofStep2
+    ...
+  QED
+
+  CONJECTURE Conjecture1 := Statement1
+  CONJECTURE Conjecture2 := Statement2
+  ...
+}
+
+3. Expansion Constructs
+- Open-ended DEFINE statements for introducing new concepts
+- Broad AXIOM statements for asserting high-level principles and patterns
+- PINCH_POINT statements for evoking relevant background knowledge
+- ANALOGY and METAPHOR statements for drawing connections between domains
+- QUESTION and CHALLENGE statements for posing open problems and directions
+
+4. Contraction Constructs  
+- Precise DEFINE statements with formal definitions
+- Specific ASSUME statements for explicit modeling assumptions
+- Rigorous THEOREM and PROOF constructs for derivation and justification
+- CONJECTURE statements for well-specified hypotheses and predictions
+- SUMMARIZE and CONCLUDE statements for distilling key takeaways
+
+5. Expansion-Contraction Cycle
+- Begin with a high-level THEORY that explores the problem space and identifies key pinch points
+- Progressively refine the THEORY through cycles of expansion (divergence) and contraction (convergence):
+  - Use expansion constructs to generate new concepts, patterns, and questions
+  - Use contraction constructs to formalize specific definitions, assumptions, theorems, and conjectures  
+  - Use the expanded knowledge to inform further abstraction and exploration
+  - Use the contracted insights to guide further specification and refinement
+- Iterate until a sufficiently comprehensive and precise conceptual framework is developed
+
+6. Pinch Point Semantics
+- PINCH_POINT statements serve as hooks for evoking relevant background knowledge
+- They can reference key terms, patterns, case studies, heuristics, etc. that implicitly connect to rich conceptual associations
+- During the reasoning process, pinch points guide the retrieval and application of latent knowledge to inform and constrain the explicit formal reasoning
+- The specific types and formatting of pinch points can be tailored to different domains and reasoning tasks
+
+
+
+
+
+THEORY AlzheimersDisease USING Neuroscience, Immunology, Genetics, Epidemiology {
+  DEFINE AlzheimerDisease := NeurodegenerativeDisorder CHARACTERIZED_BY ProgressiveCognitiveDecline, MemoryLoss, AND BehavioralChanges
+  
+  DEFINE Neuropathology := Observation OF AmyloidPlaques AND NeurofibrillaryTangles IN BrainTissue
+  
+  AXIOM AmyloidHypothesis := AccumulationOf AmyloidBetaPeptide LEADS_TO NeuronalDysfunction AND CellDeath
+  AXIOM TauHypothesis := HyperphosphorylationOf TauProtein LEADS_TO Neurofibrillary TangleFormation AND NeuronalDysfunction
+  
+  PINCH_POINT GeneticRiskFactors := APOE4, PSEN1, PSEN2, APP
+  PINCH_POINT EnvironmentalRiskFactors := Age, HeadTrauma, VascularDisease, Diabetes, Obesity 
+  PINCH_POINT ImmuneMechanisms := Neuroinflammation, MicroglialActivation, InnateMidbrainImmunity
+  PINCH_POINT TherapeuticStrategies := AmyloidTargeting, TauTargeting, NeuroprotectiveAgents, CognitiveEnhancers
+
+  QUESTION WhatIsThePrimaryDriverOfNeurodegenerationInAlzheimers
+  QUESTION HowDoGeneticAndEnvironmentalFactorsInteractToInfluenceAlzheimersRisk
+  QUESTION WhatAreTheKeyRolesOfImmuneAndInflammatoryProcessesInAlzheimersProgression
+  QUESTION WhatAreTheMostPromisingTherapeuticTargetsAndInterventionPointsForAlzheimers
+}
+
+CONCEPT AmyloidCascadeHypothesis USING AlzheimersDisease {
+  ASSUME AmyloidBetaAccumulation := ExcessiveProductionOf AmyloidBetaPeptide OR ImpairedClearanceOf AmyloidBetaPeptide
+  ASSUME AmyloidBetaToxicity := OligomericFormsOf AmyloidBeta INDUCE NeuronalDysfunction, SynapticLoss, AND OxidativeStress  
+  ASSUME DownstreamPathology := AmyloidBetaAccumulation TRIGGERS TauHyperphosphorylation, Neuroinflammation, AND NeuronalLoss
+
+  THEOREM AmyloidCascade := AmyloidBetaAccumulation CAUSES DownstreamPathologicalEvents AND AlzheimersDiseaseProgression
+  PROOF
+    1. AmyloidBetaAccumulation OCCURS DUE_TO ExcessiveProduction OR ImpairedClearance [BY AmyloidBetaAccumulation]
+    2. OligomericAmyloidBeta INDUCES NeuronalDysfunction AND SynapticLoss [BY AmyloidBetaToxicity]  
+    3. AmyloidBetaAccumulation TRIGGERS TauPathology, Neuroinflammation, AND NeuronalLoss [BY DownstreamPathology]
+    4. THEREFORE, AmyloidCascade IS SufficientCause OF AlzheimersDiseaseProgression [BY 1, 2, 3]
+  QED
+
+  CONJECTURE AntiAmyloidTherapy := TargetingOf AmyloidBetaProduction, Aggregation, OR Clearance WILLHaveTherapeuticBenefitIn AlzheimersDisease
+}
+
+CONCEPT TauHypothesis USING AlzheimersDisease {
+  ASSUME TauProtein := Microtubule-AssociatedProtein THAT NormallyFunctions IN AxonalTransport AND NeuronalIntegrity
+  ASSUME TauHyperphosphorylation := PathologicalModificationOf TauProtein LEADING_TO DissociationFromMicrotubules AND AggregationInto NeurofibrillaryTangles
+  ASSUME TangleFormation := AccumulationOf HyperphosphorylatedTau LEADS_TO SynapticDysfunction, NeuronalDeath, AND CognitiveDecline
+  
+  THEOREM TauPathology := TauHyperphosphorylation AND NeurofibrillaryTangleFormation IS SufficientCause OF KeyFeaturesOf AlzheimersDisease  
+  PROOF
+    1. TauProtein NormallyFunctions TO MaintainMicrotubuleStability AND AxonalTransport [BY TauProtein]
+    2. HyperphosphorylationOf TauProtein CAUSES DissociationFromMicrotubules AND AggregationInto NeurofibrillaryTangles [BY TauHyperphosphorylation]
+    3. AccumulationOf NeurofibrillaryTangles LEADS_TO SynapticDysfunction AND NeuronalDeath [BY TangleFormation]
+    4. SynapticDysfunction AND NeuronalDeath ARE KeyFeaturesOf AlzheimersDisease [BY AlzheimersDisease]
+    5. THEREFORE, TauPathology IS SufficientCause OF AlzheimersDiseaseFeatures [BY 1, 2, 3, 4]   
+  QED
+
+  CONJECTURE TauTargetingTherapy := InterventionsTargeting TauHyperphosphorylation OR TangleFormation MAY HaveTherapeuticPotentialIn AlzheimersDisease
+}

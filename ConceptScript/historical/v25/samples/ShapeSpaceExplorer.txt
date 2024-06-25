@@ -1,0 +1,69 @@
+CONCEPT ShapeSpaceExplorer {
+  IMPORTS {
+    ShapeSpace,
+    MolecularShapeSpace    
+  }
+
+  LANGUAGE {
+    TYPE ShapeGraph = (Shape, List[(Shape, R^≥0)])
+    TYPE ShapePath = List[(Shape, R^≥0)]
+    
+    FUNC PHT_GPU(M : Molecule) : Direction -> PersistenceDiagram^3 
+      MAPPED TO GPU  
+      
+    FUNC InterleavingDist_GPU(F G : D^b(Shv(Direction * Filtration))) : R^≥0
+      MAPPED TO GPU
+      
+    FUNC BuildShapeGraph_GPU(S : List[Molecule], ε : R^>0) : ShapeGraph
+      MAPPED TO GPU
+        
+    FUNC FindPath_GPU(G : ShapeGraph, start end : Shape, δ : R^>0) : ShapePath
+      MAPPED TO GPU
+  }
+  
+  STRUCTURE ShapeSpaceProgram {
+    molecules : List[Molecule]
+    
+    DEF RunExploration(ε δ : R^>0) : ShapePath = {
+      VAR phts : List[PHTSheaf] = []
+      
+      PARALLEL FOR m IN molecules
+        phts.Append(PHT_GPU(m))
+        
+      VAR graph : ShapeGraph = BuildShapeGraph_GPU(molecules, ε)  
+      
+      VAR start : Molecule = molecules[0]
+      VAR end : Molecule = molecules[-1]
+      
+      FindPath_GPU(graph, start, end, δ)
+    }
+    
+    DEF BuildShapeGraph_GPU(S : List[Molecule], ε : R^>0) : ShapeGraph = {
+      VAR graph : ShapeGraph = (S, [])
+      
+      PARALLEL FOR i IN 0..|S|-1
+        PARALLEL FOR j IN i+1..|S|
+          VAR d : R^≥0 = InterleavingDist_GPU(PHTSheaf(S[i]), PHTSheaf(S[j]))
+          IF d ≤ ε THEN
+            graph.Edges.Append((S[i], S[j], d))
+            graph.Edges.Append((S[j], S[i], d))
+            
+      graph  
+    }
+  }
+}
+
+This Concept defines a ShapeSpaceExplorer program that could leverage the parallel processing capabilities of the HVM2 architecture. Here's how it works:
+
+It imports the ShapeSpace and MolecularShapeSpace Concepts, allowing it to work with molecular shapes.
+It defines types for ShapeGraph (a graph where nodes are shapes and edges are labeled with interleaving distances) and ShapePath (a path through the shape graph).
+It defines GPU-mapped versions of key functions from the ShapeSpace and MolecularShapeSpace Concepts, including PHT_GPU for computing persistence diagrams, InterleavingDist_GPU for computing interleaving distances, BuildShapeGraph_GPU for constructing a shape graph, and FindPath_GPU for finding paths in the shape graph.
+The main ShapeSpaceProgram structure takes a list of molecules as input.
+The RunExploration method takes ε and δ parameters (for the shape graph construction and path finding, respectively) and returns a ShapePath.
+It first computes the PHT sheaves for all molecules in parallel using PHT_GPU.
+It then constructs a ShapeGraph by computing pairwise interleaving distances between all molecules in parallel using InterleavingDist_GPU and BuildShapeGraph_GPU.
+Finally, it finds a path from the first to the last molecule in the graph using FindPath_GPU.
+
+The key idea is to parallelize the computationally intensive parts of the program, namely the PHT computation, the pairwise distance computation, and the path finding. These can all be mapped to GPU kernels in the HVM2 architecture.
+For example, the BuildShapeGraph_GPU function could be implemented as a GPU kernel that computes each pairwise distance in a separate thread. The InterleavingDist_GPU function could also be a GPU kernel, leveraging the parallel structure of the derived sheaf computation.
+This ShapeSpaceExplorer Concept demonstrates how the ShapeSpace framework could be applied in a computational setting, leveraging parallel processing to analyze and navigate large collections of molecular shapes. It could potentially be used for tasks like drug screening, where the goal is to find a path from a starting molecule to a target molecule through the space of possible drug-like compounds.

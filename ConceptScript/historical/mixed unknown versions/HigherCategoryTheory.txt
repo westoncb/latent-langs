@@ -1,0 +1,143 @@
+CONCEPT HigherCategoryTheory {
+  LANGUAGE {
+    type Obj = Set(Morphism)
+    type Morphism = Source -> Target
+    type Functor = (Obj -> Obj, Morphism -> Morphism)
+    type NaturalTransformation = ∀X: Obj. F(X) -> G(X)
+
+    notation "f: A → B" = Morphism(A, B)  
+    notation "F: 𝒞 ⟹ 𝒟" = Functor(𝒞, 𝒟)
+    notation "α: F ⟹ G" = NaturalTransformation(F, G)
+
+    func dom(f: Morphism): Obj
+    func cod(f: Morphism): Obj
+    func id(X: Obj): Morphism(X, X)
+    func compose(f: Morphism, g: Morphism): Morphism
+
+    notation "g ∘ f" = compose(f, g)
+
+    pred Commutes(f: Morphism, g: Morphism) = cod(f) = dom(g)
+    pred Associative(f: Morphism, g: Morphism, h: Morphism) = h ∘ (g ∘ f) = (h ∘ g) ∘ f
+    pred FunctorAxiom(F: Functor) = (∀X. F(id(X)) = id(F(X))) ∧ (∀f, g. F(g ∘ f) = F(g) ∘ F(f))
+    pred NaturalityAxiom(α: F ⟹ G) = ∀(f: A → B). α(B) ∘ F(f) = G(f) ∘ α(A)
+
+    rewrite NaturalityCondition(α: F ⟹ G, f: Morphism):
+      α(cod(f)) ∘ F(f) ~> G(f) ∘ α(dom(f))
+
+    rewrite VerticalComposition(β: F ⟹ G, α: G ⟹ H):
+      α ∘ β ~> λX. α(X) ∘ β(X)
+
+    rewrite HorizontalComposition(α: F ⟹ G, β: H ⟹ K):  
+      β * α ~> λX. K(α(X)) ∘ β(F(X))
+
+    rewrite WhiskerComposition(α: F ⟹ G, H: Functor):
+      H ∘ α ~> λX. H(α(X))
+  }
+
+  STRUCTURE {
+    ; Identity morphisms
+    ∀X: Obj. id(X): X → X
+    
+    ; Composition of morphisms
+    ∀f: A → B, g: B → C. g ∘ f: A → C
+
+    ; Associativity of composition  
+    ∀f: A → B, g: B → C, h: C → D. h ∘ (g ∘ f) = (h ∘ g) ∘ f
+
+    ; Functors preserve identity and composition
+    ∀F: Functor. FunctorAxiom(F)
+
+    ; Vertical composition of natural transformations
+    ∀(F, G, H: Functor), (β: F ⟹ G), (α: G ⟹ H). (α ∘ β): F ⟹ H
+
+    ; Horizontal composition of natural transformations  
+    ∀(F, G, H, K: Functor), (α: F ⟹ G), (β: H ⟹ K). (β * α): (H ∘ F) ⟹ (K ∘ G)
+
+    ; Whiskering of functors and natural transformations
+    ∀(F, G, H: Functor), (α: F ⟹ G). (H ∘ α): (H ∘ F) ⟹ (H ∘ G) 
+  }
+
+  PROOFS {
+    theorem ExchangeLaw: ∀(F, G, H, K: Functor), (α: F ⟹ G), (β: G ⟹ H), (γ: H ⟹ K). (γ ∘ β) * α = γ * (β * α) {
+      (γ ∘ β) * α 
+        ~> λX. K(α(X)) ∘ (γ(G(X)) ∘ β(F(X)))   ; by HorizontalComposition
+        ~> λX. K(α(X)) ∘ (K(β(F(X))) ∘ γ(F(X)))   ; by VerticalComposition
+        ~> λX. (K(α(X)) ∘ K(β(F(X)))) ∘ γ(F(X))   ; by associativity
+        ~> λX. K(β(F(X)) ∘ α(X)) ∘ γ(F(X))   ; by FunctorAxiom
+        ~> λX. K((β * α)(X)) ∘ γ(F(X))   ; by HorizontalComposition
+        ~> γ * (β * α)
+    }
+
+    theorem InternalHomFunctor: ∀𝒞: Category, X, Y: Obj. Hom(-, X): 𝒞 ⟹ Set {
+      define Hom(A, X) := {f: A → X}
+
+      ; On objects:
+      ∀A: Obj. Hom(A, X) = {f: A → X} 
+
+      ; On morphisms:  
+      ∀(g: A → B). Hom(g, X): Hom(B, X) → Hom(A, X)
+        ; Hom(g, X)(f) := f ∘ g
+        ∀f: B → X. Hom(g, X)(f) = f ∘ g: A → X
+
+      ; Identity:
+      ∀A: Obj. Hom(id(A), X) = id(Hom(A, X))
+      {
+        ∀f: A → X. 
+          Hom(id(A), X)(f)
+            = f ∘ id(A)   ; by def. of Hom on morphisms
+            = f           ; by identity law
+            = id(Hom(A, X))(f)
+      }
+
+      ; Composition:  
+      ∀(g: A → B), (h: B → C). Hom(h ∘ g, X) = Hom(h, X) ∘ Hom(g, X)
+      { 
+        ∀f: C → X.
+          Hom(h ∘ g, X)(f) 
+            = f ∘ (h ∘ g)                 ; by def.
+            = (f ∘ h) ∘ g                 ; by associativity
+            = Hom(g, X)(f ∘ h)            ; by def.
+            = Hom(g, X)(Hom(h, X)(f))    ; by def.
+            = (Hom(h, X) ∘ Hom(g, X))(f) ; by def.
+      }
+      hence Hom(-, X): Functor
+    }
+
+    theorem YonedaLemma: ∀F: 𝒞 ⟹ Set, X: Obj. Nat(Hom(-, X), F) ≅ F(X) {
+      define φ: Nat(Hom(-, X), F) → F(X), ψ: F(X) → Nat(Hom(-, X), F)
+
+      ; φ takes a natural transformation α to the element α_X(id_X) of F(X)
+      φ(α) := α(X)(id(X))
+
+      ; ψ takes an element x of F(X) to the natural transformation ψ_x defined by ψ_x(A)(f) = F(f)(x)
+      ψ(x) := λA. λ(f: A → X). F(f)(x)
+
+      {
+        ; φ and ψ are inverse  
+        ∀α: Nat(Hom(-, X), F). ψ(φ(α)) = α
+        ∀x: F(X). φ(ψ(x)) = x
+
+        ; Proof that ψ(φ(α)) = α
+        ∀A: Obj, f: A → X.
+          ψ(φ(α))(A)(f)
+            = F(f)(φ(α))          ; by def. of ψ  
+            = F(f)(α(X)(id(X)))   ; by def. of φ
+            = α(A)(f ∘ id(X))     ; by naturality of α
+            = α(A)(f)             ; by identity law
+
+        ; Proof that φ(ψ(x)) = x
+          φ(ψ(x)) 
+            = ψ(x)(X)(id(X))   ; by def. of φ
+            = F(id(X))(x)      ; by def. of ψ
+            = id(F(X))(x)      ; by Functor law    
+            = x                ; by identity law
+      }
+      hence Nat(Hom(-, X), F) ≅ F(X)
+    }
+  }
+}
+
+This Concept formalizes the basic notions of higher category theory, including objects, morphisms, functors, and natural transformations. It states the key axioms these structures must satisfy, such as associativity of morphism composition and the preservation of identities and composition by functors.
+The proofs section includes two fundamental theorems. The Exchange Law demonstrates the coherence between horizontal and vertical composition of natural transformations. The Yoneda Lemma, a cornerstone result, establishes a natural isomorphism between the set of natural transformations from a represented functor to any other functor F, and the value of F at the representing object.
+The Concept leverages tactics introduced in the prior examples to achieve concision in the proofs, such as rewrite rules for composing natural transformations. Semantically, it blends ideas from the categorical foundations in the Lambda Calculus example with the symbolic rewriting techniques from Symbolic Differential Geometry.
+Overall, this aims to distill the essence of higher category theory into a compact axiomatic framework, suitable for building further abstractions.

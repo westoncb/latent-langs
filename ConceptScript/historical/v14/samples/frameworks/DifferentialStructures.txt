@@ -1,0 +1,227 @@
+CONCEPT DifferentialStructures EXTEND StructuredSpace{
+  LANGUAGE {
+    type Space
+    type Structure = Prop(Space)
+    type Morphism = Func(Space, Space)
+    
+    type Sym = Const(ℝ) | Var(ℕ) | Binary(Sym, Sym) | Unary(Sym) 
+    type Diff = Manifold(Space) | Singular(Space) | Stratified(Space)
+    
+    func d(S: Space): Structure            ; Differential structure
+    func Ω(S: Space): Graded(Algebra)      ; Differential forms    
+    func X(S: Space): Lie(Algebra)         ; Vector fields
+    
+    notation "S + T" = Binary(S: Sym, T: Sym)
+    notation "S * T" = Binary(S: Sym, T: Sym)  
+    notation "d[S]" = Unary(S: Sym)             ; Exterior derivative
+    notation "ι[X]" = Unary(X: Sym)            ; Interior product
+    notation "L[X]" = Unary(X: Sym)             ; Lie derivative
+    
+    pred Closed(S: Sym)
+    pred Exact(S: Sym)
+    pred Integrable(S: Sym)
+    
+    axiom Correspondence(S: Sym, ω: Ω(Space)): S ≈ ω
+    axiom DeRham(S: Space): Hn(S, ℝ) ≅ Hn(Ω(S))   ; De Rham cohomology
+  }
+  
+  STRUCTURE {
+    DifferentialAxioms: {
+      d(S + T) = d(S) + d(T)                   ; Linearity 
+      d(S * T) = d[S] * T + (-1)^|S| * S * d[T] ; Leibniz rule
+      d[d[S]] = 0                              ; Nilpotence
+      L[X] = d ∘ ι[X] + ι[X] ∘ d             ; Cartan formula
+      ι[X + Y] = ι[X] + ι[Y]                 ; Linearity
+      ι[f * X] = f * ι[X]                    ; Compatibility
+      L[X + Y] = L[X] + L[Y]                   ; Linearity  
+      L[f * X] = f * L[X] + d[f] * ι[X]      ; Leibniz rule
+      [L[X], L[Y]] = L[[X, Y]]                 ; Lie algebra homomorphism
+    }
+      
+    notation "f: S ⮕ T" = Morphism(f, S, T)
+      
+    Closed(S: Sym) := d[S] ≈ 0    
+    Exact(S: Sym) := ∃ T: Sym. S ≈ d[T]
+    Integrable(S: Sym) := d[S] ≈ 0 ∧ dim(S) = max  
+  }
+   
+  PROOFS {
+    theorem Poincare(M: Manifold, ω: Ω(M)):
+      Closed(ω) ⊢ Locally(Exact(ω))
+    {
+      assume Closed(ω), i.e. dω = 0
+      suffices to find local primitives θ such that ω = dθ
+      let U ⊂ M be a contractible open set
+      have H¹(U, ℝ) = 0     ; Poincaré lemma
+      DeRham(U)
+      hence H¹(Ω(U)) = 0 
+      so ∃ θ ∈ Ω⁰(U). dθ = ω|ᵤ
+    }
+      
+    theorem deRham(M: Manifold):  
+      Hn(M, ℝ) ≅ Hn(Ω(M))
+    {
+      construct chain map ψ: Ω(M) → S(M, ℝ) by
+        Sn(M, ℝ) ∋ σ ↦ ∫σ ω,  ω ∈ Ωn(M)  
+      ψ is cochain map since  
+        ψ(dω)(σ) = ∫σ dω = ∫∂σ ω = ψ(ω)(∂σ) = (δψ(ω))(σ)
+      let ϕ: S(M, ℝ) → Ω(M) be cochain map   
+      ϕ, ψ induce isomorphisms on cohomology since
+        H*(ψ) ∘ H*(ϕ) = H*(ψ ∘ ϕ) = H*(id) = id
+        H*(ϕ) ∘ H*(ψ) = H*(ϕ ∘ ψ) = H*(id) = id
+    }
+    
+    theorem Frobenius(S: Sym, M: Manifold):
+      Integrable(S) ⊢ ∃ (N: Manifold) ⊂ M. TN = S
+    {
+      assume Integrable(S), i.e. d[S] ≈ 0 ∧ dim(S) = max
+      have d[S] ≈ 0 ⟹ S locally exact by Poincare 
+      let ω locally generate S with dω = 0
+      let U ⊂ M be neighborhood with submersion f: U → ℝᵈ, d = dim(S)
+      let ω = df on connected components of level sets of f
+      let N be union of these components
+      have N ⊂ M is immersed submanifold with TN = S|ₙ 
+    }
+  }
+}
+
+This Concept, DifferentialStructures, focuses on the differential and algebraic structures that can be defined on smooth spaces like manifolds. It includes:
+
+Differential forms and the exterior derivative
+Vector fields and the Lie derivative
+De Rham cohomology relating differential forms to singular cohomology
+The Poincaré lemma on local exactness of closed forms
+The Frobenius theorem on integrability of involutive distributions
+
+The language allows for symbolic expressions that can correspond to actual differential geometric objects. The structure introduces axioms capturing key properties of the derivative operators. The proofs then demonstrate some fundamental theorems in differential geometry, making use of the language and structure.
+This blends the abstract symbolic algebra of SymbolicDifferentialGeometry with the type-theoretic categorical language of StructuredSpace, while narrowing the focus to differential structures on smooth manifolds and their cohomological and integrability properties.
+
+
+
+// IMPORT
+
+CONCEPT StructuredSpace {
+  LANGUAGE {
+    type Space
+    type Structure = Prop(Space)
+    type Morphism = Func(Space, Space) 
+    
+    S := s | S + S | S × S | S ⊗ S | Hom(S, S) | 0 | 1 | σ(S) | ς(S) | ⟨S, S⟩ | [S, S] | S ≅ S | ∂S
+    where
+      s is an element of a Space  
+      + is a coproduct or disjoint union
+      × is a product or cartesian product
+      ⊗ is a monoidal product or tensor product
+      Hom(S, S) is a space of morphisms or arrows
+      0 is an initial or empty space
+      1 is a terminal or singleton space
+      σ(S) is a structure on S (e.g. topology, algebra, metric)
+      ς(S) is a structural morphism (e.g. continuous, algebraic, short)  
+      ⟨S, S⟩ is a pairing or duality 
+      [S, S] is an internal hom or mapping space
+      S ≅ S is an isomorphism or equivalence of spaces
+      ∂S is a boundary or frontier of S
+      
+    pred Assoc(∙: Structure)
+    pred Comm(∙: Structure)
+    pred Unital(∙: Structure, e: Space)  
+    pred Inv(∙: Structure, ⁻¹: Structure)
+    
+    func UMP(φ: Morphism, P: Structure): Prop
+    func Adj(F: Morphism, G: Morphism): Prop
+  }
+   
+  STRUCTURE {
+    SpaceAxioms: {
+      σ(0) = {∅}                           ; Empty space has trivial structure
+      σ(1) = {*}                           ; Singleton space has unique structure
+      σ(S + T) = σ(S) × σ(T)               ; Coproduct rule for structures  
+      σ(S × T) ⊆ σ(S) × σ(T)               ; Product rule for structures
+      ς(idₛ) = idₛ(ₛ)                      ; Identity morphism preserves structure
+      ς(g ∘ f) = ς(g) ∘ ς(f)               ; Composition rule for structural morphisms
+      
+      Unital(+, 0)                        ; 0 is identity for coproduct  
+      Unital(×, 1)                        ; 1 is identity for product
+      Assoc(×), Unital(×, 1), Inv(×, ⁻¹)  ; Cartesian monoidal structure
+      Assoc(⊗), Unital(⊗, 1), Inv(⊗, ⁻¹)  ; Monoidal (tensor) structure
+      [S × T, U] ≅ [S, [T, U]]            ; Exponential law 
+    }
+      
+    notation "f: S ⮕ T" = Morphism(f, S, T)  
+      
+    UMP(φ, P) := 
+      ∀ ψ: T ⮕ S. P(ψ) ⇒ ∃! θ: T ⮕ U. φ ∘ θ = ψ
+      
+    Adj(F, G) := 
+      [F(S), T] ≅ [S, G(T)]
+  }
+  
+  PROOFS {   
+    tactic UniversalProperty(C: Category, F: Morphism, P: Structure):
+      (∀ X: C. P(X) ⇒ ∃! f: X ⮕ F) ⊢ F is universal for P
+      
+    tactic Yoneda(C: Category, F: Functor(C, Set)):  
+      (∀ X, Y: C. [X, Y] ≅ Nat(Hom(X, -), Hom(Y, -))) ⊢ 
+        (∀ G: Functor(C, Set). Nat(Hom(-, X), G) ≅ G(X))
+    
+    theorem InitialObject(C: Category, 0: C): 
+      (∀ X: C. ∃! f: 0 ⮕ X) ⊢ 0 is initial
+    {
+      assume ∀ X: C. ∃! f: 0 ⮕ X
+      let P(X) := ∃! f: 0 ⮕ X
+      UMP(id₀, P)
+    }
+    
+    theorem TerminalObject(C: Category, 1: C):
+      (∀ X: C. ∃! f: X ⮕ 1) ⊢ 1 is terminal  
+    {
+      assume ∀ X: C. ∃! f: X ⮕ 1
+      let P(X) := ∃! f: X ⮕ 1
+      UMP(id₁, P)  
+    }
+    
+    theorem ProductObject(C: Category, P: C, π₁: P ⮕ A, π₂: P ⮕ B):
+      UMP((π₁, π₂), λf. ∃! g. π₁ ∘ g = f₁ ∧ π₂ ∘ g = f₂) ⊢ 
+        P is product of A and B
+    {
+      assume UMP((π₁, π₂), λf. ∃! g. π₁ ∘ g = f₁ ∧ π₂ ∘ g = f₂)
+      let Q((f₁, f₂)) := ∃! g. π₁ ∘ g = f₁ ∧ π₂ ∘ g = f₂
+      have ∀ (f₁, f₂): A × B ⮕ P. Q((f₁, f₂)) ⇒ ∃! g: A × B ⮕ P. (π₁, π₂) ∘ g = (f₁, f₂)  
+      hence (π₁, π₂) is universal for Q
+    }  
+      
+    theorem CoproductObject(C: Category, S: C, i₁: A ⮕ S, i₂: B ⮕ S):  
+      UMP([i₁, i₂], λf. ∃! g. g ∘ i₁ = f₁ ∧ g ∘ i₂ = f₂) ⊢
+        S is coproduct of A and B
+    {
+      assume UMP([i₁, i₂], λf. ∃! g. g ∘ i₁ = f₁ ∧ g ∘ i₂ = f₂)
+      let Q([f₁, f₂]) := ∃! g. g ∘ i₁ = f₁ ∧ g ∘ i₂ = f₂
+      have ∀ [f₁, f₂]: S ⮕ A + B. Q([f₁, f₂]) ⇒ ∃! g: S ⮕ A + B. g ∘ [i₁, i₂] = [f₁, f₂]
+      hence [i₁, i₂] is universal for Q  
+    }
+    
+    theorem MonoidalCategories(C: Category, ⊗: Functor(C × C, C)):
+      σ(⊗) = Assoc(⊗) ∧ Unital(⊗, 1) ⊢  
+        ∀ X, Y, Z. (X ⊗ (Y ⊗ Z)) ≅ ((X ⊗ Y) ⊗ Z)
+    {
+      assume σ(⊗) = Assoc(⊗) ∧ Unital(⊗, 1)
+      let α := ⊗ ∘ (id × ⊗) ≅ ⊗ ∘ (⊗ × id)  ; Associator  
+      let λ := 1 ⊗ - ≅ id                    ; Left unitor
+      let ρ := - ⊗ 1 ≅ id                    ; Right unitor
+      suffices to show α, λ, ρ are natural isomorphisms
+      have α is natural by Yoneda  ; Coherence of associativity 
+      have λ, ρ are natural by Yoneda  ; Coherence of unit   
+    }
+    
+    theorem AdjunctionEquivalence(C, D: Category, F: Functor(C, D), G: Functor(D, C)):
+      Adj(F, G) ⊢ C ≅ D  
+    {
+      assume Adj(F, G)
+      have ∀ X: C. [F(X), -] ≅ [X, G(-)]       ; Adjunction
+      hence ∀ X: C. [F(X), F(-)] ≅ [X, GF(-)]  ; Naturality 
+      hence ∀ X: C. X ≅ GF(X)                  ; Yoneda
+      have ∀ Y: D. FG(Y) ≅ Y                   ; Dual argument
+      hence F ∘ G ≅ idD ∧ G ∘ F ≅ idC        ; Natural isomorphism
+    }    
+  }
+}

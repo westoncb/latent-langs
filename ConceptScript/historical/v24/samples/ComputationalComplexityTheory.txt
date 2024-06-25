@@ -1,0 +1,189 @@
+CONCEPT ComputationalComplexityTheory {
+  LANGUAGE {
+    TYPE Problem
+    TYPE DecisionProblem <: Problem
+    TYPE SearchProblem <: Problem
+    TYPE OptimizationProblem <: Problem
+    TYPE CountingProblem <: Problem
+    
+    TYPE Alphabet
+    TYPE Σ <: Alphabet
+    CONST ε : Σ
+    FUNC (·) : Σ -> Σ -> Σ
+    AXIOM Associativity {
+      ∀ (a b c : Σ). (a · b) · c = a · (b · c)
+    }
+    AXIOM Identity {
+      ∀ (a : Σ). ε · a = a · ε = a  
+    }
+    
+    TYPE Σ* = List[Σ]
+    NOTATION "|w|" = Length(w)
+    FUNC Reverse : Σ* -> Σ*
+    
+    TYPE Language = Σ* -> Bool
+    
+    TYPE Model
+    TYPE TuringMachine <: Model
+    TYPE DTM <: TuringMachine   // Deterministic Turing Machine
+    TYPE NTM <: TuringMachine   // Nondeterministic Turing Machine
+    FUNC Decides : Model -> Language -> Bool
+    NOTATION "M ⊢ L" = Decides(M, L)
+    
+    TYPE TimeComplexity = Nat -> Nat
+    FUNC TIME : Language -> TimeComplexity
+    NOTATION "L ∈ TIME(f(n))" = ∀ (M : Model) (M ⊢ L). ∃ (c : Nat). ∀ (w : Σ*) (w ∈ L). RuntimeOf(M, w) <= c * f(|w|)
+    
+    FUNC NTIME : Language -> TimeComplexity
+    NOTATION "L ∈ NTIME(f(n))" = ∃ (N : NTM) (N ⊢ L). ∀ (w : Σ*) (w ∈ L). RuntimeOf(N, w) <= f(|w|)
+    
+    TYPE ComplexityClass = Language -> Bool
+    NOTATION "C₁ ⊆ C₂" = ∀ (L : Language). C₁(L) -> C₂(L)
+    
+    FUNC P : ComplexityClass
+    AXIOM P_Definition { 
+      ∀ (L : Language).
+        P(L) <-> ∃ (k : Nat). L ∈ TIME(λ n. n^k)
+    }
+    
+    FUNC NP : ComplexityClass
+    AXIOM NP_Definition {
+      ∀ (L : Language). 
+        NP(L) <-> ∃ (k : Nat). L ∈ NTIME(λ n. n^k)
+    }
+    
+    FUNC coNP : ComplexityClass
+    AXIOM coNP_Definition {
+      ∀ (L : Language). 
+        coNP(L) <-> ∃ (L' : Language) (L'∈ NP). ∀ (w : Σ*). w ∈ L <-> w ∉ L'
+    }
+    
+    PRED Reducible : Language -> Language -> Bool
+    NOTATION "L₁ ≤ᵣ L₂" = Reducible(L₁, L₂)
+    
+    // Polynomial-time many-one reducibility
+    AXIOM Reducibility {
+      ∀ (L₁ L₂ : Language).
+        L₁ ≤ᵣ L₂ <->
+        ∃ (f : Σ* -> Σ*) (f ∈ TIME(λ n. n^k)). 
+          ∀ (w : Σ*). w ∈ L₁ <-> f(w) ∈ L₂
+    }
+    
+    FUNC NP_complete : ComplexityClass
+    AXIOM NPC_Definition {
+      ∀ (L : Language).
+        NP_complete(L) <-> 
+          L ∈ NP ∧ 
+          ∀ (L' : Language) (L' ∈ NP). L' ≤ᵣ L
+    }
+    
+    FUNC NP_hard : ComplexityClass
+    AXIOM NPH_Definition {
+      ∀ (L : Language).
+        NP_hard(L) <->
+          ∀ (L' : Language) (L' ∈ NP). L' ≤ᵣ L
+    }
+    
+    FUNC PH : Nat -> ComplexityClass
+    NOTATION "Σᵢ" = PH(i)
+    NOTATION "Πᵢ" = coΣᵢ
+    
+    AXIOM PH_Hierarchy {
+      Σ₀ = P,
+      ∀ (i : Nat). Σᵢ₊₁ = NPᶜᵒᴺᴾ,
+      ∀ (i : Nat). Πᵢ = coΣᵢ
+    }
+  }
+  
+  PROOFS {
+    THEOREM P_is_contained_in_NP {
+      STATEMENT: P ⊆ NP
+        
+      PROOF:
+        LET L : Language;
+        ASSUME P(L);
+        SHOW NP(L) BY {
+          HAVE ∃ (k : Nat). L ∈ TIME(λ n. n^k) BY P_Definition;
+          LET k : Nat;
+          ASSUME L ∈ TIME(λ n. n^k);
+          LET M : DTM (M ⊢ L), 
+              c : Nat (∀ (w : Σ*) (w ∈ L). RuntimeOf(M, w) <= c * |w|^k);
+          DEFINE N : NTM = SimulateAndGuess(M);
+          SHOW N ⊢ L BY {
+            ∀ (w : Σ*) (w ∈ L).
+              ∃ (b : BranchOf(N)). 
+                RuntimeOf(b, w) = RuntimeOf(M, w) <= c * |w|^k
+          };
+          SHOW L ∈ NTIME(λ n. n^k) BY DEFINITION;
+          SHOW NP(L) BY NP_Definition
+        }
+    }
+      
+    THEOREM coNP_contains_NP_intersection_coNP {
+      STATEMENT: ∀ (C : ComplexityClass). NP ∩ coNP ⊆ C -> C = NP ∩ coNP
+        
+      PROOF:
+        LET C : ComplexityClass;
+        ASSUME NP ∩ coNP ⊆ C;
+        SHOW C ⊆ NP ∩ coNP BY {
+          LET L : Language;
+          ASSUME C(L);
+          SHOW NP(L) BY {
+            DEFINE L' : Language = {w : w ∈ L};
+            HAVE L' ∈ coNP BY {
+              ∀ (w : Σ*). w ∈ L' <-> w ∉ (Σ* - L),
+              Σ* - L ∈ NP BECAUSE C ⊆ NP,
+              coNP_Definition
+            };
+            SHOW ∃ (k : Nat). L ∈ NTIME(λ n. n^k) BY {
+              C(L) -> NP(L) BECAUSE C ⊆ NP,
+              NP_Definition
+            }
+          };
+          SHOW coNP(L) BY {
+            C(L) -> coNP(L) BECAUSE C ⊆ coNP
+          }        
+        };
+        SHOW C = NP ∩ coNP BY EXTENSIONALITY
+    }
+      
+    THEOREM PH_infinite_unless_collapse {
+      STATEMENT: (∀ (i : Nat). Σᵢ = Πᵢ) -> PH = Σᵢ
+        
+      PROOF:
+        ASSUME ∀ (i : Nat). Σᵢ = Πᵢ;
+        LET i : Nat;
+        SHOW Σᵢ = Σᵢ₊₁ BY {
+          HAVE Σᵢ₊₁ 
+            = NPᶜᵒᴺᴾ      BY PH_Hierarchy
+            = NPᴺᴾ        BY ASSUMPTION
+            = NP          BECAUSE Σᵢ = Πᵢ -> NP = coNP
+            = Σᵢ          BY PH_Hierarchy, i > 0
+        };
+        SHOW PH = Σᵢ BY {
+          DEFINE S = {Σⱼ : j ∈ Nat};
+          HAVE ∀ (j k : Nat). j >= i -> Σⱼ = Σₖ BY {
+            LET j k : Nat;
+            ASSUME j >= i;
+            SHOW Σⱼ = Σₖ BY INDUCTION ON |j - k|
+          };
+          SHOW ∀ (C : ComplexityClass). C ∈ PH -> C = Σᵢ BY {
+            LET C : ComplexityClass;
+            ASSUME C ∈ PH;
+            HAVE ∃ (j : Nat). C = Σⱼ BY PH_Hierarchy; 
+            LET j : Nat;
+            ASSUME C = Σⱼ;
+            SHOW Σⱼ = Σᵢ USING ∀ (j k : Nat). j >= i -> Σⱼ = Σₖ
+          }
+        }
+    }
+  }
+}
+
+This Concept formalizes some key definitions and results from computational complexity theory, including:
+
+Definitions of decision problems, languages, Turing machines, and time complexity
+The classes P, NP, coNP and the polynomial hierarchy PH
+Polynomial-time reductions and NP-completeness
+Proofs that P ⊆ NP and that NP ∩ coNP is the largest class that can equal both NP and coNP
+A proof that the polynomial hierarchy collapses to some level if Σᵢ = Πᵢ for all i

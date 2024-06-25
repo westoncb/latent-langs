@@ -1,0 +1,74 @@
+CONCEPT Monoids {
+  LANGUAGE {
+    CLASS Monoid[T] {
+      mempty : T
+      mappend : T -> T -> T
+
+      LAWS {
+        LeftIdentity: FORALL (x : T). mappend(mempty, x) = x
+        RightIdentity: FORALL (x : T). mappend(x, mempty) = x
+        Associativity: FORALL (x y z : T). mappend(mappend(x, y), z) = mappend(x, mappend(y, z))
+      }
+    }
+
+    TYPE List[T] = Nil | Cons(T, List[T])
+
+    FUNC foldl[A, B] : (B -> A -> B) -> B -> List[A] ⊸ B
+    foldl(_, acc, Nil) = acc
+    foldl(f, acc, Cons(x, xs)) = foldl(f, f(acc, x), xs)
+
+    FUNC foldr[A, B] : (A -> B -> B) -> B -> List[A] ⊸ B
+    foldr(_, acc, Nil) = acc
+    foldr(f, acc, Cons(x, xs)) = f(x, foldr(f, acc, xs))
+  }
+
+  STRUCTURE {
+    INSTANCE Monoid[List[T]] {
+      mempty = Nil
+      mappend = Append
+
+      FUNC Append : List[T] -> List[T] -> List[T]
+      Append(Nil, ys) = ys
+      Append(Cons(x, xs), ys) = Cons(x, Append(xs, ys))
+    }
+
+    DEF Reverse[T] : List[T] ⊸ List[T]
+    Reverse = foldl(Cons, Nil)
+  }
+
+  PROOFS {
+    THEOREM FoldrAppend[A, B] {
+      STATEMENT: FORALL (f : A -> B -> B) (acc : B) (xs ys : List[A]).
+        foldr(f, acc, Append(xs, ys)) = foldr(f, foldr(f, acc, ys), xs)
+      PROOF:
+        LET f : A -> B -> B, acc : B, xs ys : List[A];
+        CASE xs OF
+          Nil -> {
+            SHOW foldr(f, acc, Append(Nil, ys)) = foldr(f, foldr(f, acc, ys), Nil) BY {
+              foldr(f, acc, Append(Nil, ys)) = foldr(f, acc, ys) BY Definition(Append);
+              foldr(f, foldr(f, acc, ys), Nil) = foldr(f, acc, ys) BY Definition(foldr);
+            }
+          }
+          Cons(x, xs') -> {
+            ASSUME foldr(f, acc, Append(xs', ys)) = foldr(f, foldr(f, acc, ys), xs');
+            SHOW foldr(f, acc, Append(Cons(x, xs'), ys)) = foldr(f, foldr(f, acc, ys), Cons(x, xs')) BY {
+              foldr(f, acc, Append(Cons(x, xs'), ys))
+                = foldr(f, acc, Cons(x, Append(xs', ys))) BY Definition(Append)
+                = f(x, foldr(f, acc, Append(xs', ys))) BY Definition(foldr)
+                = f(x, foldr(f, foldr(f, acc, ys), xs')) BY ASSUMPTION
+                = foldr(f, foldr(f, acc, ys), Cons(x, xs')) BY Definition(foldr);
+            }
+          }
+    }
+
+    THEOREM ReverseInvolutive[T] {
+      STATEMENT: FORALL (xs : List[T]). Reverse(Reverse(xs)) = xs
+      PROOF:
+        LET xs : List[T];
+        REWRITE Reverse(Reverse(xs))
+          = foldl(Cons, Nil, foldl(Cons, Nil, xs)) BY Definition(Reverse)
+          = foldr(Cons, Nil, xs) BY FoldrFoldlDuality
+          = xs BY FoldrNil;
+    }
+  }
+}

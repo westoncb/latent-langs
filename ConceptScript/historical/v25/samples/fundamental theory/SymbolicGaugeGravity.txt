@@ -1,0 +1,112 @@
+CONCEPT SymbolicGaugeGravity {
+  LANGUAGE {
+    TYPE SymMan = SymbolicManifold(SymTensor, GaugeGroup)
+    TYPE SymTensor = SymbolicExpression
+    TYPE GaugeGroup = LieGroup
+    TYPE Connection = SymbolicExpression
+    TYPE Curvature = SymbolicExpression
+    TYPE Action = SymbolicExpression
+    TYPE Boundary = SymbolicManifold(SymTensor)
+    
+    FUNC dim : SymMan -> Nat
+    FUNC metric : SymMan -> SymTensor[2,0]
+    FUNC gauge_field : SymMan -> Connection
+    FUNC field_strength : Connection -> Curvature
+    FUNC covariant_derivative : (Connection, SymTensor) -> SymTensor
+    FUNC parallel_transport : (Connection, Path) -> GroupElement
+    FUNC boundary : SymMan -> Boundary
+    FUNC pullback : (SymTensor, Map(Boundary -> SymMan)) -> SymTensor
+    FUNC integrate : (SymTensor, SymMan) -> SymbolicExpression
+    
+    AXIOM ConnectionTransformation :
+      ∀ (A : Connection) (g : GaugeGroup) . 
+        gauge_field(transform(SymMan, g)) = g⁻¹ * (d + A) * g
+        
+    AXIOM CovariantDerivativeTransformation :
+      ∀ (A : Connection) (ψ : SymTensor) (g : GaugeGroup) .
+        covariant_derivative(transform(A, g), transform(ψ, g)) = transform(covariant_derivative(A, ψ), g)
+
+    AXIOM CurvatureTransformation : 
+      ∀ (A : Connection) (g : GaugeGroup) .
+        field_strength(transform(A, g)) = g⁻¹ * field_strength(A) * g
+        
+    AXIOM HolonomyCorrespondence :
+      ∀ (A : Connection) (γ : Path) .
+        trace(parallel_transport(A, γ)) = exp(∫_γ pullback(A))
+
+    AXIOM ActionPrinciple :
+      ∀ (M : SymMan) .
+        variation(Action(M)) = 0 <->
+          (field_equations(metric(M)) = 0) ∧ (field_equations(gauge_field(M)) = 0)
+
+    AXIOM BoundaryCorrespondence :
+      ∀ (M : SymMan) . 
+        Action(M) = ∫_M Lagrangian(metric(M), gauge_field(M)) + ∫_∂M BoundaryTerm(induced_metric(∂M), induced_gauge_field(∂M))
+
+    NOTATION "d" = exterior_derivative
+    NOTATION "∫" = integrate
+    NOTATION "∫_M" = integrate(_, M)  
+    NOTATION "∫_∂M" = integrate(_, boundary(M))
+    NOTATION "δ" = variation
+  }
+
+  PROOFS {
+    THEOREM GaugeGravityCorrespondence {
+      STATEMENT : 
+        ∀ (M : SymMan) .
+          solutions(field_equations(metric(M))) <-> solutions(field_equations(gauge_field(boundary(M))))
+
+      PROOF {
+        LET M : SymMan
+        
+        solutions(field_equations(metric(M)))
+          <-> δAction(M) = 0     BY ActionPrinciple
+          <-> δ(∫_M Lagrangian(metric(M), gauge_field(M)) + ∫_∂M BoundaryTerm(induced_metric(∂M), induced_gauge_field(∂M))) = 0
+              BY BoundaryCorrespondence
+          <-> (δ∫_M Lagrangian(metric(M), gauge_field(M)) = 0) ∧ (δ∫_∂M BoundaryTerm(induced_metric(∂M), induced_gauge_field(∂M)) = 0)  
+              BY VariationLemma
+          <-> solutions(field_equations(induced_metric(∂M))) ∧ solutions(field_equations(induced_gauge_field(∂M)))
+              BY BoundaryVariationalPrinciple
+          <-> solutions(field_equations(gauge_field(boundary(M))))  
+              BY GaugeInducedMetricRelation, GaugeInducedGaugeRelation
+      }
+    }
+
+    THEOREM HolographicRenormalization {
+      STATEMENT :
+        ∀ (M : SymMan) .
+          renormalized_action(M) = regularized_integral(Lagrangian(metric(M), gauge_field(M)), M, cutoff) +
+                                    renormalized_boundary_term(induced_metric(boundary(M)), induced_gauge_field(boundary(M)), cutoff)
+
+      PROOF {
+        LET M : SymMan, ε : Real
+
+        renormalized_action(M)
+          = lim[ε -> 0] (regularized_integral(Lagrangian(metric(M), gauge_field(M)), M, ε) + counterterms(ε))
+          = lim[ε -> 0] (regularized_integral(Lagrangian(metric(M), gauge_field(M)), M, ε) + 
+                            renormalized_boundary_term(induced_metric(boundary(M)), induced_gauge_field(boundary(M)), ε))
+            BY HolographicRenormalizationPrescription
+          = regularized_integral(Lagrangian(metric(M), gauge_field(M)), M, cutoff) +
+              renormalized_boundary_term(induced_metric(boundary(M)), induced_gauge_field(boundary(M)), cutoff)  
+            BY CutoffIndependence                          
+      }
+    }
+
+    THEOREM BulkBoundaryDuality {
+      STATEMENT :
+        ∀ (M : SymMan) (O : SymTensor) .
+          <O>_boundary(M) = functional_integral(O * exp(-renormalized_action(M)))
+
+      PROOF {
+        LET M : SymMan, O : SymTensor
+        
+        <O>_boundary(M)
+          = ∫[dϕ]_boundary(M) O(ϕ) * exp(-renormalized_action(induced_gauge_field(boundary(M))))
+              BY DefinitionOfBoundaryCorrelator
+          = ∫[dϕ]_boundary(M) O(ϕ) * exp(-renormalized_action(M)) 
+              BY HolographicRenormalization, GaugeGravityCorrespondence
+          = functional_integral(O * exp(-renormalized_action(M)))
+      }
+    }
+  }
+}

@@ -1,0 +1,142 @@
+CONCEPT CrabCanon {
+  LANGUAGE {
+    TYPE MusicalPiece
+    TYPE MusicalTheme <: MusicalPiece
+    TYPE MusicalVoice
+    TYPE TimeInterval
+    TYPE Character
+    TYPE Dialogue <: List[Character × TimeInterval]
+    TYPE MobiusStrip
+
+    FUNC Play(v: MusicalVoice, t: MusicalTheme, i: TimeInterval): MusicalPiece
+    FUNC Reverse(t: MusicalTheme): MusicalTheme
+    FUNC Reverse(i: TimeInterval): TimeInterval
+    FUNC Reverse(d: Dialogue): Dialogue
+    FUNC Combine(p1: MusicalPiece, p2: MusicalPiece): MusicalPiece
+    FUNC AbstractTheme(d: Dialogue): MusicalTheme
+    FUNC Invert(t: MusicalTheme): MusicalTheme
+    FUNC Neighborhood(p: Point[MobiusStrip], a: Angle): MusicalPiece
+
+    PRED IsPalindrome(p: MusicalPiece): Bool
+    PRED IsPalindrome(d: Dialogue): Bool
+    PRED IsIsomorphic(p: MusicalPiece, m: MobiusStrip): Bool
+  }
+
+  STRUCTURE BachCrabCanon {
+    DEF Theme: MusicalTheme = [[C, E, G], [G, C, E], [E, G, C], [C, E, G]]
+    DEF Voice1: MusicalVoice = Violin
+    DEF Voice2: MusicalVoice = Viola
+    DEF TimeIntervals: List[TimeInterval] = [1, 1, 1, 1]
+
+    REQUIRE ∀ (i : 0..Length(TimeIntervals)-1).
+      Play(Voice1, Theme, TimeIntervals[i]) = 
+      Play(Voice2, Reverse(Theme), Reverse(TimeIntervals)[i])
+  }
+
+  STRUCTURE HofstadterCrabCanon {
+    DEF Theme: MusicalTheme = AbstractTheme(Dialogue)
+    DEF Voice1: MusicalVoice = Achilles
+    DEF Voice2: MusicalVoice = Tortoise
+    DEF Dialogue: List[Character × TimeInterval] = [
+      (Achilles, 1), (Tortoise, 1), (Achilles, 1), (Tortoise, 1),
+      (Tortoise, 1), (Achilles, 1), (Tortoise, 1), (Achilles, 1)
+    ]
+
+    REQUIRE IsPalindrome(Dialogue)
+    REQUIRE ∀ (i : 0..Length(Dialogue)-1).
+      Play(Voice1, Theme, Dialogue[i].2) = 
+      Play(Voice2, Reverse(Theme), Reverse(Dialogue)[i].2)
+  }
+
+  PROOFS {
+    THEOREM CrabCanonSymmetry {
+      STATEMENT:
+        ∀ (cc: CrabCanon). 
+          Play(cc.Voice1, cc.Theme, _) = Reverse(Play(cc.Voice2, cc.Theme, _))
+
+      PROOF:
+        LET cc: CrabCanon
+        REWRITE Play(cc.Voice1, cc.Theme, _) 
+          = Play(cc.Voice2, Reverse(cc.Theme), _)   BY REQUIRE clause
+          = Reverse(Play(cc.Voice2, cc.Theme, _))   BY Reverse of reverse is identity
+    }
+
+    THEOREM CrabCanonPalindromicMelody {
+      STATEMENT:  
+        ∀ (cc: CrabCanon) (t: TimeInterval).
+          Play(cc.Voice1, cc.Theme, t) = Reverse(Play(cc.Voice1, cc.Theme, Reverse(t)))
+
+      PROOF:
+        LET cc: CrabCanon, t: TimeInterval
+        REWRITE Play(cc.Voice1, cc.Theme, t)
+          = Play(cc.Voice2, Reverse(cc.Theme), t)   BY REQUIRE clause  
+          = Reverse(Play(cc.Voice2, cc.Theme, Reverse(t)))  BY Reverse reverses time
+          = Reverse(Play(cc.Voice1, cc.Theme, Reverse(t)))  BY REQUIRE clause
+    }
+     
+    THEOREM DialoguePalindromeImpliesCrabCanon {
+      STATEMENT:
+        ∀ (d: Dialogue). IsPalindrome(d) ⇒ 
+          ∃ (cc: CrabCanon). 
+            (Voices(d) = [cc.Voice1, cc.Voice2]) ∧ 
+            IsPalindrome(Combine(Play(cc.Voice1, cc.Theme, _), Play(cc.Voice2, Reverse(cc.Theme), _)))
+
+      PROOF:
+        LET d: Dialogue
+        ASSUME (H) IsPalindrome(d)
+        
+        DEFINE cc = NEW CrabCanon WITH {
+          Theme = AbstractTheme(d),
+          Voice1 = Voices(d)[0],
+          Voice2 = Voices(d)[1],
+          Dialogue = d
+        }
+
+        HAVE (Voices(d) = [cc.Voice1, cc.Voice2]) BY construction of cc
+
+        SHOW IsPalindrome(Combine(Play(cc.Voice1, cc.Theme, _), Play(cc.Voice2, Reverse(cc.Theme), _))) BY {
+          LET p1 = Play(cc.Voice1, cc.Theme, _),
+              p2 = Play(cc.Voice2, Reverse(cc.Theme), _),
+              p = Combine(p1, p2)
+          
+          REWRITE AbstractTheme(Reverse(d)) 
+            = Reverse(AbstractTheme(d))   BY Reverse distributes over abstraction
+            = Reverse(cc.Theme)           BY construction of cc
+
+          SHOW IsPalindrome(p) BY {
+            HAVE IsPalindrome(d)                                   BY (H)  
+            HAVE (Voices(d) = [cc.Voice1, cc.Voice2])              BY construction of cc
+            HAVE (AbstractTheme(d) = cc.Theme)                     BY construction of cc
+            HAVE (AbstractTheme(Reverse(d)) = Reverse(cc.Theme))   BY Reverse distributes over abstraction
+            HENCE IsPalindrome(p)
+          }
+        }
+    }
+
+    THEOREM CrabCanonNotMobiusIsomorphic {
+      STATEMENT:  
+        ∀ (cc: CrabCanon) (m: MobiusStrip).
+          ¬IsIsomorphic(Combine(Play(cc.Voice1, cc.Theme, _), Play(cc.Voice2, Reverse(cc.Theme), _)), m)
+
+      PROOF:
+        LET cc: CrabCanon, m: MobiusStrip
+        ASSUME (H) IsIsomorphic(Combine(Play(cc.Voice1, cc.Theme, _), Play(cc.Voice2, Reverse(cc.Theme), _)), m)
+        
+        HAVE ∀ (i: MusicalInterval). 
+          Play(cc.Voice1, cc.Theme, i) ≠ Invert(Play(cc.Voice1, cc.Theme, i))
+            BY definition of CrabCanon (does not invert intervals)
+        
+        HAVE ∀ (p: Point[m]) (a: Angle). 
+          Neighborhood(p, a + 360°) = Invert(Neighborhood(p, a))  
+            BY properties of MobiusStrip (inverts orientation after 360° travel)
+        
+        LET p: Point[m], i: MusicalInterval
+        REWRITE Neighborhood(p, 0°) 
+          = Play(cc.Voice1, cc.Theme, i)                BY (H)
+          = Invert(Neighborhood(p, 360°))              BY properties of MobiusStrip
+          = Invert(Play(cc.Voice1, cc.Theme, i))        BY (H)
+        
+        HENCE CONTRADICTION  BY definition of CrabCanon (does not invert intervals)
+    }
+  }
+}

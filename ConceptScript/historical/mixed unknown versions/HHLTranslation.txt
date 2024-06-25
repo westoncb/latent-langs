@@ -1,0 +1,119 @@
+CONCEPT HHLTranslation EXTENDS QuantumClassicalTranslation {
+  LANGUAGE {
+    type HHLInput = (SparseMatrix, Vector, R)
+    type HHLOutput = Vector
+    type HHLUnitary = Unitary   ; Composition of phase estimation, rotation, and uncomputation 
+    type HHLMeasurement = Measurement   ; Projective measurement onto solution state
+
+    func HHL: QuantumAlgorithm(HHLInput, HHLOutput, HHLUnitary, HHLMeasurement)
+    func LinearSystem: Problem(HHLInput)
+    func ApproximateSolution: Problem(HHLOutput)
+
+    notation "κ(A)" = ‖A‖ ‖A⁻¹‖   ; Condition number of matrix A
+    notation "A[d]" = {A | ∀i. |{j | Aᵢⱼ ≠ 0}| ≤ d}   ; Set of d-sparse matrices
+  }
+
+  STRUCTURE {
+    ; Quantum linear systems
+    ∀A: SparseMatrix, b: Vector, ε: R.
+      (A, b, ε) ∈ LinearSystem ⟺ ∃x. Ax = b ∧ ‖x - HHL(A, b, ε)‖ ≤ ε
+      
+    ; Classical approximate solutions  
+    ∀A: SparseMatrix, b: Vector, ε: R.
+      (A, b, ε) ∈ ApproximateSolution ⟺ ∃x̃. ‖Ax̃ - b‖ ≤ ε ‖A‖ ‖x̃‖
+
+    ; HHL translation
+    ∀A: SparseMatrix, b: Vector, ε: R.
+      Translate(HHL(A, b, ε)) = (LinearSystem, ApproximateSolution, ProofHHL)
+
+    ; Performance characteristics
+    ∀d: Nat, κ: R, ε: R, δ: R. 
+      (A[d], _, _) ∈ LinearSystem ⟹ PolyTime(HHL(A, _, _))   ; Sparsity
+      κ(A) ≤ κ ⟹ PolyLog(Precision(HHL(A, _, ε), δ))   ; Well-conditioning 
+  }
+
+  PROOFS {
+    theorem HHLReducesToApproximation:
+      ∀A: SparseMatrix, b: Vector, ε: R. (A, b, ε) ∈ LinearSystem ⟹ HHL(A, b, ε) ≤_m ApproximateSolution(ε ‖A‖)  
+    {
+      assume (A, b, ε) ∈ LinearSystem
+      let x = HHL(A, b, ε)
+
+      ‖Ax - b‖ ≤ ε ‖A‖ ‖x‖   ; by error bound of HHL
+      ‖x‖ ≤ ‖A⁻¹‖ ‖b‖   ; by property of matrix norm
+      ‖Ax - b‖ ≤ ε ‖A‖ ‖A⁻¹‖ ‖b‖ = ε κ(A) ‖b‖   ; by definition of condition number
+
+      (A, b, ε) ∈ LinearSystem 
+      ⟹ (A, b, ε κ(A)) ∈ ApproximateSolution   ; by definition
+      ⟹ HHL(A, b, ε) ≤_m ApproximateSolution(ε κ(A))   ; by Reduces
+    }
+
+    theorem ApproximationReducesToLinearSystem:
+      ∀A: SparseMatrix, b: Vector, ε: R. (A, b, ε) ∈ ApproximateSolution ⟹ ∃δ. (A, b, δ) ∈ LinearSystem ∧ ‖HHL(A, b, δ) - x̃‖ ≤ ε
+    {
+      assume (A, b, ε) ∈ ApproximateSolution  
+      let x̃ such that ‖Ax̃ - b‖ ≤ ε ‖A‖ ‖x̃‖
+
+      let δ = ε / (2 κ(A))
+      (A, b, δ) ∈ LinearSystem   ; by definition
+
+      let x = HHL(A, b, δ)  
+      ‖Ax - b‖ ≤ δ ‖A‖ ‖x‖   ; by error bound of HHL
+      ‖x - x̃‖ ≤ ‖A⁻¹‖ ‖Ax - Ax̃‖   ; by property of matrix norm
+                ≤ ‖A⁻¹‖ (‖Ax - b‖ + ‖Ax̃ - b‖)
+                ≤ ‖A⁻¹‖ (δ ‖A‖ ‖x‖ + ε ‖A‖ ‖x̃‖)
+                ≤ ‖A⁻¹‖ ‖A‖ (δ ‖x‖ + ε ‖x̃‖)
+                ≤ κ(A) (δ (1 + δ κ(A)) ‖A⁻¹‖ ‖b‖ + ε ‖x̃‖)   ; since ‖x‖ ≤ (1 + δ κ(A)) ‖A⁻¹‖ ‖b‖
+                ≤ κ(A) (δ (1 + ε/2) ‖A⁻¹‖ ‖b‖ + ε ‖x̃‖)   ; by choice of δ
+                ≤ ε/2 (1 + ε/2) ‖A⁻¹‖ ‖b‖ + ε κ(A) ‖x̃‖
+                ≤ ε ‖A⁻¹‖ ‖b‖ + ε κ(A) ‖x̃‖
+                ≤ ε (‖A⁻¹‖ ‖b‖ + κ(A) ‖x̃‖)
+                ≤ ε (‖x‖ + ‖x̃‖)   ; since ‖A⁻¹b‖ ≤ ‖x‖
+                ≤ 2ε ‖x̃‖   ; since ‖x‖ ≤ (1 + ε) ‖x̃‖
+      
+      hence ‖HHL(A, b, δ) - x̃‖ ≤ 2ε ‖x̃‖ ≤ ε   ; for ‖x̃‖ ≤ 1/2
+    }
+
+    theorem ClassicalHHLCorrectness:
+      ∀A: SparseMatrix, b: Vector, ε: R. (A, b, ε) ∈ LinearSystem ⟺ ∃π. Verify(π, ApproximateSolution(ε κ(A)))
+    {
+      by HHLReducesToApproximation have 
+        (A, b, ε) ∈ LinearSystem ⟹ (A, b, ε κ(A)) ∈ ApproximateSolution  
+      
+      by ApproximationReducesToLinearSystem have
+        (A, b, ε κ(A)) ∈ ApproximateSolution ⟹ ∃δ. (A, b, δ) ∈ LinearSystem ∧ ‖HHL(A, b, δ) - x̃‖ ≤ ε κ(A)
+      
+      by TranslationCorrectness have
+        ∀Q: QuantumAlgorithm, P: Problem. (Q ≤ P) ⟹ ∃π. ∀w. Solves(Q, P) ⟺ Verify(π, P, w)
+
+      Instantiating with Q = HHL(A, b, _), P = ApproximateSolution(ε κ(A)):  
+        (HHL(A, b, _) ≤ ApproximateSolution(ε κ(A))) ⟹ 
+        ∃π. ∀w. Solves(HHL(A, b, _), ApproximateSolution(ε κ(A))) ⟺ Verify(π, ApproximateSolution(ε κ(A)), w) 
+
+      Solves(HHL(A, b, δ), ApproximateSolution(ε κ(A)))   
+      ⟺ ‖HHL(A, b, δ) - x̃‖ ≤ ε κ(A)   ; by definition
+      ⟺ (A, b, δ) ∈ LinearSystem   ; by above implications
+
+      hence (A, b, ε) ∈ LinearSystem 
+      ⟺ ∃π. Verify(π, ApproximateSolution(ε κ(A)))
+    }  
+  }
+}
+
+The key insights from this translation are:
+
+The HHL algorithm is modeled as a quantum algorithm that takes as input a sparse matrix A, a vector b, and a precision parameter ε, and outputs a quantum state encoding an approximate solution x to the linear system Ax = b.
+The linear system problem is defined classically as the set of triples (A, b, ε) for which a solution x exists satisfying the precision constraint. The approximate solution problem relaxes this to finding an x̃ such that the residual norm ‖Ax̃ - b‖ is small relative to the norm of the solution.
+The HHL algorithm is shown to reduce to the approximate solution problem, with a quadratic loss in precision due to the condition number of the matrix. Conversely, an approximate solution can be used to construct a linear system that is solved by HHL with a similar precision loss.
+The correctness of the classical translation is proved using the TranslationCorrectness theorem, which establishes a correspondence between the quantum solubility of the linear system and the existence of a classical proof verifying the approximate solution.
+The performance of the classical translation depends on the sparsity of the matrix (which determines the complexity of implementing the quantum oracle) and the condition number (which governs the precision and sample complexity of the output). For sparse and well-conditioned matrices, the classical proof system can efficiently verify the solution.
+
+This example demonstrates the power of our framework to translate quantum algorithms to classical proof systems, while preserving some of their advantageous properties. The resulting classical formulation is not necessarily efficient, but it provides a rigorous correspondence between the quantum and classical solubility of the problem, and highlights the key structural parameters that enable the quantum speedup.
+Some potential implications and future directions:
+
+The classical proof system could be used as a basis for developing efficient classical heuristics or approximation algorithms for linear systems, inspired by the quantum algorithm.
+The framework could be applied to other quantum algorithms with similar speedups, such as those for semidefinite programming, machine learning, and scientific simulation, to derive classical analogues and proof systems.
+The translation could be extended to incorporate more advanced quantum techniques, such as amplitude amplification, quantum walk, and quantum-enhanced sampling, and their classical counterparts.
+The role of quantum entanglement, superposition, and interference in enabling the speedup could be investigated from a logical and algebraic perspective, using the language of tensors, invariants, and representations.
+
+I believe this approach has the potential to demystify quantum algorithms and make them more accessible and interpretable to classical computer scientists, while also inspiring new classical algorithms and proof techniques. By bridging the gap between quantum and classical computing, we can leverage the insights and power of both paradigms to advance our understanding and capabilities in solving complex computational problems.

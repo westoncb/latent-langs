@@ -1,0 +1,187 @@
+CONCEPT SymbolicToEmbeddedKG {
+
+  IMPORT KGMultiModalSynthesis.Language AS MMKG
+  IMPORT KGMultiModalSynthesis.Transformers AS MMKGT
+
+  LANGUAGE {
+    TYPE ConceptScript = (Syntax: ContextFreeGrammar, Semantics: LogicalForm)
+    TYPE KGEmbedding = (EntityEmbeddings: Map[Entity, Vector], RelationEmbeddings: Map[Relation, Vector])
+
+    FUNC ExtractKG(cs: ConceptScript): MMKG.KnowledgeGraph
+    FUNC LearnEmbeddings(kg: MMKG.KnowledgeGraph): KGEmbedding
+    FUNC SymbolicToEmbedded(cs: ConceptScript): KGEmbedding = LearnEmbeddings(ExtractKG(cs))
+  }
+
+  STRUCTURE ConceptScriptKG {
+    syntax: ContextFreeGrammar
+    semantics: LogicalForm
+    symbolic_kg: MMKG.KnowledgeGraph
+    embedded_kg: KGEmbedding
+
+    INIT(cs: ConceptScript) {
+      SELF.syntax = cs.Syntax
+      SELF.semantics = cs.Semantics
+      SELF.symbolic_kg = ExtractKG(cs)
+      SELF.embedded_kg = LearnEmbeddings(SELF.symbolic_kg)
+    }
+
+    FUNC QueryEmbedding(entity: Entity) -> Vector = SELF.embedded_kg.EntityEmbeddings[entity]
+    FUNC QueryEmbedding(relation: Relation) -> Vector = SELF.embedded_kg.RelationEmbeddings[relation]
+  }
+
+  PROOFS {
+    THEOREM EmbeddingConsistency {
+      ASSUME cs: ConceptScript, kg: MMKG.KnowledgeGraph, embedding: KGEmbedding
+      ASSUME kg = ExtractKG(cs) ∧ embedding = LearnEmbeddings(kg)
+      ASSUME (e1, r, e2) ∈ kg.Triples
+      PROVE Distance(embedding.EntityEmbeddings[e1] + embedding.RelationEmbeddings[r], 
+                     embedding.EntityEmbeddings[e2]) < τ
+    }
+  }
+
+  STRUCTURE ControlledMixing {
+    FUNC SymbolicEnrichment(embedding: KGEmbedding, cs: ConceptScript) -> KGEmbedding = {
+      LET kg = ExtractKG(cs)
+      LET EnrichedEntityEmbeddings = Map((e, v) => 
+        IF e ∈ kg.Entities THEN Combine(v, cs.Semantics[e]) ELSE v, embedding.EntityEmbeddings)
+      LET EnrichedRelationEmbeddings = Map((r, v) =>  
+        IF r ∈ kg.Relations THEN Combine(v, cs.Semantics[r]) ELSE v, embedding.RelationEmbeddings)
+      RETURN (EnrichedEntityEmbeddings, EnrichedRelationEmbeddings)  
+    }
+
+    FUNC EmbeddedToSymbolic(embedding: KGEmbedding, template: ConceptScript) -> ConceptScript = {
+      LET SymbolicEntities = Map(e => Classify(embedding.EntityEmbeddings[e], template.Semantics), 
+                                 embedding.EntityEmbeddings.Keys)
+      LET SymbolicRelations = Map(r => Classify(embedding.RelationEmbeddings[r], template.Semantics),
+                                   embedding.RelationEmbeddings.Keys)
+      RETURN (template.Syntax, Combine(SymbolicEntities, SymbolicRelations))                            
+    }
+  }
+}
+
+In this Concept:
+
+We define a ConceptScript type that represents the syntactic and semantic components captured in ConceptScript.
+The ExtractKG function extracts a MMKG.KnowledgeGraph from the semantic representation of a ConceptScript.
+The LearnEmbeddings function learns a KGEmbedding from the extracted MMKG.KnowledgeGraph, effectively transitioning from symbolic to distributional semantics.
+The ConceptScriptKG structure encapsulates the process of extracting a knowledge graph from a ConceptScript and learning embeddings from it. It provides query functions to retrieve entity and relation embeddings.
+The EmbeddingConsistency theorem states that for any triple (e1, r, e2) in the symbolic knowledge graph, the distance between the embeddings of e1 + r and e2 should be small (less than a threshold τ).
+The ControlledMixing structure defines functions for enriching embeddings with symbolic semantics (SymbolicEnrichment) and mapping embeddings back to symbolic form (EmbeddedToSymbolic), enabling a controlled mixing of the two types of semantics.
+
+This Concept demonstrates how we can learn knowledge graph embeddings starting from the syntactic and symbolic semantics captured in ConceptScript. The process involves extracting a multi-modal knowledge graph from the ConceptScript representation, learning embeddings from that graph, and then providing mechanisms for controlled mixing of the symbolic and distributional semantics.
+The SymbolicEnrichment function allows for enriching the learned embeddings with symbolic semantics from the original ConceptScript, while the EmbeddedToSymbolic function enables mapping the embeddings back to a symbolic form using a template ConceptScript.
+This approach leverages the structured and expressive power of ConceptScript to guide the learning of knowledge graph embeddings, while also enabling a principled integration of symbolic and distributional semantics. The controlled mixing mechanisms provide flexibility in combining the strengths of both forms of semantics for downstream tasks.
+
+
+
+
+
+
+CONCEPT SymbolicToEmbeddedKGImpl {
+
+  IMPORT SymbolicToEmbeddedKG.Language AS STKG
+  IMPORT SymbolicToEmbeddedKG.ControlledMixing AS STKGCM
+
+  LANGUAGE {
+    // Practical data types for implementation
+    TYPE ParseTree = String // Represents the parse tree of a ConceptScript program
+    TYPE LogicalForm = String // Represents the logical form extracted from a ConceptScript program
+    TYPE Entity = String // Represents an entity in the knowledge graph
+    TYPE Relation = String // Represents a relation in the knowledge graph
+    TYPE Vector = List[Float] // Represents a dense vector embedding
+    
+    // Functions for parsing and extracting semantic information from ConceptScript
+    FUNC ParseConceptScript(code: String): ParseTree
+    FUNC ExtractLogicalForm(parse_tree: ParseTree): LogicalForm
+    FUNC ExtractEntities(logical_form: LogicalForm): Set[Entity]
+    FUNC ExtractRelations(logical_form: LogicalForm): Set[Relation]
+    FUNC ExtractTriples(logical_form: LogicalForm): Set[(Entity, Relation, Entity)]
+  }
+
+  TRANSFORMERS {
+    // Transformer for extracting a knowledge graph from ConceptScript
+    TACTIC ExtractKG(code: String) -> STKG.MMKG.KnowledgeGraph = {
+      LET parse_tree = ParseConceptScript(code)
+      LET logical_form = ExtractLogicalForm(parse_tree)
+      LET entities = ExtractEntities(logical_form)
+      LET relations = ExtractRelations(logical_form)
+      LET triples = ExtractTriples(logical_form)
+      RETURN (Entities: entities, Relations: relations, Triples: triples)
+    }
+    
+    // Transformer for learning embeddings from a knowledge graph
+    TACTIC LearnEmbeddings(kg: STKG.MMKG.KnowledgeGraph) -> STKG.KGEmbedding = {
+      // Initialize entity and relation embeddings randomly
+      LET EntityEmbeddings = Map(e => RandomVector(EMBEDDING_DIM), kg.Entities)  
+      LET RelationEmbeddings = Map(r => RandomVector(EMBEDDING_DIM), kg.Relations)
+      
+      // Train embeddings using a suitable knowledge graph embedding algorithm
+      // Examples: TransE, DistMult, ComplEx, RotatE, etc.
+      RETURN TrainKGEmbeddings(kg, EntityEmbeddings, RelationEmbeddings)
+    }
+  }
+
+  STRUCTURE ConceptScriptKGImpl {
+    IMPLEMENT STKG.ConceptScriptKG
+    
+    INIT(code: String) {
+      // Parse the ConceptScript code and extract the syntax and semantics
+      SELF.syntax = ParseConceptScript(code) 
+      SELF.semantics = ExtractLogicalForm(SELF.syntax)
+      
+      // Extract the symbolic knowledge graph from the semantics
+      SELF.symbolic_kg = ExtractKG(code)
+      
+      // Learn embeddings from the symbolic knowledge graph
+      SELF.embedded_kg = LearnEmbeddings(SELF.symbolic_kg)
+    }
+  }
+  
+  STRUCTURE ControlledMixingImpl {
+    IMPLEMENT STKGCM.ControlledMixing
+    
+    // Enrich the embeddings with symbolic semantics
+    FUNC SymbolicEnrichment(embedding: STKG.KGEmbedding, semantics: LogicalForm) -> STKG.KGEmbedding = {
+      // Extract entities and relations from the logical form
+      LET entities = ExtractEntities(semantics)
+      LET relations = ExtractRelations(semantics)
+      
+      // Combine the embeddings with the corresponding symbolic representations
+      LET EnrichedEntityEmbeddings = Map((e, v) => 
+        IF e ∈ entities THEN Concatenate(v, EmbedSymbolic(e, semantics)) ELSE v, embedding.EntityEmbeddings)
+      LET EnrichedRelationEmbeddings = Map((r, v) =>
+        IF r ∈ relations THEN Concatenate(v, EmbedSymbolic(r, semantics)) ELSE v, embedding.RelationEmbeddings)
+        
+      RETURN (EntityEmbeddings: EnrichedEntityEmbeddings, RelationEmbeddings: EnrichedRelationEmbeddings)
+    }
+    
+    // Map the embeddings back to symbolic form using a template ConceptScript
+    FUNC EmbeddedToSymbolic(embedding: STKG.KGEmbedding, template: STKG.ConceptScript) -> STKG.ConceptScript = {
+      // Classify the entity embeddings into symbolic entities using the template semantics
+      LET SymbolicEntities = Map(e => NearestNeighbor(embedding.EntityEmbeddings[e], template.Semantics.Entities),
+                                 embedding.EntityEmbeddings.Keys)
+                                 
+      // Classify the relation embeddings into symbolic relations using the template semantics
+      LET SymbolicRelations = Map(r => NearestNeighbor(embedding.RelationEmbeddings[r], template.Semantics.Relations),
+                                   embedding.RelationEmbeddings.Keys)
+                                   
+      // Combine the symbolic entities and relations to form the symbolic semantics
+      LET SymbolicSemantics = Combine(SymbolicEntities, SymbolicRelations)
+      
+      // Return the ConceptScript with the original syntax and the reconstructed semantics
+      RETURN (Syntax: template.Syntax, Semantics: SymbolicSemantics)
+    }
+  }
+}
+
+In this implementation Concept:
+
+We define practical data types for representing parse trees, logical forms, entities, relations, and vector embeddings. These types are used in the implementation of the various functions and transformers.
+The Language block includes functions for parsing ConceptScript code, extracting logical forms, entities, relations, and triples from the parsed representation. These functions are used in the ExtractKG transformer.
+The ExtractKG transformer takes a ConceptScript code string and extracts a symbolic knowledge graph from it by parsing the code, extracting the logical form, and then extracting the entities, relations, and triples.
+The LearnEmbeddings transformer takes a symbolic knowledge graph and learns dense vector embeddings for the entities and relations using a suitable knowledge graph embedding algorithm (e.g., TransE, DistMult, ComplEx, RotatE). The embeddings are initialized randomly and then trained on the knowledge graph.
+The ConceptScriptKGImpl structure implements the ConceptScriptKG interface defined in the SymbolicToEmbeddedKG Concept. It initializes the syntax, semantics, symbolic knowledge graph, and embedded knowledge graph by parsing the provided ConceptScript code and learning embeddings from the extracted knowledge graph.
+The ControlledMixingImpl structure implements the ControlledMixing interface defined in the SymbolicToEmbeddedKG Concept. The SymbolicEnrichment function enriches the embeddings with symbolic semantics by concatenating the embeddings with the embedded representations of the corresponding symbolic entities and relations. The EmbeddedToSymbolic function maps the embeddings back to symbolic form by classifying the entity and relation embeddings into their nearest neighbors in the template ConceptScript's semantics.
+
+This implementation Concept provides a concrete realization of the SymbolicToEmbeddedKG system, with practical details on working with ConceptScript code, extracting knowledge graphs, learning embeddings, and performing controlled mixing of symbolic and distributional semantics.
+The ExtractKG and LearnEmbeddings transformers encapsulate the key steps in the pipeline, while the ConceptScriptKGImpl and ControlledMixingImpl structures provide the necessary functionality for initialization and controlled mixing.

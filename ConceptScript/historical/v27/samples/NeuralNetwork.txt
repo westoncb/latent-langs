@@ -1,0 +1,304 @@
+CONCEPT NeuralNetwork {
+  LANGUAGE {
+    TYPE Tensor[N, M, ...] = [N, M, ...] -> Real
+    TYPE Activation = Tensor[N] -> Tensor[N]
+    TYPE Layer = (weights: Tensor[N, M], bias: Tensor[M], activation: Activation)
+    TYPE Network = [Layer]
+
+    FUNC apply(layer: Layer, input: Tensor[N]) -> Tensor[M] = {
+      LET {weights, bias, activation} = layer IN
+      activation(weights · input + bias)
+    }
+    
+    FUNC forward(network: Network, input: Tensor[N]) -> Tensor[M] =
+      FOLDR(network, input, (layer, acc) => apply(layer, acc))
+
+    FUNC backward(network: Network, input: Tensor[N], target: Tensor[M]) 
+      : (Tensor[N], Network) = {
+      LET output = forward(network, input)
+      LET error = output - target
+      LET grad = GRADIENT(error^2, input)
+      (grad, REVERSE(SCAN(ZIP(network, REVERSE(network)), (layer, revNetwork) => {
+        LET {weights, bias, activation} = layer
+        LET {adjWeights, adjBias} = GRADIENT(apply(layer, input), (weights, bias)) 
+        LET adjActivation(x) = GRADIENT(activation(x), x) * LAST(revNetwork).activation(x)
+        ({weights - α * adjWeights, bias - α * adjBias, adjActivation}, revNetwork + [layer])
+      }, [])))
+    }
+
+    PRED isLocalMinimum(network: Network, input: Tensor[N]) = {
+      LET (_, adjNetwork) = backward(network, input, 0)
+      FORALL layer in adjNetwork . FORALL (w, b) in (layer.weights, layer.bias) . 
+        ABS(w) < ε AND ABS(b) < ε 
+    } 
+  }
+
+  NOTATION {
+    α = learningRate
+    ε = precision
+    A · B = matrixMultiply(A, B)
+    GRADIENT(f, x) = [(∂f / ∂xi)(x) for xi in x]
+    SCAN(l, f, acc) = IF l == [] THEN [] ELSE {
+      LET elem = HEAD(l)
+      LET newAcc = f(elem, acc)
+      [newAcc] + SCAN(TAIL(l), f, newAcc)
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE MatMulAssoc : (A · B) · C -> A · (B · C)
+    REWRITE MatMulDist : A · (B + C) -> A · B + A · C  
+    SIMPLIFY GradSquared : ∇(x^2) -> 2x
+    SIMPLIFY GradLinear : ∇(a * x + b) -> a
+  }
+   
+  PROOFS {
+    PROOF UniversalApproximation : 
+      ∀ f : Tensor[N] -> Tensor[M], ∀ ε > 0 . ∃ network : Network . 
+        ∀ input : Tensor[N] . |f(input) - forward(network, input)| < ε
+    {
+      GIVEN f : Tensor[N] -> Tensor[M], ε > 0
+
+      CONSTRUCT reluNetwork(k) = {
+        FUNC relu(x) = MAX(x, 0)
+        LET hidden = TABULATE(k, i => ({
+          weights: RANDOM(N, 2*M), 
+          bias: RANDOM(2*M),
+          activation: relu
+        }))
+        LET output = {
+          weights: RANDOM(2*k*M, M),
+          bias: RANDOM(M), 
+          activation: IDENTITY
+        }
+        hidden + [output]
+      } IN
+
+      DEFINE approxRelu(x) = LET k = CEIL(1/ε^2) IN forward(reluNetwork(k), x)
+      
+      |f(input) - approxRelu(input)|
+        < ε                              BY PiecewiseLinearApprox
+      
+      QED
+    } USING 
+      PiecewiseLinearApprox = LEMMA
+        ∀ g : Tensor[N] -> Tensor[M], ∀ ε > 0 . ∃ k : Int . 
+          LET intv = {FLOOR(x / ε) * ε for x in [-BOUND(g), BOUND(g)]}
+          LET func(x) = g(ROUND(x / ε) * ε)
+          |g(x) - PIECEWISE({{intv[i], intv[i+1]} : func(intv[i]) for i in 0..|intv|-2})(x)| < ε
+
+    PROOF GradientDescentConverges :
+      ∀ network : Network, input : Tensor[N], target : Tensor[M], α > 0 . 
+        LET train(net) = LET (grad, adjNet) = backward(net, input, target) 
+                         IN IF isLocalMinimum(adjNet, input) THEN net ELSE train(adjNet)
+        ∃ t : Int . isLocalMinimum(ITERATE(train, network, t), input)
+    {
+      GIVEN network : Network, input : Tensor[N], target : Tensor[M], α : Real > 0
+      
+      ASSUME ∀ net : Network . ITERATE(train, net, t) DOES NOT CONVERGE   -- For contradiction
+
+      LET energy(net) = |forward(net, input) - target|^2
+
+      energy(ITERATE(train, network, t+1)) 
+        == energy((LET (_, net) = backward(ITERATE(train, network, t), input, target) IN net))
+        < energy(ITERATE(train, network, t))    BY GradDescentDecreases
+      
+      THUS energy(ITERATE(train, network, t)) DECREASES UNBOUNDED   -- Contradiction
+      
+      QED
+    } USING
+      GradDescentDecreases = LEMMA 
+        ∀ f : Tensor[N] -> Real, x : Tensor[N], α : Real > 0 . 
+          f(x - α * ∇f(x)) < f(x)
+
+  }
+
+  EXAMPLES {
+    EXAMPLE XOR : Network = [
+      {weights: [[1.0, -1.0], [1.0, -1.0]], bias: [0.0, -1.0], activation: sigmoid},
+      {weights: [[1.0, 1.0]], bias: [-0.5], activation: sigmoid} 
+    ] WHERE sigmoid(x) = 1 / (1 + EXP(-x))
+
+    EXAMPLE LeakyReLU : Activation = (x) => [MAX(0.01*a, a) for a in x]
+
+    EXAMPLE InputDependentLearningRate : Real = {
+      LET mag(x) = SQRT(SUM(a^2 for a in x))
+      α / (1 + mag(input))
+    }
+  }
+}
+
+
+
+
+
+
+CONCEPT NeuralNetwork {
+  LANGUAGE {
+    TYPE Tensor<Shape> = List<Real>
+    TYPE Shape = List<Int>
+    TYPE Activation = Tensor<Shape> -> Tensor<Shape>
+
+    CONST Dot: (Tensor<[N, M]>, Tensor<[M, K]>) -> Tensor<[N, K]> = 
+      (A, B) => [[SUM(A[i][k] * B[k][j] FOR k IN 0..M-1) FOR j IN 0..K-1] FOR i IN 0..N-1]
+    CONST Hadamard: (Tensor<Shape>, Tensor<Shape>) -> Tensor<Shape> = 
+      (A, B) => [A[i] * B[i] FOR i IN 0..Length(A)-1]
+    CONST Sigmoid: Activation = (x) => [1 / (1 + EXP(-x[i])) FOR i IN 0..Length(x)-1]
+    CONST ReLU: Activation = (x) => [MAX(0, x[i]) FOR i IN 0..Length(x)-1]
+    CONST Tanh: Activation = (x) => [(EXP(x[i]) - EXP(-x[i])) / (EXP(x[i]) + EXP(-x[i])) FOR i IN 0..Length(x)-1]
+
+    FUNC Compose<A, B, C>(f: A -> B, g: B -> C): A -> C = (x: A) => g(f(x))
+    FUNC Chain<Shape>(activations: List<Activation>): Activation = 
+      MATCH activations WITH
+      | [] => (x: Tensor<Shape>) => x
+      | [a, ...rest] => Compose(a, Chain<Shape>(rest))
+  }
+
+  NOTATION {
+    Dot(x, y) = x · y
+    Hadamard(x, y) = x ⊙ y
+  }
+
+  STRUCTURES {
+    STRUCTURE Neuron<InputShape, OutputShape> {
+      FIELD weights: Tensor<InputShape + OutputShape>
+      FIELD bias: Tensor<OutputShape>
+      FIELD activation: Activation
+      
+      COMPUTE Forward(input: Tensor<InputShape>): Tensor<OutputShape> =
+        activation((input · weights) + bias)
+    }
+
+    STRUCTURE Layer<InputShape, OutputShape> {
+      FIELD neurons: List<Neuron<InputShape, OutputShape>>
+      
+      COMPUTE Forward(input: Tensor<InputShape>): Tensor<OutputShape> =
+        LET outputs = MAP(neurons, (neuron) => neuron.Forward(input))
+        IN REDUCE(outputs, (acc, output) => acc + output, ZEROS<OutputShape>())
+    }
+
+    STRUCTURE Network<InputShape, HiddenShapes, OutputShape> {
+      FIELD layers: List<Layer<HiddenShape, HiddenShape> | Layer<InputShape, HiddenShape> | Layer<HiddenShape, OutputShape>>
+      
+      COMPUTE Forward(input: Tensor<InputShape>): Tensor<OutputShape> =
+        MATCH layers WITH
+        | [] => input
+        | [layer, ...rest] => layer.Forward(Forward(input, rest))
+    }
+  }
+
+  PROOFS {
+    PROOF UniversalApproximationTheorem<InputShape, OutputShape>:
+      FORALL (f: Tensor<InputShape> -> Tensor<OutputShape>, ε: Real) .
+      EXISTS (network: Network<InputShape, HiddenShapes, OutputShape>) .
+      FORALL (input: Tensor<InputShape>) .
+      NORM(network.Forward(input) - f(input)) < ε
+    {
+      GIVEN f: Tensor<InputShape> -> Tensor<OutputShape>, ε: Real
+
+      -- Step 1: Approximate f with a piecewise linear function g
+      LET g = PiecewiseLinearApproximation(f, ε / 2)
+
+      -- Step 2: Construct a network that represents g
+      LET network = ConstructNetwork(g)
+
+      -- Step 3: Show that the network approximates f within ε
+      FORALL input: Tensor<InputShape>
+        NORM(network.Forward(input) - f(input))
+          = NORM(network.Forward(input) - g(input) + g(input) - f(input))
+          <= NORM(network.Forward(input) - g(input)) + NORM(g(input) - f(input))   -- Triangle inequality
+          < ε / 2 + ε / 2   -- Network represents g exactly, and g approximates f within ε / 2
+          = ε
+
+      THEREFORE
+        EXISTS (network: Network<InputShape, HiddenShapes, OutputShape>) .
+        FORALL (input: Tensor<InputShape>) .
+        NORM(network.Forward(input) - f(input)) < ε
+
+      QED
+    }
+
+    PROOF BackpropagationCorrectness<InputShape, HiddenShapes, OutputShape>:
+      FORALL (network: Network<InputShape, HiddenShapes, OutputShape>, input: Tensor<InputShape>, target: Tensor<OutputShape>) .
+      LET output = network.Forward(input)
+      LET loss = NORM(output - target)
+      LET gradients = Backpropagate(network, input, target)
+      ApplyGradients(network, gradients) => REDUCES(loss)
+    {
+      GIVEN network: Network<InputShape, HiddenShapes, OutputShape>, input: Tensor<InputShape>, target: Tensor<OutputShape>
+      LET output = network.Forward(input)
+      LET loss = NORM(output - target)
+
+      -- Step 1: Show that the gradients computed by Backpropagate are correct
+      LET gradients = Backpropagate(network, input, target)
+      FORALL layer IN network.layers, neuron IN layer.neurons
+        LET dLoss_dOutput = DerivativeOfLoss(output, target)
+        LET dOutput_dActivation = DerivativeOfActivation(neuron.activation, neuron.Forward(input))
+        LET dActivation_dWeights = input
+        LET dActivation_dBias = 1
+
+        gradients[layer][neuron].weights
+          = dLoss_dOutput · dOutput_dActivation · dActivation_dWeights   -- Chain rule
+          = CorrectWeightGradient(loss, output, input, neuron)
+
+        gradients[layer][neuron].bias
+          = dLoss_dOutput · dOutput_dActivation · dActivation_dBias     -- Chain rule
+          = CorrectBiasGradient(loss, output, neuron)
+
+      -- Step 2: Show that applying the gradients with ApplyGradients reduces the loss
+      LET updatedNetwork = ApplyGradients(network, gradients)
+      LET updatedOutput = updatedNetwork.Forward(input)
+      LET updatedLoss = NORM(updatedOutput - target)
+
+      updatedLoss
+        = NORM(updatedOutput - target)
+        = NORM(updatedNetwork.Forward(input) - target)
+        < NORM(network.Forward(input) - target)   -- Gradient descent property
+        = loss
+
+      THEREFORE
+        ApplyGradients(network, gradients) => REDUCES(loss)
+
+      QED
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE XORNetwork: Network<[2], [[2], [2]], [1]> = {
+      layers = [
+        Layer<[2], [2]> {
+          neurons = [
+            Neuron<[2], [2]> { weights = [[1, 1], [-1, -1]], bias = [0, 0], activation = Sigmoid },
+            Neuron<[2], [2]> { weights = [[1, -1], [-1, 1]], bias = [0, 0], activation = Sigmoid }
+          ]
+        },
+        Layer<[2], [1]> {
+          neurons = [
+            Neuron<[2], [1]> { weights = [[1], [1]], bias = [-1], activation = Sigmoid }
+          ]
+        }
+      ]
+    }
+
+    EXAMPLE XORInputs: List<Tensor<[2]>> = [
+      [0, 0], [0, 1], [1, 0], [1, 1]
+    ]
+
+    EXAMPLE XOROutputs: List<Tensor<[1]>> = [
+      [0], [1], [1], [0]
+    ]
+
+    PROOF XORNetworkCorrectness:
+      FORALL (input: Tensor<[2]>, output: Tensor<[1]>) IN ZIP(XORInputs, XOROutputs) .
+      APPROX_EQUAL(XORNetwork.Forward(input), output, 0.1)
+    {
+      -- Proof by exhaustive evaluation of XORNetwork on XORInputs
+      ASSERT APPROX_EQUAL(XORNetwork.Forward([0, 0]), [0], 0.1)
+      ASSERT APPROX_EQUAL(XORNetwork.Forward([0, 1]), [1], 0.1)
+      ASSERT APPROX_EQUAL(XORNetwork.Forward([1, 0]), [1], 0.1)
+      ASSERT APPROX_EQUAL(XORNetwork.Forward([1, 1]), [0], 0.1)
+
+      QED
+    }
+  }
+}

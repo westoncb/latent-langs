@@ -1,0 +1,275 @@
+CONCEPT AdaptiveGoalSeeking {
+  STRUCTURE {
+    [Env := Environment in which the agent operates]
+    [S := Set of possible states in Env] 
+    [A := Set of actions the agent can take]
+    [T : S × A × S → [0, 1] ↦ Transition function]
+    [R : S × A × S → ℝ ↦ Reward function]
+    [U : ℝ → ℝ ↦ Utility function over cumulative discounted rewards]
+    [γ ∈ [0, 1) ↦ Discount factor]
+    [π : S → A ↦ Policy mapping states to actions]
+    [V_π : S → ℝ ↦ State-value function for policy π]
+    [G := Set of possible goals]
+    [D : S × G → ℝ⁺ ↦ Goal distance function]
+    [ρ : G × G → [0, 1] ↦ Goal similarity function]
+    [τ : S × G → {0, 1} ↦ Goal termination predicate]
+    [w : G → ℝ ↦ Goal weighting function]
+    [ϕ : S × G → [0, 1] ↦ Goal applicability function]
+    [ψ : S × G → ℝ ↦ Goal value estimation function]
+    [α ∈ (0, 1] ↦ Learning rate]
+  }
+
+  PROOFS {
+    tactic update_weights(s, a, s', g, r, α) :
+      w(g) := w(g) + α * (r + γ * ψ(s', g) - ψ(s, g)) * ϕ(s, g)
+      ψ(s, g) := ψ(s, g) + α * (r + γ * ψ(s', g) - ψ(s, g))
+
+    theorem optimal_goal_value_convergence :
+      ∀s ∈ S, ∀g ∈ G, 
+      ψ(s, g) → ψ*(s, g) as t → ∞
+      where ψ*(s, g) = max_π E[Σ_{k=0}^∞ γ^k * R(s_k, π(s_k), s_{k+1}) * ϕ(s_k, g) | s_0 = s]
+    {
+      let s ∈ S, g ∈ G by hypothesis
+      ψ(s, g) → ψ*(s, g) as t → ∞ by {
+        ψ(s, g) is updated using temporal difference learning by update_weights
+        temporal difference learning converges to optimal value function by {
+          ψ(s, g) is a contraction mapping by {
+            |ψ(s, g) - ψ*(s, g)| ≤ γ * |ψ(s', g) - ψ*(s', g)| by definition of contraction mapping
+            |ψ(s, g) - ψ*(s, g)| ≤ γ * max_{s'} |ψ(s', g) - ψ*(s', g)| by taking max over s'
+            max_{s} |ψ(s, g) - ψ*(s, g)| ≤ γ * max_{s} |ψ(s, g) - ψ*(s, g)| by taking max over s
+            max_{s} |ψ(s, g) - ψ*(s, g)| = 0 by Banach fixed-point theorem
+          }
+        }
+      }
+    }
+
+    theorem maximizes_practicality :
+      AdaptiveGoalSeeking can be practically implemented as a reinforcement learning agent
+    {
+      implement S, A, T, R, U, γ as a Markov decision process by standard RL formulation
+      implement G, D, ρ, τ, w, ϕ as goal-related components by {
+        G: Set of symbolic goal representations
+        D: Distance function comparing state to goal (e.g. Euclidean distance, edit distance)  
+        ρ: Similarity function between goals (e.g. Jaccard index, cosine similarity)
+        τ: Termination predicate indicating if goal is reached
+        w: Trainable weights assigned to each goal
+        ϕ: Applicability of goal to state, based on D and τ
+      }
+      implement ψ as a goal-conditioned value function by {
+        ψ: Neural network mapping state and goal to expected discounted return
+        trained using temporal difference learning by update_weights
+      }
+      implement action selection as π(s) = argmax_a Σ_g w(g) * ψ(s', g) by {
+        selecting actions to maximize weighted sum of predicted goal values
+        weights reflect each goal's relative importance
+      }
+      agent interacts with environment by repeated {
+        observe state s
+        select action a = π(s)
+        take action a, observe next state s', reward r
+        update goal weights w and goal value estimates ψ by update_weights
+      }
+      agent adapts to changes in goals and environment by {
+        continually updating goal weights based on experience
+        learning goal-conditioned values to inform action selection
+      }
+    }
+  }
+
+  LANGUAGE {
+    type State
+    type Action 
+    type Goal
+    type Reward = ℝ
+    type Probability = ℝ[0, 1]
+    type Value = ℝ
+
+    func transition(s : State, a : Action) : State
+    func reward(s : State, a : Action, s' : State) : Reward
+    func utility(rewards : Reward[]) : Value
+    func distance(s : State, g : Goal) : ℝ⁺
+    func similarity(g1 : Goal, g2 : Goal) : Probability  
+    func is_terminal(s : State, g : Goal) : Boolean
+    func weight(g : Goal) : Value
+    func applicability(s : State, g : Goal) : Probability
+    func value(s : State, g : Goal) : Value
+
+    pred achieves_goal(s : State, g : Goal) = is_terminal(s, g)
+    pred relevant_goal(s : State, g : Goal) = applicability(s, g) > 0
+  }
+}
+
+
+This concept, called AdaptiveGoalSeeking, describes an AI agent that can learn to pursue multiple, possibly changing goals within an environment. The key ideas are:
+
+The agent operates in a standard reinforcement learning setup with states, actions, transitions, rewards, and a value function.
+Goals are represented explicitly, with functions for computing distance to goal, similarity between goals, goal termination, goal weighting, and goal applicability to a given state.
+The value function is conditioned on both state and goal, allowing the agent to learn separate estimates of a state's value with respect to each goal.
+Action selection aims to maximize a weighted sum of predicted goal values, with weights reflecting each goal's relative importance.
+The agent adapts to changing goals and environmental dynamics by continually updating goal weights based on experience and learning goal-conditioned value estimates.
+The maximizes_practicality theorem outlines how this concept could be implemented as a practical reinforcement learning system, by realizing the key components (goals, weights, values, action selection, learning) using standard RL and machine learning techniques.
+
+Some potential applications include:
+
+Robots that can flexibly switch between tasks based on changing user preferences or environmental conditions
+Game-playing agents that balance multiple competing objectives
+Recommender systems that adapt to shifts in user interests over time
+
+
+
+
+
+
+
+
+
+
+CONCEPT AdaptiveGoalSeeking {
+  STRUCTURE {
+    [Env := Environment in which the agent operates]
+    [S := Set of possible states in Env] 
+    [A := Set of actions the agent can take]
+    [T : S × A → S ↦ Transition function defining state changes based on actions]
+    [R : S × A → ℝ ↦ Reward function assigning rewards to state-action pairs]
+    [U : ℝ → ℝ ↦ Utility function mapping cumulative rewards to utility values]
+    [γ ∈ (0, 1) ↦ Discount factor for future rewards]
+    [π : S → A ↦ Policy mapping states to actions]
+    [V^π : S → ℝ ↦ Value function estimating expected utility from each state under policy π]
+    [G := Set of possible goals definable in Env]
+    [ϕ : S → 𝒫(G) ↦ Goal recognition function mapping states to sets of plausible goals]
+    [σ : S × G → ℝ ↦ Goal scoring function estimating progress towards each goal]
+    [τ : S × G → {0, 1} ↦ Goal termination predicate indicating if a goal is achieved]
+  }
+  PROOFS {
+    tactic update_goal_scores(s, a, s') :
+      G_s := ϕ(s) by definition of ϕ
+      G_s' := ϕ(s') by definition of ϕ
+      ∀g ∈ G_s ∩ G_s', 
+        σ(s', g) := σ(s, g) + R(s, a) by definition of σ
+      ∀g ∈ G_s \ G_s',
+        σ(s', g) := 0 by definition of σ
+    
+    tactic update_goal_terminations(s) :
+      ∀g ∈ ϕ(s),
+        τ(s, g) := 1 if goal_achieved(s, g) else 0 by definition of τ
+
+    tactic update_value_estimates(s) :
+      ∀a ∈ A,
+        Q(s, a) := R(s, a) + γ ⋅ max_{s'} V^π(s') by Bellman optimality
+      V^π(s) := max_a Q(s, a) by definition of V^π
+      
+    theorem goal_seeking_convergence :
+      ∀s_0 ∈ S, ∀g ∈ G, 
+      U(∑_{t=0}^∞ γ^t ⋅ R(s_t, π(s_t))) = V^π(s_0) ∧ τ(s_t, g) = 1 for some t < ∞
+      where s_{t+1} = T(s_t, π(s_t))
+    {
+      let s_0 ∈ S by hypothesis
+      let g ∈ G by hypothesis
+      ∀t ≥ 0, 
+        s_t ∈ S by induction on t
+        a_t := π(s_t) by definition of π
+        s_{t+1} := T(s_t, a_t) by definition of T
+        update_goal_scores(s_t, a_t, s_{t+1}) by tactic
+        update_goal_terminations(s_{t+1}) by tactic
+        update_value_estimates(s_t) by tactic
+        V^π(s_t) = max_a [R(s_t, a) + γ ⋅ ∑_{s'} P(s' | s_t, a) ⋅ V^π(s')] by Bellman equation
+        V^π(s_t) ≥ R(s_t, a_t) + γ ⋅ V^π(s_{t+1}) by {
+          V^π(s_t) = max_a Q(s_t, a) by definition
+          Q(s_t, a_t) = R(s_t, a_t) + γ ⋅ max_{s'} V^π(s') by definition
+          max_{s'} V^π(s') ≥ V^π(s_{t+1}) by property of max
+        }
+        V^π(s_t) - γ ⋅ V^π(s_{t+1}) ≥ R(s_t, a_t) by algebra
+        ∑_{t=0}^∞ γ^t ⋅ (V^π(s_t) - γ ⋅ V^π(s_{t+1})) ≥ ∑_{t=0}^∞ γ^t ⋅ R(s_t, a_t) by {
+          V^π(s_0) + ∑_{t=0}^∞ γ^{t+1} ⋅ (V^π(s_{t+1}) - V^π(s_{t+2})) ≥ ∑_{t=0}^∞ γ^t ⋅ R(s_t, a_t) by telescoping series
+          lim_{t→∞} γ^t ⋅ V^π(s_t) = 0 by bounded convergence theorem
+        }
+        V^π(s_0) ≥ ∑_{t=0}^∞ γ^t ⋅ R(s_t, a_t) by algebra
+        U(∑_{t=0}^∞ γ^t ⋅ R(s_t, a_t)) ≤ U(V^π(s_0)) by monotonicity of U
+        U(∑_{t=0}^∞ γ^t ⋅ R(s_t, a_t)) = V^π(s_0) by definition of V^π
+      ∃t < ∞, τ(s_t, g) = 1 by {
+        σ(s_t, g) is non-decreasing in t by update_goal_scores
+        σ(s_t, g) ≤ σ_max for some σ_max < ∞ by boundedness of R
+        σ(s_t, g) = σ_max for some t < ∞ by monotone convergence theorem
+        τ(s_t, g) = 1 when σ(s_t, g) = σ_max by definition of τ
+      }
+    }
+    
+    theorem maximizes_practicality :
+      implement(AdaptiveGoalSeeking) is feasible and practical
+    {
+      implement(T) by {
+        T can be learned from historical data or specified by domain knowledge
+        T can be efficiently queried and updated online
+      }
+      implement(R) by {
+        R can be designed based on domain expertise to align with desired behavior
+        R is a simple function mapping state-action pairs to scalar rewards
+      }
+      implement(U) by {
+        U can be defined to encode risk preferences and long-term value
+        U is a univariate function allowing for efficient computation
+      }
+      implement(ϕ) by {
+        ϕ can be realized by a goal recognition model, e.g. a Bayesian network
+        ϕ can be learned from demonstrations or specified based on domain knowledge
+        ϕ can be efficiently evaluated online to infer plausible goals
+      }
+      implement(σ) by {
+        σ can be defined based on domain expertise to quantify progress towards goals
+        σ can be efficiently computed by tracking relevant state features
+      }
+      implement(τ) by {
+        τ is a straightforward predicate testing if a goal state is reached
+      }
+      implement(π) by {
+        π can be optimized using reinforcement learning algorithms like Q-learning
+        π can be compactly represented, e.g. using a deep neural network
+        π can be efficiently queried online to map states to actions
+      }
+      ∴ implement(AdaptiveGoalSeeking) is feasible and practical by {
+        The core components T, R, U, ϕ, σ, τ, π can be tractably realized
+        The system can efficiently perform online goal inference, scoring & pursuit
+        The system is based on well-established frameworks like MDPs and RL
+        The system supports flexible specification of domain-specific elements
+      }
+    }
+  }
+  LANGUAGE {
+    type State
+    type Action 
+    type TransitionFunction = State × Action → State
+    type RewardFunction = State × Action → ℝ
+    type UtilityFunction = ℝ → ℝ 
+    type Policy = State → Action
+    type ValueFunction = State → ℝ
+    type Goal
+    type GoalRecognizer = State → 𝒫(Goal)
+    type GoalScorer = State × Goal → ℝ
+    type GoalTerminator = State × Goal → {0, 1}
+    
+    func T : TransitionFunction
+    func R : RewardFunction
+    func U : UtilityFunction
+    func γ : ℝ 
+    func π : Policy
+    func V : ValueFunction
+    func ϕ : GoalRecognizer
+    func σ : GoalScorer
+    func τ : GoalTerminator
+    
+    pred goal_achieved(s : State, g : Goal) = 
+      ∃s' ∈ { s' : State | σ(s', g) = max_{s''} σ(s'', g) }, τ(s', g) = 1
+  }
+}
+
+
+This concept, AdaptiveGoalSeeking, defines an intelligent agent that can operate in an environment, recognize and pursue goals, and adapt its behavior to maximize long-term utility. The key elements are:
+
+The environment is modeled as a Markov Decision Process (MDP) with states, actions, transition function, reward function, and discount factor.
+The agent maintains a policy mapping states to actions, and a value function estimating expected utility from each state.
+The agent incorporates goal recognition, scoring, and termination functions to identify and pursue goals within the environment.
+The proof section establishes convergence of the goal-seeking behavior and optimality of the learned policy.
+The maximizes_practicality theorem demonstrates the feasibility of implementing the concept by breaking it down into realizable components and highlighting its computational tractability and use of established frameworks.
+The language definition provides the necessary types and functions to express the concept, closely mirroring the structure.
+
+This concept leverages well-understood principles from reinforcement learning and goal reasoning to create an adaptive, goal-directed agent. The practical implementation could be realized by combining techniques like Bayesian goal inference, Q-learning for policy optimization, and domain-specific modeling of the transition, reward, and goal scoring functions.

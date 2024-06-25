@@ -1,0 +1,153 @@
+CONCEPT ComplexSystemTheory {
+  LANGUAGE {
+    type System = (State, Dynamics, Observables, Parameters)
+    type State = (Microstate, Macrostate)
+    type Dynamics = (Evolution, Interactions, Constraints)
+    type Observables = (Entropy, Complexity, Emergence)
+    type Parameters = (ControlParams, OrderParams, CriticalParams)
+    
+    type Microstate = (AgentStates, AgentLinks)
+    type Macrostate = (FieldState, TopologicalState, StatisticalState)
+    type Evolution = (Trajectory, Attractor, Bifurcation)
+    type Interactions = (Local, Nonlocal, MultiScale)
+    type Constraints = (Conservation, Symmetry, Invariance)
+    
+    func Hamiltonian(s: System): Real = ∫(s.State, s.Dynamics.Interactions)
+    func ActionFunctional(s: System): Real = ∫(t, Lagrangian(s) - Hamiltonian(s))
+    func PartitionFunction(s: System, β: Real): Real = ∫(s.State, exp(-β * Hamiltonian(s)))
+    func FreeEnergy(s: System, β: Real): Real = -1/β * log(PartitionFunction(s, β))
+
+    pred Equilibrium(s: System) = ∀(δs: System, δ(Hamiltonian(s), δs) = 0)
+    pred Criticality(s: System) = ∃(p: Parameters.CriticalParams, ∀(δp, |δp| < ε ⟹ Qualitative(Dynamics(s, p + δp)) ≠ Dynamics(s, p)))
+    pred Universality(s: System, o: Observables, s_i: [System], η: Real) = ∀(s' ∈ s_i, |o(s) - o(s')| < η)
+    pred Reduction(s: System, d: Dynamics, d': Dynamics) = (s with Dynamics := d') satisfies ∀(o: Observables, |o(s) - o(s with Dynamics := d)| < ε)
+
+    func RG_Transform(s: System, k: Real): System = Rescale(Coarse_Grain(s), k)
+    func RG_FlowGenerator(s: System): Parameterized(System) = λk. RG_Transform(s, k)
+    func EffectiveAction(s: System, k: Real): Real = ActionFunctional(RG_Transform(s, k))
+
+    pred RG_FixedPoint(s: System) = ∀(k: Real, RG_Transform(s, k) = s) 
+    pred RG_Universality(s: System, o: Observables, s_i: [System], η: Real, k_c: Real) =
+      ∀(k: Real, k > k_c ⟹ ∀(s' ∈ s_i, |o(RG_Transform(s, k)) - o(RG_Transform(s', k))| < η))
+
+    func MutualInfo(s: System, X: AgentStates, Y: AgentStates): Real = H(X) + H(Y) - H(X, Y)
+    func TransferEntropy(s: System, X: AgentStates, Y: AgentStates, τ: Real): Real = 
+      I(Y(t+τ); X(t) | Y(t)) = H(Y(t+τ)|Y(t)) - H(Y(t+τ)|Y(t),X(t))
+  }
+
+  STRUCTURE {
+    ; Constraints
+
+    ∀(s: System) Symmetry(Hamiltonian(s), s.Dynamics.Evolution)
+    ∀(s: System) Invariance(s.Observables.Entropy, s.Dynamics.Evolution)
+    ∀(s: System) Conservation(s.Observables.Emergence - s.Observables.Complexity, s.Dynamics.Evolution) 
+
+    ; Scaling
+
+    ∀(s: System) Universality(s, Entropy, Coarse_Grain(Neighborhoods(s, r)), O(1/r))
+    ∀(s: System) Reduction(s, s.Dynamics, MeanField(s.Dynamics))  
+    ∀(s: System, k) ScaleInvariance(EffectiveAction(s, k), k)
+
+    ; Information
+
+    ∀(s: System) Bounds(MutualInfo(s, _, _), 0, min(H(_), H(_)))
+    ∀(s: System) Bounds(TransferEntropy(s, _, _, _), 0, H(_))
+    ∀(s: System) Causality(X, Y) <=> TransferEntropy(s, X, Y, _) > 0
+  }
+
+  PROOFS {
+    theorem RenormalizationTheorem:
+      ∀(s: System).
+        RG_FixedPoint(s) <=> Criticality(s)
+    {
+      assume s: System
+
+      RG_FixedPoint(s) 
+      ⟺ ∀(k: Real, RG_Transform(s, k) = s)
+      ⟺ ∀(k: Real, Rescale(Coarse_Grain(s), k) = s)
+        by RG_Transform 
+      ⟺ ∀(k: Real, ∃(p: Parameters.CriticalParams, 
+          Dynamics(Rescale(Coarse_Grain(s), k), p) = Dynamics(s, p)))
+        ; scale invariance of dynamics
+      ⟺ ∃(p: Parameters.CriticalParams, 
+          ∀(δp: Parameters.CriticalParams, |δp| < ε ⟹ 
+            Qualitative(Dynamics(s, p + δp)) ≠ Dynamics(s, p)))  
+        ; singular change in dynamics  
+      ⟺ Criticality(s) 
+        by definition
+    }
+
+    theorem UniversalityTheorem:
+      ∀(s: System). 
+        RG_Universality(s, _, _, _, _) <=> ∃(s_c: System, o: Observables, 
+          (Universality(s_c, o, _, _) ∧ ∀(s_i: [System], k_c: Real, 
+            RG_FlowGenerator(s)(k_c) ∈ s_i ∧ RG_FlowGenerator(s_c)(k_c) ∈ s_i)))
+    {
+      assume s: System
+      
+      suppose RG_Universality(s, o, s_i, η, k_c)
+      
+      let s_c = RG_Transform(s, k_c)
+      RG_FlowGenerator(s)(k_c) = s_c ∈ s_i  ; by definition of RG_Universality
+      ∀(s' ∈ s_i, |o(s_c) - o(s')| < η)  ; by specializing RG_Universality to k = k_c
+      hence Universality(s_c, o, s_i, η)
+
+      ∀(s': System, s' ∈ s_i ⟹ RG_FlowGenerator(s')(k_c) ∈ s_i) 
+        by definition of RG_Universality
+
+      hence (Universality(s_c, o, s_i, η) ∧ 
+          ∀(s': [System], RG_FlowGenerator(s)(k_c) ∈ s' ∧ RG_FlowGenerator(s_c)(k_c) ∈ s'))
+    }
+
+    theorem MaximalEntropyPrinciple:
+      ∀(s: System, β: Real).
+        Equilibrium(s) ⟺ (s maximizes (Entropy(s) - β * Energy(s)))
+    {
+      assume s: System, β: Real
+
+      Equilibrium(s)
+      ⟺ ∀(δs: System, δ(Hamiltonian(s), δs) = 0)   ; by definition
+      ⟺ ∀(δs: System, δ(Energy(s), δs) = 0)   ; Hamiltonian = Energy by def.
+      
+      δ(Entropy(s) - β*Energy(s), δs) = 0 
+      ⟺ δ(Entropy(s), δs) - β*δ(Energy(s), δs) = 0
+      ⟺ δ(Entropy(s), δs) = 0 ∧ δ(Energy(s), δs) = 0  ; for all variations δs
+      ⟺ Equilibrium(s)
+
+      hence Equilibrium(s) ⟺ (s maximizes Entropy(s) - β*Energy(s))
+    }
+
+    theorem NetworkInformationDynamics:
+      ∀(s: System, X: AgentStates, Y: AgentStates).
+        ∑(Z ∈ s.AgentStates \ {X, Y}, I(X;Y|Z)) ≤ 
+          I(Future(X); Past(Y) | Past(X)) + I(Future(Y); Past(X) | Past(Y))
+    {
+      assume s: System, X: AgentStates, Y: AgentStates
+
+      I(X;Y|Z) = I(X;Y) - I(X;Y;Z)   ; by definition of conditional MI
+        = H(X) + H(Y) - H(X,Y) - (H(X,Z) + H(Y,Z) - H(X,Y,Z) - H(Z)) 
+        ≤ H(X) + H(Y) - H(X,Y)   ; since I(X;Y;Z) ≥ 0
+      ∑(Z, I(X;Y|Z)) ≤ |s.AgentStates| * (H(X) + H(Y) - H(X,Y))
+
+      I(Future(X); Past(Y) | Past(X)) = H(Future(X)|Past(X)) - H(Future(X)|Past(X),Past(Y))
+      I(Future(Y); Past(X) | Past(Y)) = H(Future(Y)|Past(Y)) - H(Future(Y)|Past(Y),Past(X))
+
+      |s.AgentStates| * (H(X) + H(Y) - H(X,Y)) 
+        ≤ H(Future(X)|Past(X)) + H(Future(Y)|Past(Y))
+        since H(Future(X)|Past(X),Past(Y)) ≤ H(X|Y) = H(X) - I(X;Y) ≤ H(X)
+        and  H(Future(Y)|Past(Y),Past(X)) ≤ H(Y|X) = H(Y) - I(X;Y) ≤ H(Y)
+        
+      hence ∑(Z, I(X;Y|Z)) ≤ 
+        I(Future(X); Past(Y) | Past(X)) + I(Future(Y); Past(X) | Past(Y))
+    }
+  }
+}
+
+This Concept blends ideas from the earlier examples, including:
+
+Describing complex systems in terms of state, dynamics, observables and parameters, similar to the metamaterial concept
+Using functional integrals and variational principles to characterize system behavior, as in the field theory concepts
+Renormalization group methods to study universality and scale invariance in complex systems
+Information-theoretic characterizations of complex system dynamics on networks
+
+The proofs derive some key theoretical principles of complex systems, such as the renormalization group approach to universality, the principle of maximum entropy, and bounds on information dynamics in networks. The language introduces a number of basic components for modeling complex systems and their properties.

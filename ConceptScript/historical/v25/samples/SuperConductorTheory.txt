@@ -1,0 +1,309 @@
+CONCEPT SuperConductorTheory {
+  LANGUAGE {
+    TYPE Material
+    TYPE Temperature = Real
+    TYPE CriticalTemperature <: Temperature
+    TYPE Resistance = Real
+    TYPE Current = Real
+    TYPE MagneticField = Real
+    TYPE Frequency = Real
+    TYPE EnergyGap = Real
+    TYPE CooperPair <: Particle
+    TYPE Phonon <: QuantumOfVibration
+    
+    FUNC Tc : Material -> CriticalTemperature
+    FUNC BCS(Tc : CriticalTemperature) : EnergyGap
+    FUNC LondonPenetrationDepth(m : Mass, n : Real, q : Real) : Length
+    FUNC CoherentLength(vF : Velocity, Δ : EnergyGap) : Length  
+    FUNC Hc1(λL : Length) : MagneticField
+    FUNC Hc2(Φ0 : Real, ξ : Length) : MagneticField
+    FUNC Resistance(T : Temperature, Tc : CriticalTemperature) : Resistance
+    FUNC Jc(Hc : MagneticField, ξ : Length) : Current
+    FUNC MeissnerEffect(H : MagneticField) : MagneticField
+    FUNC JosephsonEffect(δ : Real, ω : Frequency) : Current
+
+    AXIOM BCSTheory {
+      ∀ (m : Material).
+        BCS(Tc(m)) = 3.53 * k_B * Tc(m)
+    }
+
+    AXIOM LondonEquation {
+      ∀ (m : Mass) (n : Real) (q : Real).
+        LondonPenetrationDepth(m, n, q) = Sqrt((m * ε0) / (n * q^2 * μ0))
+    }
+
+    AXIOM CoherentLengthFormula {  
+      ∀ (vF : Velocity) (Δ : EnergyGap).
+        CoherentLength(vF, Δ) = ℏ * vF / (π * Δ)
+    }
+
+    AXIOM LowerCriticalField {
+      ∀ (λL : Length).  
+        Hc1(λL) = (Φ0 / (4 * π * λL^2)) * (ln(λL / ξ) + 0.5)
+    }
+
+    AXIOM UpperCriticalField {
+      ∀ (Φ0 : Real) (ξ : Length).
+        Hc2(Φ0, ξ) = Φ0 / (2 * π * ξ^2)  
+    }
+
+    AXIOM ResistivityTransition {
+      ∀ (T : Temperature) (Tc : CriticalTemperature).
+        T < Tc ⇒ Resistance(T, Tc) = 0
+    }
+
+    AXIOM CriticalCurrent {  
+      ∀ (Hc : MagneticField) (ξ : Length).
+        Jc(Hc, ξ) = Hc / (μ0 * ξ)
+    }
+
+    AXIOM MeissnerEffectEq {
+      ∀ (H : MagneticField).  
+        MeissnerEffect(H) = -H
+    }
+
+    AXIOM JosephsonEquations {
+      ∀ (δ : Real) (ω : Frequency).
+        JosephsonEffect(δ, ω) = Jc * Sin(δ) + (2 * q / ℏ) * V * Cos(ω * t)  
+    }
+    
+    NOTATION "Φ0" = 2.067833848e-15 -- Magnetic flux quantum  
+    NOTATION "ε0" = 8.854187812813e-12 -- Vacuum permittivity
+    NOTATION "μ0" = 1.25663706212e-6 -- Vacuum permeability
+    NOTATION "k_B" = 1.380649e-23 -- Boltzmann constant
+    NOTATION "ℏ" = 1.054571817e-34 -- Reduced Planck constant
+  }
+
+  STRUCTURE TypeISuperConductor(m : Material) {
+    REQUIRE ∀ (T : Temperature). T < Tc(m) ⇒ Resistance(T, Tc(m)) = 0
+    
+    REQUIRE ∀ (H : MagneticField). 
+      H < Hc1(LondonPenetrationDepth(m.CooperPairMass, m.CooperPairDensity, 2*q)) ⇒ 
+        MeissnerEffect(H) = -H
+
+    REQUIRE ∀ (H : MagneticField).
+      Hc1(...) < H ∧ H < Hc2(Φ0, CoherentLength(m.FermiVelocity, BCS(Tc(m)))) ⇒
+        ∃ (Hc : MagneticField). Jc(Hc, CoherentLength(...)) > 0
+  }
+
+  STRUCTURE TypeIISuperConductor(m : Material) {
+    REQUIRE ∀ (T : Temperature). T < Tc(m) ⇒ Resistance(T, Tc(m)) = 0
+
+    REQUIRE ∀ (H : MagneticField).  
+      H < Hc2(Φ0, CoherentLength(m.FermiVelocity, BCS(Tc(m)))) ⇒
+        ∃ (Hc : MagneticField). Jc(Hc, CoherentLength(...)) > 0
+        
+    REQUIRE LondonPenetrationDepth(m.CooperPairMass, m.CooperPairDensity, 2*q) >
+              CoherentLength(m.FermiVelocity, BCS(Tc(m)))
+  }
+
+  PROOFS {
+    THEOREM YBCOProperties {
+      STATEMENT:
+        LET YBCO : Material
+        IN Tc(YBCO) = 93 * K ∧
+           LondonPenetrationDepth(YBCO.CooperPairMass, YBCO.CooperPairDensity, 2*q) ≈ 150 * nm ∧
+           CoherentLength(YBCO.FermiVelocity, BCS(Tc(YBCO))) ≈ 1.5 * nm ∧  
+           TypeIISuperConductor(YBCO)
+
+      PROOF:
+        LET YBCO : Material
+        ASSUME (1) Tc(YBCO) = 93 * K,
+               (2) YBCO.CooperPairMass = 2 * m_e, 
+               (3) YBCO.CooperPairDensity = 1e27 / m^3,
+               (4) YBCO.FermiVelocity = 1.5e5 * m / s
+        
+        SHOW LondonPenetrationDepth(YBCO.CooperPairMass, YBCO.CooperPairDensity, 2*q) ≈ 150 * nm BY {
+          LondonPenetrationDepth(2 * m_e, 1e27 / m^3, 2 * q)  
+            = Sqrt((2 * m_e * ε0) / (1e27 / m^3 * (2*q)^2 * μ0)) BY LondonEquation
+            ≈ 150 * nm                                          BY ARITHMETIC  
+        }
+
+        SHOW CoherentLength(YBCO.FermiVelocity, BCS(Tc(YBCO))) ≈ 1.5 * nm BY {
+          BCS(93 * K) 
+            = 3.53 * k_B * 93 * K BY BCSTheory
+            ≈ 2.84e-2 * q * V     BY ARITHMETIC
+          
+          CoherentLength(1.5e5 * m/s, 2.84e-2 * q * V)
+            = ℏ * 1.5e5 * m/s / (π * 2.84e-2 * q * V) BY CoherentLengthFormula  
+            ≈ 1.5 * nm                                BY ARITHMETIC
+        }
+
+        SHOW TypeIISuperConductor(YBCO) BY {
+          HAVE ∀ (T : Temperature). T < 93 * K ⇒ Resistance(T, 93 * K) = 0 
+            BY ResistivityTransition, (1)
+
+          LET λ = 150 * nm, ξ = 1.5 * nm, Hc2 = Φ0 / (2 * π * ξ^2)
+          HAVE ∀ (H : MagneticField). H < Hc2 ⇒ ∃ (Hc : MagneticField). Jc(Hc, ξ) > 0
+            BY UpperCriticalField, CriticalCurrent
+
+          HAVE λ > ξ BY PREV
+        }
+    }
+
+    THEOREM JosephsonJunctionIV {
+      STATEMENT:
+        ∀ (δ : Real) (ω : Frequency) (Jc : Current) (V : Real).  
+          JosephsonEffect(δ, ω) = Jc * Sin(δ) + (2 * q / ℏ) * V * Cos(ω * t)
+
+      PROOF:
+        SHOW ∀ (δ : Real) (ω : Frequency) (Jc : Current) (V : Real).
+          JosephsonEffect(δ, ω) = Jc * Sin(δ) + (2 * q / ℏ) * V * Cos(ω * t)  
+        BY JosephsonEquations
+    }
+  }
+}
+
+
+
+
+
+CONCEPT SuperconductorTheory {
+  LANGUAGE {
+    TYPE Material
+    TYPE Temperature
+    TYPE CriticalTemperature <: Temperature
+    TYPE Resistance
+    TYPE Current
+    TYPE MagneticField
+    TYPE CooperPair
+    TYPE BandGap
+
+    FUNC Superconducting : Material -> Temperature -> Bool
+    FUNC ResistanceOf : Material -> Temperature -> Resistance
+    FUNC CriticalTemperatureOf : Material -> CriticalTemperature
+    FUNC CriticalCurrentDensity : Material -> Temperature -> Current
+    FUNC CriticalMagneticField : Material -> Temperature -> MagneticField
+    FUNC CooperPairDensity : Material -> Temperature -> Real
+    FUNC BandGapOf : Material -> BandGap
+    FUNC BCSTheory : Material -> CriticalTemperature
+
+    AXIOM ZeroResistance {
+      FORALL (m : Material) (t : Temperature).
+        Superconducting(m, t) <-> ResistanceOf(m, t) = 0
+    }
+
+    AXIOM MeissnerEffect {
+      FORALL (m : Material) (t : Temperature) (b : MagneticField).
+        Superconducting(m, t) -> 
+        EXISTS (bc : MagneticField).
+          CriticalMagneticField(m, t) = bc AND
+          (b > bc -> NOT Superconducting(m, t))
+    }
+  }
+
+  STRUCTURE BCSModel {
+    LET CooperPairBinding(m : Material, t : Temperature) -> Real =
+      EXP(-2 * BandGapOf(m) / (BoltzmannConstant * t))
+
+    DEF CriticalTemperature(m : Material) : Temperature =
+      BCSTheory(m)
+
+    REQUIRE FORALL (m : Material) (t : Temperature).
+      CooperPairDensity(m, t) ~ CooperPairBinding(m, t) AND
+      CriticalTemperature(m) ~ 1.13 * DebyeTemperature(m) * 
+        EXP(-1 / (DensityOfStates(m) * ElectronPhononCoupling(m)))
+  }
+
+  STRUCTURE LondonEquations {
+    REQUIRE FORALL (m : Material) (t : Temperature).
+      Superconducting(m, t) ->
+      EXISTS (l : Real).
+        PenetrationDepth(m, t) = l AND
+        MagneticField(m, t, l) = 0 AND
+        Current(m, t, l) = 0
+  }
+
+  STRUCTURE GinzburgLandauTheory {
+    LET OrderParameter(m : Material, t : Temperature, x : Real) -> Complex
+
+    REQUIRE FORALL (m : Material) (t : Temperature).
+      Superconducting(m, t) ->
+      EXISTS (psi : Complex -> Real -> Real).
+        FreeEnergy(m, t, psi) = 
+          Integral(
+            GradientEnergy(Gradient(psi)(x), t) +
+            MagneticEnergy(MagneticField(psi)(x), t) + 
+            CondensationEnergy(psi(x), t)
+          )(x)
+        OVER AllSpace  
+  }
+
+  PROOFS {
+    THEOREM IsotopeEffect {
+      STATEMENT:
+        FORALL (m : Material) (i1 i2 : Isotope | ElementOf(i1) = ElementOf(i2)).
+          LET m1 = ReplacedIsotope(m, i1),
+              m2 = ReplacedIsotope(m, i2)  
+          IN CriticalTemperature(m1) / CriticalTemperature(m2) ~ 
+             (Mass(i2) / Mass(i1))^(1/2)
+      
+      PROOF:
+        LET alpha = ElectronPhononCoupling(m),
+            theta = DebyeTemperature(m),
+            M1 = Mass(i1),  
+            M2 = Mass(i2)
+        IN {
+          HAVE DebyeTemperature(m1) ~ theta * (M2 / M1)^(1/2)  BY DebyeTheorem
+          HAVE CriticalTemperature(m1) ~ 1.13 * DebyeTemperature(m1) * EXP(-1 / (DensityOfStates(m) * alpha)) BY BCSModel
+          HAVE CriticalTemperature(m2) ~ 1.13 * DebyeTemperature(m2) * EXP(-1 / (DensityOfStates(m) * alpha)) BY BCSModel
+          HENCE CriticalTemperature(m1) / CriticalTemperature(m2) ~ (M2 / M1)^(1/2)
+        }
+    }
+
+    THEOREM TypeIConductivity {
+      STATEMENT:  
+        FORALL (m : Material).
+          LET t = Temperature, 
+              bc1 = LowerCriticalField(m, t),
+              bc2 = UpperCriticalField(m, t)
+          IN Superconducting(m, t) AND MagneticField(m, t) IN (bc1, bc2) ->
+             Mixed(Superconducting(m, t), Normal(m, t))
+      
+      PROOF:
+        LET m : Material, t : Temperature
+        ASSUME Superconducting(m, t),
+               MagneticField(m, t) IN (bc1, bc2)
+        SHOW Mixed(Superconducting(m, t), Normal(m, t)) BY {
+          LET b = MagneticField(m, t),
+              psi = OrderParameter(m, t)
+          IN {  
+            HAVE FreeEnergy(m, t, psi) MINIMIZED_AT psi != 0 BY GinzburgLandauTheory
+            HAVE psi(x) = 0 WHERE MagneticField(x) > bc2 BY GinzburgLandauTheory
+            HENCE EXISTS (x : Real).
+              Superconducting(m, t, x) AND Normal(m, t, x)  
+          }
+        }
+    }
+
+    THEOREM FluxQuantization {
+      STATEMENT:
+        FORALL (m : Material) (t : Temperature).
+          LET psi = OrderParameter(m, t)
+          IN Superconducting(m, t) ->  
+             ContourIntegral(psi * Gradient(Phase(psi)))(x) OVER ClosedPath(x) =
+             n * PlanckConstant / (2 * ElectronCharge)
+        
+      PROOF:
+        LET m : Material, t : Temperature, psi = OrderParameter(m, t)
+        ASSUME Superconducting(m, t)
+        SHOW ContourIntegral(psi * Gradient(Phase(psi)))(x) OVER ClosedPath(x) =
+             n * PlanckConstant / (2 * ElectronCharge)
+        BY {
+          LET j = Current(psi), a = MagneticPotential(psi)
+          HAVE Curl(psi * Gradient(Phase(psi))) = psi * (Gradient(Phase(psi)) x Gradient(ln(Magnitude(psi))))
+          HAVE Divergence(j) = 0 BY MaxwellEquations
+          HAVE j = -ElectronCharge * psi^2 / ElectronMass * (Gradient(Phase(psi)) - 2*ElectronCharge*a / PlanckConstant) 
+          HENCE Curl(j) = -ElectronCharge * psi^2 / ElectronMass * 
+                (2*ElectronCharge*Curl(a) / PlanckConstant + Curl(psi * Gradient(Phase(psi))))
+          HENCE Curl(a) + Curl(psi * Gradient(Phase(psi))) / (2*ElectronCharge) = 0
+          HENCE ContourIntegral(psi * Gradient(Phase(psi)))(x) OVER ClosedPath(x) = 
+                -2*ElectronCharge * SurfaceIntegral(Curl(a))(s) OVER Surface(ClosedPath)
+          HENCE ContourIntegral(psi * Gradient(Phase(psi)))(x) OVER ClosedPath(x) =
+                -2*ElectronCharge * MagneticFlux(Surface(ClosedPath))
+          HENCE ContourIntegral(psi * Gradient(Phase(psi)))(x) OVER ClosedPath(x) =
+                n * PlanckConstant / (2 * ElectronCharge)  
+        }
+    }
+  }
+}

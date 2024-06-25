@@ -1,0 +1,126 @@
+STRUCTURE QuantizedTransformerCA {
+  PARAMETERS {
+    Width : Int 
+    Height : Int
+    NumLayers : Int
+    HiddenSize : Int
+    NumHeads : Int 
+    FFSize : Int
+  }
+
+  NOTATION {
+    ⊛(x, W) := TernaryAccumulate(x, W)
+    τ(x) := SiLU(x) 
+    S(x) := Softmax(x)
+    LN(x) := LayerNorm(x)
+  }
+
+  DEF Cell := 0 | 1
+  DEF Grid := TensorLike[[Height, Width], Cell]
+  DEF Coord := (Int, Int)
+
+  DEF neighborhood(coord : Coord) -> SET(Coord) := {
+    LET (x, y) := coord IN {
+      (x', y') 
+      FOR x' : [x - 1 .. x + 1],
+          y' : [y - 1 .. y + 1] 
+      IF (x', y') != (x, y) AND 
+         0 <= x' < Width AND
+         0 <= y' < Height  
+    }
+  }
+
+  STRUCTURE TernaryLinear(InputSize, OutputSize) {
+    DEF weight : TensorLike[[InputSize, OutputSize], {-1, 0, 1}]
+    DEF bias : TensorLike[[OutputSize], Float] 
+
+    DEF forward(input : TensorLike[InputSize]) -> TensorLike[OutputSize] := (
+      input ⊛ weight + bias
+    )
+  }
+
+  STRUCTURE TernaryMHA(HiddenSize, NumHeads) {
+    DEF head_size := HiddenSize / NumHeads
+    DEF query_proj : TernaryLinear(HiddenSize, HiddenSize)
+    DEF key_proj : TernaryLinear(HiddenSize, HiddenSize) 
+    DEF value_proj : TernaryLinear(HiddenSize, HiddenSize)
+    DEF output_proj : TernaryLinear(HiddenSize, HiddenSize)
+
+    DEF forward(x : TensorLike[HiddenSize]) -> TensorLike[HiddenSize] := (
+      LET q := SPLIT(query_proj.forward(x), NumHeads),
+          k := SPLIT(key_proj.forward(x), NumHeads),
+          v := SPLIT(value_proj.forward(x), NumHeads),  
+          scores := [S(q_i ⊛ TRANSPOSE(k_i) / SQRT(head_size))
+                     FOR (q_i, k_i) : ZIP(q, k)],
+          attn := [score ⊛ v_i FOR (score, v_i) : ZIP(scores, v)], 
+          concat := CONCAT(attn, -1)
+      IN output_proj.forward(concat)  
+    )
+  }
+
+  STRUCTURE TernaryFFN(HiddenSize, FFSize) {
+    DEF proj1 : TernaryLinear(HiddenSize, FFSize) 
+    DEF proj2 : TernaryLinear(FFSize, HiddenSize)
+
+    DEF forward(x : TensorLike[HiddenSize]) -> TensorLike[HiddenSize] := (
+      LET expanded := τ(proj1.forward(x)) 
+      IN proj2.forward(expanded)
+    ) 
+  }
+   
+  STRUCTURE TransformerLayer(HiddenSize, NumHeads, FFSize) {
+    DEF mha := TernaryMHA(HiddenSize, NumHeads)
+    DEF ffn := TernaryFFN(HiddenSize, FFSize) 
+    DEF mha_norm := LayerNorm(HiddenSize)
+    DEF ffn_norm := LayerNorm(HiddenSize)
+
+    DEF forward(x : TensorLike[HiddenSize]) -> TensorLike[HiddenSize] := (
+      LET mha_out := mha.forward(x),
+          mha_residual := LN(x + mha_out), 
+          ffn_out := ffn.forward(mha_residual),
+          ffn_residual := LN(mha_residual + ffn_out)  
+      IN ffn_residual
+    )
+  }
+
+  DEF input_proj : TernaryLinear(2, HiddenSize)
+  DEF output_proj : TernaryLinear(HiddenSize, 1)
+  DEF pos_emb : TensorLike[[Height * Width, HiddenSize], Float]
+  
+  DEF layers : List[TransformerLayer]
+
+  DEF init := (
+    layers := [TransformerLayer(HiddenSize, NumHeads, FFSize)
+               FOR _ : RANGE(NumLayers)]  
+  )
+
+  DEF forward(grid : Grid) -> Grid := (
+    LET flat_grid := RESHAPE(grid, [Height * Width]),
+        input_seq := CONCAT([[grid[y][x], count_alive_neighbors(grid, (x, y))]
+                             FOR y : [0 .. Height - 1], x : [0 .. Width - 1]], 0),
+        input_emb := input_proj.forward(input_seq) + pos_emb,
+        hidden := FOLDL(
+          (h, layer) -> layer.forward(h), 
+          input_emb,
+          layers  
+        ),
+        logits := output_proj.forward(hidden),
+        output_seq := σ(logits) >= 0.5,
+        output_grid := RESHAPE(output_seq, [Height, Width])
+    IN output_grid  
+  )
+
+  DEF evolve(grid : Grid, steps : Int) -> Grid := (
+    ITERATE(forward, grid, steps)  
+  )
+
+  [∀grid : Grid, ∀coord : Coord .
+    forward(grid)[coord] = forward(grid)[coord]
+  ] # Determinism
+
+  [∀grid : Grid . 
+    SUM(forward(grid)) = SUM(grid)
+  ] # Conservation of Life (on average)
+
+  RETURN (Grid, evolve)
+}

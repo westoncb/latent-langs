@@ -1,0 +1,127 @@
+CONCEPT QuantumComputation {
+
+  LANGUAGE {
+    TYPE Qubit
+    TYPE QState[n : ℕ] = Vector[2^n]
+    TYPE Unitary[n : ℕ] = Matrix[2^n 2^n]
+    
+    CONST |0⟩ |1⟩ : Qubit
+    CONST H X Y Z : Unitary[1]
+    FUNC Tensor[n m : ℕ] : Unitary[n] -> Unitary[m] -> Unitary[n+m]
+    FUNC Measure[n : ℕ] : QState[n] -> Vector[n]
+    
+    NOTATION "U |ψ⟩" = Apply(U, |ψ⟩)
+    NOTATION "|ψ⟩ ⊗ |φ⟩" = Tensor(|ψ⟩, |φ⟩)
+    
+    REWRITE ConjugateTransposeIsInverse[n : ℕ] : ∀ (U : Unitary[n]) . U† ∘ U => I
+    REWRITE TensorProduct[n m : ℕ] : ∀ (U : Unitary[n]) (V : Unitary[m]) . (U ⊗ V) ∘ (|ψ⟩ ⊗ |φ⟩) => (U |ψ⟩) ⊗ (V |φ⟩)
+  }
+  
+  STRUCTURE {
+    DEF Qubit = Vector[2]
+    DEF |0⟩ = [1, 0]
+    DEF |1⟩ = [0, 1]
+    
+    DEF H = 1/√2 · [1  1
+                    1 -1]
+
+    DEF X = [0 1   DEF Y = [0 -i   DEF Z = [1  0
+             1 0]           i  0]           0 -1]
+    
+    DEF Tensor[n m : ℕ] = λ (U : Matrix[2^n 2^n]) (V : Matrix[2^m 2^m]) . 
+      (U ⊗ I[2^m]) ∘ (I[2^n] ⊗ V)
+
+    DEF Measure[n : ℕ] = λ (|ψ⟩ : Vector[2^n]) .
+      SAMPLE |x⟩ FROM |ψ⟩ WITH PROBABILITY |⟨x|ψ⟩|² FOR |x⟩ ∈ Basis(2^n)
+      RETURN [-log√|⟨x₁|ψ⟩|, ..., -log√|⟨xₙ|ψ⟩|] WHERE |x⟩ = |x₁⟩ ⊗ ... ⊗ |xₙ⟩
+
+    AXIOM InitialState[n : ℕ] : ∀ (i : 𝔽₂ⁿ) . ⟨i|ψ₀⟩ = if i = 0...0 then 1 else 0
+  }
+  
+  PROOFS {
+    TACTIC DecomposeState[n : ℕ] (|ψ⟩ : QState[n]) {
+      |ψ⟩ = ∑ (i : 𝔽₂ⁿ) ⟨i|ψ⟩·|i⟩  BY Superposition 
+    }
+
+    THEOREM NoCloning {
+      STATEMENT : ¬∃ (U : Unitary[2]) . ∀ (|ψ⟩ : Qubit) . U (|ψ⟩ ⊗ |0⟩) = |ψ⟩ ⊗ |ψ⟩
+      
+      PROOF {
+        ASSUME ∃ (U : Unitary[2]) . ∀ (|ψ⟩ : Qubit) . U (|ψ⟩ ⊗ |0⟩) = |ψ⟩ ⊗ |ψ⟩
+        
+        LET (|ψ⟩ : Qubit) = α|0⟩ + β|1⟩  
+        LET (|φ⟩ : Qubit) = γ|0⟩ + δ|1⟩
+        
+        HAVE : U (|ψ⟩ ⊗ |0⟩) = α|00⟩ + β|11⟩
+        HAVE : U (|φ⟩ ⊗ |0⟩) = γ|00⟩ + δ|11⟩
+
+        HAVE : ⟨ψ|U†U|φ⟩ = ⟨ψ ⊗ 0|φ ⊗ 0⟩ = ⟨ψ|φ⟩  BY ConjugateTransposeIsInverse
+        
+        HAVE : ⟨ψ ⊗ ψ|φ ⊗ φ⟩ = ⟨ψ|φ⟩² ≠ ⟨ψ|φ⟩ FOR |ψ⟩ ≠ |φ⟩
+        
+        HENCE CONTRADICTION
+      }
+    }
+
+    THEOREM QuantumParallelism[n : ℕ] {
+      STATEMENT : ∀ (f : 𝔽₂ⁿ -> 𝔽₂ᵐ) . ∃ (Uₚ : Unitary[m+n]) . 
+        ∀ (|x⟩ : QState[n]) . Uₚ(|x⟩ ⊗ |0...0⟩) = |x⟩ ⊗ |f(x)⟩
+
+      PROOF {
+        ASSUME [f : 𝔽₂ⁿ -> 𝔽₂ᵐ] 
+
+        LET |ψ₀⟩ : QState[m+n] = |0...0⟩ ⊗ |0...0⟩
+        
+        HAVE : |ψ₀⟩ = ∑ (x : 𝔽₂ⁿ) |x⟩ ⊗ |0...0⟩  BY DecomposeState
+        
+        APPLY Uᵦ : |x⟩ ⊗ |y⟩ -> |x⟩ ⊗ |y ⊕ f(x)⟩  FOR ALL x, y
+        
+        HAVE : Uᵦ|ψ₀⟩ = ∑ (x : 𝔽₂ⁿ) |x⟩ ⊗ |f(x)⟩
+        
+        LET Uₚ = (I[n] ⊗ Uᵦ[m]) ∘ (H[n] ⊗ I[m])
+
+        FORALL (|x⟩ : QState[n]) {
+          HAVE : 
+            Uₚ(|x⟩ ⊗ |0...0⟩) 
+              = (I[n] ⊗ Uᵦ[m]) ∘ (H[n] ⊗ I[m]) (|x⟩ ⊗ |0...0⟩) 
+              = (I[n] ⊗ Uᵦ[m]) (∑ (y : 𝔽₂ⁿ) ⟨y|H|x⟩·|y⟩ ⊗ |0...0⟩)
+              = ∑ (y : 𝔽₂ⁿ) ⟨y|H|x⟩·|y⟩ ⊗ |f(y)⟩
+              = |x⟩ ⊗ |f(x)⟩  WHEN MEASURED
+        }
+        
+        WITNESS Uₚ
+      }
+    }
+
+    THEOREM GroversSearch[n : ℕ] {
+      STATEMENT : ∀ (f : 𝔽₂ⁿ -> 𝔹) . ∃ (Alg : QState[n] -> 𝔽₂ⁿ) . 
+        ∀ (|ψ⟩ : QState[n]) . Alg(|ψ⟩) = x WHERE f(x) = 1
+        USING O(√(2^n)) QUERIES TO f
+      
+      PROOF {
+        ASSUME [f : 𝔽₂ⁿ -> 𝔹]
+
+        LET |s⟩ : QState[n] = H^⊗n |0...0⟩ = ∑ (x : 𝔽₂ⁿ) |x⟩
+        
+        LET Uₛ = 2|s⟩⟨s| - I
+        LET Uᵣ = I - 2|x⟩⟨x| WHERE f(x) = 1
+        LET UₓUₛ = -Uᵣ ∘ Uₛ
+        
+        DEF Alg(|ψ⟩ : QState[n]) -> 𝔽₂ⁿ {
+          ITERATE ⌊π/4 · √(2^n)⌋ TIMES {
+            |ψ⟩ := UₓUₛ |ψ⟩
+          }
+          RETURN Measure(|ψ⟩)
+        }
+        
+        FORALL (|ψ⟩ : QState[n]) {
+          LET |ψ'⟩ = Alg(|ψ⟩)
+          HAVE : |⟨x|ψ'⟩|² ≈ 1 WHERE f(x) = 1
+        }
+
+        WITNESS Alg
+      }
+    }
+
+  }
+}

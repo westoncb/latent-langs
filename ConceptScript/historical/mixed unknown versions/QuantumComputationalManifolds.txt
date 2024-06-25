@@ -1,0 +1,135 @@
+CONCEPT QuantumComputationalManifolds {
+  LANGUAGE {
+    type QState = Ket(ℂ^n)
+    type Unitary = Matrix(ℂ^(n × n))
+    type Observable = Hermitian(Matrix(ℂ^(n × n)))
+    type QCircuit = List(Gate)
+    type Gate = Unitary | Measurement(Observable)
+    type Manifold = Riemannian(Manifold) | Kahler(Manifold)
+
+    func bra(ψ: QState): QState
+    func tensorProduct(ψ: QState, φ: QState): QState
+    func apply(U: Unitary, ψ: QState): QState 
+    func measure(O: Observable, ψ: QState): ℝ
+    func eval(C: QCircuit, ψ: QState): QState
+    func entropy(ψ: QState): ℝ
+
+    pred isIsometry(U: Unitary) = (U† ∘ U = I)
+    pred isKahler(M: Manifold) = ∃(g: Metric, ω: Symplectic, J: Complex). 
+      (g(J X, J Y) = g(X, Y)) ∧ (ω(X, Y) = g(J X, Y))
+
+    notation "⟨ψ|" = bra(ψ)  
+    notation "|ψ⟩ ⊗ |φ⟩" = tensorProduct(ψ, φ)
+    notation "U |ψ⟩" = apply(U, ψ)
+    notation "⟨O⟩_ψ" = measure(O, ψ)
+    notation "⟦C⟧(ψ)" = eval(C, ψ)
+    notation "S(ψ)" = entropy(ψ)
+
+    infer Mix(ψ: QState, p: ℝ^n) = ∑_i p_i |ψ_i⟩⟨ψ_i| 
+    notation "M ⋈ N" = ProductManifold(M, N)
+
+    infer StateEvolution(C: QCircuit, ψ: QState):
+      ⟦C⟧(ψ) ~> U_n ∘ ... ∘ U_1 |ψ⟩
+
+    infer Measurement(O: Observable, ψ: QState):
+      ⟨O⟩_ψ ⟹ Δ S(ψ) > 0
+
+    infer TensorDecomposition(M: Manifold, N: Manifold, ψ: QState, C: QCircuit):  
+      (⟦C⟧(ψ) ∈ M ⋈ N) -> ∃(ψ_M: QState, ψ_N: QState).
+        (ψ = ψ_M ⊗ ψ_N) ∧ (⟦C⟧(ψ_M) ∈ M) ∧ (⟦C⟧(ψ_N) ∈ N)
+  }
+
+  STRUCTURE {
+    GHZState := 1/√2 (|000⟩ + |111⟩)
+
+    BellBasis := { 
+      |Φ+⟩ = 1/√2 (|00⟩ + |11⟩), 
+      |Φ-⟩ = 1/√2 (|00⟩ - |11⟩),
+      |Ψ+⟩ = 1/√2 (|01⟩ + |10⟩),
+      |Ψ-⟩ = 1/√2 (|01⟩ - |10⟩)
+    }
+    
+    H := 1/√2 [1 1; 1 -1]   ; Hadamard gate
+    CNOT := |0⟩⟨0| ⊗ I + |1⟩⟨1| ⊗ X    ; Controlled-NOT gate
+    
+    R(θ) := [
+      cos(θ/2), -sin(θ/2);
+      sin(θ/2),  cos(θ/2)
+    ]
+    
+    S(ρ) := - tr(ρ log(ρ))    ; von Neumann entropy
+  }
+
+  PROOFS {
+    theorem NoCloning:
+      ∀(ψ: QState, U: Unitary).
+        ¬∃φ. U |ψ⟩ ⊗ |φ⟩ = |ψ⟩ ⊗ |ψ⟩
+    {
+      assume ∃φ. U |ψ⟩ ⊗ |φ⟩ = |ψ⟩ ⊗ |ψ⟩
+      then ∀α, β. U (α|0⟩ + β|1⟩) ⊗ |φ⟩ = (α|0⟩ + β|1⟩) ⊗ (α|0⟩ + β|1⟩) 
+
+      U (|0⟩ ⊗ |φ⟩) = |0⟩ ⊗ |0⟩ =: |u00⟩
+      U (|1⟩ ⊗ |φ⟩) = |1⟩ ⊗ |1⟩ =: |u11⟩ 
+
+      ; Linearity of U 
+      U ((α|0⟩ + β|1⟩) ⊗ |φ⟩) 
+        = α U (|0⟩ ⊗ |φ⟩) + β U (|1⟩ ⊗ |φ⟩)
+        = α|u00⟩ + β|u11⟩  
+        ≠ (α|0⟩ + β|1⟩) ⊗ (α|0⟩ + β|1⟩) = α^2 |00⟩ + αβ |01⟩ + αβ |10⟩ + β^2 |11⟩ 
+
+      hence Contradiction 
+    }
+
+    theorem EntanglementEntropy:
+      ∀(ψ: QState, M: Manifold, N: Manifold).
+        ψ ∈ M ⋈ N ⊢ S(ψ) = S(tr_N |ψ⟩⟨ψ|) = S(tr_M |ψ⟩⟨ψ|)  
+    {
+      assume ψ ∈ M ⋈ N
+      let ρ_M = tr_N |ψ⟩⟨ψ|
+      ρ_N = tr_M |ψ⟩⟨ψ|
+
+      ; Schmidt decomposition
+      ψ〉 = ∑_i √λ_i |i⟩_M ⊗ |i⟩_N,  λ_i ≥ 0, ∑_i λ_i = 1
+      
+      ρ_M = ∑_i λ_i |i⟩⟨i|
+      ρ_N = ∑_i λ_i |i⟩⟨i|
+
+      S(ρ_M) = S(ρ_N) = - ∑_i λ_i log(λ_i) = S(ψ)
+    }
+
+    theorem HolographicDuality:
+      ∀(C: QCircuit, ψ: QState, M: Kahler, N: Kahler).
+        ⟦C⟧(ψ) ∈ M ⋈ N ⊢ 
+        ∃(C_M: QCircuit, C_N: QCircuit).
+          ⟦C⟧(ψ) ≈ ⟦C_M⟧(ψ_M) ⊗ ⟦C_N⟧(ψ_N)  
+    {
+      assume ⟦C⟧(ψ) ∈ M ⋈ N
+      let ψ' = ⟦C⟧(ψ)
+      
+      ψ'〉 = ∑_i √λ_i |i⟩_M ⊗ |i⟩_N   ; by Schmidt decomposition
+
+      let {|i⟩_M} and {|i⟩_N} be orthonormal bases for the Hilbert spaces of M and N
+      extend to orthonormal bases {|i, α⟩_M} and {|i, β⟩_N}
+
+      ; Expand ψ' in the tensor product basis
+      |ψ'⟩ = ∑_i,α,β A_iαβ |i, α⟩_M ⊗ |i, β⟩_N
+           = ∑_i,α A_iα |i, α⟩_M ⊗ (∑_β A_iβ/A_iα |i, β⟩_N)
+           = ∑_i,α A_iα |i, α⟩_M ⊗ |φ_i⟩_N
+
+      ⟦C_M⟧(ψ_M) = ∑_i,α A_iα |i, α⟩_M
+      ⟦C_N⟧(|i⟩_N) = |φ_i⟩_N
+
+      ⟦C⟧(ψ) = ⟦C_M⟧(ψ_M) ⊗ ⟦C_N⟧(ψ_N) 
+    }
+  }
+}
+
+This Concept blends ideas from quantum computation, thermodynamics, and differential geometry:
+
+It defines quantum states, unitaries, observables, and quantum circuits, similar to the lambda calculus concepts.
+It introduces notions of entropy and Kahler manifolds, drawing from the thermodynamics and geometry concepts.
+The NoCloning theorem is proven similar to Gödel's incompleteness theorems, by assuming the opposite and deriving a contradiction.
+Entanglement entropy is shown to be equal for subsystems, analogous to Landauer's principle equating entropy and energy.
+A holographic duality is proven where a quantum circuit on an entangled state can be decomposed into circuits on the subsystems, loosely inspired by Stokes' theorem relating integrals on a manifold and its boundary.
+
+The Concept aims to explore deep connections between quantum information, spacetime geometry, and thermodynamics in a formal axiomatic framework.

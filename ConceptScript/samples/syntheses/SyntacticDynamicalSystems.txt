@@ -1,0 +1,120 @@
+CONCEPT SyntacticDynamicalSystems {
+  IMPORTS {
+    GeometricInteractionNets
+    GeometricGrammar
+  }
+
+  PARAMETERS {
+    n : Nat  
+  }
+  
+  CONTEXT {
+    TYPES {
+      SynState := SynExpression
+      GeoState := GeoExpression
+
+      DynamicalSystem {
+        SCALAR_FIELD State : Type  
+        SCALAR_FIELD Evolution : FUNC(State, Time -> State) 
+        AXIOM Determinism(s : State, t t' : Time) : 
+          Evolution(s, t+t') = Evolution(Evolution(s, t), t')
+      }
+      
+      GeoGrammarSystem := DynamicalSystem WITH {  
+        REPLACE State := GeoState
+      }
+
+      SyntacticDynamicalSystem := DynamicalSystem WITH {
+        REPLACE State := SynState
+        SCALAR_FIELD Reduction : FUNC(SynState -> SynState)
+        CONSTRAINT ReductionIsEvolution(s : SynState, t : Time) :
+          Reduction(s) = Evolution(s, t)
+      }
+    }
+    
+    STRUCTURES {
+      STRUCTURE LinearSystem EXTENDS GeoGrammarSystem {
+        AXIOM Linearity(s s' : GeoState, t : Time, a : Scalar) :
+          Evolution(a*s + s', t) = a*Evolution(s, t) + Evolution(s', t)
+      }  
+
+      STRUCTURE InteractionNet EXTENDS SyntacticDynamicalSystem {
+        FIELD Symbols : SET(Symbol)  
+        FIELD System : GeometricInteractionNets.InteractionSystem
+        FIELD Embedding : FUNC(SynState -> GeometricInteractionNets.EmbeddedNet)
+
+        AXIOM InteractionReduction(s : SynState) :
+          Reduction(s) = s' WHERE 
+            Embedding(s) →*_System Embedding(s')
+      }
+    }
+  }
+
+  TRANSFORMERS {
+    DERIVE GeoFlow(D : GeoGrammarSystem) : VectorField(D.State) {
+      GIVEN (s : GeoState) 
+      RETURN D.Evolution(s, δt) - s WHERE δt infinitesimal time  
+    }
+    
+    REWRITE SyntacticLinearization(L : Language, G : GeometricGrammar) : 
+      SyntacticDynamicalSystem -> LinearSystem {
+        MATCH D : SyntacticDynamicalSystem
+        REWRITE WITH State <- GeoState {
+          s => Linearize(G)(s)
+          Evolution(s, t) => Linearize(G)(D.Evolution(Unlinearize(G)(s), t))
+        } WHERE
+          Linearize(e : SynExpression) : GeoExpression = 
+            THE ϕ . ϕ.Support ≅ ⟦e.SyntacticType⟧ ∧ ϕ.Valuation ≅ e.SemanticValue,
+          Unlinearize(ϕ : GeoExpression) : SynExpression =
+            THE e . e.SyntacticType IN L ∧ e.SemanticValue ≅ ϕ.Valuation
+      }
+    }
+  }
+
+  PROOFS {
+    THEOREM DeterminismOfEmbeddedNets {
+      ∀ (e e₁ e₂ : GeometricInteractionNets.EmbeddedNet, S : InteractionSystem) . 
+        e →*_S e₁ ∧ e →*_S e₂ ⇒ e₁ ≅ e₂
+    }
+    PROOF {
+      <OMITTED>
+    }
+    
+    THEOREM LinearizationCommutesWithEvolution {
+      ∀ (L : Language, G : GeometricGrammar, 
+         D : SyntacticDynamicalSystem, s : SynState, t : Time) .
+        Linearize(G)(D.Evolution(s, t)) = 
+        SyntacticLinearization(L, G)(D).Evolution(Linearize(G)(s), t)  
+    }
+    PROOF {
+      ASSUME L : Language, G : GeometricGrammar, 
+             D : SyntacticDynamicalSystem, s : SynState, t : Time
+      
+      Linearize(G)(D.Evolution(s, t))
+        = Linearize(G)(D.Evolution(Unlinearize(G)(Linearize(G)(s)), t))
+          BY Language_Shape_Correspondence
+        = SyntacticLinearization(L, G)(D).Evolution(Linearize(G)(s), t)  
+          BY SyntacticLinearization.Rewrite
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE SimpleInteractionNet : InteractionNet {
+      LET Symbols := {"N", "V"}
+      LET System := GeometricInteractionNets.SystemForBraids
+      LET Embedding(w + v) := (net, emb) WHERE
+        net := ({("N", [(0,1)]) : w.Length}, {("V", [(0,1),(1,2)]) : v.Length}, 
+                {((i,1), (i+w.Length,1)) : i < w.Length}, 
+                {((i,2), (i+1,1)) : w.Length ≤ i < w.Length+v.Length}),
+        emb := n ↦ Line(0, n, 1, n+1), v ↦ Triangle(v-0.5, v, v+0.5)
+      
+      { Symbols, System, Embedding }
+    }
+
+    EXAMPLE Language_ShapeCorrespondences {
+      C^∞(R^3) ≅ ⟦NP⟧ 
+      X(S^2) ≅ ⟦∂Direction⟧
+      Ω^1(M) ≅ ⟦↑Path⟧ WHERE M = ⟦Location⟧
+    }
+  }
+}

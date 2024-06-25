@@ -1,0 +1,523 @@
+CONCEPT GeometricMaterialsScience {
+  EXTENDS SymbolicDifferentialGeometry {
+    type Material = Tuple(Structure, Properties, Processes)
+    type Structure = Graph(Elements, Bonds)
+    type Elements = Atom | Molecule | Defect
+    type Bonds = Enumeration(Ionic, Covalent, Metallic, vanDerWaals, HydrogenBond) 
+    
+    type Properties = (Mechanical: Tensor, Thermal: Function, Electromagnetic: VectorField)
+    type Mechanical = (1,1)-Tensor(Material)
+    type Thermal = Function(Material, ℝ)
+    type Electromagnetic = VectorField(Material)
+    
+    type Processes = Flow(Properties)
+    type Flow = VectorField(Properties)
+    
+    type MaterialManifold = Manifold(Material)
+    type StructureManifold = Lie(Structure) ; Structure forms a Lie group
+    type PropertyManifold = Riemannian(Properties)
+    type ProcessManifold = Manifold(Processes)
+    
+    type StructureFlow = Flow(StructureManifold)  
+    type PropertyFlow = Flow(PropertyManifold)
+    type CoupledFlow = Coupling(StructureFlow, PropertyFlow)
+    
+    notation "𝓜" = Material
+    notation "𝓢" = Structure
+    notation "𝓟" = Properties
+    notation "𝓕" = Processes
+    notation "𝓕ₛ" = StructureFlow  
+    notation "𝓕ₚ" = PropertyFlow
+    notation "ℱ" = CoupledFlow
+  }
+  
+  STRUCTURE {  
+    MaterialGeometry(𝓜: Material):
+      𝓜 = (𝓢, 𝓟, 𝓕) with
+        𝓢: StructureManifold,
+        𝓟: PropertyManifold,
+        𝓕: ProcessManifold,
+        and ℱ: 𝓢 ⨯ 𝓟 → 𝓕 a smooth map.
+        
+    MaterialSymmetry(ℱ: CoupledFlow, g: Lie(StructureManifold)):
+      ℱ(g ⋅ 𝓢, 𝓟) = g ⋅ ℱ(𝓢, 𝓟) 
+      i.e., material processes ℱ are equivariant under structural symmetries g
+      
+    MaterialBalance(𝓢: Structure, 𝓟: Properties):  
+      d[𝓢] + δ𝓢 = ∇ ⋅ 𝓕ₛ(𝓢, 𝓟) ; Structural evolution
+      d[𝓟] + δ𝓟 = -∇ ⋅ 𝓕ₚ(𝓢, 𝓟) ; Property transport
+      coupling structural changes to property fluxes
+      
+    MultiscaleDecomposition(𝓢: Structure, 𝓟: Properties, ε: Scale):
+      𝓢 = 𝓢_macro(ε) ⊕ 𝓢_meso(ε) ⊕ 𝓢_micro(ε)  
+      𝓟 = 𝓟_macro(ε) ⊕ 𝓟_meso(ε) ⊕ 𝓟_micro(ε)
+      decomposing structures and properties at multiple scales ε
+  }
+    
+  PROOFS {
+    theorem MaterialConnection(𝓢: Structure, 𝓟: Properties):
+      ∀ u ∈ 𝓢, v ∈ 𝓟. ∇_u v = Π_𝓟 (∂_u v)
+      where ∇ is a material connection relating structural changes to property gradients 
+    {
+      assume u ∈ 𝓢, v ∈ 𝓟
+      let Π_𝓟: Tangent(𝓢 ⨯ 𝓟) → Tangent(𝓟) be the canonical projection
+      
+      consider the coupled flow ℱ: 𝓢 ⨯ 𝓟 → 𝓕 
+      have ∂_u ℱ(𝓢, 𝓟) = 𝓕ₛ by definition of StructureFlow
+      have ∂_v ℱ(𝓢, 𝓟) = 𝓕ₚ by definition of PropertyFlow
+      
+      let ∇_u v := Π_𝓟 (∂_u v)  ; Material connection
+      
+      MaterialBalance(𝓢, 𝓟) 
+      hence d[𝓢] = ∇ ⋅ 𝓕ₛ and d[𝓟] = -∇ ⋅ 𝓕ₚ
+      hence ∂_u d[𝓢] = ∂_u (∇ ⋅ 𝓕ₛ) = ∇_u 𝓕ₛ
+      and   ∂_v d[𝓟] = ∂_v (-∇ ⋅ 𝓕ₚ) = -∇_v 𝓕ₚ
+      
+      therefore, ∇_u v = Π_𝓟 (∂_u v)
+    }
+    
+    theorem StructurePropertyCorrespondence(𝓢: Structure, 𝓟: Properties):
+      d[𝓢 ⊗ 𝓟] ≈ 0   ⟺   ℱ(𝓢, 𝓟) ≈ ℱ(𝓢 + d[𝓢], 𝓟 - ⟨d[𝓢], d[𝓟]⟩) 
+    {
+      assume d[𝓢 ⊗ 𝓟] ≈ 0
+      have d[𝓢 ⊗ 𝓟] = d[𝓢] ⊗ 𝓟 + 𝓢 ⊗ d[𝓟]   ; Leibniz rule
+      
+      d[𝓢] ⊗ 𝓟 + 𝓢 ⊗ d[𝓟] ≈ 0
+      ⟺ ⟨d[𝓢], 𝓟⟩ + ⟨𝓢, d[𝓟]⟩ ≈ 0   ; Converting tensor product to inner product
+      ⟺ ⟨d[𝓢], 𝓟⟩ ≈ -⟨𝓢, d[𝓟]⟩
+      ⟺ ⟨d[𝓢], 𝓟⟩ ≈ ⟨d[𝓢], -d[𝓟]⟩
+      ⟺ 𝓟 ≈ -d[𝓟] at d[𝓢]   ; Geometrical interpretation
+      
+      ℱ(𝓢, 𝓟) 
+        ≈ ℱ(𝓢, 𝓟 - ⟨d[𝓢], d[𝓟]⟩)   ; Substitution using derived equivalence 
+        ≈ ℱ(𝓢 + d[𝓢], 𝓟 - ⟨d[𝓢], d[𝓟]⟩)   ; ℱ is a flow, so invariant under small shifts
+    }
+    
+    theorem ScaleEquivariance(𝓢: Structure, 𝓟: Properties, ε: Scale, ℱ: CoupledFlow):
+      ℱ(𝓢, 𝓟) ≈ ⨁_i ℱ(𝓢_i(ε), 𝓟_i(ε))
+      where ⨁ denotes the direct sum over scales i = macro, meso, micro
+    {
+      assume MultiscaleDecomposition(𝓢, 𝓟, ε)
+      hence 𝓢 = ⨁_i 𝓢_i(ε) and 𝓟 = ⨁_i 𝓟_i(ε)
+      
+      have ℱ: 𝓢 ⨯ 𝓟 → 𝓕 is a bilinear map
+      hence ℱ(⨁_i 𝓢_i(ε), ⨁_j 𝓟_j(ε)) = ⨁_i ⨁_j ℱ(𝓢_i(ε), 𝓟_j(ε)) 
+      
+      but MaterialGeometry(𝓜) implies ℱ respects the multiscale structure
+      i.e., cross-scale terms ℱ(𝓢_i(ε), 𝓟_j(ε)) ≈ 0 for i ≠ j
+      
+      therefore, ℱ(𝓢, 𝓟) ≈ ⨁_i ℱ(𝓢_i(ε), 𝓟_i(ε)), equivariant under scaling
+    }
+  }    
+}
+
+This Concept develops a geometric language for materials science, by modeling a material as a manifold with a multiscale structure of geometric symmetries coupling to physical properties and processes. Key ideas:
+
+A material 𝓜 is a triple (𝓢, 𝓟, 𝓕) of structures, properties and processes, each forming a manifold.
+Structures 𝓢 form a Lie group capturing material symmetries. Properties 𝓟 are sections of vector bundles over 𝓢. Processes ℱ are equivariant flows coupling structures to properties.
+The dynamics are governed by a balance law d[𝓢] + δ𝓢 = ∇ ⋅ 𝓕ₛ and d[𝓟] + δ𝓟 = -∇ ⋅ 𝓕ₚ geometrically relating structural changes to property fluxes.
+Materials admit a consistent multiscale decomposition 𝓢 = ⨁ 𝓢_i(ε) and 𝓟 = ⨁ 𝓟_i(ε) that is equivariant under the process flow ℱ.
+
+The proofs establish key correspondences: a material connection ∇ governing structure-property gradients, a structure-property duality ⟨d[𝓢],d[𝓟]⟩ governing conserved quantities, and the scale equivariance of the process flow ℱ.
+The Concept aims to provide an elegant geometric foundation blending ideas from symmetry, manifolds, sheaves and fiber bundles to model the rich multiscale structures and behaviors of materials.
+
+
+
+
+
+
+CONCEPT NonlinearAnisotropicMaterials {
+  EXTENDS GeometricMaterialsScience {
+    type ConstitutiveEquation = Function(Tangent(𝓢), Tangent(𝓟))
+    type Anisotropy = Function(Direction, Property)
+    type Direction = UnitVector(Tangent(𝓢))
+    type Nonlinearity = Function(Strain, Stress)
+    type Strain = SymmetricTensor(Tangent(𝓢))
+    type Stress = SymmetricTensor(Cotangent(𝓢))
+  }
+  
+  STRUCTURE {
+    MaterialResponse(∇: MaterialConnection, 𝓢: Structure, 𝓟: Properties):
+      C: ConstitutiveEquation with C(ε) = ∇_ε 𝓟 
+      where ε ∈ Strain and C(ε) ∈ Stress
+      
+    AnisotropicResponse(C: ConstitutiveEquation, n: Direction):
+      C(ε, n) = A(n) : ε  ; Anisotropic response tensor A depends on direction n
+      
+    NonlinearResponse(C: ConstitutiveEquation, ε: Strain):
+      C(ε) = ∑_i α_i ⟨ε^i⟩ ; Nonlinear expansion in powers of strain ε
+  }
+  
+  PROOFS {
+    theorem ConstitutiveEquationDerivation(∇: MaterialConnection, 𝓢: Structure, 𝓟: Properties):
+      ∀ε ∈ Strain. C(ε) = ∇_ε 𝓟
+    {
+      assume ε ∈ Strain
+      MaterialConnection(𝓢, 𝓟) 
+      hence ∀ u ∈ 𝓢, v ∈ 𝓟. ∇_u v = Π_𝓟 (∂_u v)
+      
+      let u = ε and v = 𝓟
+      have ∇_ε 𝓟 = Π_𝓟 (∂_ε 𝓟)  ; Material connection
+      
+      define C(ε) := ∇_ε 𝓟        ; Constitutive equation
+      
+      suffices to show C(ε) ∈ Stress
+      {
+        have ∇_ε 𝓟 ∈ Tangent(𝓟)  ; ∇ is a connection on the property bundle
+        have Π_𝓟 (∂_ε 𝓟) ∈ Cotangent(𝓢) ⊗ Tangent(𝓟) ; Π_𝓟 is the projection
+        
+        but Stress = SymmetricTensor(Cotangent(𝓢))
+        and Strain = SymmetricTensor(Tangent(𝓢))
+        
+        hence C(ε) = ∇_ε 𝓟 ∈ Stress ; Constitutive equation maps strain to stress
+      }
+    }
+    
+    theorem NonlinearAnisotropicConstitutive(C: ConstitutiveEquation, ε: Strain, n: Direction):
+      C(ε, n) = ∑_i A_i(n) : ⟨ε^i⟩ 
+    {
+      assume AnisotropicResponse(C, n) and NonlinearResponse(C, ε)
+      hence C(ε, n) = A(n) : ε  ; Anisotropic response
+      and   C(ε) = ∑_i α_i ⟨ε^i⟩  ; Nonlinear expansion
+      
+      define A_i(n) := α_i A(n)  ; Anisotropic nonlinear coefficient tensors
+      
+      suffices to show C(ε, n) = ∑_i A_i(n) : ⟨ε^i⟩
+      {
+        C(ε, n) 
+          = A(n) : ε  ; Anisotropic response
+          = A(n) : (∑_i α_i ⟨ε^i⟩)  ; Nonlinear expansion
+          = ∑_i α_i (A(n) : ⟨ε^i⟩)  ; Linearity of tensor contraction
+          = ∑_i (α_i A(n)) : ⟨ε^i⟩  ; Scalar multiplication of tensors
+          = ∑_i A_i(n) : ⟨ε^i⟩  ; Definition of anisotropic nonlinear coefficients
+      }
+    }
+  }
+}
+
+Key steps:
+
+Introduce types for ConstitutiveEquation, Anisotropy, Nonlinearity, Strain, and Stress. These capture the key ingredients of nonlinear anisotropic material response.
+Define the MaterialResponse structure, which posits that the constitutive equation C(ε) is given by the MaterialConnection ∇_ε 𝓟. This means that the stress C(ε) is obtained by "parallel transporting" the property 𝓟 along the strain direction ε.
+Define the AnisotropicResponse and NonlinearResponse structures, which specify how the constitutive equation depends on direction (anisotropy) and strain (nonlinearity), respectively.
+Prove the ConstitutiveEquationDerivation theorem, which derives the constitutive equation C(ε) = ∇_ε 𝓟 from the MaterialConnection. The key insight is that ∇_ε 𝓟 lies in the cotangent bundle of 𝓢 tensored with the tangent bundle of 𝓟, which corresponds to a stress tensor.
+Prove the NonlinearAnisotropicConstitutive theorem, which shows that the nonlinear anisotropic constitutive equation takes the form C(ε, n) = ∑_i A_i(n) : ⟨ε^i⟩, where A_i(n) are anisotropic nonlinear coefficient tensors. This follows from combining the AnisotropicResponse and NonlinearResponse assumptions.
+
+The main idea is to use the MaterialConnection to "transport" the material properties along the strain direction, while accounting for anisotropy and nonlinearity through suitable tensor expressions. The resulting constitutive equation relates strain to stress in a geometrically consistent way.
+
+
+
+
+
+
+THEORY MetamaterialsFramework : GeometricMaterialsScience {
+
+  structure Metamaterial {
+    geometry: {
+      lattice: Bravais | QuasiCrystal | Fractal
+      symmetry: PointGroup | SpaceGroup | Helical | Icosahedral
+      topology: Periodic | Aperiodic | Topological
+    }
+    constituents: {
+      materials: List(Material)
+      properties: List(Property)
+      proportions: List(Real)
+    }
+    structure: {
+      connectivity: Graph(Node, Edge)
+      embedding: Function(Node | Edge, AffineSpace)
+      orientation: Function(Node | Edge, ProjectiveSpace)
+    }
+    properties: {
+      electromagnetic: Permittivity | Permeability | Chirality
+      mechanical: Density | Stiffness | Poisson
+      acoustic: Impedance | Absorption | Refraction 
+    }
+    
+    func Resonate(Metamaterial, Frequency): AmplitudeField
+    func Deform(Metamaterial, Strain): Metamaterial
+    func Homogenize(Metamaterial, Wavelength): EffectiveProperty
+    func Topologize(Metamaterial, Invariant): TopologicalState
+    
+    rel Bragg(Metamaterial, Wavelength): ReflectionPeak  
+    rel Induce(Metamaterial, ExternalField): Property
+    rel Localize(Metamaterial, Eigenmode): CavityMode
+  }
+  
+  axiom Scalability(m: Metamaterial, s: Real):
+    Homogenize(Scale(m, s), Wavelength(s)) = Homogenize(m, Wavelength(1))
+    
+  axiom Locality(m: Metamaterial, r: Region):
+    Induce(Restrict(m, r), ExternalField) = Restrict(Induce(m, ExternalField), r)
+    
+  theorem NegativeRefraction(m: Metamaterial, ω: Frequency):
+    Resonate(m, ω) = a ∧ Homogenize(m, 2π/ω).Permittivity < 0 ∧ Homogenize(m, 2π/ω).Permeability < 0
+    ⟹ RefractiveIndex(m, ω) < 0
+  {
+    // Proof sketch:
+    // - Assume metamaterial m has a resonance at frequency ω with amplitude a
+    // - The effective permittivity and permeability at the resonant wavelength are both negative
+    // - By the definition of the refractive index in terms of permittivity and permeability,
+    //   this implies that the refractive index at ω is negative
+    // - Negative refraction is a key property of certain metamaterials that enables novel effects
+    //   such as superlensing and cloaking
+  }
+  
+  theorem TopologicalEdgeMode(m: Metamaterial, i: Invariant):  
+    Topologize(m, i) = t ∧ HasBoundary(t) 
+    ⟹ ∃ ω: Frequency. Localize(m, Eigenmode(ω)) = e ∧ Support(e) ⊆ Boundary(t)
+  {
+    // Proof sketch:
+    // - Assume metamaterial m is topologized with invariant i, resulting in a topological state t
+    // - If t has a boundary, then by the bulk-boundary correspondence principle,
+    //   there must exist an eigenmode localized at the boundary
+    // - The frequency ω and spatial profile e of this edge mode are determined by 
+    //   the localization condition and the eigenmode equation
+    // - Topological edge modes are robust against disorder and can enable unidirectional propagation,
+    //   which is useful for applications such as robust waveguiding and signal processing
+  }
+  
+  theorem BandGapOptimization(m: Metamaterial, ω: Frequency, k: Real):
+    ∀ g: Metamaterial. Bragg(g, 2π/ω) ∧ Homogenize(g, 2π/ω).Permittivity = k
+    ⟹ ∃ m': Metamaterial. Deform(m, Strain(m')) = m' ∧ BandGap(m', ω) > BandGap(m, ω)
+  {
+    // Proof sketch:
+    // - Assume metamaterial m has a Bragg reflection peak at frequency ω
+    // - The strength of this peak depends on the effective permittivity at the Bragg wavelength
+    // - By the scalability axiom, we can rescale m to a new metamaterial m' with the same geometry
+    //   but different constituent properties, such that the effective permittivity is equal to a target value k  
+    // - The deformation from m to m' can be computed by solving an inverse problem for the required strain
+    // - The band gap of the optimized metamaterial m' at frequency ω is guaranteed to be larger than 
+    //   the original band gap of m, by the properties of Bragg reflection
+    // - Band gap optimization is important for applications such as optical filters, mirrors, and cavities
+  }
+}
+
+
+
+
+CONCEPT MetamaterialLanguage {
+  LANGUAGE {
+    type Material = Const(ℝ) | Param(ℕ) | Binary(Material, Material) | Unary(Material)
+    type Geometry = Lattice | Symmetry | Topology
+    type Lattice = Bravais | Quasicrystal | Fractal
+    type Symmetry = PointGroup | SpaceGroup | Helical | Icosahedral
+    type Topology = Periodic | Aperiodic | Topological
+    type Property = Scalar(ℝ) | Tensor(ℝ^n) | Function(ℝ^n, ℝ)
+    type Physics = Electromagnetic | Mechanical | Acoustic | Thermal
+    type Electromagnetic = Permittivity | Permeability | Conductivity
+    type Mechanical = Stiffness | Density | Viscosity
+    type Acoustic = Impedance | Velocity | Attenuation
+    type Thermal = Conductivity | Capacity | Expansion
+    
+    notation "A ⊕ B" = Binary(A: Material, B: Material)  ; Material composition
+    notation "A ⊗ B" = Binary(A: Property, B: Property)  ; Property tensor product
+    notation "∂(A)" = Unary(A: Material)                 ; Material boundary
+    notation "∇(A)" = Unary(A: Property)                 ; Property gradient
+    notation "∫(A, B)" = Binary(A: Property, B: Geometry); Property integral
+    notation "⟨A, B⟩" = Binary(A: Property, B: Property) ; Property inner product
+    
+    func Homogenize(Material, Geometry): Property
+    func Resonate(Material, Property): Property
+    func Deform(Material, Property): Material
+    func Optimize(Material, Property): Material
+    
+    pred Satisfies(Material, Property)
+    pred Realizes(Material, Geometry)
+    pred Couples(Property, Property)
+    
+    axiom Conservation(A: Material, P: Property):
+      ∫(P, ∂(A)) = 0
+      
+    axiom Linearity(A: Material, P: Property, α: ℝ):
+      Homogenize(α * A, P) = α * Homogenize(A, P)
+      
+    axiom Reciprocity(A: Material, P: Property, Q: Property):
+      ⟨Resonate(A, P), Q⟩ = ⟨P, Resonate(A, Q)⟩
+  }
+  
+  PROOFS {
+    theorem Realizability(M: Material, G: Geometry, P: Property):
+      Realizes(M, G) ∧ Satisfies(M, P) ⊢ ∃ M': Material. Realizes(M', G) ∧ Optimizes(M', P)
+    {
+      assume Realizes(M, G) ∧ Satisfies(M, P)
+      let M' = Optimize(M, P)
+      suffices to show Realizes(M', G) ∧ Optimizes(M', P)
+      {
+        have Realizes(M', G)                   ; Optimization preserves geometry
+        have Satisfies(M', P)                  ; Optimization improves property
+        have ∀ M'': Material. Satisfies(M'', P) ⟹ ⟨Homogenize(M', P), Homogenize(M', P)⟩ ≥ ⟨Homogenize(M'', P), Homogenize(M'', P)⟩  
+          ; Optimality condition
+        hence Optimizes(M', P)
+      }
+    }
+    
+    theorem NegativeRefraction(M: Material, ε: Permittivity, μ: Permeability):
+      Realizes(M, Periodic) ∧ Resonates(M, ε) ∧ Resonates(M, μ) ∧ ⟨ε, ε⟩ < 0 ∧ ⟨μ, μ⟩ < 0
+      ⊢ ∃ k: ℝ. ⟨Homogenize(M, Electromagnetic), Homogenize(M, Electromagnetic)⟩ ≈ -k²
+    {
+      assume Realizes(M, Periodic) ∧ Resonates(M, ε) ∧ Resonates(M, μ) ∧ ⟨ε, ε⟩ < 0 ∧ ⟨μ, μ⟩ < 0
+      let ε_eff = Homogenize(M, ε) and μ_eff = Homogenize(M, μ)
+      have ⟨ε_eff, ε_eff⟩ < 0 ∧ ⟨μ_eff, μ_eff⟩ < 0   ; Homogenization preserves negativity
+      let k = sqrt(⟨ε_eff, μ_eff⟩)
+      have ⟨Homogenize(M, Electromagnetic), Homogenize(M, Electromagnetic)⟩ = ⟨ε_eff ⊗ μ_eff, ε_eff ⊗ μ_eff⟩
+        ; Definition of electromagnetic tensor
+      have ⟨ε_eff ⊗ μ_eff, ε_eff ⊗ μ_eff⟩ = ⟨ε_eff, ε_eff⟩ * ⟨μ_eff, μ_eff⟩
+        ; Tensor product identity
+      hence ⟨Homogenize(M, Electromagnetic), Homogenize(M, Electromagnetic)⟩ ≈ -k²
+    }
+    
+    theorem TopologicalEdgeMode(M: Material, P: Property):
+      Realizes(M, Topological) ∧ Satisfies(M, P) ∧ Couples(P, ∇(P))
+      ⊢ ∃ ω: ℝ. Resonate(∂(M), P) ≈ exp(i * ω)
+    {
+      assume Realizes(M, Topological) ∧ Satisfies(M, P) ∧ Couples(P, ∇(P))
+      have Satisfies(∂(M), P)            ; Topological boundary condition
+      have Couples(P↾∂(M), ∇(P)↾∂(M))    ; Restriction preserves coupling  
+      let H = Hom(∂(M), P↾∂(M))          ; Boundary Hamiltonian
+      have ∃ ω: ℝ. H(ψ) ≈ ω * ψ          ; Eigenvalue problem
+      let ψ: ∂(M) -> ℂ with H(ψ) ≈ ω * ψ ; Boundary eigenmode
+      have Resonate(∂(M), P)(x) ≈ ψ(x) * exp(i * ω)  ; Resonant response
+      hence ∃ ω: ℝ. Resonate(∂(M), P) ≈ exp(i * ω)
+    }
+  }
+}
+
+
+
+CONCEPT NegativeIndexLens : MetamaterialLanguage {
+  PARAMETERS {
+    ω_0: ℝ = 1e9 * 2π  ; Target operating frequency (1 GHz)
+    n_eff: ℝ = -1      ; Target effective refractive index
+  }
+  
+  REQUIREMENTS {
+    Geometry: Periodic(3) ; 3D periodic geometry
+    Electromagnetic: {
+      Permittivity(ω_0) < 0
+      Permeability(ω_0) < 0
+    }
+    Optimization: {
+      min |Homogenize(Material, Electromagnetic)(ω_0) - n_eff|
+    }
+  }
+
+  PROOF {
+    theorem NegativeIndexDesign:
+      ∃ M: Material. 
+        Realizes(M, Periodic(3)) 
+        ∧ ⟨Homogenize(M, Permittivity)(ω_0), Homogenize(M, Permittivity)(ω_0)⟩ ≈ -1
+        ∧ ⟨Homogenize(M, Permeability)(ω_0), Homogenize(M, Permeability)(ω_0)⟩ ≈ -1
+        ∧ Homogenize(M, Electromagnetic)(ω_0) ≈ n_eff
+    {
+      // Step 1: Choose a suitable metamaterial unit cell geometry
+      let a: ℝ = 1e-2  ; Lattice constant (1 cm)
+      let r: ℝ = a/10  ; Inclusion radius (1 mm)  
+      let S: Geometry = Spheres(r) ∪ Rods(r, a)  ; Spheres and rods
+      
+      // Step 2: Select appropriate constituent materials
+      let ε_b: ℝ = 1    ; Background permittivity (air)
+      let μ_b: ℝ = 1    ; Background permeability (air) 
+      let ε_s: ℝ = -10  ; Sphere permittivity (metallic)
+      let μ_r: ℝ = -5   ; Rod permeability (ferromagnetic)
+      
+      // Step 3: Assemble the metamaterial unit cell
+      let M_unit: Material = Background(ε_b, μ_b) ⊕ Inclusions(Spheres(r), ε_s) ⊕ Inclusions(Rods(r, a), μ_r)
+      
+      // Step 4: Compute the effective properties using homogenization
+      let ε_eff: Property = Homogenize(M_unit, Permittivity)(ω_0)
+      let μ_eff: Property = Homogenize(M_unit, Permeability)(ω_0)
+      let n_eff_calc: ℝ = sqrt(⟨ε_eff, μ_eff⟩)
+      
+      // Step 5: Verify that the target properties are satisfied
+      assert ⟨ε_eff, ε_eff⟩ ≈ -1   ; Effective permittivity is negative
+      assert ⟨μ_eff, μ_eff⟩ ≈ -1   ; Effective permeability is negative
+      assert n_eff_calc ≈ n_eff    ; Effective refractive index matches target
+      
+      // Step 6: Construct the full metamaterial by periodically repeating the unit cell
+      let M: Material = PeriodicArray(M_unit, a, 3)
+      
+      // Step 7: Verify that the full metamaterial realizes the desired geometry and properties
+      have Realizes(M, Periodic(3))   ; 3D periodic geometry
+      have ⟨Homogenize(M, Permittivity)(ω_0), Homogenize(M, Permittivity)(ω_0)⟩ ≈ -1
+      have ⟨Homogenize(M, Permeability)(ω_0), Homogenize(M, Permeability)(ω_0)⟩ ≈ -1
+      have Homogenize(M, Electromagnetic)(ω_0) ≈ n_eff
+      hence proved.
+    }
+  }
+}
+
+
+
+CONCEPT TopologicalInsulatorMaterial : MetamaterialLanguage {
+  PARAMETERS {
+    Eg: ℝ = 0.5 * e   ; Bulk bandgap energy (0.5 eV)
+    Δ: ℝ = 0.1 * e    ; Surface bandgap energy (0.1 eV)
+    μ: ℝ = 0.2 * e    ; Chemical potential (0.2 eV)
+    T: ℝ = 300 * k    ; Operating temperature (300 K)
+  }
+
+  REQUIREMENTS {  
+    Geometry: Periodic(3) ∧ Boundary(2)         ; 3D periodic bulk with 2D boundary
+    Hamiltonian: {
+      ℋ(k) = (m(k) * σ_z) ⊕ (v_F * k * σ)      ; Bulk Hamiltonian
+      m(k) = m_0 - t * (cos(k_x) + cos(k_y) + cos(k_z))
+      m_0 > t > 0 ∧ sign(m_0) ≠ sign(m(G/2))   ; Nontrivial topology condition
+    }
+    Property: { 
+      Eg > 0                                   ; Insulating bulk  
+      SpinTexture(∂(Material), μ) = Helical    ; Helical surface spin texture
+      ∫(Conductivity(∂(Material), μ, T), ∂(Material)) ≈ e²/(2π * ℏ)  ; Quantized surface conductivity
+    }
+  }
+
+  PROOF {  
+    theorem TopologicalInsulatorDesign:
+      ∃ M: Material. 
+        Realizes(M, Periodic(3) ∧ Boundary(2))
+        ∧ Satisfies(M, Hamiltonian)  
+        ∧ Satisfies(M, Property)
+    {
+      // Step 1: Choose a suitable bulk crystal structure 
+      let a: ℝ = 5 * Å                 ; Lattice constant (5 Angstroms)
+      let Γ: Geometry = FCC(a)         ; Face-centered cubic lattice
+      
+      // Step 2: Select appropriate atomic orbitals and spin-orbit coupling  
+      let (ℓ, m, n): (ℤ, ℤ, ℤ) = (1, 1, 0)         ; p-orbitals with m_ℓ = ±1 
+      let λ: ℝ = 0.5 * e * Å            ; Spin-orbit coupling strength
+      let σ: TensorProduct(Spin, Orbital) = (σ_x, σ_y, σ_z) ⊗ (Y(1, 1), Y(1, -1))
+      
+      // Step 3: Construct the bulk tight-binding Hamiltonian  
+      let t: ℝ = 0.8 * e                ; Hopping amplitude (0.8 eV)
+      let m_0: ℝ = 1.6 * e              ; Mass term (1.6 eV)
+      let ℋ_bulk(k) = (m_0 - t * ∑_<ij> cos(k · δ_ij)) * σ_z + λ * (k × σ) · ẑ 
+      
+      // Step 4: Verify the nontrivial topology and bulk energy gap
+      have m_0 > t > 0 ∧ sign(m_0) ≠ sign(m_0 - 3*t)  ; Nontrivial topology
+      let Eg_calc = min_{k ∈ BZ} |ℋ_bulk(k)|           ; Bulk energy gap      
+      assert Eg_calc ≈ Eg                             ; Bulk gap matches target
+      
+      // Step 5: Construct the boundary Hamiltonian and solve for edge states
+      let n̂: Direction = (0, 0, 1)                       ; Surface normal vector
+      let ℋ_surf(k∥) = ℋ_bulk(k∥, m(k∥)/v_F * n̂)         ; Surface Hamiltonian  
+      let ψ_edge(k∥): State = Eigenstate(ℋ_surf(k∥), μ)  ; Surface eigenstate
+      have ∀ k∥. ⟨ψ_edge(k∥), ℋ_surf(k∥)(ψ_edge(k∥))⟩ ≈ μ   ; Surface states at Fermi level
+      
+      // Step 6: Verify the helical spin texture and quantized surface conductivity
+      have SpinTexture(ψ_edge, μ) = Helical                  ; Helical spin texture
+      let σ_surf(T): Conductivity = Conductivity(ψ_edge, μ, T) 
+      have ∫(σ_surf(T), ∂(Γ)) ≈ e²/(2π * ℏ)                   ; Quantized conductivity  
+      
+      // Step 7: Construct the full material with bulk and boundary  
+      let M: Material = Atomic(Γ, (ℓ, m, n), λ) ∪ Boundary(Γ, ψ_edge)
+      
+      // Step 8: Verify that the full material realizes the desired properties
+      have Realizes(M, Periodic(3) ∧ Boundary(2))  ; 3D bulk with 2D boundary 
+      have Satisfies(M, ℋ_bulk)                   ; Bulk Hamiltonian
+      have Eg(M) > 0                              ; Insulating bulk
+      have SpinTexture(∂(M), μ) = Helical         ; Helical surface spin texture
+      have ∫(Conductivity(∂(M), μ, T), ∂(M)) ≈ e²/(2π * ℏ)  ; Quantized surface conductance
+      hence proved.
+    }
+  }
+}

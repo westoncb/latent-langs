@@ -1,0 +1,591 @@
+CONCEPT SemanticFiberBundleTower {
+  PARAMETERS {
+    B : EmbeddingSpace
+    F : SmoothManifold
+    E : FiberBundle(B, F)
+    n : Nat
+  }
+  
+  CONTEXT {
+    TYPES {
+      EmbeddingSpace = {
+        Dimension : Nat
+        Metric : RiemannianMetric  
+        Embedding : FUNC(SmoothManifold, THIS)
+      }
+      
+      SmoothManifold = {
+        Dimension : Nat
+        Cardinality : Nat  
+        Atlas : SET(Chart)
+        Tangent : FUNC(Point(THIS), VectorSpace)
+        Cotangent : FUNC(Point(THIS), VectorSpace)
+      }
+      
+      Chart(M : SmoothManifold) = {
+        Domain : OpenSet(M)
+        Map : FUNC(Domain, EuclideanSpace(M.Dimension))  
+      }
+      
+      FiberBundle(B : SmoothManifold, F : SmoothManifold) = {
+        TotalSpace : SmoothManifold
+        BaseSpace : B  
+        Fiber : F
+        Projection : FUNC(TotalSpace, BaseSpace)
+        LocalTrivialization : FUNC(OpenSet(BaseSpace), DirectProduct(OpenSet(BaseSpace), Fiber))
+      }
+      
+      Connection(E : FiberBundle) = {
+        HorizontalSubspace : FUNC(TangentSpace(E.TotalSpace), SubSpace(TangentSpace(E.TotalSpace)))  
+      }
+      
+      TowerLevel = {
+        EmbeddingSpaceBelow : EmbeddingSpace
+        FiberSpaceStructure : FiberBundle(EmbeddingSpaceBelow, SmoothManifold)  
+        ContentDensity : FUNC(FiberSpaceStructure.TotalSpace, Real)
+      }
+      
+      TowerInstance = ARRAY(n) OF TowerLevel
+      
+      Path(M : SmoothManifold, p : Point(M), q : Point(M)) = FUNC(Interval([0, 1]), M) 
+        WITH START_POINT(p) AND END_POINT(q)
+        
+      Loop(M : SmoothManifold, p : Point(M)) = Path(M, p, p)
+      
+      HolonomyGroup(E : FiberBundle, ∇ : Connection(E), p : Point(E.BaseSpace))
+        = GROUP_GENERATED_BY { Holonomy(γ) | γ : Loop(E.BaseSpace, p) }
+    }
+    
+    STRUCTURES {
+      STRUCTURE EmbeddingSpace {
+        FIELD Dimension : Nat
+        FIELD Metric : RiemannianMetric
+        FIELD Embedding : FUNC(SmoothManifold, THIS)
+        
+        AXIOM DistancePreserving "∀ M p q . d(Embedding(p), Embedding(q)) = d_M(p, q)"
+      }
+      
+      STRUCTURE SmoothManifold {
+        FIELD Dimension : Nat
+        FIELD Cardinality : Nat
+        FIELD Atlas : SET(Chart)
+        FIELD Tangent : FUNC(Point(THIS), VectorSpace) 
+        FIELD Cotangent : FUNC(Point(THIS), VectorSpace)
+        
+        AXIOM SmoothTransitions "∀ C1 C2 ∈ Atlas . C1 ∩ C2 IS_OPEN ∧ C1 ∘ C2⁻¹ IS_SMOOTH"
+        AXIOM TangentProperties "∀ p ∈ THIS . Dimension(Tangent(p)) = Dimension"
+        AXIOM CotangentProperties "∀ p ∈ THIS . Dimension(Cotangent(p)) = Dimension"
+      }
+      
+      STRUCTURE FiberBundle(B : SmoothManifold, F : SmoothManifold) {
+        FIELD TotalSpace : SmoothManifold
+        FIELD BaseSpace : B
+        FIELD Fiber : F
+        FIELD Projection : FUNC(TotalSpace, BaseSpace)
+        FIELD LocalTrivialization : FUNC(OpenSet(BaseSpace), DirectProduct(OpenSet(BaseSpace), Fiber))
+        
+        AXIOM LocalTrivializationProperty "∀ p : BaseSpace . |Projection⁻¹(p)| = |Fiber|"
+        AXIOM LocalDiffeomorphismProperty 
+          "∀ U ⊆ BaseSpace . Projection|_U : LocalTrivialization(U) ≅ U × Fiber"  
+      }
+      
+      STRUCTURE Connection(E : FiberBundle) {
+        FIELD HorizontalSubspace : FUNC(TangentSpace(E.TotalSpace), SubSpace(TangentSpace(E.TotalSpace)))
+        
+        AXIOM HorizontalVerticalDecomposition 
+          "∀ e : E.TotalSpace . T_e(E.TotalSpace) = HorizontalSubspace(e) ⊕ T_e(E.Fiber)"
+        AXIOM ParallelTransportProperty
+          "∀ γ : Path(E.BaseSpace) . ∀ e : E_γ(0) . ParallelTransport(γ, e) = ∫_γ HorizontalLift(γ')"
+      }
+    }
+
+    NOTATION {
+      DEF "π_E" = "E.Projection"
+      DEF "E_p" = "E.Fiber|_{π_E⁻¹(p)}"
+      DEF "Γ(E)" = "SectionSpace(E)"
+      DEF "σ|_U" = "Restriction(σ, U)"  WHERE "σ : Γ(E)" AND "U ⊆ E.BaseSpace" 
+      DEF "T_pM" = "TangentSpace(M, p)"
+      DEF "T^*_pM" = "CotangentSpace(M, p)"
+      DEF "H_e" = "HorizontalSubspace(e)"
+      DEF "X^H" = "HorizontalLift(X)"
+      DEF "P_γ" = "ParallelTransport(γ)"
+      DEF "∇_X" = "CovariantDerivative(X)"
+      DEF "L_i" = "TowerInstance[i]"
+      DEF "S_i" = "StructuralTensor(L_i.FiberSpaceStructure)"
+      DEF "C_i" = "ContentTensor(L_i.FiberSpaceStructure)"
+    }
+  }
+  
+  TRANSFORMERS {
+    REWRITE HorizontalLiftProperties(E : FiberBundle, X Y : VectorField(E.BaseSpace)) {
+      REWRITE "X^H + Y^H" TO "(X + Y)^H"
+      REWRITE "f · X^H" TO "(f ∘ π_E) · X^H"  WHERE "f : FUNC(E.BaseSpace, Real)"  
+    }
+    
+    REWRITE ParallelTransportProperties(E : FiberBundle, γ : Path(E.BaseSpace), X Y : VectorField(E.BaseSpace), f : FUNC(E.BaseSpace, Real)) {
+      REWRITE "P_γ(X + Y)" TO "P_γ(X) + P_γ(Y)"
+      REWRITE "P_γ(f · X)" TO "(f ∘ γ) · P_γ(X)"
+    }
+    
+    SIMPLIFY ConnectionCurvature(E : FiberBundle, ∇ : Connection(E), X Y : VectorField(E.BaseSpace)) {
+      REWRITE "Curvature(∇)(X, Y)" TO "X^H ∘ Y^H - Y^H ∘ X^H - [X, Y]^H"
+    }
+    
+    SIMPLIFY StructureTensorContraction(L : TowerLevel, X Y : VectorField(L.EmbeddingSpaceBelow)) {
+      REWRITE "⟨S_L(X), Y⟩" TO "0"
+    }
+  }
+  
+  PROOFS {
+    THEOREM ConnectionHolonomy(E : FiberBundle, ∇ : Connection(E), p : Point(E.BaseSpace)) {
+      LET "Ω_p" = { γ : Loop(E.BaseSpace, p) }
+      LET "Φ_∇" = "HolonomyHomomorphism(∇)"
+      
+      CONCLUDE "Image(Φ_∇) = HolonomyGroup(∇, p)"
+      PROOF {
+        CONCLUDE "Image(Φ_∇) ⊆ HolonomyGroup(∇, p)" BY {
+          SUPPOSE "g ∈ Image(Φ_∇)"
+          THEN "∃ [γ] ∈ Ω_p . Φ_∇([γ]) = g" BY Definition("Image")
+          THEN "∃ γ : Ω_p . ParallelTransport(γ) = g" BY Definition("Φ_∇")
+          HENCE "g ∈ HolonomyGroup(∇, p)" BY Definition("HolonomyGroup")
+        }
+        
+        CONCLUDE "HolonomyGroup(∇, p) ⊆ Image(Φ_∇)" BY {
+          SUPPOSE "h ∈ HolonomyGroup(∇, p)"
+          THEN "∃ γ : Ω_p . ParallelTransport(γ) = h" BY Definition("HolonomyGroup")
+          LET "[γ]" = "LoopClass(γ)"
+          THEN "Φ_∇([γ]) = ParallelTransport(γ) = h" BY Definition("Φ_∇")
+          HENCE "h ∈ Image(Φ_∇)" BY Definition("Image")  
+        }
+      }  
+    }
+    
+    THEOREM TowerFlatness(T : TowerInstance) {
+      CONCLUDE "∀ i ∈ [1, n] . Curvature(T.L_i.FiberSpaceStructure.Connection) = 0"
+      PROOF {
+        LET "∇_i" = "T.L_i.FiberSpaceStructure.Connection"
+        
+        SUPPOSE "i ∈ [1, n]"
+        SUPPOSE "X Y : VectorField(T.L_{i-1}.FiberSpaceStructure.TotalSpace)"
+        
+        THEN "Curvature(∇_i)(X, Y)" 
+          ≡ "X^H ∘ Y^H - Y^H ∘ X^H - [X, Y]^H"  BY ConnectionCurvature
+          ≡ "S_i(X) ∘ S_i(Y) - S_i(Y) ∘ S_i(X) - S_i([X, Y])"  BY Definition("H_e")
+          ≡ "⟨S_i(X), S_i(Y)⟩ - ⟨S_i(Y), S_i(X)⟩ - ⟨S_i([X, Y]), Id⟩"  BY VectorFieldPairing  
+          ≡ "0 - 0 - 0"  BY StructureTensorContraction
+          ≡ "0"
+          
+        HENCE "∀ X Y . Curvature(∇_i)(X, Y) = 0"
+        THEREFORE "Curvature(∇_i) = 0"
+        
+        THEREFORE "∀ i ∈ [1, n] . Curvature(T.L_i.FiberSpaceStructure.Connection) = 0" BY ArbitrarinessOfI
+      }
+    }
+
+    THEOREM ContentUniformization(T : TowerInstance, U : OpenSet(T.L_i.EmbeddingSpaceBelow), i : [1, n]) {
+      LET "E" = "T.L_i.FiberSpaceStructure"
+      LET "M" = "E.TotalSpace"
+      LET "f" = "C_i|_{π_E⁻¹(U)}"
+      LET "g" = "S_i|_{π_E⁻¹(U)}"
+      
+      CONCLUDE "∫_M f dvol ≤ exp(∫_M g dvol)"
+      PROOF {
+        SUPPOSE "W ⊆ π_E⁻¹(U)" WHERE "W IS_OPEN"
+        
+        THEN "∫_W f dvol" 
+          ≤ "∫_W sup(f|_W) dvol"  BY IntegralSupremumInequality
+          ≡ "sup(f|_W) · vol(W)"
+          ≤ "exp(sup(g|_W)) · vol(W)"  BY PointwiseInequalityExponential
+          ≤ "exp(∫_W g dvol)"  BY JensenInequality
+          
+        THEREFORE "∀ W ⊆ π_E⁻¹(U) . ∫_W f dvol ≤ exp(∫_W g dvol)" BY ArbitrarinessOfW
+        
+        HENCE "∫_M f dvol ≤ exp(∫_M g dvol)" BY MonotonicityOfIntegral
+      }
+    }
+  }
+  
+  EXAMPLES {
+    EXAMPLE WordEmbeddingTower {
+      LET "B_0" = "R^300" WITH "Metric(v, w) = CosineSimilarity(v, w)"
+      LET "F_0" = "SmoothManifold" WITH {
+        Dimension = 10
+        Cardinality = 1e5
+        Atlas = {FlatChart(F_0)}
+        Tangent(p) = R^10
+        Cotangent(p) = DualSpace(R^10)
+      }
+      LET "E_0" = "FiberBundle(B_0, F_0)" WITH {
+        TotalSpace.Dimension = 310
+        Projection((v, w)) = v
+        LocalTrivialization(U) = (U, F_0)
+      }
+      LET "L_0" = "TowerLevel" WITH {
+        EmbeddingSpaceBelow = B_0
+        FiberSpaceStructure = E_0
+        ContentDensity(e) = exp(-NegativeLogLikelihood(e))
+      }
+      
+      FUNC LevelAbove(i : [1, n]) -> TowerLevel {
+        RETURN "TowerLevel" WITH {
+          EmbeddingSpaceBelow = L_{i-1}.FiberSpaceStructure.TotalSpace
+          FiberSpaceStructure = "FiberBundle"(
+            EmbeddingSpaceBelow, 
+            SmoothManifold WITH {
+              Dimension = 2^i
+              Tangent(p) = R^(2^i)
+              Cotangent(p) = DualSpace(R^(2^i))
+            }
+          )
+          ContentDensity(e) = exp(-KLDivergence(
+            ConditionalDistribution(e) || 
+            MarginalDistribution(π_E(e))  
+          ))
+        }
+      }
+      
+      LET "T" = ARRAY(n + 1) WITH "T[0] = L_0" AND "∀ i ∈ [1, n] . T[i] = LevelAbove(i)"
+      
+      THEN "T : TowerInstance"
+        AND "∀ i ∈ [1, n] . Curvature(T.L_i.FiberSpaceStructure.Connection) = 0"
+        BY TowerFlatness
+        AND "∀ i ∈ [1, n] . ∀ U ⊆ T.L_i.EmbeddingSpaceBelow . ∫_{π_E⁻¹(U)} C_i dvol ≤ exp(∫_{π_E⁻¹(U)} S_i dvol)"
+        BY ContentUniformization
+    }
+  }
+}
+
+
+
+
+CONCEPT SemanticFiberBundleTower {
+  PARAMETERS {
+    B : EmbeddingSpace
+    F : SmoothManifold
+    E : FiberBundle(B, F)
+    n : Nat
+  }
+  
+  CONTEXT {
+    TYPES {
+      EmbeddingSpace = {
+        Dimension : Nat
+        Metric : RiemannianMetric  
+        Embedding : FUNC(SmoothManifold, THIS)
+      }
+      
+      SmoothManifold = {
+        Dimension : Nat
+        Cardinality : Nat  
+        Atlas : SET(Chart)
+        Tangent : FUNC(Point(THIS), VectorSpace)
+        Cotangent : FUNC(Point(THIS), VectorSpace)
+      }
+      
+      Chart(M : SmoothManifold) = {
+        Domain : OpenSet(M)
+        Map : FUNC(Domain, EuclideanSpace(M.Dimension))  
+      }
+      
+      FiberBundle(B : SmoothManifold, F : SmoothManifold) = {
+        TotalSpace : SmoothManifold
+        BaseSpace : B  
+        Fiber : F
+        Projection : FUNC(TotalSpace, BaseSpace)
+        LocalTrivialization : FUNC(OpenSet(BaseSpace), DirectProduct(OpenSet(BaseSpace), Fiber))
+      }
+      
+      Connection(E : FiberBundle) = {
+        HorizontalSubspace : FUNC(TangentSpace(E.TotalSpace), SubSpace(TangentSpace(E.TotalSpace)))  
+      }
+      
+      TowerLevel = {
+        EmbeddingSpaceBelow : EmbeddingSpace
+        FiberSpaceStructure : FiberBundle(EmbeddingSpaceBelow, SmoothManifold)  
+        ContentDensity : FUNC(FiberSpaceStructure.TotalSpace, Real)
+      }
+      
+      TowerInstance = ARRAY(n) OF TowerLevel
+      
+      Path(M : SmoothManifold, p : Point(M), q : Point(M)) = FUNC(Interval([0, 1]), M) 
+        WITH START_POINT(p) AND END_POINT(q)
+        
+      Loop(M : SmoothManifold, p : Point(M)) = Path(M, p, p)
+      
+      HolonomyGroup(E : FiberBundle, ∇ : Connection(E), p : Point(E.BaseSpace))
+        = GROUP_GENERATED_BY { Holonomy(γ) | γ : Loop(E.BaseSpace, p) }
+    }
+    
+    STRUCTURES {
+      STRUCTURE EmbeddingSpace {
+        FIELD Dimension : Nat
+        FIELD Metric : RiemannianMetric
+        FIELD Embedding : FUNC(SmoothManifold, THIS)
+        
+        AXIOM DistancePreserving(M : SmoothManifold, p : Point(M), q : Point(M)) :
+          d(Embedding(p), Embedding(q)) = d_M(p, q)
+      }
+      
+      STRUCTURE SmoothManifold {
+        FIELD Dimension : Nat
+        FIELD Cardinality : Nat
+        FIELD Atlas : SET(Chart)
+        FIELD Tangent : FUNC(Point(THIS), VectorSpace) 
+        FIELD Cotangent : FUNC(Point(THIS), VectorSpace)
+        
+        AXIOM SmoothTransitions(C1 : Chart, C2 : Chart) : 
+          C1 ∈ Atlas AND C2 ∈ Atlas AND C1 ∩ C2 IS_OPEN 
+          IMPLIES C1 ∘ C2⁻¹ IS_SMOOTH
+          
+        AXIOM TangentProperties(p : Point) :
+          Dimension(Tangent(p)) = Dimension
+        
+        AXIOM CotangentProperties(p : Point) :  
+          Dimension(Cotangent(p)) = Dimension
+      }
+
+      STRUCTURE FiberBundle(B : SmoothManifold, F : SmoothManifold) {
+        FIELD TotalSpace : SmoothManifold  
+        FIELD BaseSpace : B
+        FIELD Fiber : F
+        FIELD Projection : FUNC(TotalSpace, BaseSpace)
+        FIELD LocalTrivialization : FUNC(OpenSet(BaseSpace), DirectProduct(OpenSet(BaseSpace), Fiber))
+        
+        AXIOM LocalTrivializationProperty(p : BaseSpace) :
+          |Projection⁻¹(p)| = |Fiber|
+        
+        AXIOM LocalDiffeomorphismProperty(U : OpenSet(BaseSpace)) :
+          Projection|_U : LocalTrivialization(U) ≅ U × Fiber
+      }
+      
+      STRUCTURE Connection(E : FiberBundle) {
+        FIELD HorizontalSubspace : FUNC(TangentSpace(E.TotalSpace), SubSpace(TangentSpace(E.TotalSpace)))
+        
+        AXIOM HorizontalVerticalDecomposition(e : E.TotalSpace) :
+          T_e(E.TotalSpace) = HorizontalSubspace(e) ⊕ T_e(E.Fiber)
+        
+        AXIOM ParallelTransportProperty(γ : Path(E.BaseSpace), e : E_γ(0)) :
+          ParallelTransport(γ, e) = ∫_γ HorizontalLift(γ')
+      }
+    }
+
+    NOTATION {
+      DEF "π_E" = "E.Projection"
+      DEF "E_p" = "E.Fiber|_{π_E⁻¹(p)}"
+      DEF "Γ(E)" = "SectionSpace(E)"
+      DEF "σ|_U" = "Restriction(σ, U)"  WHERE "σ : Γ(E)" AND "U ⊆ E.BaseSpace" 
+      DEF "T_pM" = "TangentSpace(M, p)"
+      DEF "T^*_pM" = "CotangentSpace(M, p)"
+      DEF "H_e" = "HorizontalSubspace(e)"
+      DEF "X^H" = "HorizontalLift(X)"
+      DEF "P_γ" = "ParallelTransport(γ)"
+      DEF "∇_X" = "CovariantDerivative(X)"
+      DEF "L_i" = "TowerInstance[i]"
+      DEF "S_i" = "StructuralTensor(L_i.FiberSpaceStructure)"
+      DEF "C_i" = "ContentTensor(L_i.FiberSpaceStructure)"
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE HorizontalLiftProperties(E : FiberBundle, X Y : VectorField(E.BaseSpace))
+      "X^H + Y^H" = "(X + Y)^H"
+      "f · X^H" = "(f ∘ π_E) · X^H"  WHERE "f : FUNC(E.BaseSpace, Real)"  
+      
+    REWRITE ParallelTransportProperties(E : FiberBundle, γ : Path(E.BaseSpace), 
+                                        X Y : VectorField(E.BaseSpace), 
+                                        f : FUNC(E.BaseSpace, Real))
+      "P_γ(X + Y)" = "P_γ(X) + P_γ(Y)"
+      "P_γ(f · X)" = "(f ∘ γ) · P_γ(X)"
+    
+    SIMPLIFY ConnectionCurvature(E : FiberBundle, ∇ : Connection(E), 
+                                 X Y : VectorField(E.BaseSpace))
+      "Curvature(∇)(X, Y)" ~> "X^H ∘ Y^H - Y^H ∘ X^H - [X, Y]^H"
+    
+    SIMPLIFY StructureTensorContraction(L : TowerLevel, X Y : VectorField(L.EmbeddingSpaceBelow))
+      "⟨S_L(X), Y⟩" ~> "0"
+  }
+  
+  PROOFS {
+    THEOREM ConnectionHolonomy(E : FiberBundle, ∇ : Connection(E), p : Point(E.BaseSpace)) :
+      Image(Φ_∇) = HolonomyGroup(∇, p)
+      WHERE 
+        "Ω_p" = { γ : Loop(E.BaseSpace, p) },
+        "Φ_∇" = "HolonomyHomomorphism(∇)"
+      
+    PROOF {
+      SHOW Image(Φ_∇) ⊆ HolonomyGroup(∇, p) BY {  
+        SUPPOSE g ∈ Image(Φ_∇)
+        THEN ∃ [γ] ∈ Ω_p . Φ_∇([γ]) = g BY Definition("Image")  
+        THEN ∃ γ ∈ Ω_p . ParallelTransport(γ) = g BY Definition("Φ_∇")
+        HENCE g ∈ HolonomyGroup(∇, p) BY Definition("HolonomyGroup")
+      }
+      
+      SHOW HolonomyGroup(∇, p) ⊆ Image(Φ_∇) BY {
+        SUPPOSE h ∈ HolonomyGroup(∇, p)  
+        THEN ∃ γ ∈ Ω_p . ParallelTransport(γ) = h BY Definition("HolonomyGroup")
+        LET [γ] = "LoopClass(γ)"  
+        THEN Φ_∇([γ]) = ParallelTransport(γ) = h BY Definition("Φ_∇")
+        HENCE h ∈ Image(Φ_∇) BY Definition("Image")
+      }
+      
+      CONCLUDE Image(Φ_∇) = HolonomyGroup(∇, p) BY SetEquality
+    }
+
+    THEOREM TowerFlatness(T : TowerInstance) :  
+      ∀ i ∈ [1, n] . Curvature(T.L_i.FiberSpaceStructure.Connection) = 0
+      
+    PROOF {  
+      LET ∇_i = "T.L_i.FiberSpaceStructure.Connection"
+      
+      SUPPOSE i ∈ [1, n]
+      SUPPOSE X Y : VectorField(T.L_{i-1}.FiberSpaceStructure.TotalSpace)
+      
+      SHOW Curvature(∇_i)(X, Y) = 0 BY {
+        HAVE Curvature(∇_i)(X, Y) 
+          ≡ X^H ∘ Y^H - Y^H ∘ X^H - [X, Y]^H  BY ConnectionCurvature
+          ≡ S_i(X) ∘ S_i(Y) - S_i(Y) ∘ S_i(X) - S_i([X, Y]) BY Definition("H_e")
+          ≡ ⟨S_i(X), S_i(Y)⟩ - ⟨S_i(Y), S_i(X)⟩ - ⟨S_i([X, Y]), Id⟩ BY VectorFieldPairing
+          ≡ 0 - 0 - 0  BY StructureTensorContraction
+          ≡ 0
+      }
+      
+      THEREFORE ∀ X Y . Curvature(∇_i)(X, Y) = 0
+      THEREFORE Curvature(∇_i) = 0
+      
+      CONCLUDE ∀ i ∈ [1, n] . Curvature(T.L_i.FiberSpaceStructure.Connection) = 0 BY ArbitrarinessOfI
+    }
+
+    THEOREM ContentUniformization(T : TowerInstance, U : OpenSet(T.L_i.EmbeddingSpaceBelow), 
+                                  i : [1, n]) :
+      ∫_M f dvol ≤ exp(∫_M g dvol)
+      WHERE  
+        "E" = "T.L_i.FiberSpaceStructure",
+        "M" = "E.TotalSpace", 
+        "f" = "C_i|_{π_E⁻¹(U)}",
+        "g" = "S_i|_{π_E⁻¹(U)}"
+
+    PROOF {
+      SUPPOSE W ⊆ π_E⁻¹(U) AND W IS_OPEN
+      
+      SHOW ∫_W f dvol ≤ exp(∫_W g dvol) BY {
+        HAVE ∫_W f dvol
+          ≤ ∫_W sup(f|_W) dvol  BY IntegralSupremumInequality  
+          ≡ sup(f|_W) · vol(W)
+          ≤ exp(sup(g|_W)) · vol(W) BY PointwiseInequalityExponential
+          ≤ exp(∫_W g dvol) BY JensenInequality
+      }
+      
+      THEREFORE ∀ W ⊆ π_E⁻¹(U) . ∫_W f dvol ≤ exp(∫_W g dvol) BY ArbitrarinessOfW
+      HENCE ∫_M f dvol ≤ exp(∫_M g dvol) BY MonotonicityOfIntegral
+    }
+  }
+  
+  EXAMPLES {
+    EXAMPLE WordEmbeddingTower(n : Nat = 5) WHERE
+      LET B_0 = "R^300" WITH "Metric(v, w) = CosineSimilarity(v, w)", 
+          F_0 = "SmoothManifold" WITH {
+            Dimension = 10,
+            Cardinality = 1e5,
+            Atlas = {FlatChart(F_0)},  
+            Tangent(p) = R^10,
+            Cotangent(p) = DualSpace(R^10)
+          },
+          E_0 = "FiberBundle(B_0, F_0)" WITH {
+            TotalSpace.Dimension = 310,
+            Projection((v, w)) = v,
+            LocalTrivialization(U) = (U, F_0)  
+          },
+          L_0 = "TowerLevel" WITH {
+            EmbeddingSpaceBelow = B_0,
+            FiberSpaceStructure = E_0,
+            ContentDensity(e) = exp(-NegativeLogLikelihood(e))
+          }
+      
+      FUNC LevelAbove(i : [1, n]) -> TowerLevel {
+        RETURN "TowerLevel" WITH {
+          EmbeddingSpaceBelow = L_{i-1}.FiberSpaceStructure.TotalSpace,
+          FiberSpaceStructure = "FiberBundle"(
+            EmbeddingSpaceBelow, 
+            SmoothManifold WITH {
+              Dimension = 2^i,
+              Tangent(p) = R^(2^i),
+              Cotangent(p) = DualSpace(R^(2^i))  
+            }
+          ),
+          ContentDensity(e) = exp(-KLDivergence(
+            ConditionalDistribution(e) || 
+            MarginalDistribution(π_E(e))
+          ))  
+        }
+      }
+      
+      LET T = ARRAY(n + 1) WITH "T[0] = L_0" AND "∀ i ∈ [1, n] . T[i] = LevelAbove(i)"
+      
+      THEN T : TowerInstance
+        AND
+      THEN T : TowerInstance
+        AND ∀ i ∈ [1, n] . Curvature(T.L_i.FiberSpaceStructure.Connection) = 0
+          BY TowerFlatness
+        AND ∀ i ∈ [1, n] . ∀ U ⊆ T.L_i.EmbeddingSpaceBelow . 
+            ∫_{π_E⁻¹(U)} C_i dvol ≤ exp(∫_{π_E⁻¹(U)} S_i dvol)
+          BY ContentUniformization
+
+    EXAMPLE DependencyTreeTower(n : Nat = 3) WHERE  
+      LET V = "VocabularySpace" WITH "Metric(v, w) = EditDistance(v, w)",
+          G = "GraphManifold" WITH {
+            Dimension = 100,
+            Atlas = {ExponentialChart(G)},
+            Tangent(p) = R^100,
+            Cotangent(p) = DualSpace(R^100)
+          },
+          E = "FiberBundle(V, G)" WITH {
+            TotalSpace.Dimension = 100 + |V|,
+            Projection((v, g)) = v,
+            LocalTrivialization(U) = (U, G)  
+          },
+          L_0 = "TowerLevel" WITH {
+            EmbeddingSpaceBelow = V,
+            FiberSpaceStructure = E,
+            ContentDensity(e) = SyntacticProbability(π_E(e), e)
+          }
+      
+      FUNC NextLevel(L_i : TowerLevel) -> TowerLevel {
+        LET B_next = "L_i.FiberSpaceStructure.TotalSpace",
+            F_next = "GraphManifold" WITH {  
+              Dimension = L_i.FiberSpaceStructure.Fiber.Dimension + 1,
+              Tangent(p) = R^(L_i.FiberSpaceStructure.Fiber.Dimension + 1),
+              Cotangent(p) = DualSpace(Tangent(p))
+            },
+            E_next = "FiberBundle(B_next, F_next)" WITH {
+              Projection((b, f)) = b,
+              LocalTrivialization(U) = (U, F_next)  
+            }
+        
+        RETURN "TowerLevel" WITH {
+          EmbeddingSpaceBelow = B_next,
+          FiberSpaceStructure = E_next,
+          ContentDensity(e) = SemanticCoherence(π_E(e), e)  
+        }
+      }
+
+      LET T = ARRAY(n) WITH "T[0] = L_0" AND "∀ i ∈ [1, n) . T[i] = NextLevel(T[i-1])"
+      
+      THEN T : TowerInstance 
+        AND ∀ i ∈ [1, n] . Curvature(T.L_i.FiberSpaceStructure.Connection) = 0
+          BY TowerFlatness
+        AND ∀ i ∈ [1, n] . ∀ e1 e2 : T.L_i.FiberSpaceStructure.TotalSpace . 
+            π_E(e1) = π_E(e2) IMPLIES 
+              C_i(e1) / C_i(e2) ≤ exp(Distance(S_i(e1), S_i(e2)))  
+          BY ContentUniformization
+
+    COUNTEREXAMPLE NonSmoothTransition(M : SmoothManifold) WHERE
+      M = "SmoothManifold" WITH {
+        Dimension = 2,
+        Atlas = {(U1, φ1), (U2, φ2)},
+        Tangent(p) = R^2,
+        Cotangent(p) = DualSpace(R^2)
+      } AND U1 ∩ U2 ≠ ∅ AND φ1 ∘ φ2⁻¹ IS_NOT_SMOOTH
+      
+      THEN NOT (M SATISFIES SmoothTransitions)
+  }
+}

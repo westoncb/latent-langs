@@ -1,0 +1,236 @@
+CONCEPT FractalManifolds {
+  LANGUAGE {
+    TYPE FM[H : (0,1), M : Manifold] <: Manifold
+    TYPE Measure[S] = (S -> ℝ≥0) ∪ {∞}
+    TYPE HausdorffDim = Manifold -> (0,∞)
+
+    FUNC Iterate(f : M -> M, n : ℕ) : M -> M
+    FUNC Attractor(f : M -> M) : 𝒫(M)  
+    FUNC BoxCounting(S, ε) : ℕ
+
+    AXIOM Contraction {
+      ∀ (f : M -> M) . ∃ (c : (0,1)) . 
+        ∀ (x y : M) . d(f(x), f(y)) ≤ c * d(x, y)
+    }
+
+    NOTATION "f^n" = Iterate(f, n)
+    NOTATION "δ[S]" = HausdorffDim(S)
+    NOTATION "N[ε]" = BoxCounting(S, ε)
+  }
+
+  STRUCTURE FractalManifold(H : (0,1), M : Manifold) : FM[H, M] {
+    DEF Metric(x y : M) : ℝ≥0 = inf{ Σ[i=1 to n] d(xi, xi+1)^H | x1 = x, xn+1 = y, n : ℕ }
+
+    REQUIRE ∀ (x y z : M) . 
+      Metric(x, y) ≤ Metric(x, z) + Metric(z, y)
+  }
+
+  PROOFS {
+    THEOREM HausdorffMeasure {
+      STATEMENT : ∀ (S : FM[H, M]) . 
+        μ[H](S) = lim[ε->0] (inf{ Σ[i=1 to ∞] diam(Ui)^H | S ⊆ ⋃[i=1 to ∞] Ui, diam(Ui) < ε })
+
+      PROOF {
+        LET S : FM[H, M], ε : ℝ>0, δ = HausdorffDim(S)
+        
+        μ[H](S) 
+          = lim[ε->0] (inf{ Σ diam(Ui)^H | S ⊆ ⋃ Ui, diam(Ui) < ε })  BY definition
+          ≈ lim[ε->0] (ε^(H-δ) * N[ε](S))                            BY {
+              N[ε](S) ≈ C * ε^-δ                                     BY definition of δ
+              diam(Ui) ≈ ε                                           FOR "optimal" cover {Ui}
+              Σ diam(Ui)^H ≈ N[ε] * ε^H ≈ C * ε^(H-δ)                USING PREV, PREV
+            }
+          = C * lim[ε->0] ε^(H-δ)
+          = 0     IF H < δ
+            ∞     IF H > δ
+            C     IF H = δ                                          BY properties of limits
+      }
+    }
+
+    THEOREM Density {
+      STATEMENT : ∀ (S : FM[H, M]) (f : M -> M | f is contraction) .
+        δ[Attractor(f)] = -log[c](N) 
+        WHERE N = lim[n->∞] (card(Fix(f^n)))^(1/n), c = contraction factor of f
+
+      PROOF {
+        LET S : FM[H, M], f : M -> M, A = Attractor(f), δ = δ[A]
+        ASSUME (1) : f is contraction with factor c
+
+        lim[n->∞] (f^n(S)) = A                                      BY definition of attractor
+        
+        lim[ε->0] (N[ε](A) / N[ε](f^n(S))) = c^(n*δ)                BY {
+          N[ε](f^n(S)) ≈ N[c^n*ε](S)                                BY (1)
+          N[ε](A) ≈ C1 * ε^-δ                                       BY definition of δ
+          N[c^n*ε](S) ≈ C2 * (c^n*ε)^-δ ≈ C2 * c^(-n*δ) * ε^-δ      BY definition of δ
+          lim[ε->0] (C1 / (C2 * c^(-n*δ))) = c^(n*δ)                USING PREV, PREV
+        }
+
+        lim[n->∞] (card(Fix(f^n)))^(1/n) = N                        BY definition of N
+        
+        log[c](N) 
+          = log[c](lim[n->∞] (card(Fix(f^n)))^(1/n))
+          = lim[n->∞] log[c]((card(Fix(f^n)))^(1/n))               BY continuity of log
+          = lim[n->∞] (1/n) * log[c](card(Fix(f^n)))
+          = lim[n->∞] (log[c^n](card(Fix(f^n))))
+          = -δ                                                      USING PREV, PREV
+      }
+    }
+  }
+}
+
+
+
+CONCEPT FractalNetworks {
+  LANGUAGE {
+    TYPE Node
+    TYPE Edge = (Node, Node)
+    TYPE Graph = (Set[Node], Set[Edge])
+    TYPE Subgraph[G : Graph] = { S : Graph | S.Nodes ⊆ G.Nodes, S.Edges ⊆ G.Edges }
+    TYPE Degree[G : Graph] = Node -> ℕ
+    TYPE Clustering[G : Graph] = Node -> [0,1]
+    TYPE Centrality[G : Graph] = Node -> ℝ≥0
+
+    FUNC ShortestPath[G : Graph](n1 n2 : Node) : ℕ ∪ {∞}
+    FUNC Dijkstra[G : Graph](source : Node) : (Node -> ℝ≥0)
+
+    AXIOM SmallWorld {
+      ∀ (G : Graph | G is connected) (n : G.Nodes) . 
+        avg[m : G.Nodes](ShortestPath[G](n, m)) ∈ O(log(|G.Nodes|))
+    }
+
+    AXIOM ScaleFree {
+      ∀ (G : Graph) . 
+        Pr[n : G.Nodes](Degree[G](n) = k) ∝ k^(-γ) for some γ > 0
+    }
+  }
+
+  STRUCTURE FractalNetwork(H : (0,1), G : Graph) : FractalManifold[H, G] {
+    DEF ClusteringDimension : (0,∞) = 
+      lim[ε->0](log(avg[n : G.Nodes](|{ m : Ball[n, ε] | G.Edges(n, m) }|)) / log(1/ε))
+
+    DEF Density(S : Subgraph[G]) : ℝ = 
+      |S.Edges| / |S.Nodes|^H
+
+    REQUIRE ∀ (S T : Subgraph[G]) . 
+      d(S, T) = inf[f : S ≅ T] max[n : S.Nodes] Dijkstra[G](f(n))(n)
+
+    REQUIRE ∀ (S : Subgraph[G]) . 
+      δ[S] = ClusteringDimension
+  }
+
+  PROOFS {
+    THEOREM Densification {
+      STATEMENT : ∀ (F : FractalNetwork[H, G]) (S : Subgraph[G]) .
+        Density(S) ∝ |S.Nodes|^(1-H)
+
+      PROOF {
+        LET F : FractalNetwork[H, G], S : Subgraph[G], δ = ClusteringDimension, d = Density(S)
+        
+        |Ball[n, ε]| ∝ ε^δ                                  FOR n : S.Nodes   BY definition of δ
+        |S| ∝ diam(S)^δ                                     BY covering S with balls of size ≈ diam(S)
+        |S| ∝ |S.Nodes|^(δ/H)                               USING PREV, PREV
+        d = |S.Edges| / |S.Nodes|^H                         BY definition of d
+        d ∝ |S|^(1-H/δ) / |S.Nodes|^H                       USING PREV
+        d ∝ (|S.Nodes|^(δ/H))^(1-H/δ) / |S.Nodes|^H         USING PREV
+        d ∝ |S.Nodes|^(δ/H - δ/H + 1 - H)
+        d ∝ |S.Nodes|^(1-H)                                 BY ALGEBRA
+      }
+    }
+
+    THEOREM RichClubScaling {
+      STATEMENT : ∀ (F : FractalNetwork[H, G]) (k : ℕ) . 
+        Φ(k) ∝ k^(1/H - 1)
+        WHERE Φ(k) = 2 * |{ (n, m) : G.Edges | Degree[G](n) ≥ k, Degree[G](m) ≥ k }| / (|{ n : G.Nodes | Degree[G](n) ≥ k }| * (|{ n : G.Nodes | Degree[G](n) ≥ k }| - 1))
+
+      PROOF {
+        LET F : FractalNetwork[H, G], k : ℕ, δ = ClusteringDimension
+        LET N≥k = { n : G.Nodes | Degree[G](n) ≥ k }, E≥k = { (n, m) : G.Edges | n ∈ N≥k, m ∈ N≥k }
+
+        |N≥k| ∝ k^(-γ)                                      BY ScaleFree
+        |E≥k| ∝ |N≥k|^(2-H)                                 BY Densification
+        |E≥k| ∝ k^(-γ*(2-H))                                USING PREV, PREV
+        Φ(k) = 2 * |E≥k| / (|N≥k| * (|N≥k| - 1))            BY definition of Φ
+        Φ(k) ∝ k^(-γ*(2-H)) / (k^(-2*γ))                    USING PREV, PREV
+        Φ(k) ∝ k^(2*γ - γ*(2-H))
+        Φ(k) ∝ k^(γ*H)
+        γ = 1/H                                             BY ASSUME γ = 1/H
+        Φ(k) ∝ k^(1/H - 1)                                  USING PREV, PREV
+      }
+    }
+  }
+}
+
+
+
+CONCEPT FractalNetworks {
+  LANGUAGE {
+    TYPE Network = (Nodes : 𝒫(Node), Edges : 𝒫(Node × Node))
+    TYPE Degree = Node -> ℕ
+    TYPE Clustering = Node -> [0,1]
+    TYPE Distance = Node × Node -> ℝ≥0
+
+    FUNC ShortestPath(x y : Node) : ℝ≥0
+    FUNC LocalDimension(x : Node, r : ℝ≥0) : ℝ≥0
+    FUNC Centrality(x : Node) : ℝ
+
+    NOTATION "γ[x]" = Degree(x)
+    NOTATION "C[r]" = Clustering(x, r)
+    NOTATION "d[x,y]" = Distance(x, y)
+  }
+
+  STRUCTURE FractalNetwork : Network {
+    REQUIRE ∃ (H : (0,1)) . 
+      ∀ (x : Node) . lim[r->∞] LocalDimension(x, r) = H
+
+    DEF FractalDimension : ℝ = H FROM REQUIRE
+
+    FUNC LocalDimension(x : Node, r : ℝ≥0) : ℝ≥0 = 
+      log[γ[x]](card({ y : Node | d[x,y] ≤ r }))
+
+    FUNC Metric(x y : Node) : ℝ≥0 = 
+      inf{ Σ[i=1 to n] d[xi, xi+1]^H | x1 = x, xn+1 = y, n : ℕ }
+
+    REQUIRE ∀ (x y z : Node) . 
+      Metric(x, y) ≤ Metric(x, z) + Metric(z, y)
+  }
+
+  PROOFS {
+    THEOREM SmallWorld {
+      STATEMENT : ∀ (F : FractalNetwork) (x y : Node) .
+        E[ShortestPath(x, y)] ≤ C * log[card(Nodes)](d[x,y])
+        WHERE C = 1 / FractalDimension(F)
+
+      PROOF {
+        LET F : FractalNetwork, H = FractalDimension(F)
+        LET x y : Node, d = d[x,y], δ = LocalDimension(x, d)
+
+        ShortestPath(x, y) 
+          ≤ Metric(x, y)                                  BY definition of shortest path
+          ≤ d^H                                            BY definition of Metric
+          = exp(H * log(d))
+          = card(Nodes)^(H * log[card(Nodes)](d))         BY ALGEBRA
+          ≤ card(Nodes)^(H * log[card(Nodes)](d[x,y]))    USING d ≤ d[x,y]
+          ≤ card(Nodes)^(δ * log[card(Nodes)](d[x,y]))    BY H ≤ δ
+          = C * log[card(Nodes)](d[x,y])                  WHERE C = 1/H
+        
+        HENCE E[ShortestPath(x, y)] ≤ C * log[card(Nodes)](d[x,y])  
+      }
+    }
+
+    THEOREM Centrality {
+      STATEMENT : ∀ (F : FractalNetwork) (x : Node) . 
+        Centrality(x) ∝ card({ r : ℝ≥0 | C[r](x) ≥ 1/2 })
+
+      PROOF {
+        LET F : FractalNetwork, x : Node
+
+        Centrality(x)
+          ∝ ∫[0 to ∞] C[r](x) dr                      BY definition
+          ∝ ∫[0 to ∞] 𝟙{C[r](x) ≥ 1/2} dr            BY ALGEBRA
+          = μ({ r : ℝ≥0 | C[r](x) ≥ 1/2 })            BY definition of Lebesgue measure
+          ∝ card({ r : ℝ≥0 | C[r](x) ≥ 1/2 })         BY MEASURE THEORY
+      }
+    }
+  }  
+}
+

@@ -1,0 +1,103 @@
+CONCEPT QuantumCausalStructures {
+  LANGUAGE {
+    TYPE Qubit  -- Quantum bit
+    TYPE TensorProduct[n : Nat] = Qubit -> ... -> Qubit -> Qubit  -- n-fold tensor product 
+    TYPE Operator = Matrix[Complex, 2^n, 2^n]  -- Operator on n qubits
+    TYPE Process = Operator -> Operator  -- Quantum process
+    TYPE CausalStructure = CausalNetwork[Process] -- Causal network of quantum processes
+    
+    FUNC Entanglement(ψ : Qubit) : Real -- Entanglement measure
+    FUNC Identity : Process  -- Identity process
+    FUNC Discard : Process  -- Discarding process
+    FUNC QuantumChannel(K : Matrix) : Process -- Quantum channel defined by Kraus operators K
+    FUNC ParallelCompose(P : Process, Q : Process) : Process  -- Parallel composition of processes
+    FUNC SequentialCompose(P : Process, Q : Process) : Process  -- Sequential composition of processes
+        
+    AXIOM CausalCompatibility {
+      ∀ (G : CausalStructure) (ρ : Operator) . 
+        G(ρ) = G(ρ')  WHERE ρ' = DiscardNonInputs(G, ρ)
+    }
+
+    AXIOM EntanglementMonotonicity {
+      ∀ (ρ : Operator) (C : QuantumChannel) . 
+        Entanglement(C(ρ)) ≤ Entanglement(ρ)
+    }
+    
+    AXIOM NaturalityOfEntanglement {
+      ∀ (ρ : Operator) (U V : Unitary) . 
+        Entanglement((U⊗V)(ρ)) = Entanglement(ρ)
+    }
+  }
+
+  STRUCTURE EntanglementRenormalization {
+    DEF RG[n : Nat](G : CausalStructure[n]) : CausalStructure[n-1] = 
+      DiscardLowEntanglementEdges(
+        MergeAdjacentProcesses(G))
+
+    DEF FixedPoint(G₀ : CausalStructure[n]) : CausalStructure = 
+      LET G = G₀, G' = RG(G), ...  
+      IN LIM k -> ∞. Gᵏ
+  }
+    
+  PROOFS {
+    THEOREM Universality {
+      STATEMENT:  
+        ∀ (C : QuantumCircuit) . 
+          ∃ (G : CausalStructure) . G ≃ C
+
+      PROOF:
+        LET C : QuantumCircuit
+        WTS ∃ (G : CausalStructure) . G ≃ C
+
+        DEFINE G : CausalStructure = 
+          LET G₀ = ParallelCompose(Wire, ..., Wire) -- n wires
+          IN FOLDL (λ G T. ApplyGate(G, T)) G₀ C
+          WHERE ApplyGate(G, (U, (i₁, ..., iₖ))) = 
+                  SequentialCompose(G, ParallelCompose(
+                    Identity, ..., QuantumChannel(U), ..., Identity))
+                  WITH QuantumChannel(U) at positions i₁, ..., iₖ  
+
+        SHOW G ≃ C BY {
+          LET ρ : Operator
+          
+          G(ρ) 
+            = ApplyGate(...(ApplyGate(G₀, T₁))..., Tₙ)(ρ)
+            = (Uₙ ⊗ ... ⊗ U₁)(ρ)
+            = C(ρ)   BY DEF QuantumCircuit
+        }
+    }
+
+    THEOREM FixedPointDecoupling {
+      STATEMENT:
+        ∀ (G₀ : CausalStructure[n]) (ρ : Operator[n]) .
+          Entanglement((FixedPoint(G₀))(ρ)) ≤ ε
+
+      PROOF:
+        LET G₀ : CausalStructure[n], ρ : Operator[n]
+        
+        LET G = FixedPoint(G₀)
+        
+        HAVE Gᵏ(ρ) -> G(ρ) as k -> ∞ BY DEF FixedPoint
+        
+        HAVE ∀ k . Entanglement(Gᵏ⁺¹(ρ)) ≤ Entanglement(Gᵏ(ρ)) BY {  
+          LET k : Nat
+
+          Gᵏ⁺¹(ρ) = (DiscardLowEntanglementEdges ∘ MergeAdjacentProcesses)(Gᵏ(ρ)) 
+            BY DEF RG
+
+          Entanglement(MergeAdjacentProcesses(Gᵏ(ρ))) ≤ Entanglement(Gᵏ(ρ)) 
+            BY EntanglementMonotonicity, MergeAdjacentProcesses = QuantumChannel
+
+          Entanglement(DiscardLowEntanglementEdges(MergeAdjacentProcesses(Gᵏ(ρ)))) 
+            ≤ Entanglement(MergeAdjacentProcesses(Gᵏ(ρ)))
+            BY EntanglementMonotonicity, DiscardLowEntanglementEdges = QuantumChannel
+
+          HENCE Entanglement(Gᵏ⁺¹(ρ)) ≤ Entanglement(Gᵏ(ρ)) BY ABOVE, DEF Gᵏ⁺¹
+        }
+
+        HAVE Entanglement(Gᵏ(ρ)) -> 0 as k -> ∞  BY ABOVE, <<Entanglement ≥ 0>>
+        
+        HENCE Entanglement(G(ρ)) ≤ ε BY ABOVE, LIM k -> ∞. Gᵏ(ρ) = G(ρ)
+    }
+  }
+}

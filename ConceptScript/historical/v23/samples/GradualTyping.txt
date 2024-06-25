@@ -1,0 +1,84 @@
+CONCEPT GradualTyping {
+
+  LANGUAGE {
+    TYPE Term
+    TYPE Type
+    TYPE ConsistencyRelation = Type -> Type -> 𝔹
+    
+    FUNC TDyn : Type
+    FUNC TArr : Type -> Type -> Type
+    
+    PRED HasType : Term -> Type -> 𝔹
+    PRED Reduces : Term -> Term -> 𝔹
+    
+    NOTATION "t : T" = HasType(t, T)
+    NOTATION "S ~ T" = Consistent(S, T)
+    NOTATION "t ↦ u" = Reduces(t, u)
+  }
+  
+  STRUCTURE {
+    DEF Consistent(S, T) <-> CASE (S, T) OF
+      | (TDyn, _) -> ⊤
+      | (_, TDyn) -> ⊤
+      | (TArr(S1, S2), TArr(T1, T2)) -> Consistent(T1, S1) ∧ Consistent(S2, T2)
+      | _ -> S = T
+      
+    DEF CastsTo(S, T) <-> Consistent(S, T) ∧ (S ≠ TDyn ∨ T = TDyn)
+    
+    AXIOM ConsistentDynamic {
+      ∀T. Consistent(TDyn, T)
+    }
+    
+    AXIOM ConsistentSymmetric {
+      ∀S T. Consistent(S, T) <-> Consistent(T, S)
+    }
+    
+    AXIOM CastReflexive {
+      ∀T. CastsTo(T, T)
+    }
+    
+    AXIOM CastTransitive {
+      ∀R S T. CastsTo(R, S) ∧ CastsTo(S, T) -> CastsTo(R, T)
+    }
+  }
+  
+  PROOFS {
+    THEOREM GradualGuarantee {
+      STATEMENT : ∀t u T. t : T ∧ t ↦* u -> ∃T'. u : T' ∧ T ~ T'
+      
+      PROOF BY INDUCTION ON t ↦* u {
+        CASE Base: t = u
+          TAKE T' = T
+          HAVE t : T' SINCE t : T
+          HAVE T ~ T' SINCE T = T'
+        CASE Step: t ↦ t' ↦* u  
+          ASSUME IH: ∃T''. t' : T'' ∧ T ~ T''
+          ASSUME t' : T''
+          ASSUME t ↦ t'
+          ASSUME T ~ T''
+          SHOW ∃T'. u : T' ∧ T'' ~ T' BY IH
+          HENCE ∃T'. u : T' ∧ T ~ T' BY ConsistentTransitive
+      }
+    }
+    
+    TACTIC ConsistentTransitive {
+      ASSUME S ~ T
+      ASSUME T ~ U  
+      SHOW S ~ U BY {
+        LET Cast1 = WITNESS(CastsTo(S, T))
+        LET Cast2 = WITNESS(CastsTo(T, U))
+        LET Cast3 = CastTransitive(Cast1, Cast2)
+        ConsistentSymmetric(LEFT(Cast3))
+      }
+    }
+  }
+}
+
+This Concept formalizes some key ideas from gradual typing, a approach to mixing static and dynamic typing in programming languages:
+
+The TDyn type represents the dynamic type.
+The Consistent relation captures the notion of type consistency, which allows TDyn to be consistent with any type.
+The CastsTo relation represents safe casts between types. It requires consistency but prohibits casting from TDyn to anything other than TDyn.
+The GradualGuarantee theorem states that if a term t has a type T and reduces to a term u, then u has some type T' that is consistent with T. This captures the key soundness property of gradually typed languages.
+
+The proof uses a helper tactic ConsistentTransitive to show that consistency is transitive, which follows from the transitivity of casting.

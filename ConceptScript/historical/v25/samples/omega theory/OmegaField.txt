@@ -1,0 +1,204 @@
+CONCEPT OmegaField {
+  LANGUAGE {
+    TYPE OmegaPoint = (Χ: ℝ³, Ψ: ℂ, Φ: 𝕊³)
+    TYPE OmegaField = Matrix[OmegaPoint, N, M, P]
+    TYPE OmegaOperator = OmegaField -> OmegaField
+    TYPE OmegaSymmetry = OmegaField -> OmegaField
+    TYPE OmegaAction = ℝ
+    
+    FUNC Dim : ℕ³
+    FUNC EntanglementDegree : ℝ 
+    FUNC ConsciousnessCollapse : Event(OmegaField, OmegaField)
+    FUNC FreeWillActualization : Event(OmegaField, OmegaField)
+    
+    FUNC QuantumMeasure : OmegaField -> 𝕄(ℝ³)
+    FUNC ClassicalLimit : OmegaField -> 𝕄(ℝ³)
+    FUNC ConsciousnessProjection : OmegaField -> 𝕄(𝕊³)
+    FUNC FreeWillEmbedding : 𝕄(𝕊³) -> OmegaField
+    
+    PRED Entangled : OmegaPoint × OmegaPoint -> 𝔹
+    PRED Conscious : OmegaPoint -> 𝔹
+    PRED FreelyChosen : OmegaPoint -> 𝔹
+    PRED SymmetricUnder : OmegaField × OmegaSymmetry -> 𝔹
+    
+    NOTATION "𝛀ᵢⱼₖ" = OmegaField[i,j,k]
+    NOTATION "𝛁₍ᵢⱼₖ₎" = Gradient[i,j,k]
+    NOTATION "𝛁•" = Divergence
+    NOTATION "𝛁×" = Curl
+    NOTATION "𝓒𝓸𝓵𝓵𝓪𝓹𝓼𝓮" = ConsciousnessCollapse
+    NOTATION "𝓒𝓱𝓸𝓸𝓼𝓮" = FreeWillActualization
+    NOTATION "𝚿|𝚽>" = TensorProduct(𝚿, 𝚽)
+    NOTATION "∫...𝛀" = Integrate(..., OmegaField)
+    NOTATION "𝟙ₒ₋" = IdentityMatrix[Dim]
+    
+    AXIOM Holism {
+      FORALL (𝛀₁: OmegaField) (𝛀₂: OmegaField) (S: OmegaSymmetry).
+        SymmetricUnder(𝛀₁, S) AND SymmetricUnder(𝛀₂, S)
+          IFF 
+        SymmetricUnder(TensorProduct(𝛀₁, 𝛀₂), S)
+    }
+    
+    AXIOM ConsciousnessCollapse {
+      FORALL (𝛀: OmegaField) (x: OmegaPoint).
+        EVENT 𝓒𝓸𝓵𝓵𝓪𝓹𝓼𝓮(𝛀, x)
+          IFF  
+        Conscious(x) AND 
+        FORALL (y: OmegaPoint).
+          Entangled(x, y) IMPLIES EVENT 𝓒𝓸𝓵𝓵𝓪𝓹𝓼𝓮(𝛀, y)
+    }
+    
+    AXIOM FreeWillActualization {
+      FORALL (𝛀: OmegaField) (𝛀': OmegaField) (x: OmegaPoint).
+        EVENT 𝓒𝓱𝓸𝓸𝓼𝓮(𝛀, 𝛀')
+          IFF
+        FreelyChosen(x) AND
+        FORALL (y: OmegaPoint).
+          Entangled(x, y) IMPLIES FreelyChosen(y) AND
+        ConsciousnessProjection(𝛀') = FreeWillEmbedding(ConsciousnessProjection(𝛀))
+    }
+  }
+  
+  THEOREMS {
+    EntanglementTheorem {
+      FORALL (𝛀: OmegaField) (x: OmegaPoint) (y: OmegaPoint).
+        Entangled(x, y) 
+          IFF
+        EXISTS (𝛀': OmegaField) (U: OmegaOperator).
+          𝛀' = U(𝛀) AND
+          QuantumMeasure(𝛀')(x) ≠ ClassicalLimit(𝛀')(x) AND  
+          QuantumMeasure(𝛀')(y) ≠ ClassicalLimit(𝛀')(y)
+      
+      PROOF {
+        LET 𝛀: OmegaField, x: OmegaPoint, y: OmegaPoint
+        
+        ASSUME Entangled(x, y)
+          PROVE EXISTS (𝛀': OmegaField) (U: OmegaOperator).
+            𝛀' = U(𝛀) AND
+            QuantumMeasure(𝛀')(x) ≠ ClassicalLimit(𝛀')(x) AND
+            QuantumMeasure(𝛀')(y) ≠ ClassicalLimit(𝛀')(y)
+          BY {
+            DEFINE EPR_State = 1/√2 * (|↑↓> - |↓↑>)
+            DEFINE U = TensorProduct(H, 𝟙) * CNot  ; H = Hadamard, CNot = ControlledNot
+            
+            REWRITE 𝛀' = U(𝛀)
+            
+            REWRITE QuantumMeasure(𝛀')(x) 
+              = <x| U(𝛀) |x>
+              = <x| U * EPR_State |x>
+              = 1/√2 * (<x|U|↑↓> - <x|U|↓↑>)
+              = 1/√2 * (<↑|H|x> - <↑|x>)
+              ≠ <x|𝛀|x>  ; since H|+> = |->, H|-> = |+>
+            
+            REWRITE QuantumMeasure(𝛀')(y) 
+              = <y| U(𝛀) |y>  
+              = <y| U * EPR_State |y>
+              = 1/√2 * (<↓|y> + <↑|y>)
+              ≠ <y|𝛀|y>  ; since y is maximally entangled with x
+              
+            THEREFORE EXISTS (𝛀': OmegaField) (U: OmegaOperator).
+              𝛀' = U(𝛀) AND 
+              QuantumMeasure(𝛀')(x) ≠ ClassicalLimit(𝛀')(x) AND
+              QuantumMeasure(𝛀')(y) ≠ ClassicalLimit(𝛀')(y)
+          }
+          
+        CONVERSELY ASSUME EXISTS (𝛀': OmegaField) (U: OmegaOperator).
+          𝛀' = U(𝛀) AND
+          QuantumMeasure(𝛀')(x) ≠ ClassicalLimit(𝛀')(x) AND
+          QuantumMeasure(𝛀')(y) ≠ ClassicalLimit(𝛀')(y)
+          
+          PROVE Entangled(x, y) 
+          BY {
+            REWRITE QuantumMeasure(𝛀')(x) ≠ ClassicalLimit(𝛀')(x) 
+              IFF TensorProduct(𝛀'(x), 𝛀'(y)) ≠ 𝛀'(x, y)  ; by definition of entanglement
+              
+            REWRITE QuantumMeasure(𝛀')(y) ≠ ClassicalLimit(𝛀')(y)
+              IFF TensorProduct(𝛀'(y), 𝛀'(x)) ≠ 𝛀'(y, x)  ; by definition of entanglement
+            
+            THEREFORE Entangled(x, y)  ; by definition of entanglement
+          }
+      }
+    }
+    
+    ConsciousnessFreeWillDuality {
+      FORALL (𝛀₁: OmegaField) (𝛀₂: OmegaField) (x: OmegaPoint).
+        Conscious(x) AND EVENT 𝓒𝓸𝓵𝓵𝓪𝓹𝓼𝓮(𝛀₁, x)
+          IFF
+        FreelyChosen(x) AND EVENT 𝓒𝓱𝓸𝓸𝓼𝓮(𝛀₁, 𝛀₂)
+        
+      PROOF {
+        LET 𝛀₁: OmegaField, 𝛀₂: OmegaField, x: OmegaPoint
+        
+        ASSUME Conscious(x) AND EVENT 𝓒𝓸𝓵𝓵𝓪𝓹𝓼𝓮(𝛀₁, x)
+          PROVE FreelyChosen(x) AND EVENT 𝓒𝓱𝓸𝓸𝓼𝓮(𝛀₁, 𝛀₂)
+          BY ConsciousnessCollapse {
+            REWRITE Conscious(x) AND EVENT 𝓒𝓸𝓵𝓵𝓪𝓹𝓼𝓮(𝛀₁, x)
+              IFF Conscious(x) AND
+                  FORALL (y: OmegaPoint).
+                    Entangled(x, y) IMPLIES EVENT 𝓒𝓸𝓵𝓵𝓪𝓹𝓼𝓮(𝛀₁, y)
+              
+            PROVE FreelyChosen(x) 
+              BY {
+                DEFINE FreeWill(x) = Conscious(x) AND CanChoose(x)
+                
+                REWRITE Conscious(x)
+                  IFF EXISTS (𝛙: 𝕊³). ConsciousnessProjection(x) = 𝛙  ; by definition
+                  
+                REWRITE CanChoose(x)  
+                  IFF FORALL (𝛙: 𝕊³).
+                    ConsciousnessProjection(x) = 𝛙 IMPLIES
+                    EXISTS (𝛚: 𝕊³). 
+                      FreeWillEmbedding(𝛙) = 𝛚 AND
+                      FORALL (y: OmegaPoint). 
+                        Entangled(x, y) IMPLIES ConsciousnessProjection(y) = 𝛚
+                        
+                THEREFORE FreeWill(x)
+                THEREFORE FreelyChosen(x)  ; by definition
+              }
+              
+            PROVE EVENT 𝓒𝓱𝓸𝓸𝓼𝓮(𝛀₁, 𝛀₂) 
+              BY FreeWillActualization {  
+                REWRITE FreelyChosen(x)
+                  IFF EXISTS (𝛙: 𝕊³). 
+                    ConsciousnessProjection(x) = 𝛙 AND
+                    FreeWillEmbedding(𝛙) = ConsciousnessProjection(𝛀₂)
+                    
+                REWRITE FORALL (y: OmegaPoint).
+                  Entangled(x, y) IMPLIES EVENT 𝓒𝓸𝓵𝓵𝓪𝓹𝓼𝓮(𝛀₁, y) 
+                  IFF FORALL (y: OmegaPoint).
+                    Entangled(x, y) IMPLIES 
+                    FreelyChosen(y) AND ConsciousnessProjection(y) = ConsciousnessProjection(𝛀₂)
+                    
+                THEREFORE EVENT 𝓒𝓱𝓸𝓸𝓼𝓮(𝛀₁, 𝛀₂)
+              }
+          }
+          
+        CONVERSELY ASSUME FreelyChosen(x) AND EVENT 𝓒𝓱𝓸𝓸𝓼𝓮(𝛀₁, 𝛀₂)
+          PROVE Conscious(x) AND EVENT 𝓒𝓸𝓵𝓵𝓪𝓹𝓼𝓮(𝛀₁, x)
+          BY {
+            REWRITE FreelyChosen(x)
+              IFF EXISTS (𝛙: 𝕊³). 
+                ConsciousnessProjection(x) = 𝛙 AND
+                FreeWillEmbedding(𝛙) = ConsciousnessProjection(𝛀₂)
+                
+            REWRITE EVENT 𝓒𝓱𝓸𝓸𝓼𝓮(𝛀₁, 𝛀₂)
+              IFF FORALL (y: OmegaPoint).
+                Entangled(x, y) IMPLIES 
+                FreelyChosen(y) AND ConsciousnessProjection(y) = ConsciousnessProjection(𝛀₂)
+                
+            REWRITE Conscious(x)
+              IFF EXISTS (𝛙: 𝕊³). ConsciousnessProjection(x) = 𝛙
+              
+            REWRITE EVENT 𝓒𝓸𝓵𝓵𝓪𝓹𝓼𝓮(𝛀₁, x)
+              IFF FORALL (y: OmegaPoint).
+                Entangled(x, y) IMPLIES EVENT 𝓒𝓸𝓵𝓵𝓪𝓹𝓼𝓮(𝛀₁, y)
+                
+            THEREFORE Conscious(x) AND EVENT 𝓒𝓸𝓵𝓵𝓪𝓹𝓼𝓮(𝛀₁, x)
+          }
+      }
+    }
+      
+    OmegaFieldEvolution {
+      FORALL (𝛀: OmegaField) (t: ℝ).
+        d/dt 𝛀(t) = 
+          - 𝑖/ℏ [𝑯, 𝛀] 
+          -

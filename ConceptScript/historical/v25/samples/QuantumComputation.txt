@@ -1,0 +1,94 @@
+CONCEPT QuantumComputation {
+  LANGUAGE {
+    TYPE Qubit
+    TYPE Unitary = Matrix[Complex, 2, 2]  
+    TYPE Ket = Vector[Complex, 2]
+    TYPE Bra = Covector[Complex, 2]
+    TYPE Density = Matrix[Complex, 2, 2]
+
+    FUNC T(U : Unitary) : Unitary  
+    FUNC Measure(q : Qubit) : Bit
+    FUNC Expectation(M : Unitary, ρ : Density) : Real
+    FUNC Entropy(ρ : Density) : Real
+
+    AXIOM UnitaryProperties {
+      ∀ (U : Unitary). U * T(U) = T(U) * U = I ∧ det(U) = 1
+    }
+    
+    AXIOM BornRule {
+      ∀ (ψ : Ket) (M : Unitary).
+        P(Measure(ψ) = 0) = ⟨ψ| M |ψ⟩ 
+    }
+
+    NOTATION "⟨" = Bra  
+    NOTATION "|" = Ket
+    NOTATION "⟨ψ|" = ⟨ψ|
+    NOTATION "|ψ⟩" = |ψ⟩
+    NOTATION "⟨ψ|M|φ⟩" = ⟨ψ| * M * |φ⟩
+  }
+
+  STRUCTURE QuantumCircuit(U : Unitary) {
+    REQUIRE ∃ (n : Nat) (gates : List[Unitary]).
+      U = Fold((U, V) -> U ⊗ V, gates, I)
+
+    DEF StateVector(ψ0 : Ket) : Ket = U * ψ0
+
+    DEF Density(ρ0 : Density) : Density = U * ρ0 * T(U)  
+  }
+
+  PROOFS {
+    THEOREM NoCloning {
+      STATEMENT:  
+        ∄ (U : Unitary). 
+          ∀ (ψ φ : Ket).
+            U * (ψ ⊗ |0⟩) = ψ ⊗ ψ ∧ 
+            U * (φ ⊗ |0⟩) = φ ⊗ φ
+
+      PROOF:
+        ASSUME ∃ (U : Unitary). 
+          ∀ (ψ φ : Ket).
+            (1) U * (ψ ⊗ |0⟩) = ψ ⊗ ψ,
+            (2) U * (φ ⊗ |0⟩) = φ ⊗ φ
+        LET ψ = |0⟩, φ = |1⟩, θ = π/4
+        LET |+⟩ = Cos(θ) * |0⟩ + Sin(θ) * |1⟩  
+        REWRITE U * (|+⟩ ⊗ |0⟩)  
+          = U * ((Cos(θ) * |0⟩ + Sin(θ) * |1⟩) ⊗ |0⟩)  
+          = U * (Cos(θ) * (|0⟩ ⊗ |0⟩) + Sin(θ) * (|1⟩ ⊗ |0⟩))
+          = Cos(θ) * U * (|0⟩ ⊗ |0⟩) + Sin(θ) * U * (|1⟩ ⊗ |0⟩)  
+          = Cos(θ) * (|0⟩ ⊗ |0⟩) + Sin(θ) * (|1⟩ ⊗ |1⟩)         BY (1), (2)
+        REWRITE |+⟩ ⊗ |+⟩
+          = (Cos(θ) * |0⟩ + Sin(θ) * |1⟩) ⊗ (Cos(θ) * |0⟩ + Sin(θ) * |1⟩)
+          = Cos(θ)^2 * (|0⟩ ⊗ |0⟩) + Cos(θ) * Sin(θ) * (|0⟩ ⊗ |1⟩) +  
+            Cos(θ) * Sin(θ) * (|1⟩ ⊗ |0⟩) + Sin(θ)^2 * (|1⟩ ⊗ |1⟩)
+        SHOW U * (|+⟩ ⊗ |0⟩) ≠ |+⟩ ⊗ |+⟩ BY LinearIndependence(|0⟩ ⊗ |1⟩, |1⟩ ⊗ |0⟩)
+    }
+
+    THEOREM EntanglementEntropy { 
+      STATEMENT:
+        ∀ (ψ : Ket).
+          LET ρ : Density = |ψ⟩⟨ψ|
+          IN Entropy(ρ) ≥ 0 ∧ (Entropy(ρ) = 0 ⇔ ρ IS Pure)
+
+      PROOF:
+        LET ψ : Ket, ρ : Density = |ψ⟩⟨ψ|
+        REWRITE Entropy(ρ)
+          = - tr(ρ * Log(ρ))  
+          ≥ 0                 BY KleinInequality
+        SHOW Entropy(ρ) = 0 ⇔ ρ IS Pure BY {
+          ASSUME Entropy(ρ) = 0
+          REWRITE ρ  
+            = Sum(λ_i * |i⟩⟨i|)  BY SpectralDecomposition
+          REWRITE Entropy(ρ)
+            = - Sum(λ_i * Log(λ_i))
+            = 0                   BY ASSUME  
+          HAVE ∀ (i : Nat). λ_i = 0 ∨ λ_i = 1 BY {  
+            ASSUME ∃ (i : Nat). 0 < λ_i < 1
+            HAVE - λ_i * Log(λ_i) > 0   BY LogInequality
+            HAVE Entropy(ρ) > 0          BY DEFINITION Entropy, CONTRADICTION
+          }
+          HAVE ∃ (i : Nat). λ_i = 1 BY ProbabilityAxioms
+          SHOW ρ IS Pure              BY DEFINITION Pure
+        }
+    }
+  }
+}

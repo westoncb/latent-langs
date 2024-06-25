@@ -1,0 +1,93 @@
+CONCEPT CellularAutomaton {
+  NOTATION {
+    A(t) = state of automaton at time t
+    A(t, (i, j)) = state of cell (i, j) at time t
+    A(0) = initial conditions of automaton
+    A(t+1) = F(A(t))
+    S = set of possible cell states
+    N(i, j) = neighborhood of cell (i, j)
+  }
+
+  LANGUAGE {
+    TYPE Grid[W, H] = (W, H) -> Cell
+    TYPE Cell = Int  -- Represents state 
+    TYPE Rule = Grid[W, H] -> Grid[W, H]
+    
+    FUNC evolve[T] : (Grid[W, H], Rule) -> Grid[W, H] =
+      (A, F) => REDUCE(RANGE(T), A, (A_t, _) => F(A_t))
+      
+    FUNC vonNeumannNbhd : (Int, Int) -> [(Int, Int)] =
+      (i, j) => [(i+di, j+dj) for di, dj in [(-1,0),(1,0),(0,-1),(0,1)]]
+
+    FUNC mooreNbhd : (Int, Int) -> [(Int, Int)] = 
+      (i, j) => [(i+di, j+dj) for di in [-1,0,1], dj in [-1,0,1]]
+      
+    FUNC conway : Grid[W, H] -> Grid[W, H] = A => {
+      MAPI(A, (i, j) => LET n = COUNT(vonNeumannNbhd(i, j), (i, j) => A(i, j) == 1) IN
+        IF A(i, j) == 1 THEN (IF n in [2,3] THEN 1 ELSE 0)
+        ELSE (IF n == 3 THEN 1 ELSE 0)
+      )
+    }
+    
+    FUNC elementaryRule[N] : Grid[W, 1] -> Grid[W, 1] = A => {
+      MAPI(A, (i, _) => 
+        LET triad = [A(i-1, 0), A(i, 0), A((i+1) % W, 0)] IN
+        LET index = FOLD(ZIP(triad, [4, 2, 1]), 0, (s, (b, p)) => s + b * p) IN
+        IF N & (1 << index) != 0 THEN 1 ELSE 0
+      )
+    } 
+  }
+  
+  STRUCTURES {
+    STRUCTURE ConwaysLife EXTENDS CellularAutomaton {
+      FIELD initial : Grid[W, H]
+      FIELD rule : Rule = conway
+      FIELD states : [Grid[W, H]] = [initial] ++ [rule(last(states)) for _ in 1..]
+    }
+    
+    STRUCTURE ElementaryCA[N] EXTENDS CellularAutomaton {
+      FIELD initial : Grid[W, 1] 
+      FIELD rule : Rule = elementaryRule[N]
+      FIELD states : [Grid[W, 1]] = [initial] ++ [rule(last(states)) for _ in 1..]
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE Blinker : ConwaysLife = {
+      initial = [[0, 0, 0], 
+                 [1, 1, 1],
+                 [0, 0, 0]]
+    }
+
+    EXAMPLE Rule30 : ElementaryCA[30] = {
+      initial = MAPI(ZEROS(100, 1), (49, 0) => 1, ELSE => 0) -- Single live cell in center
+    }
+  }
+
+  PROOFS {
+    PROOF ConwayFixedPoint : ∀ A : Grid[W, H] . conway(conway(A)) = conway(A) => 
+                                ∀ t : Int . t > 1 => A(t) = A(1)
+    {
+      GIVEN A : Grid[W, H]
+      ASSUME ∀ t : Int . conway(conway(A(t))) = conway(A(t))
+
+      PROVE ∀ t : Int . t > 1 => A(t) = A(1)
+        BY INDUCTION on t
+        BASE CASE: t = 2
+          A(2) = conway(A(1))                       BY DEF of evolution
+               = conway(conway(A(0)))              BY DEF of evolution  
+               = conway(A(0))                      BY ASSUMPTION
+               = A(1)                              BY DEF of evolution
+        INDUCTIVE CASE: 
+          IH: ASSUME A(k) = A(1)   
+          PROVE A(k+1) = A(1)
+            A(k+1) = conway(A(k))                   BY DEF of evolution
+                   = conway(A(1))                   BY IH
+                   = conway(conway(A(0)))           BY DEF of evolution
+                   = conway(A(0))                   BY ASSUMPTION
+                   = A(1)                           BY DEF of evolution
+
+      QED
+    }
+  }
+}

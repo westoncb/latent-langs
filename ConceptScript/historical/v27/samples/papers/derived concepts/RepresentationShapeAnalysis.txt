@@ -1,0 +1,150 @@
+CONCEPT RepresentationShapeAnalysis {
+  NOTATION {
+    T = transformer model
+    L_i = i-th layer of T
+    E_i = contextualized embeddings at layer L_i
+    M_i = {E_i(x) : x ∈ 𝒳}  -- Embedding manifold at layer i
+    
+    ℱ_i = {B_f : f ∈ F_i}  -- Feature neighborhoods at layer i 
+    𝒞_i = cover of M_i by ℱ_i
+    
+    PHT_i = PHT(M_i)  -- Persistent homology transform of M_i
+    PHT_if = PHT(B_f) for f ∈ F_i
+    
+    M_ix = component of M_i containing E_i(x)
+    ε_i(x,y) = inf{ε ≥ 0 : E_i(y) ∈ M_ix_ε}
+    γ_i(x,y) = inf_p ∫_0^1 ‖E'_i(p(t))‖ dt  -- Geodesic distance
+    
+    B_f_ε = {p ∈ 𝕊^(D_i-1) × ℝ : ‖p - enc(B_f)‖∞ < ε} × (-ε,r_f+ε) -- ε-thickening
+  }
+  
+  LANGUAGE {
+    FUNC phiPersistence(k: ℕ, dir: 𝕊^(D_i-1), M: ManifoldComponent): PersistenceDiagram =
+      VietorisRipsPersistence(k, Sublevel(M, dir, *))  
+      -- k-dim persistence diagram in direction dir
+      
+    FUNC featurePersistence(k: ℕ, dir: 𝕊^(D_i-1), f: FeatureVector): PersistenceDiagram =
+      phiPersistence(k, dir, component(B_f))
+    
+    FUNC persistentFeatureGroup(k: ℕ, dir: 𝕊^(D_i-1), birth: ℝ, death: ℝ, F: Set[FeatureVector]): 
+      Set[FeatureVector] = {f ∈ F : (birth, death) ∈ featurePersistence(k, dir, f)}
+
+    FUNC inputFieldLines(x: 𝒳, k: ℕ, dir: 𝕊^(D_i-1), r: ℝ>0, n: ℕ): Set[𝒳] =
+      LET v = LinearSteeringView(k, dir) IN
+      {x_j = T(steer(E_i(x_j-1), v, r)) : 
+       x_0 = x, x_j ∈ 𝒳, j=1..n}
+
+    FUNC suggestiveFeature(x: 𝒳, k: ℕ, i: ℕ): FeatureVector =
+      ARGMAX_f∈F P(f | E_i-k(x), ..., E_i+k(x)) *
+      ∑_j geomdist(E_i(x), B_f)^-1 * |cos(E_i(x)-ctr(B_f), E_i(T(f))-E_i(x))|
+      -- Feature most likely to steer x towards high density regions aligned with its local geometry
+  }
+
+  STRUCTURES {
+    STRUCTURE ComponentwiseShapeSignature {
+      FIELD components : Decomposition
+      FIELD persistences : ℕ × Component → PersistenceDiagram
+      
+      FUNC compare(other: ComponentwiseShapeSignature, k: ℕ): ℝ≥0 =
+        ∑_i d_B(persistences(k, components[i]), other.persistences(k, other.components[i]))
+    }
+  }
+
+  THEOREMS {
+    THEOREM SheafDescriptionOfRepresentation: ∀ i∈ℕ .
+      PHT_i ≃ holim[ ∏_f PHT_if ⇒ ∏_(f,g) PHT_i(B_f ∩ B_g) → ⋯ ]
+      WHERE f,g ∈ F_i
+    {
+      M_i triangulated by polytopes {E_i(x) : x ∈ 𝒳}
+      𝒞_i := {B_f : f ∈ F_i} is a good cover since ℱ_i partitions M_i 
+      ⇒ FiniteCover(𝒞_i, M_i)
+      ⇒ APPLY PHTDescentTheorem
+    }
+
+    THEOREM PHTStabilityWRTEmbedding: ∀ x,y∈𝒳, i∈ℕ .
+      d_I(PHT(E_i[𝒩_ε(x)]),PHT(E_i[𝒩_ε(y)])) ≤ O(ε_i(x,y))
+      WHERE E_i[𝒩_ε(*)] := {E_i(z) : z ∈ 𝒳, d(z,*) ≤ ε}
+    {
+      E_i isometric embedding ⇒ E_i[𝒩_ε(*)] ≃ 𝒩_ε(*) 
+      ⇒ d_GH(E_i[𝒩_ε(x)], E_i[𝒩_ε(y)]) ≤ ε_i(x,y)
+      ⇒ APPLY PHTStability 
+    }
+    
+    THEOREM PHTCoverApproximation: ∀ i∈ℕ .
+      d_I(PHT_i, hocolim_ε PHT_∪_{f∈F}B_f_ε) ≤ O(ε)
+    {  
+      ∀ ε>0 . M_i ⊆ ⋃_{f∈F} B_f_ε ⇒ {B_f_ε} is ε-cover of M_i
+      ⇒ APPLY PHTApproximation to ⋃_{f∈F} B_f_ε
+      LET K_ε := SimplicialComplex(⋃_{f∈F} B_f_ε)
+      d_I(PHT(M_i), PHT(K_ε)) ≤ O(ε)
+    }
+      
+    THEOREM LocalGeometryInfluenceOnSteering: ∀ x,y ∈ 𝒳, k∈ℕ, i∈ℕ, r>0.
+      γ_i(x,y) ≤ r  ⇒  γ_{i+k}(T^k(x),T^k(y)) ≤ r·O(max_j≤k 𝔼_f∈F L_fj )
+      WHERE L_fj = Lipschitz const of E_j restricted to B_f
+    {
+      γ_i(x,y) ≤ r  
+      ⇒ ∃ path p ⊂ M_i from x to y with len(p) ≤ r
+      p ⊂ ⋃_j B_f_j  for some f_j ∈ F_i
+      E_{i+1}(p) ⊂ ⋃_j LinearView(f_j)[B_f_j] BY SteeringEquivalence
+      len(E_{i+1}(p)) ≤ ∑_j L_f_j len(p∩B_f_j)  ≤  r·max_f L_f
+      ⇒ γ_{i+1}(T(x),T(y)) ≤ r·max_f L_f 
+      ITERATE k times.
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE StoryDirections {
+      LET T = HigherOrderFeatureMemory(GPT-3) IN
+      LET x = "Once upon a time there was a unicorn named Twilight Sparkle who lived in a magical forest." IN
+      LET F = HigherOrderLocalInterpretation(x, 20, 3) IN
+      LET directions = {
+        "fantasy adventure" : (f_1, f_2, f_3) = persistentFeatureGroup(1, *, 0, ∞, F),
+        "romance" : (g_1, g_2) = persistentFeatureGroup(1, *, 1.2, 2.3, F), 
+        "dark fairy tale" : (h_1, h_2, h_3, h_4) = persistentFeatureGroup(1, *, 0.8, 3.2, F)
+      } IN
+      
+      LET storyArcs = {genre : inputFieldLines(x, 1, dir, 1.5, 50) 
+                       for genre, dir in directions} IN
+                       
+      FOR genre, arc in storyArcs DO
+        PRINT genre, ":", JOIN(T(a) for a in arc)
+    }
+    
+    EXAMPLE StyleTransfer {
+      LET T = HigherOrderFeatureMemory(GPT-3) IN
+
+      LET X = {x_1, ..., x_n} ⊂ 𝒳 = Dickens novels IN
+      LET Y = {y_1, ..., y_m} ⊂ 𝒳 = Hemingway novels IN
+      
+      LET PCA_X = PCA(E_i(X), k=5), PCA_Y = PCA(E_i(Y), k=5) IN
+      LET transferFrom(z) = E_i(z) - PCA_X.mean + PCA_Y.mean IN
+      LET transferTo(z) = E_i(z) - PCA_Y.mean + PCA_X.mean IN
+
+      FUNC transferStyle(src: 𝒳, tgt: 𝒳, n: ℕ): 𝒳 =
+        LET z = src IN
+        FOR i = 1..n DO
+          z = T(transferTo(suggestiveFeature(transferFrom(z))))
+        RETURN z
+
+      LET x = "It was the best of times, it was the worst of times, ..." IN
+      PRINT transferStyle(x, Y, 10)  -- Dickens-to-Hemingway transfer
+    }
+
+    EXAMPLE GradientFeatureFields {
+      LET M = CLIP in
+      LET x = randomImage() in
+      LET dir(v) = v / |v| in
+    
+      LET objectFeatures = HigherOrderLocalInterpretation(x, 3, 7) in
+      LET backgroundFeatures = globalFeatures(M) \ objectFeatures in
+
+      FUNC featureGradient(x, f): 
+        LET F = {z : |E_i(z) - E_i(x)| < ε} in
+        ∑_{z in F} sim(f, suggestiveFeature(z)) * dir(z - x)
+
+      PLOT vecField(x -> featureGradient(x, f), f in objectFeatures), x in subRegion(0.2, 0.8, 0.2, 0.8)
+      PLOT vecField(x -> featureGradient(x, f), f in backgroundFeatures), x in [0,1]^2 
+    }
+  }
+}

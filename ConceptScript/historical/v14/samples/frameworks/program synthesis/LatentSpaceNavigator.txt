@@ -1,0 +1,114 @@
+CONCEPT LatentSpaceNavigator_v2 : PracticalProgramCFC_v1 {
+  PROGRAM := p(C, D, F, I)
+  
+  C := {
+    PromptManager := c(S, A)
+      S := {LLMInterface := s(LLM, "OpenAI|Anthropic|..."), PromptTemplates := s(MAP(PromptType, PromptTemplate), {}), PromptParameters := s(PromptParameters, ∅)}
+      A := {ConstructPrompt := a("CONSTRUCTPROMPT", E1, P1), SetPromptParameters := a("SETPROMPTPARAMETERS", E2, P2)}
+        E1 := {e("PROMPT", Prompt, "ConstructedPrompt")}
+        E2 := {e("PROMPTPARAMETERS", PromptParameters, "UpdatedParameters")}
+        P1 := {p("PROMPTPARAMETERS", PromptType, "∈ PromptTemplates.Keys"), p("PROMPTPARAMETERS", PromptParameters, "≠ ∅")}
+        P2 := {}
+
+    LLMInteractionManager := c(S, A)
+      S := {LLMInterface := s(LLM, "OpenAI|Anthropic|..."), MaxTokens := s(INT, "2048"), Temperature := s(FLOAT, "0.7"), StopSequence := s(STRING, "<|endoftext|>")}
+      A := {SendPrompt := a("SENDPROMPT", E1, P1), SetLLMParameters := a("SETLLMPARAMETERS", E2, P2)}  
+        E1 := {e("LLMRESPONSE", LLMResponse, "GeneratedResponse")}
+        E2 := {e("LLMINTERFACE", LLMInterface, "UpdatedInterface"), e("MAXTOKENS", MaxTokens, "UpdatedMaxTokens"), e("TEMPERATURE", Temperature, "UpdatedTemperature"), e("STOPSEQUENCE", StopSequence, "UpdatedStopSequence")}
+        P1 := {p("PROMPT", Prompt, "≠ ∅"), p("LLMINTERFACE", LLMInterface, "≠ ∅")}
+        P2 := {}
+        
+    ConceptManager := c(S, A)  
+      S := {ConceptHistory := s(LIST(Concept), []), CurrentConcept := s(Concept, ∅)}
+      A := {StoreConcept := a("STORECONCEPT", E1, P1), NavigateToConcept := a("NAVIGATETOCONCEPT", E2, P2), NavigateBack := a("NAVIGATEBACK", E3, P3)}
+        E1 := {e("CURRENTCONCEPT", CurrentConcept, "NewConcept"), e("CONCEPTHISTORY", ConceptHistory, "Append(ConceptHistory, NewConcept)")}  
+        E2 := {e("CURRENTCONCEPT", CurrentConcept, "SelectedConcept"), e("CONCEPTHISTORY", ConceptHistory, "Append(ConceptHistory, SelectedConcept)")}
+        E3 := {e("CURRENTCONCEPT", CurrentConcept, "Last(ConceptHistory)"), e("CONCEPTHISTORY", ConceptHistory, "ButLast(ConceptHistory)")}
+        P1 := {p("LLMRESPONSE", GeneratedConcept, "≠ ∅")}
+        P2 := {p("LLMRESPONSE", AvailableConcepts, "Contains(SelectedConcept)")}  
+        P3 := {p("CONCEPTHISTORY", Length, "> 0")}
+  }
+  
+  D := {
+    PromptParameters := d({PromptType := e(STRING, "", OneOf{"Sampling", "Representation", "Navigation"}), Category := e(STRING, "", ""), FlavorCriteria := e(STRING, "", ""), OptimizationCriteria := e(STRING, "", ""), Format := e(STRING, "", OneOf{"NaturalLanguage", "HTML/CSS", "Manim", "ConceptScript"}), NavigationTarget := e(STRING, "", "")}, {})
+    PromptTemplate := d({PromptType := e(STRING, "", ""), Template := e(STRING, "", "")}, {})
+    Concept := d({Representation := e(STRING, "", ""), AvailableConcepts := e(LIST(STRING), [], "")}, {})
+  }
+  
+  F := {
+    MainFlow := f({Start := n(∅, ""), SetPromptParameters := n({SetPromptParameters}, ""), ConstructPrompt := n({ConstructPrompt}, ""), SendPrompt := n({SendPrompt}, ""), StoreConcept := n({StoreConcept}, ""), NavigateToConcept := n({NavigateToConcept}, ""), NavigateBack := n({NavigateBack}, ""), End := n(∅, "")},  
+      {p(Start, SetPromptParameters, TRUE), p(SetPromptParameters, ConstructPrompt, TRUE), p(ConstructPrompt, SendPrompt, TRUE), p(SendPrompt, StoreConcept, "PromptType = Sampling"), 
+       p(SendPrompt, NavigateToConcept, "PromptType = Navigation ∧ SelectedConcept ≠ ∅"), p(SendPrompt, NavigateBack, "PromptType = Navigation ∧ SelectedConcept = ∅"),
+       p(StoreConcept, SetPromptParameters, TRUE), p(NavigateToConcept, SetPromptParameters, TRUE), p(NavigateBack, SetPromptParameters, "CanNavigateBack"), p(NavigateBack, End, "¬CanNavigateBack")},
+      {})
+  }
+      
+  I := {  
+    Input := i({u("PROMPTTYPE", OneOf{"Sampling", "Representation", "Navigation"}), u("CATEGORY", STRING), u("FLAVORCRITERIA", STRING), u("OPTIMIZATIONCRITERIA", STRING), u("FORMAT", OneOf{"NaturalLanguage", "HTML/CSS", "Manim", "ConceptScript"}), u("SELECTEDCONCEPT", STRING)}, {})
+    Output := i({}, {h("CURRENTCONCEPT", "Current Concept:\n<CurrentConcept.Representation>"), h("AVAILABLECONCEPTS", "Available Concepts:\n<CurrentConcept.AvailableConcepts>")})  
+  }
+}
+
+
+
+
+
+CONCEPT LatentSpaceNavigator_v3 : PracticalProgramCFC_v1 {
+  PROGRAM := p(C, D, F, I)
+  
+  C := {
+    LLMInterface := c(S, A)
+      S := {LLM := s(LLM, "OpenAI|Anthropic|..."), KnowledgeBase := s(SET(Concept), ∅), CurrentConcept := s(Concept, ∅)}
+      A := {PromptLLM := a("PROMPTLLM", E1, P1), UpdateKnowledgeBase := a("UPDATEKNOWLEDGEBASE", E2, P2), SetCurrentConcept := a("SETCURRENTCONCEPT", E3, P3)}
+        E1 := {e("RESULT", Result, "LLMResponse(Prompt)")}
+        E2 := {e("KNOWLEDGEBASE", KnowledgeBase, "∪ {NewConcept}")}
+        E3 := {e("CURRENTCONCEPT", CurrentConcept, "NewConcept")}
+        P1 := {p("PROMPT", Prompt, "≠ ∅")}
+        P2 := {p("NEWCONCEPT", NewConcept, "≠ ∅")}
+        P3 := {p("NEWCONCEPT", NewConcept, "≠ ∅")}
+  }
+        
+  D := {
+    Concept := d({Category := e(STRING, "", ""), FlavorCriteria := e(STRING, "", ""), OptimizationCriteria := e(STRING, "", ""), Representation := e(STRING, "", "")}, {})
+    Prompt := d({Task := e(STRING, "", OneOf{"Sampling", "Representation", "Navigation"}), Parameters := e(STRING, "", "")}, {}) 
+    Link := d({ConceptID := e(STRING, "", ""), Description := e(STRING, "", "")}, {r(Concept, Link, "CONTAINS")})
+  }
+        
+  F := {
+    MainFlow := f({Start := n(∅, ""), SetupSampling := n({PromptLLM, UpdateKnowledgeBase, SetCurrentConcept}, ""), SetupRepresentation := n({PromptLLM}, ""), ExtractLinks := n({PromptLLM}, ""), NavigateToConcept := n({PromptLLM, SetCurrentConcept}, ""), End := n(∅, "")},
+      {p(Start, SetupSampling, TRUE), p(SetupSampling, SetupRepresentation, TRUE), p(SetupRepresentation, ExtractLinks, "Format = ConceptScript"), p(ExtractLinks, NavigateToConcept, "SelectedLink ≠ ∅"),
+       p(ExtractLinks, End, "SelectedLink = ∅"), p(NavigateToConcept, SetupRepresentation, TRUE)},
+      {ConceptScriptBranch := b({p(SetupRepresentation, ExtractLinks, "Format = ConceptScript")}, "Format = ConceptScript"),
+       NoConceptScriptBranch := b({p(SetupRepresentation, End, "Format ≠ ConceptScript")}, "Format ≠ ConceptScript")})
+  }
+        
+  I := {  
+    Input := i({u("SAMPLINGPROMPT", STRING), u("REPRESENTATIONPROMPT", STRING), u("NAVIGATIONPROMPT", STRING), u("FORMAT", OneOf{"NaturalLanguage", "HTML/CSS", "Manim", "ConceptScript"}), u("SELECTEDLINK", OneOf{Links})}, {})
+    Output := i({}, {h("LLMRESPONSE", "<Result>")})
+  }
+}
+
+
+In this updated LatentSpaceNavigator_v3 concept:
+
+The core component is the LLMInterface, which encapsulates the interaction with the LLM. It has actions for prompting the LLM, updating the knowledge base with new concepts, and setting the current concept.
+The data model includes Concept (representing a generated concept), Prompt (representing a task-specific prompt for the LLM), and Link (representing a navigable link within a concept).
+The main flow is simplified to focus on the high-level tasks:
+
+Start -> SetupSampling: Prompt the LLM to sample a new concept, update the knowledge base, and set the current concept.
+SetupSampling -> SetupRepresentation: Prompt the LLM to represent the current concept in the specified format.
+SetupRepresentation -> ExtractLinks (if ConceptScript): Prompt the LLM to extract navigable links from the ConceptScript representation.
+ExtractLinks -> NavigateToConcept (if link selected) or End (if no link selected).
+NavigateToConcept -> SetupRepresentation: Set the selected concept as the current concept and prepare to represent it.
+
+
+The input/output interface allows the user to provide task-specific prompts for sampling, representation, and navigation, select the representation format and links, and view the LLM's responses.
+
+With this approach, the core functionality of the app is driven by crafting appropriate prompts for the LLM to perform the desired tasks, rather than implementing separate engines. This leverages the power and flexibility of the LLM to handle the complex tasks of concept sampling, representation, and navigation.
+The prompts can be designed to include the necessary information and instructions for each task, such as:
+
+Sampling prompt: Specify the category, flavor criteria, and optimization criteria for generating new concepts.
+Representation prompt: Specify the desired format (natural language, HTML/CSS, Manim, ConceptScript) for representing the current concept.
+Navigation prompt: Specify the selected link or navigation action (e.g., "navigate back") to guide the exploration of concepts.
+
+The LLMInterface component handles the interaction with the LLM, sending the prompts and receiving the responses, which are then processed and used to update the knowledge base, set the current concept, and display the results to the user.

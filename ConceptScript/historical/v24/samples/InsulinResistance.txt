@@ -1,0 +1,96 @@
+CONCEPT InsulinResistance {
+  LANGUAGE {
+    TYPE Glucose
+    TYPE Insulin
+    TYPE Cell
+    TYPE Receptor(A : Type) = Cell ⊸ A ⊸ Cell
+
+    FUNC Bind(Receptor(A), A) : Cell ⊸ Cell
+    FUNC Unbind(Receptor(A)) : Cell ⊸ (Receptor(A) ⊗ A)
+    FUNC Absorb : Glucose ⊸ Cell ⊸ Cell
+    FUNC Secrete : Insulin ⊸ Cell ⊸ Cell
+
+    CLASS Monad(M : Type -> Type) {
+      Return : A -> M(A)
+      Bind : M(A) -> (A -> M(B)) -> M(B)
+    }
+
+    REWRITE BindReturn(x, m) : Bind(Return(x), m) = m(x)
+    REWRITE ReturnBind(m) : Bind(m, Return) = m
+    REWRITE BindAssoc(m, f, g) : Bind(Bind(m, f), g) = Bind(m, λ(x). Bind(f(x), g))
+  }
+
+  STRUCTURE {
+    INSTANCE Monad(Cell ⊸) {
+      Return(x) = λ(c : Cell). c ⊗ x
+      Bind(m, f) = λ(c : Cell). LET (c', x) = m(c) IN f(x)(c')
+    }
+
+    DEF InsulinReceptor = Receptor(Glucose)
+    DEF GlucoseTransporter = Receptor(Glucose)
+
+    DEF HealthyCell(c : Cell, i : Insulin, g : Glucose) : Cell = 
+      LET c1 = Bind(InsulinReceptor, i)(c) IN
+      LET c2 = Bind(GlucoseTransporter, g)(c1) IN
+      LET c3 = Absorb(g)(c2) IN
+      Unbind(InsulinReceptor)(Unbind(GlucoseTransporter)(c3))
+
+    DEF ResistantCell(c : Cell, i : Insulin, g : Glucose) : Cell =
+      LET c1 = Bind(InsulinReceptor, i)(c) IN
+      LET c2 = Unbind(InsulinReceptor)(c1) IN
+      LET c3 = Bind(GlucoseTransporter, g)(c2) IN
+      Unbind(GlucoseTransporter)(c3)
+  }
+
+  PROOFS {
+    THEOREM HealthyInsulinResponse {
+      STATEMENT: ∀ (c : Cell) (i : Insulin) (g : Glucose).
+        HealthyCell(c, i, g) = Absorb(g)(Bind(InsulinReceptor, i)(c))
+      PROOF:
+        LET c : Cell, i : Insulin, g : Glucose
+        REWRITE HealthyCell(c, i, g)
+          = LET c1 = Bind(InsulinReceptor, i)(c) IN
+            LET c2 = Bind(GlucoseTransporter, g)(c1) IN
+            LET c3 = Absorb(g)(c2) IN
+            Unbind(InsulinReceptor)(Unbind(GlucoseTransporter)(c3))
+          = LET c1 = Bind(InsulinReceptor, i)(c) IN
+            LET c2 = Bind(GlucoseTransporter, g)(c1) IN
+            Absorb(g)(c2)
+            BY {
+              Unbind(InsulinReceptor)(Unbind(GlucoseTransporter)(Absorb(g)(c2)))
+              = Unbind(InsulinReceptor)(Absorb(g)(c2)) BY MonadLaws
+              = Absorb(g)(c2) BY MonadLaws
+            }
+          = Absorb(g)(Bind(InsulinReceptor, i)(c))
+            BY MonadLaws, BindAssoc
+        QED
+    }
+
+    THEOREM ResistantInsulinResponse {
+      STATEMENT: ∀ (c : Cell) (i : Insulin) (g : Glucose).
+        ResistantCell(c, i, g) = Bind(GlucoseTransporter, g)(c)
+      PROOF:
+        LET c : Cell, i : Insulin, g : Glucose
+        REWRITE ResistantCell(c, i, g)
+          = LET c1 = Bind(InsulinReceptor, i)(c) IN
+            LET c2 = Unbind(InsulinReceptor)(c1) IN
+            LET c3 = Bind(GlucoseTransporter, g)(c2) IN
+            Unbind(GlucoseTransporter)(c3)
+          = LET c1 = Bind(InsulinReceptor, i)(c) IN
+            LET c2 = Unbind(InsulinReceptor)(c1) IN
+            Bind(GlucoseTransporter, g)(c2)
+            BY MonadLaws
+          = LET c1 = Bind(InsulinReceptor, i)(c) IN
+            Bind(GlucoseTransporter, g)(c)
+            BY {
+              LET c2 = Unbind(InsulinReceptor)(c1) IN
+              Bind(GlucoseTransporter, g)(c2)
+              = Bind(GlucoseTransporter, g)(Unbind(InsulinReceptor)(c1))
+              = Bind(GlucoseTransporter, g)(c) BY MonadLaws
+            }
+          = Bind(GlucoseTransporter, g)(c)
+            BY MonadLaws
+        QED
+    }
+  }
+}

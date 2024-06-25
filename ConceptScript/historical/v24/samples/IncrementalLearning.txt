@@ -1,0 +1,190 @@
+CONCEPT IncrementalLearning {
+
+  LANGUAGE {
+    TYPE Example = (x : Vector[n], y : Label)
+    TYPE Hypothesis = Vector[n] -> Label
+    TYPE Loss = Label -> Label -> Real
+    
+    CLASS Learnable(A) {
+      Update : A -> Example -> A
+      Predict : A -> Vector[n] -> Label
+    }
+    
+    FUNC Accuracy(h : Hypothesis, examples : List(Example)) -> Real
+    FUNC EmpiricalRisk(h : Hypothesis, examples : List(Example), loss : Loss) -> Real
+    
+    REWRITE Accuracy(h, []) = 1.0
+    REWRITE Accuracy(h, (x, y) :: examples) = 
+      (IF h(x) == y THEN 1.0 ELSE 0.0 + Accuracy(h, examples) * Length(examples)) / (Length(examples) + 1.0)
+      
+    REWRITE EmpiricalRisk(h, examples, loss) = 
+      SUM(MAP((x, y) => loss(h(x), y), examples)) / Length(examples)
+      
+    AXIOM LossDecomposition {
+      ∀ (loss : Loss) (h1 h2 : Hypothesis) (examples : List(Example)).
+        EmpiricalRisk(h1, examples, loss) - EmpiricalRisk(h2, examples, loss)
+          = SUM(MAP((x, y) => loss(h1(x), y) - loss(h2(x), y), examples)) / Length(examples)
+    }
+  }
+  
+  STRUCTURE {
+    DEF Perceptron(n : Nat) {
+      INSTANCE Learnable(Vector[n]) {
+        Update(w, (x, y)) = w + (y - Predict(w, x)) * x
+        Predict(w, x) = Sign(DotProduct(w, x))
+      }
+    }
+    
+    DEF OnlineToBatch(Learnable(A))(h0 : A, examples : List(Example), m : Nat) : A {
+      FOLD(Update, h0, TAKE(m, examples))
+    }
+  }
+  
+  PROOFS {
+    THEOREM PerceptronConvergence {
+      STATEMENT: ∀ (examples : List(Example)) (maxIter : Nat).
+        ∃ (m : Nat) (m <= maxIter). 
+          LET h0 = ZeroVector[n]
+              h_final = FOLD(Perceptron(n).Update, h0, TAKE(m, examples))
+          IN Accuracy(Perceptron(n).Predict(h_final), examples) = 1.0
+          
+      PROOF:
+        LET examples : List(Example), maxIter : Nat
+        ASSUME ∀ (x, y) ∈ examples. ∃ (w_star : Vector[n]). y * DotProduct(w_star, x) > 0
+        
+        LET h0 = ZeroVector[n]
+        LET Gamma = MIN(MAP((x, y) => y * DotProduct(w_star, x), examples))
+        LET R = MAX(MAP((x, _) => Norm(x), examples))
+        
+        HAVE ∀ (m : Nat) (m <= maxIter). 
+          LET w_m = FOLD(Perceptron(n).Update, h0, TAKE(m, examples))
+          IN DotProduct(w_star, w_m) >= m * Gamma - R^2 * Norm(w_star) BY {
+            INDUCE ON m
+            CASE m = 0:
+              DotProduct(w_star, w_0) = DotProduct(w_star, h0) = 0 >= 0 * Gamma - R^2 * Norm(w_star)
+            CASE m = k + 1:
+              LET (x, y) = examples[k]
+              LET w_k = FOLD(Perceptron(n).Update, h0, TAKE(k, examples))
+              LET w_k+1 = Perceptron(n).Update(w_k, (x, y))
+              HAVE DotProduct(w_star, w_k+1)
+                = DotProduct(w_star, w_k + (y - Perceptron(n).Predict(w_k, x)) * x)
+                = DotProduct(w_star, w_k) + (y - Perceptron(n).Predict(w_k, x)) * DotProduct(w_star, x)
+                >= k * Gamma - R^2 * Norm(w_star) + (y - Perceptron(n).Predict(w_k, x)) * DotProduct(w_star, x) BY IH
+                >= k * Gamma - R^2 * Norm(w_star) + Gamma - R^2 * Norm(w_star)
+                = (k + 1) * Gamma - 2 * R^2 * Norm(w_star)
+                >= (k + 1) * Gamma - R^2 * Norm(w_star)
+          }
+        
+        LET m_final = CEIL((R^2 * Norm(w_star)) / Gamma)
+        HAVE m_final <= maxIter BY {
+          ASSUME m_final > maxIter
+          LET w_maxIter = FOLD(Perceptron(n).Update, h0, TAKE(maxIter, examples))
+          HAVE DotProduct(w_star, w_maxIter) >= maxIter * Gamma - R^2 * Norm(w_star) BY INSTANTIATE m = maxIter
+          HENCE DotProduct(w_star, w_maxIter) > 0 BY {
+            maxIter * Gamma - R^2 * Norm(w_star) 
+              > ((R^2 * Norm(w_star)) / Gamma) * Gamma - R^2 * Norm(w_star)
+              = 0
+          }
+          HENCE ∀ ((x, y) ∈ examples). y * Perceptron(n).Predict(w_maxIter, x) > 0 BY {
+            LET (x, y) ∈ examples
+            HAVE y * DotProduct(w_star, x) > 0 BY ASSUMPTION
+            HAVE y * DotProduct(w_maxIter, x) > 0 BY {
+              y * DotProduct(w_maxIter, x) 
+                = y * DotProduct(w_star, x) * (DotProduct(w_maxIter, x) / DotProduct(w_star, x))
+                > 0 * (DotProduct(w_maxIter, x) / DotProduct(w_star, x))
+                = 0
+            }
+            HENCE y * Perceptron(n).Predict(w_maxIter, x) > 0 BY {
+              Perceptron(n).Predict(w_maxIter, x) = Sign(DotProduct(w_maxIter, x))
+            }
+          }
+          HENCE Accuracy(Perceptron(n).Predict(w_maxIter), examples) = 1.0 BY {
+            REWRITE Accuracy(Perceptron(n).Predict(w_maxIter), examples)
+              = SUM(MAP((x, y) => IF y * Perceptron(n).Predict(w_maxIter, x) > 0 THEN 1.0 ELSE 0.0, examples)) / Length(examples)
+              = Length(examples) / Length(examples)
+              = 1.0
+          }
+          CONTRADICTION
+        }
+        
+        LET h_final = FOLD(Perceptron(n).Update, h0, TAKE(m_final, examples))
+        SHOW Accuracy(Perceptron(n).Predict(h_final), examples) = 1.0 BY {
+          REWRITE Accuracy(Perceptron(n).Predict(h_final), examples)
+            = SUM(MAP((x, y) => IF y * Perceptron(n).Predict(h_final, x) > 0 THEN 1.0 ELSE 0.0, examples)) / Length(examples)
+            = Length(examples) / Length(examples)
+            = 1.0
+        }
+    }
+    
+    THEOREM OnlineToBatchConvergence(Learnable(A)) {
+      STATEMENT: ∀ (h0 : A) (examples : List(Example)) (loss : Loss) (ε : Real) (0 < ε < 1) (δ : Real) (0 < δ < 1).
+        ∃ (m : Nat). 
+          LET h_avg = OnlineToBatch(h0, examples, m)
+          IN ℙ[EmpiricalRisk(h_avg, examples, loss) <= EmpiricalRisk(h0, examples, loss) + ε] >= 1 - δ
+          
+      PROOF:
+        LET h0 : A, examples : List(Example), loss : Loss, ε : Real, δ : Real
+        ASSUME 0 < ε < 1, 0 < δ < 1
+        
+        LET m = CEIL((2 * LOG(2 / δ)) / (ε^2))
+        LET h_avg = OnlineToBatch(h0, examples, m)
+        
+        HAVE ∀ (i : Nat) (i <= m). 
+          LET h_i = FOLD(Update, h0, TAKE(i, examples))
+          IN 𝔼[EmpiricalRisk(h_i, examples, loss)] <= EmpiricalRisk(h0, examples, loss) BY {
+            INDUCE ON i
+            CASE i = 0:
+              𝔼[EmpiricalRisk(h_0, examples, loss)] 
+                = 𝔼[EmpiricalRisk(h0, examples, loss)]
+                = EmpiricalRisk(h0, examples, loss)
+            CASE i = j + 1:
+              LET (x, y) = examples[j]
+              LET h_j = FOLD(Update, h0, TAKE(j, examples))
+              LET h_j+1 = Update(h_j, (x, y))
+              𝔼[EmpiricalRisk(h_j+1, examples, loss)]
+                = 𝔼[EmpiricalRisk(Update(h_j, (x, y)), examples, loss)]
+                <= 𝔼[EmpiricalRisk(h_j, examples, loss) - loss(h_j(x), y) + loss(h_j+1(x), y)] BY LossDecomposition
+                <= 𝔼[EmpiricalRisk(h_j, examples, loss)] BY {
+                  loss(h_j+1(x), y) <= loss(h_j(x), y)
+                }
+                <= EmpiricalRisk(h0, examples, loss) BY IH
+          }
+        
+        HAVE EmpiricalRisk(h_avg, examples, loss) <= (1 / m) * SUM(MAP(i => EmpiricalRisk(FOLD(Update, h0, TAKE(i, examples)), examples, loss), RANGE(0, m))) BY {
+          LET f = (i : Nat) => EmpiricalRisk(FOLD(Update, h0, TAKE(i, examples)), examples, loss)
+          EmpiricalRisk(h_avg, examples, loss)
+            = EmpiricalRisk(OnlineToBatch(h0, examples, m), examples, loss)
+            = EmpiricalRisk((1 / m) * SUM(MAP(FOLD(Update, h0, TAKE(_, examples)), RANGE(0, m))), examples, loss)
+            <= (1 / m) * SUM(MAP(f, RANGE(0, m))) BY Jensen
+        }
+        
+        HAVE 𝔼[EmpiricalRisk(h_avg, examples, loss)] <= EmpiricalRisk(h0, examples, loss) BY {
+          𝔼[EmpiricalRisk(h_avg, examples, loss)]
+            <= 𝔼[(1 / m) * SUM(MAP(i => EmpiricalRisk(FOLD(Update, h0, TAKE(i, examples)), examples, loss), RANGE(0, m)))] BY LINEARITY
+            = (1 / m) * SUM(MAP(i => 𝔼[EmpiricalRisk(FOLD(Update, h0, TAKE(i, examples)), examples, loss)], RANGE(0, m)))
+            <= (1 / m) * SUM(MAP(_ => EmpiricalRisk(h0, examples, loss), RANGE(0, m))) BY {
+              ∀ (i : Nat) (i <= m). 𝔼[EmpiricalRisk(FOLD(Update, h0, TAKE(i, examples)), examples, loss)] <= EmpiricalRisk(h0, examples, loss)
+            }
+            = EmpiricalRisk(h0, examples, loss)
+        }
+        
+        HAVE ℙ[EmpiricalRisk(h_avg, examples, loss) <= EmpiricalRisk(h0, examples, loss) + ε] >= 1 - δ BY {
+          ℙ[EmpiricalRisk(h_avg, examples, loss) > EmpiricalRisk(h0, examples, loss) + ε]
+            <= ℙ[EmpiricalRisk(h_avg, examples, loss) - 𝔼[EmpiricalRisk(h_avg, examples, loss)] > ε] BY {
+              𝔼[EmpiricalRisk(h_avg, examples, loss)] <= EmpiricalRisk(h0, examples, loss)
+            }
+            <= 2 * EXP(-2 * m * ε^2) BY Hoeffding
+            <= 2 * EXP(-2 * ((2 * LOG(2 / δ)) / (ε^2)) * ε^2)
+            = 2 * EXP(-4 * LOG(2 / δ))
+            = 2 * ((2 / δ)^(-4))
+            = δ / 2
+            < δ
+        }
+        
+        SHOW ∃ (m : Nat). 
+          LET h_avg = OnlineToBatch(h0, examples, m)
+          IN ℙ[EmpiricalRisk(h_avg, examples, loss) <= EmpiricalRisk(h0, examples, loss) + ε] >= 1 - δ
+        BY WITNESS m
+    }
+  }
+}

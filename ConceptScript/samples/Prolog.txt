@@ -1,0 +1,235 @@
+CONCEPT Prolog {
+  PARAMETERS {
+    Atom : TYPE
+    Variable : TYPE
+    Functor : TYPE
+  }
+
+  CONTEXT {
+    TYPES {
+      INDUCTIVE Term {
+        CASE Atom(Atom)
+        CASE Var(Variable)
+        CASE Compound(Functor, List(Term))
+      }
+
+      Predicate := Compound
+      
+      Clause := STRUCTURE {
+        FIELD head : Predicate
+        FIELD body : List(Predicate)
+      }
+
+      Program := List(Clause)
+
+      Goal := List(Predicate)
+
+      Substitution := FUNC(Variable) -> Term
+
+      UnificationResult := ONEOF {
+        CASE Success(Substitution)
+        CASE Failure
+      }
+
+      ProofTree := STRUCTURE {
+        FIELD goal : Goal
+        FIELD clause : Clause
+        FIELD substitution : Substitution
+        FIELD children : List(ProofTree)
+      }
+    }
+
+    STRUCTURES {
+      STRUCTURE Unifier {
+        FUNC unify(t1 : Term, t2 : Term) -> UnificationResult
+        
+        AXIOM Symmetry {
+          ∀ t1 t2 : Term . unify(t1, t2) = unify(t2, t1)
+        }
+
+        AXIOM Idempotence {
+          ∀ t : Term . unify(t, t) = Success(λ v . v)
+        }
+      }
+
+      STRUCTURE SLDResolver {
+        FUNC resolve(program : Program, goal : Goal) -> List(ProofTree)
+        
+        AXIOM Soundness {
+          ∀ program : Program, goal : Goal, proof : ProofTree .
+            proof ∈ resolve(program, goal) ⇒ 
+              program ⊨ apply_substitution(proof.substitution, goal)
+        }
+
+        AXIOM Completeness {
+          ∀ program : Program, goal : Goal .
+            (program ⊨ goal) ⇒ ∃ proof ∈ resolve(program, goal)
+        }
+      }
+    }
+
+    NOTATION {
+      :- := Clause separator (head :- body)
+      , := Conjunction in clause bodies and goals
+      ; := Disjunction in clause bodies
+      _ := Anonymous variable
+      ! := Cut operator
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE Normalize(clause : Clause) -> Clause {
+      LET normalize_term = λ t . MATCH t WITH
+        | Atom(a) => Atom(a)
+        | Var(v) => IF v = "_" THEN Var(FRESH_VAR()) ELSE Var(v)
+        | Compound(f, args) => Compound(f, MAP(normalize_term, args))
+      IN Clause {
+        head = normalize_term(clause.head),
+        body = MAP(normalize_term, clause.body)
+      }
+    }
+
+    SIMPLIFY OccursCheck(v : Variable, t : Term) -> Bool {
+      MATCH t WITH
+        | Atom(_) => False
+        | Var(v') => v = v'
+        | Compound(_, args) => ANY(OccursCheck(v, arg) for arg in args)
+    }
+
+    REWRITE ApplySubstitution(subst : Substitution, t : Term) -> Term {
+      MATCH t WITH
+        | Atom(a) => Atom(a)
+        | Var(v) => subst(v)
+        | Compound(f, args) => Compound(f, MAP(ApplySubstitution(subst, _), args))
+    }
+  }
+
+  PROOFS {
+    THEOREM UnificationCommutativity {
+      ∀ t1 t2 : Term, u : Unifier .
+        u.unify(t1, t2) = Success(θ) ⇔ u.unify(t2, t1) = Success(θ)
+    }
+    PROOF {
+      GIVEN t1 t2 : Term, u : Unifier
+      
+      <1>. ASSUME u.unify(t1, t2) = Success(θ)
+      <2>. BY Unifier.Symmetry, u.unify(t2, t1) = u.unify(t1, t2)
+      <3>. HENCE u.unify(t2, t1) = Success(θ)
+      
+      <4>. ASSUME u.unify(t2, t1) = Success(θ)
+      <5>. BY Unifier.Symmetry, u.unify(t1, t2) = u.unify(t2, t1)
+      <6>. HENCE u.unify(t1, t2) = Success(θ)
+      
+      <7>. QED BY <1>-<3> AND <4>-<6>
+    }
+
+    THEOREM CutElimination {
+      ∀ program : Program, goal : Goal .
+        ∃ program' : Program . 
+          (∀ g : Goal . program ⊨ g ⇔ program' ⊨ g) ∧
+          (! ∉ program')
+    }
+    PROOF {
+      GIVEN program : Program, goal : Goal
+      
+      <1>. DEFINE remove_cut = λ clause .
+             IF ! ∈ clause.body THEN
+               LET (prefix, _, suffix) = SPLIT(clause.body, !)
+               IN Clause { head = clause.head, body = prefix }
+             ELSE
+               clause
+      
+      <2>. LET program' = MAP(remove_cut, program)
+      
+      <3>. SHOW ∀ g : Goal . program ⊨ g ⇔ program' ⊨ g
+        <3>1. (⇒) program ⊨ g ⇒ program' ⊨ g
+          Cut can only reduce the set of provable goals
+        <3>2. (⇐) program' ⊨ g ⇒ program ⊨ g
+          Any proof in program' is also a valid proof in program
+        <3>3. QED BY <3>1 AND <3>2>
+      
+      <4>. SHOW ! ∉ program'
+        BY construction in <1> and <2>
+      
+      <5>. QED BY <2>, <3>, AND <4>
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE FamilyRelations {
+      LET program = Program [
+        Clause {
+          head = Predicate("parent", [Atom("alice"), Atom("bob")]),
+          body = []
+        },
+        Clause {
+          head = Predicate("parent", [Atom("bob"), Atom("charlie")]),
+          body = []
+        },
+        Clause {
+          head = Predicate("ancestor", [Var("X"), Var("Y")]),
+          body = [Predicate("parent", [Var("X"), Var("Y")])]
+        },
+        Clause {
+          head = Predicate("ancestor", [Var("X"), Var("Z")]),
+          body = [
+            Predicate("parent", [Var("X"), Var("Y")]),
+            Predicate("ancestor", [Var("Y"), Var("Z")])
+          ]
+        }
+      ]
+
+      LET goal = Goal [Predicate("ancestor", [Var("X"), Atom("charlie")])]
+
+      LET resolver = SLDResolver()
+      LET proofs = resolver.resolve(program, goal)
+
+      ASSERT LEN(proofs) = 2
+      ASSERT proofs[0].substitution(Var("X")) = Atom("bob")
+      ASSERT proofs[1].substitution(Var("X")) = Atom("alice")
+    }
+
+    EXAMPLE ListProcessing {
+      LET program = Program [
+        Clause {
+          head = Predicate("append", [Atom("[]"), Var("Ys"), Var("Ys")]),
+          body = []
+        },
+        Clause {
+          head = Predicate("append", [
+            Compound(".", [Var("X"), Var("Xs")]),
+            Var("Ys"),
+            Compound(".", [Var("X"), Var("Zs")])
+          ]),
+          body = [Predicate("append", [Var("Xs"), Var("Ys"), Var("Zs")])]
+        },
+        Clause {
+          head = Predicate("reverse", [Atom("[]"), Atom("[]")]),
+          body = []
+        },
+        Clause {
+          head = Predicate("reverse", [
+            Compound(".", [Var("X"), Var("Xs")]),
+            Var("Zs")
+          ]),
+          body = [
+            Predicate("reverse", [Var("Xs"), Var("Ys")]),
+            Predicate("append", [Var("Ys"), Compound(".", [Var("X"), Atom("[]")]), Var("Zs")])
+          ]
+        }
+      ]
+
+      LET goal = Goal [Predicate("reverse", [
+        Compound(".", [Atom("a"), Compound(".", [Atom("b"), Compound(".", [Atom("c"), Atom("[]")])])]),
+        Var("Result")
+      ])]
+
+      LET resolver = SLDResolver()
+      LET proofs = resolver.resolve(program, goal)
+
+      ASSERT LEN(proofs) = 1
+      ASSERT proofs[0].substitution(Var("Result")) = 
+        Compound(".", [Atom("c"), Compound(".", [Atom("b"), Compound(".", [Atom("a"), Atom("[]")])])])
+    }
+  }
+}

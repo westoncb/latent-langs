@@ -1,0 +1,226 @@
+CONCEPT QuantumCircuit {
+  LANGUAGE {
+    TYPE Qubit
+    TYPE Bit
+    TYPE Gate
+    TYPE Circuit = List[Gate]
+    TYPE State = Complex[2^n] -- n is the number of qubits
+    TYPE Unitary = Matrix[Complex, 2^n, 2^n] 
+
+    FUNC Ket(b : Bit) : State
+    FUNC Bra(b : Bit) : State  
+    FUNC Measure(q : Qubit) : Bit
+    FUNC Apply(G : Gate, qs : List[Qubit]) : List[Qubit]
+    FUNC Run(C : Circuit, qs : List[Qubit]) : List[Qubit]
+
+    PRED Entangled(qs : List[Qubit]) : Bool
+
+    AXIOM BornRule {
+      ∀ (ψ : State) (b : Bit).
+        P(Measure(Ket(ψ)) = b) = |Bra(b) · ψ|^2
+    }
+
+    AXIOM GateApplication {
+      ∀ (G : Gate) (qs : List[Qubit]).
+        Apply(G, qs) = (G.Matrix ⊗ I) * qs  
+    }
+
+    NOTATION "⟨" = Bra
+    NOTATION "|" = Ket  
+    NOTATION "⟨ψ|" = Bra(ψ)
+    NOTATION "|ψ⟩" = Ket(ψ)
+    NOTATION "⟨ψ|ϕ⟩" = Bra(ψ) · Ket(ϕ)  
+    NOTATION "H" = Hadamard
+    NOTATION "X" = PauliX
+    NOTATION "Z" = PauliZ
+    NOTATION "CNOT" = ControlledNot
+  }
+
+  STRUCTURE QuantumTeleportation(a : Qubit, b : Qubit) : Circuit {
+    DEF Bell : List[Gate] = [H(a), CNOT(a, b)]
+    DEF Alice : List[Gate] = [CNOT(a, msg), H(msg), Measure(msg), Measure(a)]
+    DEF Bob : List[Gate] = [
+      CNOT(a, b) IF Measure(a) = |1⟩,  
+      Z(b) IF Measure(msg) = |1⟩
+    ]
+
+    RETURN Bell ++ Alice ++ Bob
+  }
+
+  STRUCTURE GroverSearch(Uf : Gate, qs : List[Qubit]) : Circuit {
+    DEF NumIterations : Nat = Floor(π / 4 * Sqrt(2^Length(qs)))
+    DEF Initialize : List[Gate] = Map(H, qs)  
+    DEF Grover : List[Gate] = [  
+      H⊗Length(qs), 
+      Uf,
+      H⊗Length(qs),
+      (2|0⟩⟨0|-I)⊗Length(qs),  
+      H⊗Length(qs)
+    ]
+    DEF FinalMeasure : List[Gate] = Map(Measure, qs)
+
+    RETURN Initialize ++ Repeat(Grover, NumIterations) ++ FinalMeasure
+  }
+
+  PROOFS {
+    TACTIC Substitute(e, x, y) = REWRITE e[x -> y]
+    TACTIC ExpandDef(d) = REWRITE d = d.Definition
+    TACTIC Matrix(G) = REWRITE G = G.Matrix  
+    TACTIC Tensor(e) = REWRITE e = e[0] ⊗ e[1]
+
+    THEOREM BellStateEntanglement {
+      STATEMENT:
+        LET (a b : Qubit) (BellState : State = (|00⟩ + |11⟩) / Sqrt(2))  
+        IN Entangled([a, b]) WHEN (a, b) IN BellState
+
+      PROOF:
+        LET a b : Qubit, BellState : State = (|00⟩ + |11⟩) / Sqrt(2)
+        ASSUME (a, b) IN BellState
+        SHOW Entangled([a, b]) BY {
+          BellState  
+            = (|0⟩ ⊗ |0⟩ + |1⟩ ⊗ |1⟩) / Sqrt(2)   BY Tensor
+            ≠ (α|0⟩ + β|1⟩) ⊗ (γ|0⟩ + δ|1⟩)       BY CONTRADICTION
+          QED
+        }
+    }
+
+    THEOREM GroverCorrectness {
+      STATEMENT:
+        ∀ (Uf : Gate) (qs : List[Qubit]) (w : Nat).
+          LET C : Circuit = GroverSearch(Uf, qs)  
+          IN P(Measure(Run(C, qs)) = BinaryRep(w)) ≥ 1 - 1/2^Length(qs)
+            WHEN (∀ (x : Nat). Uf|x⟩ = (-1)^(x = w) |x⟩) 
+
+      PROOF:
+        LET Uf : Gate, qs : List[Qubit], w : Nat
+        LET C : Circuit = GroverSearch(Uf, qs)
+        LET n = Length(qs), θ = ArcSin(1/Sqrt(2^n))  
+        ASSUME ∀ (x : Nat). Uf|x⟩ = (-1)^(x = w) |x⟩
+
+        REWRITE |w⟩ = Sin(θ)|w⟩ + Cos(θ)|s⟩  
+          WHERE |s⟩ = (Σ_(x ≠ w) |x⟩) / Sqrt(2^n - 1)
+
+        LET NumIterations = Floor(π / 4 * Sqrt(2^n))
+        REWRITE (2|0⟩⟨0|-I)⊗n |ψ⟩ = 
+          Cos(θ)|w⟩ - Sin(θ)|s⟩ WHEN |ψ⟩ = Sin(θ)|w⟩ + Cos(θ)|s⟩ 
+
+        LET |ψ⟩ = (Grover^NumIterations)(H|0⟩)^⊗n
+        REWRITE |ψ⟩ = Sin((2*NumIterations+1)θ)|w⟩ + Cos((2*NumIterations+1)θ)|s⟩
+
+        SHOW P(Measure(Run(C, qs)) = BinaryRep(w)) 
+          = |⟨w|ψ⟩|^2                                BY BornRule  
+          = Sin((2*NumIterations+1)θ)^2              BY ALGEBRA
+          ≥ 1 - 1/2^n                                BY ALGEBRA, DEFINITION NumIterations
+      }
+    }
+  }
+}
+
+CONCEPT QuantumCircuit {
+  LANGUAGE {
+    TYPE Qubit
+    TYPE Gate <: Matrix[Complex, 2, 2]
+    TYPE Circuit <: List[Gate]
+    TYPE State <: Vector[Complex, 2^n]  
+
+    FUNC Hadamard : Gate  
+    FUNC PauliX : Gate
+    FUNC PauliY : Gate
+    FUNC PauliZ : Gate
+    FUNC Phase(θ : Real) : Gate
+    FUNC Rot(θ : Real, φ : Real, λ : Real) : Gate  
+    FUNC CNOT : Gate
+    FUNC Toffoli : Gate
+    FUNC Fredkin : Gate
+
+    FUNC Tensor(g1 : Gate, g2 : Gate) : Gate
+    FUNC Apply(c : Circuit, ψ : State) : State
+    FUNC Measure(ψ : State) : Nat  
+
+    AXIOM UnitaryGates {
+      ∀ (g : Gate). g * g† = I ∧ det(g) = 1
+    }
+
+    NOTATION "H" = Hadamard
+    NOTATION "X" = PauliX  
+    NOTATION "Y" = PauliY
+    NOTATION "Z" = PauliZ
+    NOTATION "P(θ)" = Phase
+    NOTATION "R(θ, φ, λ)" = Rot
+    NOTATION "⊗" = Tensor  
+    NOTATION "⟨ψ|" = Bra
+    NOTATION "|ψ⟩" = Ket
+  }
+
+  STRUCTURE QuantumComputation(n : Nat) {
+    DEF |0⟩ : State[2^n] = State[2^n] { 0 ↦ 1, _ ↦ 0 }  
+    DEF |1⟩ : State[2^n] = State[2^n] { 1 ↦ 1, _ ↦ 0 }
+
+    DEF BellState |Φ⁺⟩ : State[2^2] = (|00⟩ + |11⟩) / √2
+    DEF BellState |Φ⁻⟩ : State[2^2] = (|00⟩ - |11⟩) / √2  
+    DEF BellState |Ψ⁺⟩ : State[2^2] = (|01⟩ + |10⟩) / √2
+    DEF BellState |Ψ⁻⟩ : State[2^2] = (|01⟩ - |10⟩) / √2
+
+    DEF TeleportationCircuit : Circuit = [
+      H ⊗ I, 
+      CNOT,
+      CNOT ⊗ I,
+      H ⊗ I ⊗ I,
+      I ⊗ CNOT  
+    ]
+  }
+
+  PROOFS {
+    TACTIC Substitute(s, t, u) = REWRITE s = t IN u
+
+    THEOREM BellStateEntanglement {
+      STATEMENT:
+        ∀ (M N : Matrix[Real, 2, 2]).
+          (⟨Φ⁺| (M ⊗ N) |Φ⁺⟩ = tr(M) * tr(N) / 4) ∧  
+          (⟨Φ⁻| (M ⊗ N) |Φ⁻⟩ = tr(M) * tr(N) / 4) ∧
+          (⟨Ψ⁺| (M ⊗ N) |Ψ⁺⟩ = tr(M * N) / 4) ∧
+          (⟨Ψ⁻| (M ⊗ N) |Ψ⁻⟩ = -tr(M * N) / 4)
+          
+      PROOF:
+        LET M N : Matrix[Real, 2, 2]
+        SHOW ⟨Φ⁺| (M ⊗ N) |Φ⁺⟩ = tr(M) * tr(N) / 4 BY {  
+          LET |Φ⁺⟩ = (|00⟩ + |11⟩) / √2
+          ⟨Φ⁺| (M ⊗ N) |Φ⁺⟩  
+            = (⟨00| + ⟨11|) (M ⊗ N) (|00⟩ + |11⟩) / 2  
+            = (⟨00| M |0⟩ ⟨0| N |0⟩ + ⟨00| M |1⟩ ⟨0| N |1⟩ +  
+               ⟨11| M |0⟩ ⟨1| N |0⟩ + ⟨11| M |1⟩ ⟨1| N |1⟩) / 2
+            = (M00 * N00 + M01 * N01 + M10 * N10 + M11 * N11) / 2
+            = (tr(M) * tr(N) - det(M) * det(N)) / 2  
+            = tr(M) * tr(N) / 4                         BY det(M) = det(N) = 1
+        }
+        SHOW ⟨Φ⁻| (M ⊗ N) |Φ⁻⟩ = tr(M) * tr(N) / 4 BY {...}
+        SHOW ⟨Ψ⁺| (M ⊗ N) |Ψ⁺⟩ = tr(M * N) / 4 BY {...}  
+        SHOW ⟨Ψ⁻| (M ⊗ N) |Ψ⁻⟩ = -tr(M * N) / 4 BY {...}
+    }
+
+    THEOREM QuantumTeleportation {
+      STATEMENT:
+        ∀ (ψ : State[2]).
+          LET |Ξ⟩ = ψ ⊗ |Φ⁺⟩  
+          IN Apply(TeleportationCircuit, |Ξ⟩) = |00⟩ ⊗ ψ
+
+      PROOF:
+        LET a b : Complex, ψ : State[2] = a |0⟩ + b |1⟩, |Ξ⟩ = ψ ⊗ |Φ⁺⟩
+        REWRITE |Ξ⟩  
+          = (a |0⟩ + b |1⟩) ⊗ (|00⟩ + |11⟩) / √2
+          = (a |000⟩ + a |011⟩ + b |100⟩ + b |111⟩) / √2
+        REWRITE Apply(TeleportationCircuit, |Ξ⟩)
+          = Apply([I ⊗ CNOT], Apply([CNOT ⊗ I], Apply([H ⊗ I ⊗ I], Apply([CNOT], Apply([H ⊗ I], |Ξ⟩)))))  
+          = Apply([I ⊗ CNOT], Apply([CNOT ⊗ I], Apply([H ⊗ I ⊗ I], Apply([CNOT], 
+              (a |000⟩ + a |011⟩ + a |100⟩ - a |111⟩ + b |010⟩ - b |001⟩ + b |110⟩ + b |101⟩) / 2))))
+          = Apply([I ⊗ CNOT], Apply([CNOT ⊗ I], Apply([H ⊗ I ⊗ I],  
+              (a |000⟩ + a |011⟩ + a |110⟩ - a |101⟩ + b |010⟩ - b |001⟩ + b |100⟩ + b |111⟩) / 2)))
+          = Apply([I ⊗ CNOT], Apply([CNOT ⊗ I],
+              (a |000⟩ + a |011⟩ + a |110⟩ - a |101⟩ + b |010⟩ + b |001⟩ - b |100⟩ - b |111⟩) / 2))  
+          = Apply([I ⊗ CNOT], 
+              (a |000⟩ + a |011⟩ + a |110⟩ - a |101⟩ + b |010⟩ + b |001⟩ - b |100⟩ - b |111⟩) / 2)
+          = (a |000⟩ + a |011⟩ + a |110⟩ - a |101⟩ + b |010⟩ + b |001⟩ - b |100⟩ - b |111⟩) / 2  
+          = |00⟩ ⊗ (a |0⟩ + b |1⟩) = |00⟩ ⊗ ψ
+    }
+  }
+}

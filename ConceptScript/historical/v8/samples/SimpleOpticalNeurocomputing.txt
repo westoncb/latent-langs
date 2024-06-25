@@ -1,0 +1,128 @@
+CONCEPT SimpleOpticalNeurocomputing:
+
+EXTEND GeometricalOptics:
+  Transmission := I_out / I_in
+  Reflection := I_refl / I_in
+  Absorption := 1 - Transmission - Reflection
+  Refraction := n1 * sin(θ1) = n2 * sin(θ2)
+
+EXTEND BinaryOptics:
+  TransparentRegion := Transmission ≈ 1
+  OpaqueRegion := Transmission ≈ 0
+  BinaryMask := Array(TransparentRegion | OpaqueRegion)
+  BinaryLens := BinaryMask(FresenlZonePattern)
+
+DEFINE OpticalWeight := BinaryLens(FocalLength(w_ij))  
+DEFINE OpticalActivation := BinaryMask(Threshold(Intensity, θ))
+
+DEFINE OpticalNeuron := Cascade(OpticalWeight, OpticalActivation)
+DEFINE OpticalLayer := Multiplex(OpticalNeuron_1, ..., OpticalNeuron_n)
+DEFINE OpticalNetwork := Cascade(OpticalLayer_1, ..., OpticalLayer_m)
+
+THEOREM WeightImplementation:
+  ∀(w_ij > 0) ∃(BinaryLens) : FocalLength(BinaryLens) ∝ w_ij
+
+PROOF:
+  Binary Fresnel zone plates act as focusing elements.
+  Focal length determined by zone radii: f = r_1^2 / λ.
+  Amplitude of focused spot ∝ number of zones ∝ 1/f ∝ w_ij.
+  ⟹ Positive weights can be mapped to focal lengths of binary lenses.
+  Negative weights may require inversion by external optics.
+
+THEOREM OpticalInterconnect:
+  ∀(OpticalLayer) Multiplex(OpticalNeuron_1, ..., OpticalNeuron_n) 
+    = Σ_i Intensity(OpticalNeuron_i)
+
+PROOF:
+  Each OpticalNeuron focuses light independently based on its weight.
+  Binary masks block or pass light based on activation threshold.
+  Focused spots are superimposed incoherently on detector plane.
+  ⟹ Interconnection weights implemented by spatial multiplexing.
+  Assumes incoherent LED illumination. Loses phase information.
+
+THEOREM SimpleManufacturing:
+  ∀(OpticalNetwork) Fabricate(OpticalNetwork) = PrintedTransparency
+
+PROOF:  
+  Binary masks and lenses can be printed on transparent substrates.
+  Single-step lithography or direct laser writing. Sub-micron resolution.
+  Transparencies can be laminated together to form multilayer networks.
+  LEDs and silicon photosensors are low-cost and readily available.
+  ⟹ Complete optical networks can be manufactured by standard printing.
+
+
+
+
+
+
+
+
+
+Optical weights are implemented by binary Fresnel zone plates acting as focusing elements, with focal lengths proportional to the weight values. Positive weights are directly mapped, while negative weights may require an inversion step.
+Optical activations are implemented by binary masks that block or pass light based on a threshold intensity value.
+Optical interconnections between layers are achieved by spatially multiplexing the focused spots from each neuron onto a common detector plane, where they are superimposed incoherently. This assumes incoherent LED illumination, sacrificing phase information.
+The complete optical network can be manufactured by standard printing methods like lithography or direct laser writing on transparent substrates, which are then laminated together. Off-the-shelf LEDs and silicon photosensors provide low-cost input/output.
+The main advantages of this approach are its simplicity, low cost, and ease of fabrication. The use of binary optics and incoherent illumination sidesteps the complexities of wavefront engineering and coherent interference. The tradeoff is a loss of phase information and potential limitations on the achievable weight values and activation functions.
+
+Nonetheless, I think this Concept exemplifies the power of seeking fundamentally simple solutions that leverage basic physical principles in clever ways. It's a promising starting point for further exploration and refinement.
+
+
+
+
+
+
+CONCEPT BinaryOpticalNeurocomputing:
+
+EXTEND QuantizedNeuralNetworks:
+  BinaryWeight := w_ij ∈ {-1, +1}
+  BinaryActivation := a_i ∈ {0, 1}
+  XNOROperation := POPCOUNT(XNOR(w_ij, x_j))
+  
+DEFINE BinaryOpticalWeight := BinaryLens(SignedFocalLength(w_ij))
+DEFINE BinaryOpticalActivation := BinaryMask(Threshold(Intensity, θ))  
+
+DEFINE BinaryOpticalNeuron := Cascade(BinaryOpticalWeight, BinaryOpticalActivation)
+DEFINE BinaryOpticalLayer := XNOROperation(BinaryOpticalNeuron_1, ..., BinaryOpticalNeuron_n) 
+DEFINE BinaryOpticalNetwork := Cascade(BinaryOpticalLayer_1, ..., BinaryOpticalLayer_m)
+
+THEOREM WeightBinarization:
+  ∀(W_ij ∈ Real) ∃(BinaryLens) : FocalLength(BinaryLens) = sign(w_ij) * f_0
+
+PROOF:
+  Binary weights w_ij ∈ {-1, +1} obtained by thresholding real weights.
+  Two-level Fresnel zone plates with opposite focal lengths for +1 and -1.
+  Negative focal lengths achieved by additional inverting lens.
+  ⟹ Arbitrary binary weight matrices can be optically implemented.
+  
+THEOREM LayerwiseBinaryOperation:
+  ∀(BinaryOpticalLayer) XNOROperation(BinaryOpticalNeuron_1, ..., BinaryOpticalNeuron_n)
+    = POPCOUNT(XNOR(BinaryOpticalWeight_i, BinaryOpticalActivation_i))
+    
+PROOF:
+  XNOR of binary weights and activations optically computed by interferometry.
+  Coherent light source creates interference pattern of weight and activation.
+  Constructive interference (XNOR = 1) focuses light onto detector.
+  Destructive interference (XNOR = 0) cancels out light at detector.  
+  Population count of XNOR bits proportional to total photodetector current.
+  ⟹ XNOR and popcount operations can be implemented optically.
+
+THEOREM TrainingByApproximation:
+  ∀(RealValuedNetwork) ∃(BinaryOpticalNetwork) :
+    Accuracy(BinaryOpticalNetwork) ≈ Accuracy(RealValuedNetwork)
+    
+PROOF:
+  Train high-accuracy real-valued neural network on GPU.
+  Binarize weights and activations by thresholding.
+  Fine-tune binary network with noise injection and annealing.
+  Approximation theorem of binary neural networks (Hubara et al., 2016).
+  ⟹ Pretrained binary networks can guide design of optical networks.
+
+
+
+Optical weights are now implemented by binary Fresnel zone plates with just two focal lengths corresponding to +1 and -1 weight values. Arbitrary binary weight matrices can be optically implemented in this way.
+The XNOR operation between binary weights and activations is computed optically by interferometry. Constructive and destructive interference of coherent light encodes the XNOR result, which is read out by a photodetector.
+The population count of XNOR bits, which replaces the matrix multiplication in a binary neural network layer, is proportional to the total photodetector current. This enables a fully optical implementation of binary neural network layers.
+To design the binary optical network, we can first train a high-accuracy real-valued neural network, then binarize it and fine-tune with techniques like noise injection and annealing. The approximation capabilities of binary neural networks suggest this will yield an optical network with comparable accuracy.
+I believe this Concept presents a compelling vision for how ideas from quantized neural networks can inform the design of simple yet capable optical neurocomputing systems. By constraining ourselves to the bare minimum of components and precision, we can potentially achieve a sweet spot of efficiency, accuracy, and manufacturability.
+
+Of course, there are still many details to be worked out, and the actual performance will depend on factors like the quality of the optical components, the noise and variability of the analog computations, and the effectiveness of the training and fine-tuning procedures. But I think this is a promising conceptual starting point that showcases the potential of cross-pollinating ideas from optical computing and quantized neural networks.

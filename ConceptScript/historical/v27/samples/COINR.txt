@@ -1,0 +1,447 @@
+CONCEPT COINR {
+  LANGUAGE {
+    TYPE Net
+    TYPE Agent
+    TYPE Port
+    TYPE Wire
+    TYPE Thread
+    TYPE SharedPort
+
+    FUNC Agents : Net -> Set[Agent]
+    FUNC Ports : Net -> Set[Port]
+    FUNC Wires : Net -> Set[Wire]
+    FUNC Sources : Wire -> Port
+    FUNC Target : Wire -> Port
+    FUNC Owner : Port -> Agent
+    FUNC Principal : Agent -> Port
+    FUNC Auxiliary : Agent -> Set[Port]
+    FUNC Threads : Net -> Set[Thread]
+    FUNC ActiveAgents : Thread -> Set[Agent]
+    FUNC SharedPorts : Net -> Set[SharedPort]
+    FUNC SharedPortMap : SharedPort -> Set[Port]
+
+    FUNC Spawn : (Thread, Agent) -> Thread
+    FUNC Merge : (Thread, Thread) -> Thread
+    FUNC Share : (Port, Port) -> SharedPort
+    FUNC Unshare : SharedPort -> (Port, Port)
+  }
+
+  NOTATION {
+    α, β, γ ::= a | a[i] | α β | α || β | α[φ] | (α)
+    a, b, c          -- Agents
+    a[i]             -- The i-th auxiliary port of agent a
+    α β              -- Sequential composition (plugging β into α)
+    α || β           -- Parallel composition (of threads)
+    α[φ]             -- Substitution (replacing ports in α according to φ)
+    (α)              -- Grouping
+    i, j, k ∈ ℕ      -- Natural numbers (for indexing)
+    φ ::= {x ↦ y}    -- Port substitution map
+    
+    x, y, z          -- Ports
+    _                -- Anonymous port (wildcard)
+    x̂                -- Shared port corresponding to x
+    
+    α --w--> β       -- Wire connecting α to β
+    α ==t==> β       -- Thread transition from α to β
+    α ==*==> β       -- Reflexive transitive closure of ==>==>
+    α ~> β           -- Net reduction (via agent interaction)
+    α ~>* β          -- Reflexive transitive closure of ~>
+  }
+
+  TRANSFORMERS {
+    RULE Communication {
+      a b WITH (a.Principal --w1--> b.Auxiliary[i]) AND (b.Principal --w2--> a.Auxiliary[j]) 
+      ~>
+      a.Auxiliary[j] --Wire--> b.Auxiliary[i]
+    }
+
+    RULE Indirection {
+      α[x, x′] β[y, y′] WITH α --w1--> x --SharedPort--> x′ --w2--> β  AND  α --w3--> y --SharedPort--> y′ --w4--> β
+      ~>
+      α β WITH α --w1--> x̂ --Wire--> ŷ --w2--> β  
+    }
+
+    RULE ThreadSpawning {
+      α ==t==> Spawn(t, a) || (a.Principal --Wire--> b.Auxiliary[i])  WHEN b ∉ ActiveAgents(t)
+    }
+
+    RULE ThreadMerging {
+      t1 || t2 ==t==> Merge(t1, t2)  WHEN ActiveAgents(t1) ∩ ActiveAgents(t2) = ∅
+    }
+
+    RULE PortSharing {
+      x --Wire--> y IN α  AND  x --Wire--> y IN β  
+      ==t==>  
+      α[x ↦ x̂] || β[y ↦ ŷ] || (x̂ --Wire--> ŷ)
+    }
+  }
+
+  PROOFS {
+    DEF ThreadTransition(t, t′) := 
+      EXISTS a, b, i, j, α, β . 
+        t = α || a || β  AND  t′ = α || a.Auxiliary[j] --Wire--> b.Auxiliary[i] || β
+        AND (a.Principal --w1--> b.Auxiliary[i]) AND (b.Principal --w2--> a.Auxiliary[j])
+    
+    DEF NetReduction(n, n′) :=
+      EXISTS α, β, w1, w2 . 
+        n = α ~> β  AND  n′ = α.Target(w1) --Wire--> β.Target(w2)
+        AND (α.Principal --w1--> β.Auxiliary[i]) AND (β.Principal --w2--> α.Auxiliary[j])
+
+    THEOREM Soundness {
+      ∀ n, n′, t . n ==t==> n′ ⇒ (n ~>* n′)
+    } BY INDUCTION ON ThreadTransition(t, _)
+    
+    THEOREM Completeness {
+      ∀ n, n′ . n ~>* n′ ⇒ (∃ t . n ==t==> n′)
+    } BY INDUCTION ON NetReduction(n, _)
+
+    COROLLARY Confluence {
+      ∀ n, n1, n2 . (n ~>* n1) ∧ (n ~>* n2) ⇒ (∃ n′ . (n1 ~>* n′) ∧ (n2 ~>* n′))
+    } BY Completeness, Soundness, AND THEOREM ChurchRosser FOR ==t==>
+
+    -- The THEOREM Confluence states that if a net n reduces to both n1 and n2, then there exists a net n′ 
+    -- such that both n1 and n2 reduce to n′. This is a corollary of the Soundness and Completeness theorems,
+    -- which establish a correspondence between net reductions (~>) and thread transitions (==>), 
+    -- together with the Church-Rosser theorem for thread transitions (proved elsewhere).
+  }
+}
+
+
+CONCEPT DistributedLambdaCalculus IMPORTS COINR {
+  LANGUAGE {
+    TYPE Term
+    TYPE Variable <: Term
+    TYPE Abstraction <: Term
+    TYPE Application <: Term
+
+    FUNC FreeVariables : Term -> Set[Variable]
+    FUNC BoundVariables : Term -> Set[Variable]
+    FUNC Subterms : Term -> Set[Term]
+    FUNC Substitute : (Term, Variable, Term) -> Term
+    FUNC IsValue : Term -> Bool
+
+    FUNC Encode : Term -> Net
+    FUNC Decode : Net -> Term
+  }
+
+  TRANSFORMERS {
+    RULE BetaReduction {
+      (λ x . M) N ~> M[x := N]
+    }
+
+    RULE ApplicationEncoding {
+      Encode((M N)) = 
+        LET α = Encode(M), 
+            β = Encode(N),
+            x = FreshPort(),
+            y = FreshPort()
+        IN
+          (α.Principal --Wire--> x) || 
+          (β.Principal --Wire--> y) || 
+          (a_App.Auxiliary[0] --Wire--> x) ||
+          (a_App.Auxiliary[1] --Wire--> y) ||
+          a_App
+    }  
+
+    RULE AbstractionEncoding {
+      Encode(λ x . M) =
+        LET α = Encode(M)
+            γ = FreshPort()
+        IN  
+          α[x.Principal ↦ a_Abs.Auxiliary[0]] ||
+          (a_Abs.Principal --Wire--> γ) || 
+          a_Abs
+    }
+
+    RULE VariableEncoding {
+      Encode(x) = a_Var.Principal --Wire--> x.Principal || a_Var  
+    }
+
+    RULE ApplicationDecoding {
+      Decode(a_App.Principal --Wire--> _) = 
+        LET x = a_App.Auxiliary[0],
+            y = a_App.Auxiliary[1],
+            M = Decode(x --Wire--> _),
+            N = Decode(y --Wire--> _)
+        IN
+          (M N)
+    }
+
+    RULE AbstractionDecoding {
+      Decode(a_Abs.Principal --Wire--> _) =
+        LET x = FreshVariable(),
+            M = Decode(a_Abs.Auxiliary[0] --Wire--> _)
+        IN
+          λ x . M
+    }
+
+    RULE VariableDecoding {
+      Decode(a_Var.Principal --Wire--> x) = Variable(x)
+    }
+  }
+
+  PROOFS {
+    THEOREM EncodingCorrectness {
+      ∀ M . Decode(Encode(M)) = M
+    } BY INDUCTION ON M
+
+    THEOREM DecodingCorrectness {
+      ∀ α . Encode(Decode(α)) ~> α
+    } BY INDUCTION ON α
+
+    THEOREM SimulationTheorem {
+      ∀ M, M′ . M ~> M′ ⇒ Encode(M) ~>* Encode(M′)
+    } BY INDUCTION ON ~>
+
+    THEOREM ComputationalAdequacy {
+      ∀ M . (∃ V . IsValue(V) ∧ M ~>* V) ⇔ (∃ α . IsNormalForm(α) ∧ Encode(M) ~>* α)
+    } BY SimulationTheorem AND INDUCTION ON ~>*
+  }
+
+  EXAMPLES {
+    EXAMPLE Identity {
+      LET I = λ x . x
+      IN
+        Encode(I) ~>* a_Abs || (a_Abs.Principal --Wire--> γ) || (a_Abs.Auxiliary[0] --Wire--> γ)
+    }
+
+    EXAMPLE SelfApplication {
+      LET Ω = (λ x . x x) (λ x . x x)
+      IN
+        Encode(Ω) ~>* 
+          (a_App || (a_App.Principal --Wire--> _) || 
+           (a_App.Auxiliary[0] --SharedPort--> a_Abs.Principal) || 
+           (a_App.Auxiliary[1] --SharedPort--> a_Abs.Principal) ||
+           a_Abs || (a_Abs.Auxiliary[0] --SharedPort--> a_Abs.Principal))
+    }
+  }
+}
+
+
+
+CONCEPT DistributedLisp IMPORTS DistributedLambdaCalculus {
+  LANGUAGE {
+    TYPE Expr
+    TYPE Atom <: Expr
+    TYPE Symbol <: Atom
+    TYPE Number <: Atom
+    TYPE List <: Expr
+    TYPE Closure <: Expr
+
+    FUNC Car : List -> Expr
+    FUNC Cdr : List -> List
+    FUNC Cons : (Expr, List) -> List
+    FUNC IsEmpty : List -> Bool
+    FUNC MakeList : Expr* -> List
+    FUNC Env : Map[Symbol, Expr]
+    FUNC Eval : (Expr, Env) -> Expr
+    FUNC Apply : (Closure, List, Env) -> Expr
+
+    FUNC CompileToLambda : Expr -> Term
+    FUNC EncodeEnv : Env -> Net
+    FUNC DecodeEnv : Net -> Env
+  }
+
+  TRANSFORMERS {
+    RULE EvalAtom {
+      Eval(a, env) = 
+        CASE a OF
+          Symbol(s) -> env(s)
+          Number(n) -> a
+    }
+
+    RULE EvalList {
+      Eval(MakeList(e1, ..., en), env) =
+        CASE Eval(e1, env) OF
+          Closure(params, body, cenv) ->
+            LET args = Map(ei -> Eval(ei, env), [e2, ..., en]),
+                nenv = MergeEnvs(cenv, MakeEnvFromList(params, args))
+            IN
+              Eval(body, nenv)
+          _                            -> 
+            MakeList(Map(ei -> Eval(ei, env), [e1, ..., en]))
+    }
+
+    RULE EvalLambda {
+      Eval(Lambda(params, body), env) = Closure(params, body, env)
+    }
+
+    RULE ApplyClosureEncoding {
+      EncodeEnv(Apply(Closure(params, body, cenv), args, env)) = 
+        EncodeEnv(env) ||
+        Encode(CompileToLambda(body))[
+          Map(p -> EncodeEnv(cenv)(p), params) ↦ 
+          Map(a -> EncodeExpr(a), args)
+        ]
+    }
+
+    RULE SymbolEncoding {
+      EncodeExpr(Symbol(s)) = a_Var.Principal --Wire--> EncodeEnv(env)(s)
+    }
+
+    RULE NumberEncoding {
+      EncodeExpr(Number(n)) = a_Num.Principal --Wire--> Encode(n)
+    }
+
+    RULE ConsEncoding {
+      EncodeExpr(Cons(e1, e2)) = 
+        LET α = EncodeExpr(e1),
+            β = EncodeExpr(e2)
+        IN
+          a_Cons || 
+          (a_Cons.Principal --Wire--> γ) ||
+          (a_Cons.Auxiliary[0] --Wire--> α) || 
+          (a_Cons.Auxiliary[1] --Wire--> β)
+    }
+  }
+
+  PROOFS {
+    THEOREM CompilerCorrectness {
+      ∀ e, env . Eval(e, env) = Decode(Encode(CompileToLambda(e))[EncodeEnv(env)])
+    } BY INDUCTION ON e
+
+    THEOREM DistributedEvaluation {
+      ∀ e1, e2, env1, env2 .
+        Eval(Cons(e1, e2), MergeEnvs(env1, env2)) = 
+        Decode(EncodeExpr(Eval(e1, env1)) || EncodeExpr(Eval(e2, env2)))
+    } BY CompilerCorrectness AND ReduceParallel
+
+    LEMMA ReduceParallel {
+      ∀ α, β . Encode(Decode(α)) || Encode(Decode(β)) ~>* Encode(Decode(α || β))
+    } BY DecodingCorrectness, SimulationTheorem
+  }
+
+  EXAMPLES {
+    EXAMPLE FibonacciFunction {
+      LET fib = Lambda(["n"], 
+                 If(LessThanOrEqual(Symbol("n"), Number(1)),
+                    Number(1),
+                    Plus(Eval(MakeList(Symbol("fib"), Minus(Symbol("n"), Number(1))), Env()),
+                         Eval(MakeList(Symbol("fib"), Minus(Symbol("n"), Number(2))), Env()))))
+      IN
+        EncodeExpr(Eval(MakeList(Symbol("fib"), Number(5)), MakeEnv(["fib" -> fib]))) ~>*
+        EncodeExpr(Number(8))
+    }
+
+    EXAMPLE DistributedFactorial {
+      LET factorial = Lambda(["n"],
+                        If(LessThanOrEqual(Symbol("n"), Number(1)), 
+                           Number(1),
+                           Times(Symbol("n"), Eval(MakeList(Symbol("factorial"), Minus(Symbol("n"), Number(1))), Env())))),
+          subtask1 = Eval(MakeList(Symbol("factorial"), Number(3)), MakeEnv(["factorial" -> factorial])),
+          subtask2 = Eval(MakeList(Symbol("factorial"), Number(4)), MakeEnv(["factorial" -> factorial])),
+          result = Eval(Plus(subtask1, subtask2), Env())
+      IN
+        EncodeExpr(result) ~>*
+        EncodeExpr(Number(30))
+    }
+  }
+}
+
+
+CONCEPT DistributedPatternMatching IMPORTS DistributedLambdaCalculus {
+  LANGUAGE {
+    TYPE Pattern
+    TYPE Variable <: Pattern
+    TYPE Constructor <: Pattern
+    TYPE Wildcard <: Pattern
+
+    FUNC Arity : Constructor -> Nat
+    FUNC Parameters : Constructor -> [Pattern]
+    FUNC MatchesPattern : (Term, Pattern) -> Bool
+    FUNC BindingVariable : Variable -> Variable
+    FUNC ConstructorName : Constructor -> String
+
+    FUNC CompilePattern : Pattern -> Term
+    FUNC CompilePatternMatching : (Term, [(Pattern, Term)]) -> Term
+  }
+
+  TRANSFORMERS {
+    RULE VariablePattern {
+      CompilePattern(Variable(x)) = λ x . x
+    }
+
+    RULE WildcardPattern {
+      CompilePattern(Wildcard()) = λ _ . a_Wld
+    }
+
+    RULE ConstructorPattern {
+      CompilePattern(Constructor(c, [p_1, ..., p_n])) =
+        LET x_1 = FreshVariable(), ..., x_n = FreshVariable()
+        IN
+          λ x . 
+            CASE x OF
+              c(x_1, ..., x_n) ->
+                (CompilePattern(p_1) x_1) ... (CompilePattern(p_n) x_n)
+              _ -> a_Fail
+    }
+
+    RULE PatternMatchingCompilation {
+      CompilePatternMatching(M, [(p_1, N_1), ..., (p_n, N_n)]) =
+        (CompilePattern(p_1) M) (λ _ . N_1) (
+          ...
+            (CompilePattern(p_n) M) (λ _ . N_n) (
+              λ _ . a_Fail
+            )
+          ...
+        )
+    }
+
+    RULE MatchReduction {
+      (λ x . CASE x OF c(x_1, ..., x_n) -> M _ -> N) (c(V_1, ..., V_n))
+      ~>
+      M[x_1 := V_1, ..., x_n := V_n]
+    }
+
+    RULE NoMatchReduction {
+      (λ x . CASE x OF c(x_1, ..., x_n) -> M _ -> N) V
+      ~> 
+      N  WHEN ConstructorName(V) != c
+    }
+  }
+
+  PROOFS {
+    THEOREM PatternMatchingCorrectness {
+      ∀ M, ps .
+        LET N = CompilePatternMatching(M, ps)
+        IN
+          ∀ p_i, N_i ∈ ps . MatchesPattern(M, p_i) ⇒ (N M) ~> N_i
+    } BY INDUCTION ON ps AND MatchReduction, NoMatchReduction
+
+    THEOREM PatternMatchingExhaustiveness {
+      ∀ M, ps .
+        LET N = CompilePatternMatching(M, ps)
+        IN
+          (∀ p_i ∈ ps . ¬MatchesPattern(M, p_i)) ⇒ (N M) ~> a_Fail
+    } BY INDUCTION ON ps AND NoMatchReduction
+  }
+
+  EXAMPLES {
+    EXAMPLE NatSum {
+      LET Sum = λ xs .
+            CASE xs OF
+              Nil() -> 0
+              Cons(x, xs') -> x + Sum(xs')
+          Nat = μ Nat . (Zero() | Succ(Pred: Nat))
+      IN
+        Encode(Sum(Cons(Succ(Zero()), Cons(Succ(Succ(Zero())), Nil()))))
+        ~>*
+        Encode(3)
+    }
+
+    EXAMPLE BinaryTreeDepth {
+      LET Depth = λ t .
+            CASE t OF
+              Leaf(_) -> 0
+              Node(l, _, r) -> 1 + Max(Depth(l), Depth(r))
+          BinaryTree = μ BinaryTree . (Leaf(Value: Nat) | Node(Left: BinaryTree, Value: Nat, Right: BinaryTree))
+          Max = λ x . λ y . IF x >= y THEN x ELSE y
+      IN  
+        LET t = Node(Node(Leaf(1), 2, Leaf(3)), 4, Node(Leaf(5), 6, Node(Leaf(7), 8, Leaf(9))))
+        IN
+          Encode(Depth(t))
+          ~>*
+          Encode(4)
+    }
+  }
+}

@@ -1,0 +1,326 @@
+CONCEPT DifferentialProgramSemantics {
+  PARAMETERS {
+    Prog : TYPE
+    Real : TYPE
+  }
+  
+  CONTEXT {
+    TYPES {
+      Var := String
+      Type := Real 
+            | Type -> Type
+            | Mu(Type -> Type)
+      Expr := Var + Real + Expr(Expr) + Lambda(Var, Type, Expr)
+            | Lift(Type, Expr) | Fold(Type, Expr) | Unfold(Expr)  
+      Stmt := Var := Expr
+            | If(Expr, Stmt, Stmt)
+            | While(Expr, Stmt)
+            | Stmt ; Stmt
+      Prog := Stmt
+
+      INDUCTIVE DualNum {
+        CASE Real(r : Real)
+        CASE Dual(r : Real, e : Real)
+      }
+      
+      Value := Real + Closure(Var, Expr, Env) + Value(Value) + Mu(Value -> Value)
+      
+      Env := Map(Var, Value)
+      
+      State := (Env, Heap)
+      
+      Heap := Map(Addr, Value)
+      
+      Addr := Nat
+    }
+
+    STRUCTURES {
+      STRUCTURE Semantics {
+        -- Standard value semantics
+        FUNC Eval(e : Expr, env : Env, h : Heap) -> (Value, Heap)
+        FUNC Apply(v1 : Value, v2 : Value) -> Value  
+        FUNC Alloc(v : Value, h : Heap) -> (Addr, Heap)
+        FUNC Update(a : Addr, v : Value, h : Heap) -> Heap
+        
+        -- Standard program semantics 
+        FUNC Exec(p : Prog, s : State) -> State
+      }
+      
+      STRUCTURE DifferentialSemantics {
+        -- Differential value semantics
+        FUNC DualEval(e : Expr, env : Env, denv : Env, h : Heap, dh : Heap) -> (DualNum, Heap, Heap)
+        FUNC DualApply(dv1 : DualNum, dv2 : DualNum) -> DualNum
+        FUNC DualAlloc(dv : DualNum, h : Heap, dh : Heap) -> (Addr, Heap, Heap) 
+        FUNC DualUpdate(a : Addr, dv : DualNum, h : Heap, dh : Heap) -> (Heap, Heap)
+        
+        -- Differential program semantics
+        FUNC DualExec(p : Prog, s : State, ds : State) -> State
+        
+        -- Differential transformations
+        FUNC Linearize(p : Prog) -> Prog
+        FUNC Transpose(p : Prog) -> Prog  
+      }
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE DualSimplify {
+      DualEval(e, env, denv, h, dh) =>  
+        LET (v, h') = Eval(e, env, h)
+            (dv, dh') = DualEval(e, env, denv, h, dh)
+        IN (Dual(v, dv), h', dh')
+    }
+
+    REWRITE DualSubs {  
+      DualApply(Dual(f, df), Dual(x, dx)) => Dual(Apply(f, x), df(dx))
+    }
+    
+    REWRITE DualFold {
+      DualEval(Fold(t, e), env, denv, h, dh) =>
+        LET (v, h') = Eval(e, env, h)
+            (dv, dh') = DualEval(e, env, denv, h, dh)  
+        IN (Fold(DualType(t), Dual(v, dv)), h', dh')
+      WHERE DualType(Real) = Real
+            DualType(s -> t) = DualType(s) -> DualType(t)  
+            DualType(Mu(f)) = Mu(λ dt . DualType(f(Unfold(dt))))
+    }
+    
+    REWRITE Transpose {
+      Transpose(Skip) => Skip
+      Transpose(x := e) => x :<= Transpose(e)
+      Transpose(If(e, s1, s2)) => If(e, Transpose(s1), Transpose(s2))
+      Transpose(While(e, s)) => Fixpoint(λ s' . If(e, s';Transpose(s), Skip), Skip)  
+      Transpose(s1;s2) => Transpose(s2);Transpose(s1)
+    }
+    
+    REWRITE LinearLet {
+      Let(x, e, s) => Bind(p, λ x . s, Z(p))
+        WHERE (p, h') = Linearize(e)
+    }
+    
+    REWRITE LinearWhile {
+      While(e, s) => Fixpoint(λ s' . Bind(pe, λ ve . 
+                        If(ToReal(ve), Bind(ps, λ vs . s';s', Z(ps)), Z(s')), Z(s)), Z(s))
+        WHERE pe = Linearize(e)  
+              ps = Linearize(s)
+    }
+  }
+  
+  PROOFS {
+    -- Correctness of differential semantics
+    THEOREM DifferentialCorrectness {
+      ∀ (p : Prog) (s ds : State) .
+        LET (es, hs) = s
+            (des, dhs) = ds
+            (es', hs') = Exec(p, s)
+            (des', dhs') = DualExec(p, s, ds)
+        IN ∀ (x : Var) . 
+             des'(x) = ∂(es'(x))/∂(es(y)) * des(y) + ...
+    }
+
+    -- Correctness of transpose transformation  
+    THEOREM TransposeCorrectness {
+      ∀ (p : Prog) (s ds : State) .
+        LET (_, _, dhs') = DualExec(p, s, ds)
+            (_, _, dhs'') = DualExec(Transpose(p), Exec(p, s), ds)
+        IN dhs' = Reverse(dhs'')  
+    }
+    
+    -- Correctness of linearization transformation
+    THEOREM LinearizationCorrectness {
+      ∀ (p : Prog) (s : State) .
+        LET (e, h) = Exec(p, s)
+            (e', h') = Eval(Linearize(p), (EmptyEnv, EmptyHeap)) 
+        IN e = Tangent(e') ∧ h = Tangent(h')
+    } 
+  } 
+  
+  EXAMPLES {
+    EXAMPLE HigherOrderDerivative {
+      LET Twice(f, x) = f(f(x))
+      
+      LET P = g := Lambda(x, Real, x * x) ; h := Lambda(f, Real -> Real, Twice(f, c)) ; z := h(g)
+      
+      THEN ∂[[P]]/∂c = {c => 1, g => [x => 2x], h => [f => f'(f(c))f'(c)], z => 4c^3}
+    }
+    
+    EXAMPLE RecursiveTypeDerivative {
+      LET T = Mu(X, Real + X * X)
+      
+      LET SumTree(t) = Fold(T, Unfold(t)) MATCH {
+        CASE Leaf(x) => x
+        CASE Node(l, r) => SumTree(l) + SumTree(r)  
+      }
+      
+      LET P = t := ... ; z := SumTree(t)
+      
+      THEN ∂[[P]]/∂t = ... -- derivative of SumTree
+    } 
+  }
+}
+
+
+
+
+
+CONCEPT DifferentialProgramSemantics {
+  PARAMETERS {
+    Prog : TYPE
+    Real : TYPE
+  }
+  
+  CONTEXT {
+    TYPES {
+      Var := String
+      Expr := Var + Real + Expr * Expr + Expr + Expr + Expr - Expr 
+      Stmt := Skip 
+            | Var := Expr
+            | If(Expr, Stmt, Stmt)
+            | While(Expr, Stmt)
+            | Stmt ; Stmt
+      Prog := Stmt
+
+      State := Map(Var, Real)
+      
+      INDUCTIVE DualNum {
+        CASE Real(r : Real)
+        CASE Dual(r : Real, e : Real)
+      }
+    }
+    
+    STRUCTURES {
+      STRUCTURE Semantics {
+        FUNC Eval(e : Expr, s : State) -> Real
+          CASE Var(x) => s(x)  
+          CASE Real(r) => r
+          CASE e1 * e2 => Eval(e1, s) * Eval(e2, s)
+          CASE e1 + e2 => Eval(e1, s) + Eval(e2, s)
+          CASE e1 - e2 => Eval(e1, s) - Eval(e2, s)
+        
+        FUNC Exec(p : Prog, s : State) -> State  
+          CASE Skip => s
+          CASE x := e => s[x => Eval(e, s)]
+          CASE If(e, p1, p2) => IF Eval(e, s) > 0 THEN Exec(p1, s) ELSE Exec(p2, s) 
+          CASE While(e, p) => IF Eval(e, s) > 0 THEN Exec(p ; While(e, p), s) ELSE s
+          CASE p1 ; p2 => Exec(p2, Exec(p1, s))
+      }
+      
+      STRUCTURE DifferentialSemantics {
+        FUNC DualEval(e : Expr, s : State, ds : State) -> DualNum
+          CASE Var(x) => Dual(s(x), ds(x))
+          CASE Real(r) => Real(r)
+          CASE e1 * e2 => 
+            LET Dual(v1, dv1) = DualEval(e1, s, ds)
+                Dual(v2, dv2) = DualEval(e2, s, ds)
+            IN Dual(v1 * v2, v1 * dv2 + v2 * dv1)  
+          CASE e1 + e2 =>   
+            LET Dual(v1, dv1) = DualEval(e1, s, ds)
+                Dual(v2, dv2) = DualEval(e2, s, ds)
+            IN Dual(v1 + v2, dv1 + dv2)
+          CASE e1 - e2 =>
+            LET Dual(v1, dv1) = DualEval(e1, s, ds)  
+                Dual(v2, dv2) = DualEval(e2, s, ds)
+            IN Dual(v1 - v2, dv1 - dv2)
+            
+        FUNC DualExec(p : Prog, s : State, ds : State) -> State
+          CASE Skip => ds  
+          CASE x := e => ds[x => DualEval(e, s, ds).e]
+          CASE If(e, p1, p2) => 
+            IF Eval(e, s) > 0 
+            THEN DualExec(p1, s, ds) 
+            ELSE DualExec(p2, s, ds)
+          CASE While(e, p) => 
+            IF Eval(e, s) > 0
+            THEN LET ds' = DualExec(p, s, ds) 
+                 IN DualExec(While(e, p), Exec(p, s), ds')
+            ELSE ds   
+          CASE p1 ; p2 => 
+            LET ds' = DualExec(p1, s, ds)
+            IN DualExec(p2, Exec(p1, s), ds')
+      }
+    }
+    
+    NOTATION {
+      "∂[[ p ]]/∂(x_i)" := DualExec(p, Init, ds[x_i => 1])
+        WHERE Init = s[x => 0 for x in Vars(p)]
+    }
+  }
+
+  PROOFS {
+    THEOREM DifferentialCorrectness {
+      ∀ (p : Prog) (s ds : State) .
+        DualEval(e, s, ds).e = ∂(Eval(e, s))/∂(x) * ds(x) + ...  
+    }
+    PROOF {
+      <1>1. ASSUME p : Prog, s ds : State
+      
+      <1>2. PROVE DualEval(e, s, ds).e = ∂(Eval(e, s))/∂(x) * ds(x) + ...
+        <2>1. INDUCT ON e : Expr
+          <3>1. CASE Var(x) =>
+            SHOW DualEval(Var(x), s, ds).e = ds(x)
+            BY SIMP DualEval 
+          <3>2. CASE Real(r) =>  
+            SHOW DualEval(Real(r), s, ds).e = 0
+            BY SIMP DualEval
+          <3>3. CASE e1 * e2 =>
+            LET de1 = DualEval(e1, s, ds) 
+                de2 = DualEval(e2, s, ds)
+            LET Dual(v1, dv1) = de1
+                Dual(v2, dv2) = de2
+            SHOW DualEval(e1 * e2, s, ds).e = dv1 * v2 + dv2 * v1
+            BY <2>1 INDUCTIVE_HYPOTHESIS, SIMP DualEval
+          <3>4. CASE e1 + e2 =>  
+            SHOW DualEval(e1 + e2, s, ds).e = DualEval(e1, s, ds).e + DualEval(e2, s, ds).e  
+            BY <2>1 INDUCTIVE_HYPOTHESIS, SIMP DualEval
+          <3>5. CASE e1 - e2 =>
+            SHOW DualEval(e1 - e2, s, ds).e = DualEval(e1, s, ds).e - DualEval(e2, s, ds).e
+            BY <2>1 INDUCTIVE_HYPOTHESIS, SIMP DualEval  
+              
+      <1>3. PROVE DualExec(p, s, ds) = { x => ∂(Exec(p, s))(x)/∂(y) * ds(y) + ... }  
+        <2>1. INDUCT ON p : Prog
+          <3>1. CASE Skip => SHOW DualExec(Skip, s, ds) = ds BY SIMP DualExec
+          <3>2. CASE x := e =>
+            SHOW DualExec(x := e, s, ds) = ds[x => DualEval(e, s, ds).e]  
+            BY <2>1 INDUCTIVE_HYPOTHESIS, <1>2, SIMP Exec, DualExec
+          <3>3. CASE If(e, p1, p2) =>
+            SHOW DualExec(If(e, p1, p2), s, ds) =
+              IF Eval(e, s) > 0
+              THEN DualExec(p1, s, ds)
+              ELSE DualExec(p2, s, ds)
+            BY <2>1 INDUCTIVE_HYPOTHESIS, SIMP Exec, DualExec  
+          <3>4. CASE While(e, p) =>  
+            SHOW DualExec(While(e, p), s, ds) = 
+              IF Eval(e, s) > 0
+              THEN LET ds' = DualExec(p, s, ds)
+                   IN DualExec(While(e, p), Exec(p, s), ds')  
+              ELSE ds
+            BY <2>1 INDUCTIVE_HYPOTHESIS, SIMP Exec, DualExec
+          <3>5. CASE p1 ; p2 =>
+            SHOW DualExec(p1 ; p2, s, ds) =
+              LET ds' = DualExec(p1, s, ds) 
+              IN DualExec(p2, Exec(p1, s), ds')  
+            BY <2>1 INDUCTIVE_HYPOTHESIS, SIMP Exec, DualExec
+            
+      <1>. QED BY <1>3    
+    }
+  }
+  
+  EXAMPLES {
+    EXAMPLE Derivative {
+      LET Sq(x) = x * x
+      
+      LET P = z := Sq(x) + y ; w := Sq(z)
+      
+      THEN ∂[[P]]/∂x = {x => 1, y => 0, z => 2x, w => 4x(x^2 + y)}
+      
+      AND ∂[[P]]/∂y = {x => 0, y => 1, z => 1, w => 2(x^2 + y)}
+    }
+    
+    EXAMPLE Sensitivity {
+      LET P = If(x > 0, y := 2 * x, y := x) ; z := y
+
+      THEN ∂[[P]]/∂x = IF x > 0 THEN {x => 1, y => 2, z => 2} 
+                                 ELSE {x => 1, y => 1, z => 1}  
+    } 
+  }
+}

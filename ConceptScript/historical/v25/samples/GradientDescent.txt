@@ -1,0 +1,110 @@
+CONCEPT GradientDescent {
+  LANGUAGE {
+    TYPE Params  -- Parameters of model
+    TYPE Loss = Params -> Real  -- Loss function to minimize
+    TYPE Gradient = Params -> Params  -- Gradient of loss function
+    
+    FUNC Optimize : (Params, Loss, Gradient, Nat) -> Params
+    PRED Converged : (Params, Loss, Real) -> Bool
+
+    AXIOM Descent {
+      ∀ (θ : Params) (L : Loss) (α : Real) (𝛁L : Gradient).
+        L(θ - α * 𝛁L(θ)) ≤ L(θ) 
+    }
+    
+    NOTATION "𝛁" = Gradient
+    NOTATION "||" <Vector> "||" = Norm
+  }
+
+  STRUCTURE BatchGradientDescent(θ₀ : Params, L : Loss, B : Nat) {
+    DEF 𝛁L = AutoDifferentiate(L) 
+
+    DEF η = 0.01  -- Learning rate
+
+    DEF Optimize : (Params, Loss, Gradient, Nat) -> Params = λ θ L 𝛁L n.
+      MATCH n WITH
+      | 0 -> θ
+      | n' -> LET ∇ = SUM i FROM 1 TO B OF 𝛁L(Sample(θ, i)) / B
+              IN Optimize(θ - η * ∇, L, 𝛁L, n'-1) 
+              
+    DEF Converged : (Params, Loss, Real) -> Bool = λ θ L ε.
+      ||𝛁L(θ)|| ≤ ε  
+  }
+
+  STRUCTURE Momentum(θ₀ : Params, L : Loss, B : Nat, γ : Real) EXTENDS BatchGradientDescent {
+    DEF v₀ : Params = 0
+
+    DEF Optimize : (Params, Params, Loss, Gradient, Nat) -> Params = λ θ v L 𝛁L n.
+      MATCH n WITH 
+      | 0 -> θ
+      | n' -> LET ∇ = SUM i FROM 1 TO B OF 𝛁L(Sample(θ, i)) / B
+              LET v' = γ * v + η * ∇  
+              IN Optimize(θ - v', v', L, 𝛁L, n'-1)
+  }
+
+  PROOFS {
+    THEOREM Convergence {
+      STATEMENT:
+        ∀ (θ₀ : Params) (L : Loss) (𝛁L : Gradient) (ε : Real).
+          (∃ (N : Nat). ∀ (n : Nat). n ≥ N ⇒ Converged(Optimize(θ₀, L, 𝛁L, n), L, ε))
+
+      PROOF:
+        LET θ₀ : Params, L : Loss, 𝛁L : Gradient, ε : Real
+        SUFFICES TO SHOW
+          ∃ (N : Nat). ∀ (n : Nat). n ≥ N ⇒ ||𝛁L(Optimize(θ₀, L, 𝛁L, n))|| ≤ ε
+
+        DEFINE A = λ n. L(Optimize(θ₀, L, 𝛁L, n))
+        
+        HAVE (A 0 ≥ A 1 ≥ A 2 ≥ ...) BY {
+          INDUCT ON n
+          CASE 0: TRIVIAL
+          CASE n': 
+            A (n'+1) 
+              = L(Optimize(θ₀, L, 𝛁L, n'+1))
+              = L(Optimize(Optimize(θ₀, L, 𝛁L, n'), L, 𝛁L, 1))
+              ≤ L(Optimize(θ₀, L, 𝛁L, n')) 
+                BY Descent, Optimize(θ₀, L, 𝛁L, n') - η * 𝛁L(Optimize(θ₀, L, 𝛁L, n'))
+              = A n'
+        }
+        
+        HAVE ∀ n. A n ≥ 0 BY {
+          LET n : Nat
+          L(Optimize(θ₀, L, 𝛁L, n)) ≥ 0   BY <<L is nonnegative>>
+        }
+        
+        HAVE Bounded(A) ∧ Decreasing(A) BY ABOVE
+        HENCE LimExists(A) BY MonotoneConvergence
+
+        LET θ* = Lim(λ n. Optimize(θ₀, L, 𝛁L, n))
+        HAVE A(θ*) = Lim(A) BY Continuity(L), Lim(θₙ) = θ*
+        HAVE 𝛁L(θ*) = 0 BY GradientVanishesAtMinimum
+
+        LET N = FIND n. ||𝛁L(Optimize(θ₀, L, 𝛁L, n))|| ≤ ε   USING << 𝛁L continuous >>
+        SHOW ∀ (n : Nat). n ≥ N ⇒ ||𝛁L(Optimize(θ₀, L, 𝛁L, n))|| ≤ ε BY {
+          LET n ≥ N
+          ||𝛁L(Optimize(θ₀, L, 𝛁L, n))||
+            ≤ ||𝛁L(Optimize(θ₀, L, 𝛁L, N))||   BY ABOVE, A Decreasing
+            ≤ ε   BY CHOICE OF N
+        }
+    }
+
+    THEOREM MomentumSpeedup {
+      STATEMENT:
+        ∃ (θ₀ : Params) (L : Loss) (B N : Nat) (γ : Real).
+          ∀ (n : Nat). n ≤ N ⇒ 
+            ||𝛁L(Optimize(θ₀, L, AutoDifferentiate(L), n))|| ≥
+            ||𝛁L(Momentum.Optimize(θ₀, 0, L, AutoDifferentiate(L), n))||
+
+      PROOF:
+        DEFINE QuadraticBowl(x, y) = x^2 + 100y^2
+        LET θ₀ = [1, 1], L = QuadraticBowl, B = 10, N = 100, γ = 0.9
+
+        SUFFICES TO SHOW 
+          ∀ (n : Nat). n ≤ 100 ⇒  
+            ||𝛁L(Optimize(θ₀, L, 𝛁L, n))|| ≥ ||𝛁L(Momentum.Optimize(θ₀, 0, L, 𝛁L, n))||
+          USING θ₀, L, B, N, γ    
+          
+        ARGUE_BY_COMPUTATION
+    }
+  }
+}

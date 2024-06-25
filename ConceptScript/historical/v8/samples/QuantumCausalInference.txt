@@ -1,0 +1,64 @@
+CONCEPT QuantumCausalInference:
+
+EXTEND QuantumProbability:
+  State := Density(Hilbert)
+  Observable := Hermitian(Hilbert)
+  Probability(o|s) := Tr(O|s⟩⟨s|) for O = |o⟩⟨o| 
+
+EXTEND CausalInference:  
+  Variable := (Exogenous, Endogenous)
+  Model := DAG(Variable, CausalMechanism)
+  Intervention(X=x) := Set(Exogenous, X, x) in Model
+  CausalEffect := Probability(Y|Intervention(X))
+
+DEFINE QuantumVariable := Observable
+DEFINE QuantumModel := CommutingDAG(QuantumVariable) 
+DEFINE QuantumIntervention(X=Π) := Project(State, Π, X) in QuantumModel
+DEFINE QuantumCausalEffect := Tr(ρ\_Π Y) / Tr(ρ\_Π)
+
+THEOREM QuantumCausalityTheorem:
+  ∀(QM : QuantumModel, X : QuantumVariable, Y : QuantumVariable):
+    X \*→ Y in QM ⟺ 
+      ∃(Π : Projector(X)) Tr(ρ\_Π Y) ≠ Tr(ρ Y)
+
+PROOF:
+  ⟹: Assume X \*→ Y. Let Π = |x⟩⟨x| for some eigenvector |x⟩ of X.
+     ρ\_Π = Π ρ Π / Tr(ρ Π) is the state after projection.
+     Tr(ρ\_Π Y) = ⟨x|Y|x⟩ ⟨x|ρ|x⟩ / ⟨x|ρ|x⟩ = ⟨x|Y|x⟩  
+     Since X \*→ Y, intervening on X affects Y, so ∃|x⟩ ⟨x|Y|x⟩ ≠ Tr(ρ Y).
+
+  ⟸: Assume ∃(Π) Tr(ρ\_Π Y) ≠ Tr(ρ Y). Let Π = |x⟩⟨x|.
+     ⟨x|Y|x⟩ = Tr(ρ\_Π Y) ≠ Tr(ρ Y) = ∑\_i ⟨i|ρ|i⟩ ⟨i|Y|i⟩
+     So setting X = |x⟩⟨x| changes the expected value of Y.
+     Thus X has a causal effect on Y, i.e. X \*→ Y in QM.
+
+ASSERT Implications:
+  Quantum ⟹ Signaling ≢ Causation 
+    Entanglement enables signaling without direct causation.
+  Quantum ⟹ Fine-Tuning Problem
+    Parameters must be fine-tuned for desired causal structure.
+  Quantum ⟹ Causal Discovery Harder
+    Confounding by entanglement, need for strong assumptions.
+  Quantum ⟹ Interventions ≠ Projections
+    General POVMs, weak measurement may be needed.
+
+ASSERT Opportunities:  
+  Quantum-Enhanced Causal Inference
+    Quantum speedups, nonclassical models, superpositions of DAGs.
+  Quantum Causal Discovery
+    From quantum observational and interventional data.
+  Quantum Causal Reasoning 
+    Counterfactual inference, causal induction, causal implication.
+  Quantum Causal Learning
+    Structure learning, mechanism learning, transportability.
+
+
+
+In this Concept, I extend quantum probability theory and classical causal inference to define a framework for quantum causal models and reasoning. The key ideas are:
+
+Represent causal variables as quantum observables in a Hilbert space.
+Define a quantum causal model as a DAG of commuting observables.
+Define quantum interventions as projections onto eigenstates of a variable.
+Define quantum causal effects via pre- and post-intervention expectations.
+Prove a theorem connecting quantum causal structure to differences in expectations under interventions.
+I then discuss some implications and opportunities at the intersection of quantum information and causal inference. The Concept illustrates how to formalize causal reasoning in a quantum setting and highlights the potential for quantum generalizations of classical causal inference ideas.

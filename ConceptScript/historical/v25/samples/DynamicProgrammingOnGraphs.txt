@@ -1,0 +1,156 @@
+CONCEPT DynamicProgrammingOnGraphs {
+  LANGUAGE {
+    TYPE Vertex
+    TYPE Edge(u : Vertex, v : Vertex)
+    TYPE Graph(V : Set[Vertex], E : Set[Edge])
+    TYPE Path(g : Graph, s : Vertex, t : Vertex) = List[Edge]
+    TYPE Cost(e : Edge) : Real
+    FUNC ShortestPath(g : Graph, s : Vertex, t : Vertex) : Path
+    FUNC AllPairsShortestPaths(g : Graph) : Vertex -> Vertex -> Path
+
+    NOTATION "w(u, v)" := λ(u : Vertex, v : Vertex), Cost(Edge(u, v))
+    NOTATION "d(s, t)" := λ(s : Vertex, t : Vertex), Cost(ShortestPath(g, s, t))
+    NOTATION "p(s, t)" := λ(s : Vertex, t : Vertex), ShortestPath(g, s, t)
+    NOTATION "p_k(s, t)" := λ(s : Vertex, t : Vertex), ShortestPathAtMostK(g, s, t, k)
+    NOTATION "d_k(s, t)" := λ(s : Vertex, t : Vertex), Cost(p_k(s, t))
+  }
+
+  STRUCTURE FloydWarshall(g : Graph) {
+    LET n = |g.V|
+    DEF d : Vertex -> Vertex -> Real = (s, t) -> {
+      IF s = t THEN 0
+      ELSE IF Edge(s, t) ∈ g.E THEN w(s, t)  
+      ELSE ∞
+    }
+    DEF p : Vertex -> Vertex -> Path = (s, t) -> {
+      IF s = t THEN []
+      ELSE IF Edge(s, t) ∈ g.E THEN [Edge(s, t)]
+      ELSE []  
+    }
+
+    REQUIRE ∀ (s t : Vertex) (k : 0..n), 
+      d_k(s, t) = MIN[d_{k-1}(s, t), d_{k-1}(s, k) + d_{k-1}(k, t)]
+    
+    REQUIRE ∀ (s t : Vertex) (k : 0..n),
+      p_k(s, t) = {
+        IF d_k(s, t) = d_{k-1}(s, t) THEN p_{k-1}(s, t)
+        ELSE p_{k-1}(s, k) + p_{k-1}(k, t)  
+      }
+
+    REQUIRE ∀ (s t : Vertex), d(s, t) = d_n(s, t) ∧ p(s, t) = p_n(s, t)
+  }
+
+  STRUCTURE BellmanFord(g : Graph, s : Vertex) {
+    LET n = |g.V|  
+    DEF d : Nat -> Vertex -> Real = (k, t) -> {
+      IF k = 0 THEN IF s = t THEN 0 ELSE ∞
+      ELSE MIN[d(k-1, t), MIN[d(k-1, u) + w(u, t) | (u, t) ∈ g.E]]
+    }
+    DEF p : Nat -> Vertex -> Path = (k, t) -> {
+      IF k = 0 THEN IF s = t THEN [] ELSE []
+      ELSE {
+        LET u_min = ARGMIN[d(k-1, u) + w(u, t) | (u, t) ∈ g.E]
+        IF d(k, t) = d(k-1, t) THEN p(k-1, t) 
+        ELSE p(k-1, u_min) + [Edge(u_min, t)]
+      }
+    }
+
+    REQUIRE ∀ (t : Vertex), ShortestPath(g, s, t) = p(n-1, t)
+    REQUIRE ∀ (t : Vertex), Cost(ShortestPath(g, s, t)) = d(n-1, t)
+    REQUIRE NegativeCycleExists(g) <=> ∃ (t : Vertex), d(n, t) < d(n-1, t)
+  }
+
+  PROOFS {
+    TACTIC ExpandDefinitions {
+      REPEAT {
+        MATCH e[d_k(s, t)] => REWRITE e[MIN[d_{k-1}(s, t), d_{k-1}(s, k) + d_{k-1}(k, t)]]  
+        MATCH e[p_k(s, t)] => REWRITE 
+          e[IF d_k(s, t) = d_{k-1}(s, t) THEN p_{k-1}(s, t) ELSE p_{k-1}(s, k) + p_{k-1}(k, t)]
+      }
+    }
+
+    THEOREM FloydWarshallCorrectness {
+      STATEMENT:  
+        ∀ (g : Graph) (s t : Vertex), 
+          LET apsp = AllPairsShortestPaths(g)
+          IN ShortestPath(g, s, t) = apsp(s, t)
+
+      PROOF {
+        LET g : Graph, s t : Vertex, n = |g.V|, apsp = AllPairsShortestPaths(g)
+
+        SHOW d(s, t) = d_n(s, t) ∧ p(s, t) = p_n(s, t) {
+          ASSUME ∀ (s t : Vertex) (k : 0..n), 
+            d_k(s, t) = MIN[d_{k-1}(s, t), d_{k-1}(s, k) + d_{k-1}(k, t)]
+          ASSUME ∀ (s t : Vertex) (k : 0..n),
+            p_k(s, t) = IF d_k(s, t) = d_{k-1}(s, t) THEN p_{k-1}(s, t) ELSE p_{k-1}(s, k) + p_{k-1}(k, t)
+
+          ExpandDefinitions
+          SHOW d_n(s, t) = MIN[d_0(s, t), MIN[d_{n-1}(s, k) + d_{n-1}(k, t) | k ∈ g.V]] {
+            <1> d_0(s, t) = IF s = t THEN 0 ELSE IF Edge(s, t) ∈ g.E THEN w(s, t) ELSE ∞
+            <2> ∀ (k : g.V), d_{n-1}(s, k) + d_{n-1}(k, t) ≥ d(s, k) + d(k, t)  BY INDUCTION
+            <3> QED BY <1>, <2>
+          }
+          SHOW p_n(s, t) = ShortestPath(g, s, t) {
+            <1> p_n(s, t) = IF d_n(s, t) = d_0(s, t) THEN p_0(s, t) ELSE p_{n-1}(s, k_min) + p_{n-1}(k_min, t)
+              WHERE k_min = ARGMIN[d_{n-1}(s, k) + d_{n-1}(k, t) | k ∈ g.V]
+            <2> p_0(s, t) = IF s = t THEN [] ELSE IF Edge(s, t) ∈ g.E THEN [Edge(s, t)] ELSE []
+            <3> ∀ (k : g.V), p_{n-1}(s, k) + p_{n-1}(k, t) = ShortestPath(g, s, k) + ShortestPath(g, k, t)
+              BY INDUCTION  
+            <4> QED BY <1>, <2>, <3>
+          }
+        }
+
+        SHOW ShortestPath(g, s, t) = apsp(s, t) {
+          <1> apsp(s, t) = p(s, t)  BY DEFINITION AllPairsShortestPaths
+          <2> p(s, t) = p_n(s, t)  BY ASSUME
+          <3> p_n(s, t) = ShortestPath(g, s, t)  BY PROVE  
+          <4> QED BY <1>, <2>, <3>
+        }
+      }
+    }
+
+    THEOREM BellmanFordCorrectness {
+      STATEMENT:
+        ∀ (g : Graph) (s : Vertex) (t : Vertex),
+          (NegativeCycleExists(g) ∧ IsReachable(s, t)) ∨ 
+          (¬NegativeCycleExists(g) ∧ ShortestPath(g, s, t) = p(|g.V| - 1, t))
+
+      PROOF {
+        LET g : Graph, s t : Vertex, n = |g.V|
+
+        SHOW ∀ (k : Nat), d(k, t) = MIN[d(0, t), MIN[d(k-1, u) + w(u, t) | (u, t) ∈ g.E]] {
+          <1> d(0, t) = IF s = t THEN 0 ELSE ∞  BY DEFINITION  
+          <2> ∀ (k : Nat) (t : Vertex), 
+            d(k, t) = MIN[d(k-1, t), MIN[d(k-1, u) + w(u, t) | (u, t) ∈ g.E]]  BY DEFINITION
+          <3> QED BY <1>, <2>
+        }
+
+        SHOW ∀ (k : Nat), p(k, t) = ShortestPathAtMostK(g, s, t, k) {
+          <1> p(0, t) = IF s = t THEN [] ELSE []  BY DEFINITION
+          <2> ∀ (k : Nat) (t : Vertex),
+            p(k, t) = IF d(k, t) = d(k-1, t) THEN p(k-1, t) 
+                     ELSE p(k-1, u_min) + [Edge(u_min, t)] 
+              WHERE u_min = ARGMIN[d(k-1, u) + w(u, t) | (u, t) ∈ g.E]  BY DEFINITION
+          <3> QED BY <1>, <2>, INDUCTION
+        }
+
+        ASSUME ∀ (t : Vertex), ShortestPath(g, s, t) = p(n-1, t)
+        ASSUME ∀ (t : Vertex), Cost(ShortestPath(g, s, t)) = d(n-1, t)  
+        ASSUME NegativeCycleExists(g) <=> ∃ (t : Vertex), d(n, t) < d(n-1, t)
+
+        CASE NegativeCycleExists(g) ∧ IsReachable(s, t) {
+          <1> ∃ (t : Vertex), d(n, t) < d(n-1, t)  BY ASSUME  
+          <2> ∀ (t : Vertex), d(n, t) ≤ d(n-1, t)  BY PROVE
+          <3> ∀ (k : Nat), IsReachable(s, t) => d(k, t) < ∞  BY INDUCTION
+          <4> QED BY <1>, <2>, <3>  
+        }
+
+        CASE ¬NegativeCycleExists(g) {
+          <1> ∀ (t : Vertex), d(n, t) = d(n-1, t)  BY ASSUME
+          <2> ShortestPath(g, s, t) = p(n-1, t)  BY ASSUME
+          <3> QED BY <1>, <2>
+        }
+      }
+    }
+  }
+}

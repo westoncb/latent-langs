@@ -1,0 +1,127 @@
+CONCEPT GeometricCognition {
+  NOTATION {
+    M ⊕ N = directSum(M, N)
+    M ⊗ N = tensorProduct(M, N)
+    T(M) = tangentBundle(M)
+    exp_p = exponential(p)
+    par_X = parallel(X)
+    ∇_X = covariantDerivative(X)
+    G(p, q) = geodesic(p, q)
+    // Notation for mental states, mental actions, and their transformations  
+    φ|ψ⟩ = mentalTransition(φ, ψ)
+    ⟨φ| = dualState(φ)
+    |φ⟩⊗|ψ⟩ = mentalComposition(φ, ψ)
+    U(t)|φ⟩ = mentalEvolution(U, t, φ)
+  }
+
+  LANGUAGE {
+    TYPE MentalState = VectorSpace
+    TYPE MentalTransformation = VectorSpace -> VectorSpace
+    TYPE CognitiveManifold = Manifold
+    TYPE ConceptualSpace = VectorBundle
+    TYPE MentalDynamics = (MentalState, Time) -> MentalState
+
+    FUNC directSum(M: VectorSpace, N: VectorSpace) : VectorSpace = 
+      (M.basis() × N.basis()) -> (m, n) => M.element(m) + N.element(n)
+    FUNC tensorProduct(M: VectorSpace, N: VectorSpace) : VectorSpace =
+      (M.basis() × N.basis()) -> (m, n) => M.element(m) * N.element(n)
+
+    FUNC tangentBundle(M: Manifold) : VectorBundle =
+      M -> p => VectorSpace{e_i(p) for e_i ∈ M.frame(p)}
+
+    FUNC exponential(p: Manifold.Point) : Manifold.Point -> Manifold.Point = 
+      X => LET γ = geodesic(0, X) IN γ(1)
+
+    PRED parallel(X: VectorField) : Bool = ∇_X(X) = 0
+  }
+
+  STRUCTURES {
+    STRUCTURE Mind {
+      FIELD state : MentalState
+      FIELD dynamics : MentalDynamics
+      FIELD transformations : List<MentalTransformation>
+
+      COMPUTE apply(U: MentalTransformation) : MentalState = U(state)
+      COMPUTE evolve(t: Time) : MentalState = dynamics(state, t)
+    }
+
+    STRUCTURE Concept {
+      FIELD meaning : ConceptualSpace.Section
+      FIELD associations : List<Concept>
+      
+      COMPUTE similarityTo(that: Concept) : Real = 
+        LET d = dist(meaning, that.meaning) IN exp(-d^2)
+
+      COMPUTE combine(that: Concept) : Concept = 
+        Concept{
+          (meaning ⊕ that.meaning) / 2,
+          append(associations, that) + that.associations  
+        }
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE DirectSumAssociativity : (M ⊕ N) ⊕ P -> M ⊕ (N ⊕ P) 
+    REWRITE TensorProductAssociativity : (M ⊗ N) ⊗ P -> M ⊗ (N ⊗ P)
+    REWRITE MentalTransformationComposition : U(V|φ⟩) -> (U ∘ V)|φ⟩
+
+    TACTIC CommuteMentalTransformations : 
+      REWRITE U(V|φ⟩) -> V(U|φ⟩) WHEN U ∘ V = V ∘ U
+
+    SIMPLIFY NormalizeState : |φ⟩ / ⟨φ|φ⟩ -> |φ⟩
+    SIMPLIFY InfinitesimalGenerator : (U(dt) - 𝟙) / dt |φ⟩ -> H|φ⟩ WHEN dU/dt = -i H
+  } 
+
+  PROOFS {
+    PROOF StateEvolutionUnitarity : ∀ |φ⟩, U, t . ⟨φ|U†(t) U(t)|φ⟩ = 1 {
+      GIVEN |φ⟩ : MentalState, U : MentalTransformation, t : Time
+      ASSUME U is unitary
+
+      ⟨φ|U†(t) U(t)|φ⟩
+        == ⟨φ| U†(t) (U(t) |φ⟩)     BY DEF of notation
+        == ⟨φ| (U†(t) ∘ U(t)) |φ⟩   BY MentalTransformationComposition
+        == ⟨φ| 𝟙 |φ⟩                BY DEF of unitary transformation  
+        == ⟨φ|φ⟩                    BY identity transformation
+        == 1                       BY normalization of |φ⟩
+
+      QED  
+    }
+
+    PROOF ContinuityOfMentalEvolution : ∀ |φ⟩, U, t, ε . || |φ(t+ε)⟩ - |φ(t)⟩ || < δ(ε) ∧ lim[ε->0] δ(ε) = 0 {
+      GIVEN |φ⟩ : MentalState, U : MentalTransformation, t : Time, ε : Real
+      ASSUME U is continuous, |φ⟩ = U(t)|φ⟩
+      
+      |φ(t+ε)⟩ - |φ(t)⟩  
+        == U(t+ε)|φ⟩ - U(t)|φ⟩                        EXPAND |φ(t)⟩
+        == (U(t+ε) - U(t))|φ⟩                         DISTRIBUTIVITY of MentalTransformation over +
+        == ((U(t+ε) - U(t)) / ε) ε |φ⟩                MULTIPLY by ε/ε
+        == ((U(t+ε) - U(t)) / ε) ε |φ⟩                SIMPLIFY
+        == (dU/dt) ε |φ⟩ + 𝒪(ε^2)                     BY DEF of derivative, Taylor expansion
+        == -i H ε |φ⟩ + 𝒪(ε^2)                        BY InfinitesimalGenerator  
+      
+      TAKE NORM OF BOTH SIDES:
+        || |φ(t+ε)⟩ - |φ(t)⟩ || = || -i H ε |φ⟩ + 𝒪(ε^2) ||
+                              <= || -i H ε |φ⟩ || + || 𝒪(ε^2) ||   BY triangle inequality
+                              <= || H || ε + || 𝒪(ε^2) ||          BY norm property, i has norm 1
+      
+      LET δ(ε) = || H || ε + || 𝒪(ε^2) ||
+      
+      lim[ε->0] δ(ε)  
+        == lim[ε->0] (|| H || ε + || 𝒪(ε^2) ||)
+        == || H || * 0 + lim[ε->0] || 𝒪(ε^2) ||        BY linearity of limits
+        == 0 + 0                                       ε^2 vanishes faster than ε as ε->0
+        == 0
+
+      QED
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE QuantumMentalState : MentalState = HILBERT_SPACE
+    EXAMPLE QuantumMentalTransformation : MentalTransformation = |φ⟩ => U|φ⟩
+    EXAMPLE ConceptualBlend : Concept = 
+      LET physicist = Concept{SUBSPACE(HILBERT_SPACE), []}
+      LET dancer = Concept{SUBSPACE(HILBERT_SPACE), []} IN
+      physicist.combine(dancer)
+  }
+}

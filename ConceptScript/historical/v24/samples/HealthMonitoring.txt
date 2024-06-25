@@ -1,0 +1,157 @@
+CONCEPT HealthMonitoring {
+  LANGUAGE {
+    TYPE Timestamp = Nat
+    TYPE SensorValue = Real
+    
+    TYPE SensorData = (
+      HeartRate(bpm : SensorValue),
+      BloodPressure(systolic : SensorValue, diastolic : SensorValue),
+      BodyTemperature(celsius : SensorValue)
+    )
+    
+    TYPE SensorEvent = (timestamp : Timestamp, data : SensorData)
+    
+    TYPE HealthStatus = OK | WARNING | CRITICAL
+    
+    FUNC AnalyzeHeartRate : SensorValue -> HealthStatus
+    AnalyzeHeartRate(bpm) = MATCH bpm {
+      | bpm < 60.0 => WARNING
+      | 60.0 <= bpm <= 100.0 => OK
+      | _ => CRITICAL
+    }
+    
+    FUNC AnalyzeBloodPressure : SensorValue -> SensorValue -> HealthStatus
+    AnalyzeBloodPressure(systolic, diastolic) = MATCH (systolic, diastolic) {
+      | (systolic < 90.0, _) => WARNING  
+      | (_, diastolic < 60.0) => WARNING
+      | (90.0 <= systolic <= 120.0, 60.0 <= diastolic <= 80.0) => OK
+      | _ => CRITICAL
+    }
+    
+    FUNC AnalyzeTemperature : SensorValue -> HealthStatus
+    AnalyzeTemperature(celsius) = MATCH celsius {
+      | celsius < 36.0 => WARNING
+      | 36.0 <= celsius <= 37.5 => OK  
+      | _ => CRITICAL
+    }
+    
+    CLASS Monoid(M) {
+      Mempty : M
+      Mappend : M -> M -> M
+      
+      LAWS {
+        LeftIdentity:  FORALL (x : M). Mappend(Mempty, x) = x
+        RightIdentity: FORALL (x : M). Mappend(x, Mempty) = x
+        Associativity: FORALL (x y z : M). Mappend(Mappend(x, y), z) = Mappend(x, Mappend(y, z)) 
+      }
+    }
+    
+    INSTANCE Monoid(HealthStatus) {
+      Mempty = OK
+      Mappend(s1, s2) = MATCH (s1, s2) {
+        | (CRITICAL, _) => CRITICAL
+        | (_, CRITICAL) => CRITICAL
+        | (WARNING, _)  => WARNING
+        | (_, WARNING)  => WARNING
+        | _ => OK
+      }
+    }
+    
+    FUNC AggregateStatus : List(SensorEvent) ⊸ HealthStatus
+    AggregateStatus(events) = FOLDR(Mappend, Mempty, MAP(AnalyzeEvent, events))
+    
+    FUNC AnalyzeEvent : SensorEvent -> HealthStatus
+    AnalyzeEvent((_, HeartRate(bpm))) = AnalyzeHeartRate(bpm)
+    AnalyzeEvent((_, BloodPressure(sys, dia))) = AnalyzeBloodPressure(sys, dia)  
+    AnalyzeEvent((_, BodyTemperature(temp))) = AnalyzeTemperature(temp)
+    
+    NOTATION "(♥)" = HeartRate
+    NOTATION "(⧗⧘)" = BloodPressure
+    NOTATION "(🌡️)" = BodyTemperature
+  }
+
+  STRUCTURE {
+    DEF RecentEvents(n : Nat) : List(SensorEvent) ⊸ List(SensorEvent)
+    RecentEvents(n, events) = TAKE(n, REVERSE(events))
+    
+    DEF DiagnosePatient(patientLog : List(SensorEvent)) : HealthStatus {
+      LET recentEvents = RecentEvents(10, patientLog);
+      LET overallStatus = AggregateStatus(recentEvents);
+      overallStatus
+    }
+  }
+  
+  PROOFS {
+    TACTIC IndCases(p, xs) = CASES xs OF Nil -> _ | Cons -> ASSUME p(Cons) 
+    
+    THEOREM AggregateStatusMonoid {
+      STATEMENT: FORALL (xs ys : List(SensorEvent)).
+        AggregateStatus(APPEND(xs, ys)) = Mappend(AggregateStatus(xs), AggregateStatus(ys))
+        
+      PROOF:
+        LET xs ys : List(SensorEvent);
+        
+        REWRITE AggregateStatus(APPEND(xs, ys))
+          = FOLDR(Mappend, Mempty, MAP(AnalyzeEvent, APPEND(xs, ys)))
+          = FOLDR(Mappend, FOLDR(Mappend, Mempty, MAP(AnalyzeEvent, ys)), MAP(AnalyzeEvent, xs)) 
+            BY FoldrAppend
+          = Mappend(FOLDR(Mappend, Mempty, MAP(AnalyzeEvent, xs)), FOLDR(Mappend, Mempty, MAP(AnalyzeEvent, ys)))  
+            BY {
+              INDUCE ON MAP(AnalyzeEvent, xs) WITH IndCases(LAMBDA (zs : List(HealthStatus)). 
+                FOLDR(Mappend, FOLDR(Mappend, Mempty, MAP(AnalyzeEvent, ys)), zs) =
+                  Mappend(FOLDR(Mappend, Mempty, zs), FOLDR(Mappend, Mempty, MAP(AnalyzeEvent, ys)))
+              )
+            }
+          = Mappend(AggregateStatus(xs), AggregateStatus(ys)) 
+            BY Definition(AggregateStatus)
+    }
+    
+    THEOREM WorstCaseDominates {
+      STATEMENT: FORALL (events : List(SensorEvent)) (event : SensorEvent).
+        Mappend(AggregateStatus(events), AnalyzeEvent(event)) = 
+          MATCH (AggregateStatus(events), AnalyzeEvent(event)) {
+            | (CRITICAL, _) => CRITICAL
+            | (_, CRITICAL) => CRITICAL
+            | _ => AggregateStatus(Cons(event, events))
+          }
+          
+      PROOF:
+        LET events : List(SensorEvent), event : SensorEvent;
+        
+        Mappend(AggregateStatus(events), AnalyzeEvent(event))
+          = MATCH (AggregateStatus(events), AnalyzeEvent(event)) {  
+              | (CRITICAL, _) => CRITICAL
+              | (_, CRITICAL) => CRITICAL
+              | (WARNING, _)  => WARNING
+              | (_, WARNING)  => WARNING
+              | _ => OK
+            } BY Definition(Mappend[HealthStatus])
+          = MATCH (AggregateStatus(events), AnalyzeEvent(event)) {
+              | (CRITICAL, _) => CRITICAL
+              | (_, CRITICAL) => CRITICAL
+              | _ => AggregateStatus(Cons(event, events))
+            } BY {
+              CASE (WARNING, OK) | (OK, WARNING) -> {
+                AggregateStatus(Cons(event, events))
+                  = FOLDR(Mappend, Mempty, MAP(AnalyzeEvent, Cons(event, events)))
+                  = FOLDR(Mappend, Mempty, Cons(AnalyzeEvent(event), MAP(AnalyzeEvent, events)))
+                  = Mappend(AnalyzeEvent(event), FOLDR(Mappend, Mempty, MAP(AnalyzeEvent, events)))
+                  = Mappend(AnalyzeEvent(event), AggregateStatus(events))
+                  = WARNING BY {
+                      (AnalyzeEvent(event), AggregateStatus(events)) = (WARNING, OK) | (OK, WARNING)  
+                    }
+              }
+              CASE (OK, OK) -> {
+                AggregateStatus(Cons(event, events))
+                  = FOLDR(Mappend, Mempty, MAP(AnalyzeEvent, Cons(event, events)))
+                  = FOLDR(Mappend, Mempty, Cons(AnalyzeEvent(event), MAP(AnalyzeEvent, events))) 
+                  = Mappend(AnalyzeEvent(event), FOLDR(Mappend, Mempty, MAP(AnalyzeEvent, events)))
+                  = Mappend(AnalyzeEvent(event), AggregateStatus(events)) 
+                  = OK BY {
+                      (AnalyzeEvent(event), AggregateStatus(events)) = (OK, OK)
+                    }
+              }
+            }
+    }
+  }
+}

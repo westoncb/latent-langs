@@ -1,0 +1,103 @@
+CONCEPT MenieresDiseaseUnderlyingPhysiology {
+  LANGUAGE {
+    type Ear = {
+      cochlea: Cochlea,
+      vestibule: Vestibule,
+      semicircularCanals: SemicircularCanal*3,
+      endolymphaticDuct: EndolymphaticDuct,
+      endolymphaticSac: EndolymphaticSac
+    }
+    
+    type Cochlea = {
+      scalaTympani: Duct,
+      scalaMedia: Duct,
+      scalaVestibuli: Duct,
+      reissnersMembrane: Membrane,
+      basilarMembrane: Membrane,
+      organ of Corti: Organ,
+      hair cells: HairCell*
+    }
+    
+    type Vestibule = {
+      utricle: Chamber,
+      saccule: Chamber,
+      otolithicMembrane: Membrane,
+      hair cells: HairCell*
+    }
+    
+    type Endolymph = {[K⁺], [Na⁺], [Ca²⁺], volume, pressure}
+    type Perilymph = {[K⁺], [Na⁺], [Ca²⁺], volume, pressure}
+    
+    func osmolarity(fluid: Endolymph | Perilymph): ℝ =
+      α * fluid.[K⁺] + β * fluid.[Na⁺] + γ * fluid.[Ca²⁺]
+    
+    pred homeostasis(ear: Ear) = 
+      ∀ t: Time. osmolarity(ear.cochlea.endolymph) ≈ osmolarity(ear.cochlea.perilymph)
+      ∧ volume(ear.cochlea.endolymph) ≈ volume(ear.cochlea.perilymph)
+      ∧ pressure(ear.cochlea.endolymph) ≈ pressure(ear.cochlea.perilymph)
+      
+    pred endolymphHydrops(ear: Ear) =
+      ∃ t: Time. volume(ear.cochlea.endolymph) > φ * volume(ear.cochlea.perilymph)
+      ∧ pressure(ear.cochlea.endolymph) > ψ * pressure(ear.cochlea.perilymph)
+  }
+  
+  STRUCTURE {
+    CochlearHydrops: endolymphHydrops(ear.cochlea) ⇒ 
+      distension(ear.cochlea.reissnersMembrane) ∧ displacement(ear.cochlea.basilarMembrane)
+      
+    VestibularHydrops: endolymphHydrops(ear.vestibule) ⇒
+      distension(ear.vestibule.otolithicMembrane) ∧ displacement(ear.vestibule.hair cells)
+      
+    HydropsSymptoms: ∀ t: Time.
+      endolymphHydrops(ear) @ t ⇒ 
+        ∃ δ: Duration. 
+          (vertigo ∧ hearingLoss ∧ tinnitus ∧ auralFullness) @ [t, t+δ]
+          
+    IonImbalanceHypothesis: ∀ t: Time.
+      osmolarity(ear.endolymph) @ t > osmolarity(ear.perilymph) @ t ⇒
+        volume(ear.endolymph) @ (t+ε) > volume(ear.endolymph) @ t
+        
+    EndolymphaticSacDysfunctionHypothesis:
+      dysfunction(ear.endolymphaticSac) ⇒ 
+        accumulation(ear.endolymph) ∧ 
+        ¬absorption(ear.endolymphaticSac, ear.endolymph)
+  }
+  
+  PROOFS {
+    HydropsInducesHypertensionProof: ∀ ear: Ear.
+      endolymphHydrops(ear) ⇒ hypertension(ear.endolymph)
+    {
+      assume endolymphHydrops(ear)
+      have volume(ear.endolymph) > φ * volume(ear.perilymph)  ; by definition of endolymphHydrops
+      calc pressure(ear.endolymph)
+           > ψ * pressure(ear.perilymph)  ; by definition of endolymphHydrops
+           ≥ pressure(ear.perilymph)      ; since ψ ≥ 1 in normal ears 
+      hence hypertension(ear.endolymph)  ; by definition of hypertension
+    }
+    
+    IonImbalanceInducesHydropsProof: ∀ ear: Ear, t: Time.
+      osmolarity(ear.endolymph) @ t > osmolarity(ear.perilymph) @ t ⇒ 
+      volume(ear.endolymph) @ (t+ε) > volume(ear.endolymph) @ t  
+    {
+      assume osmolarity(ear.endolymph) @ t > osmolarity(ear.perilymph) @ t
+      calc volume(ear.endolymph) @ (t+ε) 
+           = volume(ear.endolymph) @ t + ΔV                ; by definition of volume change
+           > volume(ear.endolymph) @ t + k * Δosmolarity   ; by osmosis, k is a positive constant
+           > volume(ear.endolymph) @ t                     ; since Δosmolarity > 0 by assumption
+    }
+    
+    SacDysfunctionInducesHydropsProof: ∀ ear: Ear.
+      dysfunction(ear.endolymphaticSac) ⇒ endolymphHydrops(ear)
+    {{
+      assume dysfunction(ear.endolymphaticSac)
+      have accumulation(ear.endolymph)            ; by EndolymphaticSacDysfunctionHypothesis
+      have ¬absorption(ear.endolymph)             ; by EndolymphaticSacDysfunctionHypothesis
+      let t: Time
+      calc volume(ear.endolymph) @ (t+δ)
+           = volume(ear.endolymph) @ t + ΔV_in - ΔV_out    ; by volume conservation 
+           > volume(ear.endolymph) @ t + ΔV_in             ; since ΔV_out ≈ 0 by ¬absorption
+           > φ * volume(ear.perilymph) @ (t+δ)             ; for some δ, by accumulation
+      hence endolymphHydrops(ear)                 ; by definition, at time t+δ
+    }}
+  }
+}

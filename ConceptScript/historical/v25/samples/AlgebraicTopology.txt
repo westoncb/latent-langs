@@ -1,0 +1,128 @@
+CONCEPT AlgebraicTopology {
+  LANGUAGE {
+    TYPE Space
+    TYPE Point
+    TYPE Path[X, Y : Point] = Continuous[Interval[0,1] -> Space, X, Y]
+    TYPE Loop[X : Point] = Path[X, X]
+    TYPE Homotopy[f, g : Path] = Continuous[Interval[0,1] -> Space, f, g]
+    TYPE HomotopyClass[X, Y : Point] = Quotient[Path[X, Y], Homotopy]
+    TYPE FundamentalGroup[X : Point] = Group[HomotopyClass[X, X], PathCat[X, X]]
+
+    FUNC Sphere(n : Nat) : Space
+    FUNC Real(n : Nat) : Space  
+    FUNC RP(n : Nat) : Space
+
+    PRED Simply_Connected : Space -> Bool
+    AXIOM Simply_Connected_def {  
+      ∀ (X : Space) (x : Point[X]). 
+        Simply_Connected(X) ⇔ Isomorphic(FundamentalGroup(X, x), Trivial)
+    }
+
+    PRED Contractible : Space -> Bool  
+    AXIOM Contractible_def {
+      ∀ (X : Space).
+        Contractible(X) ⇔ ∃ (x : Point[X]). ∀ (y : Point[X]). Path[X, x, y] 
+    }
+
+    FUNC Homology(X : Space, n : Nat, R : Ring) : R-Module
+    FUNC CohomologicalDimension(X : Space) : Nat ∪ {∞}
+
+    NOTATION "S^n" = Sphere(n)  
+    NOTATION "ℝ^n" = Real(n)
+    NOTATION "ℝP^n" = RP(n)
+    NOTATION "H_n" = Homology(-, n, -)
+    NOTATION "cd" = CohomologicalDimension
+  }
+
+  STRUCTURE Manifold {  
+    CARRIER : Space
+    ATLAS : ∀ (p : Point). ∃ (U ⊆ CARRIER) (φ : U ≅ ℝ^n). p ∈ U
+      WHERE ∀ (U V ⊆ CARRIER) (φ : U ≅ ℝ^n) (ψ : V ≅ ℝ^n). 
+        Smooth(φ ∘ ψ⁻¹ : ℝ^n ⇢ ℝ^n)
+
+    FUNC Dimension : Nat
+    DEF Dimension = n FROM ATLAS
+  }  
+  
+  PROOFS {
+    TACTIC InductOnCW(X, prop) {
+      LET X = colim X_n WHERE X_0 ⊆ X_1 ⊆ ... 
+        AND ∀ n. X_n \ X_(n-1) = ∐_α e^n_α
+
+      BASIS: prop(X_0)
+      IND_STEP: ∀ n. prop(X_(n-1)) ⇒ prop(X_n) BY {
+        LET Y = X_(n-1), Z = X_n
+        HAVE ∀ α. prop(Y ∪ e^n_α) BY {
+          FIX α. LET A = Y ∩ ∂e^n_α, B = Y ∪ ∂e^n_α, C = e^n_α
+          SHOW prop(A) BY InductionHypothesis
+          SHOW prop(C) USING Contractible(e^n_α)
+          SHOW prop(B) BY Gluing(A, B)
+          SHOW prop(Y ∪ e^n_α) BY Gluing(B, C)
+        }
+        SHOW prop(Z) BY Locality(prop, Z = ∪_α (Y ∪ e^n_α))
+      }  
+      CONCLUDE: prop(X)
+    }
+
+    THEOREM Hurewicz {
+      STATEMENT: ∀ (X : Simply_Connected) (n ≥ 2). Isomorphic(π_n(X), H_n(X,ℤ))
+
+      PROOF:
+        LET X : Simply_Connected, n ≥ 2
+        LET C = C(X), K = K(π_n(X), n)
+        
+        CONSTRUCT f : C -> K BY InductOnCW(C, (Y) ↦ ∃ f_Y. f_Y : Y -> K) {
+          BASIS: f_0 : * -> *
+          IND_STEP: EXTEND f_(n-1) : Y -> K TO f_n : Y ∪_α e^n_α -> K BY {
+            ∀ α. f_(n-1) ∘ ∂e^n_α ≃ * IN K 
+              BY HomotopyExtension(∂e^n_α, Y) AND π_i(K)=0 FOR i < n
+            ∴ CanExtend(f_(n-1), e^n_α) 
+              BY Hurewicz(∂e^n_α ≃ S^(n-1), π_(n-1)(S^(n-1)) ≅ H_(n-1)(S^(n-1)))
+          }
+        }
+        
+        SHOW f : C ≃ K AND f_* : π_n(C, X) ≅ π_n(K) ≅ H_n(K) 
+          BY WhiteheadTheorem(f_* : π_≤n(X) ≅ π_≤n(K))
+        
+        CONCLUDE π_n(X) ≅ H_n(X, ℤ)
+          BY Hurewicz(K(π_n(X), n))
+    }
+
+    THEOREM UCC {
+      STATEMENT: 
+        ∀ (X : Manifold).
+          Homotopic(X, Wedge_α K(π_α, n_α)) 
+        WHERE
+          π_α = CHOOSE BASIS OF FundamentalGroup(X), H_*(X)
+          n_α = CHOOSE n WHERE π_α ⊆ FundamentalGroup(X) OR π_α ⊆ H_n(X)
+
+      PROOF:
+        LET X : Manifold
+        LET π_α, n_α BE CHOSEN AS IN STATEMENT
+        
+        LET Y = Wedge_α K(π_α, n_α)
+        CONSTRUCT f : X -> Y BY InductOnSkeleton(X, (X_n) ↦ ∃ f_n. f_n : X_n -> Y) {
+          BASIS: f_0 : X_0 -> Y_0 BY UniversalProperty(Y_0 = *)
+          IND_STEP: EXTEND f_(n-1): X_(n-1) -> Y TO f_n : X_n -> Y BY {
+            LET E = X_n \ X_(n-1) = ∐_α e^n_α
+            ∀ α. f_(n-1) ∘ ∂e^n_α ≃ * IN Y
+              BY π_i(Y)=0 FOR i < min_α n_α  
+            ∴ CanExtend(f_(n-1), e^n_α) BY Hurewicz(∂e^n_α ≃ S^(n-1))
+            CHOOSING Extension AT EACH α YIELDS f_n : X_n -> Y
+          }
+        }
+
+        SHOW f : X ≃ Y BY {
+          SHOW f_* : π_≤cd(X)(X) ≅ π_≤cd(X)(Y) BY {
+            LET n < cd(X), k = CHOOSE α. n = n_α, OR TAKE k=0
+            SHOW f_* : π_n(X) ≅ π_n(Y) BY CASES:
+              CASE: k=0. THEN π_n(X) = π_n(Y) = 0 
+              CASE: ∃α. n=n_α. THEN f_* : π_n(X) -≅->> π_n(K(π_α, n_α)) ≤ π_n(Y) 
+                IS ISOMORPHISM ONTO FACTOR
+          }
+          THUS f : X ≃ Y BY Whitehead(X, Y)
+        }
+      }
+    }
+  }  
+}

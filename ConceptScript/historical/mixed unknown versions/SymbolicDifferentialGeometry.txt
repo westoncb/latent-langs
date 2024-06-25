@@ -1,0 +1,453 @@
+CONCEPT SymbolicDifferentialGeometry {
+  DECLARE {
+    Sym : TYPE
+      Const : ℝ -> Sym
+      Var : ℕ -> Sym
+      Binary : Sym × Sym -> Sym
+      Unary : Sym -> Sym
+      
+    Man : TYPE
+      Manifold : ℝ^n -> Man  
+      Riemannian : Man -> Man
+      Lie : Grp -> Man
+      Symplectic : Man -> Man
+      
+    Fld : TYPE  
+      Fun : Man -> ℝ -> Fld
+      Vec : Man -> Tan -> Fld
+      Form : Man -> Cotan -> Fld
+      
+    _≈_ : Sym × Fld -> Prop
+    _≋_ : Sym × Fld -> Prop
+    
+    determines : Sym × (ℝ | Vec | Form | Fun) -> Prop
+    
+    _+_ : Sym × Sym -> Sym
+    _-_ : Sym × Sym -> Sym
+    _*_ : Sym × Sym -> Sym
+    _/_ : Sym × Sym -> Sym
+    _∘_ : Sym × Sym -> Sym
+    _⁻¹ : Sym -> Sym
+    d : Sym -> Sym
+    ∫ : Sym -> Sym
+    L : Vec × Fld -> Fld
+    [_,_] : Fld × Fld -> Fld
+    ⟨_,_⟩ : Fld × Fld -> ℝ  
+    _∧_ : Form × Form -> Form
+  }
+  
+  AXIOM {
+    ∀(S : Sym) (F : Fld). (S ≈ F) 
+    ∀(S : Sym) (X : ℝ | Vec | Form | Fun). determines(S, X)
+  }
+  
+  DEFINE {
+    ∀(S T : Sym) (f : Fun). (S ≈ f) ∧ (T ≈ f) -> (S + T) ≈ (λp. f(p) + f(p))
+    ∀(S T : Sym) (f : Fun). (S ≋ f) ∧ (T ≋ f) -> (S - T) ≋ (λp. f(p) - f(p))  
+    ∀(S T : Sym) (f g : Fun). (S ≈ f) ∧ (T ≈ g) -> (S * T) ≈ (λp. f(p) * g(p))
+    ∀(S T : Sym) (X Y : Vec). (S ≈ X) ∧ (T ≈ Y) -> ⟨S, T⟩ ≈ ⟨X, Y⟩
+    ∀(S T : Sym) (ω τ : Form). (S ≈ ω) ∧ (T ≈ τ) -> (S ∧ T) ≈ (ω ∧ τ)  
+    ∀(S : Sym) (X : Vec) (f : Fun). (S ≈ f) -> L(X, S) ≈ L(X, f)
+    ∀(S T : Sym) (X Y : Vec). (S ≈ X) ∧ (T ≈ Y) -> [S, T] ≈ [X, Y]
+    ∀(S : Sym) (f : Fun). (S ≈ f) -> d(S) ≈ df
+    ∀(S : Sym) (ω : Form). (S ≈ ω) -> ∫(S) ≈ ∫ω
+  }
+  
+  THEOREM Substitution {
+    PROOF {
+      assume (S : Sym) (F : Fld) (prop : Fld -> Prop)
+      assume (S ≈ F)
+      
+      show prop(S) <-> prop(F) by {
+        assume prop(S)  
+        have S ≈ F by assumption
+        hence prop(F) by prop and S ≈ F
+        
+        assume prop(F)
+        have S ≈ F by assumption  
+        hence prop(S) by prop and S ≈ F
+      }
+    }
+  }
+  
+  THEOREM Leibniz {
+    PROOF {
+      assume (S T : Sym) (F G : Fld)
+        (op : Sym × Sym -> Sym) 
+        (∘ : Fld × Fld -> Fld)
+      assume (S ≈ F), (T ≈ G),
+        ∀(A B : Sym). (A ≈ B) -> (op(A, B) ≈ ∘(A, B))
+        
+      show op(S, T) ≈ ∘(F, G) by {
+        have S ≈ F, T ≈ G by assumption
+        hence op(S, T) ≈ ∘(F, G) by above
+      }  
+    }
+  }
+  
+  THEOREM CorrespondenceOfDerivative {
+    PROOF {
+      assume (S : Sym) (f : Fun)
+      assume S ≈ f
+      
+      show d(S) ≈ df by Substitution(d(S), df, λx. S ≈ x)
+    }
+  }
+  
+  THEOREM NoncommutativeDerivative {
+    PROOF {
+      assume (S T : Sym) (X Y : Vec)  
+      assume (S ≈ X), (T ≈ Y)
+      
+      show [d(S), d(T)] ≈ d(L(X, Y)) by {
+        have [d(S), d(T)] ≈ [d(X), d(Y)] by Substitution
+        have d(L(X, Y)) ≈ d([X, Y]) by Substitution
+        have [d(X), d(Y)] = d([X, Y]) ; Equality of mixed partials
+      }
+    }
+  }
+    
+  THEOREM StokesTheorem {
+    PROOF {
+      assume (S : Sym) (ω : Form) (M : Man) (∂M : Man)
+      assume (∂M = ∂(M)) ∧ (S ≈ ω)
+      
+      show ∫(d(S), M) ≈ ∫(S, ∂M) by {
+        have ∫(d(S), M) ≈ ∫(dω, M) by Substitution  
+        have ∫(S, ∂M) ≈ ∫(ω, ∂M) by Substitution
+        have ∫(dω, M) = ∫(ω, ∂M) ; Stokes' theorem
+      }
+    }
+  }
+    
+  THEOREM ClosedFormTheorem {
+    PROOF {
+      assume (S : Sym) (ω : Form) (M : Manifold)
+      assume S ≈ ω
+      
+      show d(d(S)) ≈ 0 <-> (∃(B : Sym). ∫(S) ≈ ∫(d(B))) by {
+        have d(d(S)) ≈ 0 <-> d(dω) = 0 by Substitution
+        have d(dω) = 0 <-> (∃(τ : Form). ω = dτ) ; Poincaré lemma
+        obtain (B : Sym) by let B ≈ τ
+        have ∫(S) ≈ ∫(ω) ≈ ∫(dτ) ≈ ∫(d(B)) by Substitution and Stokes
+      }
+    }  
+  }
+    
+  THEOREM SymplecticStructureTheorem {
+    PROOF {
+      assume (S T : Sym) (M : Symplectic)
+        
+      show ⟨d(S), d(T)⟩ ≈ 0 <-> [S, T] ≈ 0 by {
+        have ⟨d(S), d(T)⟩ ≈ 0 <-> ω(d(S), d(T)) = 0 by Substitution
+        have [S, T] ≈ L(S, T) by Substitution
+        have ω(d(S), d(T)) = 0 <-> L(S, T) = 0 ; Cartan magic formula  
+      }
+    }
+  }
+}
+
+
+CONCEPT GeometricChemistry {
+  EXTENDS SymbolicDifferentialGeometry {
+    DEFINE {
+      Atom : TYPE ≜ Element × Position
+      Element : TYPE ≜ Enumeration(Hydrogen, Helium, ...)
+      Position : TYPE ≜ ℝ³
+      
+      Molecule : TYPE ≜ {Atoms : [Atom], Bonds : [Bond]}
+      Bond : TYPE ≜ {Atom1 : Atom, Atom2 : Atom, Order : ℕ}
+      
+      ElectronicStructure(M : Molecule) : TYPE ≜ ComplexVectorBundle(M)
+      ElectronicState(M : Molecule) : TYPE ≜ Section(ElectronicStructure(M))
+      ElectronicHamiltonian(M : Molecule) : TYPE ≜ Operator(ElectronicStructure(M))
+      
+      PotentialEnergySurface(M : Molecule) : TYPE ≜ Riemannian(M)
+      PotentialEnergyFunction(M : Molecule) : TYPE ≜ M -> ℝ
+      Gradient(M : Molecule) : TYPE ≜ VectorField(PotentialEnergySurface(M))  
+      Hessian(M : Molecule) : TYPE ≜ (1,1)-Tensor(PotentialEnergySurface(M))
+      
+      Wavefunction(M : Molecule) : TYPE ≜ M -> ℂ
+      Density(M : Molecule) : TYPE ≜ M -> ℝ₊
+      DensityMatrix(M : Molecule) : TYPE ≜ Operator(ElectronicStructure(M))
+      
+      ChemicalReaction(M₁ M₂ : Molecule) : TYPE ≜ Path(PotentialEnergySurface(M₁), PotentialEnergySurface(M₂))  
+      ReactionRate(R : ChemicalReaction) : TYPE ≜ (T : ℝ₊) -> ℝ₊
+      
+      𝓗 : ElectronicHamiltonian
+      𝓔 : PotentialEnergyFunction
+      ℋ : Hessian
+      ψ : Wavefunction
+      ρ : Density
+      ℛ : ReactionRate
+    }
+    
+    AXIOM BornOppenheimer {
+      ∀(M : Molecule) (𝓗 : ElectronicHamiltonian(M)) (ψ : Wavefunction(M)).
+        SchrodingerEquation(𝓗, ψ) = (Δ + 𝓥(M)) ψ
+    } where {
+      𝓥(M : Molecule) : Density(M) ≜ λ(r : M). ⟨𝓗(r), M(r)⟩
+      Δ : Operator(ElectronicStructure(M))
+    }
+    
+    AXIOM HohenbergKohn {
+      ∀(ρ : Density) (𝓔 : PotentialEnergyFunction).
+        (∃(ψ : Wavefunction). ρ = ρ[ψ]) ∧ 
+        (𝓔 = (𝓕_HK[ρ] + ∫(ρ(r) * v(r), r)))
+    } where {
+      𝓕_HK : Density -> ℝ
+      v : Density
+      ρ[ψ] : Density ≜ λ(r : M). |ψ(r)|²
+    }
+    
+    AXIOM HellmannFeynman {
+      ∀(ψ : Wavefunction) (H : ElectronicHamiltonian) (λ : ℝ).
+        ∂⟨ψ, H, ψ⟩/∂λ = ⟨ψ, ∂H/∂λ, ψ⟩
+    }
+      
+    AXIOM VariationalPrinciple {
+      ∀(ψ : Wavefunction) (𝓗 : ElectronicHamiltonian).
+        ⟨ψ, 𝓗, ψ⟩ ≥ E₀(𝓗)
+    } where {
+      E₀(𝓗 : ElectronicHamiltonian) : ℝ ≜ inf{⟨ϕ, 𝓗, ϕ⟩ | ϕ : Wavefunction}
+    }
+         
+    AXIOM WoodwardHoffmann {
+      ∀(R : ChemicalReaction) (S : Symmetry).
+        Allowed(R) <-> Matches(S(ReactantOrbitals(R)), S(ProductOrbitals(R)))
+    }
+      
+    AXIOM EyringEquation {
+      ∀(R : ChemicalReaction) (ΔG : ℝ) (T : ℝ₊).
+        ℛ(R)(T) = (kₚ * T / h) * exp(-ΔG / (kₚ * T))  
+    } where {
+      kₚ : ℝ₊ ≜ 1.380649e-23  ; Boltzmann constant
+      h : ℝ₊ ≜ 6.62607015e-34  ; Planck constant
+    }
+    
+    THEOREM QuantumChemistry {
+      ASSUME {
+        M : Molecule
+        𝓗 : ElectronicHamiltonian(M)
+        BornOppenheimer(M, 𝓗)
+      }
+      PROVE {
+        ElectronicStructure(M) = Spectrum(𝓗)
+      }
+      
+      PROOF {
+        define 𝓥 : Density(M) ≜ λ(r : M). ⟨𝓗, r⟩
+        define Δ : Operator(ElectronicStructure(M))
+        
+        assume BornOppenheimer(M, 𝓗)
+        hence SchrodingerEquation(𝓗, ψ) = (Δ + 𝓥) ψ
+        
+        obtain {Eᵢ : ℝ, ψᵢ : Wavefunction(M)}ᵢ : Spectrum(𝓗) by SpectralTheorem(𝓗)
+        hence 𝓗 ψᵢ = Eᵢ ψᵢ
+        
+        have ElectronicStructure(M) ≜ ⋃ᵢ ℂ ψᵢ by definition of complex vector bundle
+        hence ElectronicStructure(M) = Spectrum(𝓗)
+      }
+    }
+      
+    THEOREM DensityFunctionalTheory {
+      ASSUME {
+        ρ : Density
+        𝓔 : PotentialEnergyFunction
+        HohenbergKohn(ρ, 𝓔)
+      }
+      PROVE {
+        GroundStateDensity(ρ) = MinimizeEnergy(𝓔)
+      }
+      
+      PROOF {
+        obtain 𝓕_HK : Density -> ℝ and v : Density by HohenbergKohn(ρ, 𝓔)
+        hence 𝓔 = 𝓕_HK[ρ] + ∫(ρ(r) * v(r), r)
+        
+        obtain ψ : Wavefunction where ρ = ρ[ψ] by HohenbergKohn(ρ, 𝓔)
+        
+        have ⟨ψ, 𝓗, ψ⟩ = MinEnergy(𝓗) by VariationalPrinciple(ψ, 𝓗)
+        hence ψ = argmin{⟨ϕ, 𝓗, ϕ⟩ | ϕ : Wavefunction}
+        
+        therefore have GroundStateDensity(ρ) = ρ[ψ] = MinimizeEnergy(𝓔) by HohenbergKohn(ρ, 𝓔)
+      }
+    }
+    
+    THEOREM StructureOptimization {
+      ASSUME {
+        M : Molecule  
+        𝓔 : PotentialEnergyFunction(M)
+        Gradient : VectorField(M)
+      }
+      PROVE {
+        StationaryPoints(𝓔) = {m ∈ M | Gradient(𝓔)(m) = 0}
+      }
+      
+      PROOF {
+        let M = ℝᵈ with d = 3 * |M.Atoms|
+        
+        have Gradient(𝓔) = λ(m : M). (∂𝓔(m)/∂x₁, ..., ∂𝓔(m)/∂xₙ) by definition
+        
+        for m ∈ M {
+          have m ∈ StationaryPoints(𝓔) <->
+            ∂𝓔(m)/∂xᵢ = 0 ∀i <->  ; By definition of stationary point
+            Gradient(𝓔)(m) = 0     ; By definition of gradient
+        }
+        
+        hence StationaryPoints(𝓔) = {m ∈ M | Gradient(𝓔)(m) = 0}
+      }
+    }
+    
+    THEOREM TransitionStateTheory {
+      ASSUME {
+        R : ChemicalReaction
+        ΔG : ℝ
+        T : ℝ₊
+        EyringEquation(R, ΔG, T)
+      }
+      PROVE {
+        ℛ(R)(T) = (kₚ * T / h) * exp(-(𝓔(Mₜ) - 𝓔(Mᵣ)) / (kₚ * T))
+      } where {
+        M_r ≜ Reactants(R) : Molecule
+        M_p ≜ Products(R) : Molecule
+        M_t ≜ TransitionState(R) : Molecule  
+      }
+      
+      PROOF {
+        let M_r = Reactants(R), M_p = Products(R), M_t = TransitionState(R)
+        assume EyringEquation(R, ΔG, T)
+        
+        have ℛ(R)(T) = (kₚ * T / h) * exp(-ΔG / (kₚ * T)) by EyringEquation(R, ΔG, T)
+        
+        define ΔG ≜ G(M_t) - G(M_r) ; Free energy of activation
+        have G(M) = 𝓔(M) - T * S(M) ∀(M : Molecule) by definition of Gibbs free energy
+        assume S(M_t) ≈ S(M_r) ; Entropy of activation is small
+        hence ΔG ≈ 𝓔(M_t) - 𝓔(M_r)
+        
+        therefore conclude
+          ℛ(R)(T) = (kₚ * T / h) * exp(-ΔG / (kₚ * T))
+                  ≈ (kₚ * T / h) * exp(-(𝓔(M_t) - 𝓔(M_r)) / (kₚ * T))
+      }
+    }
+  }
+}
+
+
+
+
+CONCEPT ConicalIntersection {
+  EXTENDS GeometricChemistry {
+    DEFINE {
+      ConicalIntersection : TYPE ≜ {
+        Molecule : Molecule
+        E1 : PotentialEnergyFunction
+        E2 : PotentialEnergyFunction  
+        Intersection : Submanifold(PotentialEnergySurface)
+      }
+      
+      CI(M : Molecule, E1 : PotentialEnergyFunction, E2 : PotentialEnergyFunction) : ConicalIntersection ≜ {
+        Molecule ≜ M
+        E1 ≜ E1
+        E2 ≜ E2
+        Intersection ≜ {r ∈ PotentialEnergySurface(M) | E1(r) = E2(r)}
+      }
+      
+      BerryPhase(γ : Loop(C : ConicalIntersection.Intersection)) : ℝ ≜ 
+        ∮(A_KZ, γ) 
+      where 
+        A_KZ : Connection ≜ KrasovskyZenerConnection(C)
+    }
+    
+    AXIOM GradientDifferenceCoupling {
+      ∀(M : Molecule) (E1 E2 : PotentialEnergyFunction).
+        let C ≜ CI(M, E1, E2)
+        let d12 ≜ ⟨ψ1|Gradient(E2 - E1)|ψ2⟩ / (E2(C) - E1(C)) 
+      where
+        ψ1 : ElectronicState ≜ GroundState(E1, C)
+        ψ2 : ElectronicState ≜ GroundState(E2, C)
+    }
+    
+    AXIOM GeometricalPhaseTheorem {
+      ∀(ψ : ElectronicState) (C : ConicalIntersection.Intersection) (γ : Loop(C)).
+        FinalState(ψ, γ) = exp(i * BerryPhase(γ)) * HolonomyTransport(ψ, γ)
+    }
+    
+    AXIOM LandauZenerFormula {
+      ∀(M : Molecule) (E1 E2 : PotentialEnergyFunction) (v : Velocity).
+        let C ≜ CI(M, E1, E2)
+        let d12 ≜ ⟨ψ1|Gradient(E2 - E1)|ψ2⟩ / (E2(C) - E1(C))
+        TransitionProbability(E1, E2, v, C) = 
+          exp(-2π * |d12|² / (ℏ * |v · Gradient(E2 - E1)(C)|))
+    }
+    
+    THEOREM ConicalIntersectionTopology {
+      ASSUME {
+        M : Molecule
+        E1 E2 : PotentialEnergyFunction
+        C ≜ CI(M, E1, E2).Intersection
+        N ≜ dim(BranchingSpace(E1, E2, C))
+      } 
+      PROVE {
+        C ≅ Cone(ℝ^N)
+      }
+      
+      PROOF {
+        let n ≜ dim(PotentialEnergySurface(M))
+        
+        have TangentSpace(C) = Kernel(HessianMatrix(E2 - E1)(C)) by definition
+        hence dim(TangentSpace(C)) = n - N by RankNullityTheorem
+        
+        obtain (x₁, ..., xₙ) : LocalCoordinates(PotentialEnergySurface(M), C)
+          where C = (0, ..., 0) and TangentSpace(C) = Span(∂/∂x₁, ..., ∂/∂xₙ₋ₙ)
+          by MorseCoordinates(E2 - E1) ; Assuming coordinates from Morse lemma
+        
+        have E2 - E1 = ½ * (α * x₍ₙ₋ₙ₊₁₎² + β * x₍ₙ₋ₙ₊₂₎² + ...) + O(|x|³) 
+          where (α : ℝ) (β : ℝ) (α ≠ 0) (β ≠ 0)  
+          by MorseLemma(E1, E2, C)
+        hence C = {(x₁, ..., xₙ₋ₙ, 0, ..., 0)}  
+          and NormalSpace(C) = Span(∂/∂x₍ₙ₋ₙ₊₁₎, ..., ∂/∂xₙ)
+        
+        have C ≅ ℝ^(n-N) × {0} by DiffeomorphismInvariance 
+        have NormalSpace(C) ≅ Cone(ℝ^N) by ConeConstruction
+        hence C ≅ Cone(ℝ^N) by ConicalIntersectionDefinition
+      }
+    }
+    
+    THEOREM BerryCurvature {
+      ASSUME {  
+        M : Molecule
+        E1 E2 : PotentialEnergyFunction
+        C ≜ CI(M, E1, E2)  
+        A_KZ : Connection ≜ KrasovskyZenerConnection(C)
+        F_KZ : Curvature ≜ Curvature(A_KZ)
+      }
+      PROVE {
+        F_KZ = i * ⟨dψ1 ∧ dψ2⟩ / (E2 - E1)²
+      } where {
+        ψ1 : ElectronicState ≜ GroundState(E1)
+        ψ2 : ElectronicState ≜ GroundState(E2)  
+      }
+      
+      PROOF {
+        have A_KZ = ⟨ψ1|dψ2⟩ / (E2 - E1) by KZConnectionDefinition
+        
+        calc F_KZ 
+             = d(A_KZ) by CurvatureDefinition
+             = d(⟨ψ1|dψ2⟩) / (E2 - E1) - d(E2 - E1) ∧ ⟨ψ1|dψ2⟩ / (E2 - E1)² by LeibnizRule
+        
+        calc d(⟨ψ1|dψ2⟩)  
+             = ⟨dψ1|dψ2⟩ - ⟨ψ1|d²ψ2⟩ by Linearity and AntiCommutativity  
+             = ⟨dψ1|dψ2⟩ by d²=0
+             = -⟨dψ2|dψ1⟩ by Antisymmetry
+             = ⟨dψ1 ∧ dψ2⟩ by WedgeProductDefinition
+             
+        calc d(E2 - E1)
+             = ⟨ψ2|𝓗|dψ2⟩ - ⟨ψ1|𝓗|dψ1⟩ by HellmannFeynmanTheorem
+             = (E2 - E1) * (⟨ψ2|dψ2⟩ - ⟨ψ1|dψ1⟩) by Eigenstates(𝓗, ψ1, ψ2)
+             = 0 by Normalization
+             
+        hence F_KZ = i * ⟨dψ1 ∧ dψ2⟩ / (E2 - E1)² 
+      }
+    }
+  }
+}

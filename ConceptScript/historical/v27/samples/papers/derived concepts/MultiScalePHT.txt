@@ -1,0 +1,110 @@
+CONCEPT MultiScalePHT {
+  NOTATION {
+    X = Finite metric space
+    𝓒_ε(X) = Cech complex of X at scale ε
+    PHT_ε(X) = PHT(𝓒_ε(X))
+    Dgm_ε(X) = {Dgm(i, 𝓒_ε(X), v) | i ∈ ℕ, v ∈ 𝕊^(d-1)}
+  }
+
+  LANGUAGE {
+    TYPE Data = Finite subspace of ℝ^d 
+    TYPE FilteredPHT = ε ↦ PHT_ε(X)
+    TYPE PersistenceLandscape = ⨁_i L_i where
+      L_i(t) = sup{m≥0 | (b,d)∈Dgm, b+d=2t, d-b≥2m}
+
+    FUNC DataPHT(X: Data, ε_min, ε_max) -> FilteredPHT =  
+      ε ↦ PHT(𝓒_ε(X)) for ε_min ≤ ε ≤ ε_max
+
+    FUNC Landscape(X: Data, ε_min, ε_max) -> PersistenceLandscape =
+      ⨁_i ε ↦ L_i(Dgm_ε(X)) for ε_min ≤ ε ≤ ε_max
+
+    FUNC Betti(X: Data, ε_min, ε_max) -> (ℕ→ℝ_≥0)^[ε_min,ε_max] =
+      i ↦ (ε ↦ rank(PHT^i_ε(X))) 
+  }
+
+  STRUCTURES {
+    STRUCTURE MultiScaleDescriptor {
+      FIELD PHT : FilteredPHT  
+      FIELD Landscapes : PersistenceLandscape
+      FIELD PersistentBetti : (ℕ→ℝ_≥0)^[ε_min,ε_max]
+      
+      CONSTRUCTOR (X, ε_min, ε_max) {
+        PHT := DataPHT(X, ε_min, ε_max)
+        Landscapes := Landscape(X, ε_min, ε_max)  
+        PersistentBetti := Betti(X, ε_min, ε_max)
+      }
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE ExpandPHT(ε: ℝ≥0):
+      PHT_ε(X) -> PHT(𝓒_ε(X))
+      
+    SIMPLIFY PersistentBettiViaPHT:  
+      rank(PHT^i_ε(X)) -> 
+      ∑_{v∈𝕊^(d-1)} #{(b,d)∈Dgm(i,𝓒_ε(X),v) | b≤ε≤d}
+  }
+
+  PROOFS {
+    THEOREM StabilityMultiScale: 
+      d_GH(X,Y) ≤ ε ⇒ d_I(PHT_δ(X), PHT_δ(Y)) ≤ ε ∀δ
+    {
+      GIVEN d_GH(X,Y) ≤ ε
+      ⇒ d_GH(𝓒_δ(X), 𝓒_δ(Y)) ≤ ε ∀δ   BY interleaving
+      ⇒ d_I(PHT_δ(X), PHT_δ(Y)) ≤ ε ∀δ BY PHTStability 
+    }
+    
+    THEOREM ReconstructionMultiScale:
+      X ≃ Y IF PHT_ε(X) ≃ PHT_ε(Y) ∀ε
+    {
+      GIVEN PHT_ε(X) ≃ PHT_ε(Y) ∀ε
+      ⇒ ECT_ε(X) = ECT_ε(Y) ∀ε         BY PHTDeterminesShape
+      ⇒ X ≃ Y                           BY Schapira  
+    }
+  }
+  
+  EXAMPLES {
+    EXAMPLE CircleData : MultiScaleDescriptor = 
+      LET X = {x_i = (cos(2πi/n), sin(2πi/n))}
+      MultiScaleDescriptor(X, 0, 2)
+      
+    EXAMPLE AnnulusData : MultiScaleDescriptor =  
+      LET X = {x_i = (r_i cos(θ_i), r_i sin(θ_i))} 
+            WHERE r_i ∈ [1,2], θ_i ∈ [0,2π]
+      MultiScaleDescriptor(X, 0, 3)
+      
+    EXAMPLE TorusData : MultiScaleDescriptor =
+      LET X = {x_ijk = ((2+cos(2πj/m))cos(2πi/n), 
+                        (2+cos(2πj/m))sin(2πi/n),
+                        sin(2πj/m))}
+      MultiScaleDescriptor(X, 0, 4)
+  }
+}
+
+The MultiScalePHT Concept provides a framework for topological analysis of metric data across all scales, by computing the Persistent Homology Transform (and derived invariants like persistence landscapes and Betti numbers) of the Cech filtration. It comes with multi-scale stability and reconstruction guarantees.
+
+The key aspects are:
+
+1. Encoding shape properties of data at all scales in the PHT filtration
+2. Extracting multi-scale topological features like persistent Betti numbers and persistence landscapes
+3. Proving stability and reconstruction theorems for the multi-scale analysis
+4. Giving examples of multi-scale topological descriptors for simple synthetic datasets
+
+This Concept leverages the ideas of higher-order interactions, sheaf-theoretic shape analysis, and topological persistence to provide a principled and informative framework for studying the shape of data across scales. The efficient use of the PHT and its derived invariants allows capturing both local and global structure.
+
+
+
+------
+
+
+The key novel ideas from the previous Concepts are:
+
+1. Expressing higher-order interactions and decompositions in various domains (statistics, information theory, biology, physics, chemistry, game theory, machine learning) using a unified algebraic framework based on the Mobius inversion formula on posets. This allows capturing multi-scale phenomena in a principled way.
+
+2. Representing shapes and their directionality/scale-dependent properties using the Persistent Homology Transform (PHT), which maps a shape to a sheaf over the sphere cross the reals, encoding its sublevel set persistent homology in all directions and scales. 
+
+3. Deriving stability, approximation and reconstruction theorems for the PHT, enabling its use as a complete shape descriptor that is robust to perturbations and discretization.
+
+4. Utilizing sheaf-theoretic operations like pushforward and descent to manipulate PHTs and relate global and local shape properties.
+
+Building on these ideas, here is a new Concept for multi-scale topological analysis of data:

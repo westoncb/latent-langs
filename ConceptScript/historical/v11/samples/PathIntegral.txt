@@ -1,0 +1,77 @@
+CONCEPT PathIntegral {
+  STRUCTURE {
+    [QuantumSystem := Physical system described by quantum mechanics]
+    [State(t) := Quantum state of the system at time t]
+    [Action[γ] := ∫_0^T L(γ(t), γ'(t), t) dt] // Action functional for a path γ
+    [L(q, q', t) := T(q') - V(q, t)] // Lagrangian (T: kinetic energy, V: potential energy)
+    [TransitionAmplitude(qi, ti, qf, tf) := ⟨qf, tf|qi, ti⟩] // Transition amplitude
+    [TransitionAmplitude(qi, ti, qf, tf) = ∫_γ:qi→qf 𝒟[γ] e^{(i/ħ) Action[γ]}] // Path integral formula
+    [𝒟[γ] := ∏_{t=ti}^{tf} dγ(t)] // Path integral measure
+    [ħ := h / (2π)] // Reduced Planck's constant
+    [i := √(-1)] // Imaginary unit
+  }
+
+  PROOFS {
+    theorem composition_property :
+      ∀qi, qk, qf ∈ Config, ∀ti, tk, tf ∈ Time, ti < tk < tf ⇒
+        ⟨qf, tf|qi, ti⟩ = ∫ dqk ⟨qf, tf|qk, tk⟩ ⟨qk, tk|qi, ti⟩
+    {
+      assume qi, qk, qf ∈ Config by hypothesis
+      assume ti, tk, tf ∈ Time ∧ ti < tk < tf by hypothesis
+      ⟨qf, tf|qi, ti⟩
+        = ∫_γ:qi→qf 𝒟[γ] e^{(i/ħ) Action[γ]} by PathIntegralFormula
+        = ∫_γ1:qi→qk 𝒟[γ1] ∫_γ2:qk→qf 𝒟[γ2] e^{(i/ħ) (Action[γ1] + Action[γ2])} by {
+            let γ1 = γ restricted to [ti, tk]
+            let γ2 = γ restricted to [tk, tf]
+            have Action[γ] = Action[γ1] + Action[γ2] by additivity of action
+            have 𝒟[γ] = 𝒟[γ1] 𝒟[γ2] by product property of path integral measure
+          }
+        = ∫ dqk (∫_γ1:qi→qk 𝒟[γ1] e^{(i/ħ) Action[γ1]}) (∫_γ2:qk→qf 𝒟[γ2] e^{(i/ħ) Action[γ2]})
+            by Fubini's theorem
+        = ∫ dqk ⟨qk, tk|qi, ti⟩ ⟨qf, tf|qk, tk⟩ by PathIntegralFormula
+    }
+
+    theorem stationary_phase :
+      ∀qi, qf ∈ Config, ∀ti, tf ∈ Time, ti < tf ⇒
+        ⟨qf, tf|qi, ti⟩ ≈ ∑_γ:qi→qf (2πiħ/Δt)^{n/2} |det(∂^2 Action[γ])|^{-1/2} e^{(i/ħ) Action[γ]}
+          where Δt := tf - ti, n := dim(Config), and γ satisfies δAction[γ] = 0
+    {
+      assume qi, qf ∈ Config by hypothesis
+      assume ti, tf ∈ Time ∧ ti < tf by hypothesis
+      let Δt := tf - ti
+      let n := dim(Config)
+      ⟨qf, tf|qi, ti⟩
+        = ∫_γ:qi→qf 𝒟[γ] e^{(i/ħ) Action[γ]} by PathIntegralFormula
+        ≈ ∑_γ:qi→qf ∫_𝒰(γ) 𝒟[γ'] e^{(i/ħ) Action[γ']} where 𝒰(γ) is a neighborhood of γ, and γ satisfies δAction[γ] = 0
+            by stationary phase approximation
+        ≈ ∑_γ:qi→qf (2πiħ/Δt)^{n/2} |det(∂^2 Action[γ])|^{-1/2} e^{(i/ħ) Action[γ]}
+            by Gaussian integral approximation, where ∂^2 Action[γ] is the Hessian matrix of Action at γ
+    }
+  }
+
+  LANGUAGE {
+    type QuantumSystem
+    type State(t : Time)
+    type Action[γ : Path]
+    type Lagrangian(q : Config, q' : Velocity, t : Time)
+    type TransitionAmplitude(qi : Config, ti : Time, qf : Config, tf : Time)
+    type PathIntegralMeasure[γ : Path]
+    type Config // Configuration space
+    type Velocity // Tangent space to configuration space
+    type Time // Time domain
+    type Path // Path in configuration space
+
+    func ħ : ℝ // Reduced Planck's constant
+    func i : ℂ // Imaginary unit
+    func "⟨" "_" "," "_" "|" "_" "," "_" "⟩" (qf : Config, tf : Time, qi : Config, ti : Time) : TransitionAmplitude
+    func "𝒟[" "_" "]" (γ : Path) : PathIntegralMeasure[γ]
+    func "∫" "_" "d" "_" (𝒟[γ] : PathIntegralMeasure[γ], q : Config) : TransitionAmplitude
+    func "∑_" (i : Indexer) : TransitionAmplitude // Summation over paths
+    func "e^" (x : ℂ) : ℂ // Exponential function
+    func "det" (A : Matrix) : ℝ // Determinant of a matrix
+    func "∂^2" (f : Function) : Matrix // Hessian matrix of a function
+
+    pred "≈" (x : TransitionAmplitude, y : TransitionAmplitude) // Approximation relation
+    pred "δ" (f : Action) = 0 // Variational derivative of action is zero (stationary path)
+  }
+}

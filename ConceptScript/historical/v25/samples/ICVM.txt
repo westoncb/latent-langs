@@ -1,0 +1,559 @@
+CONCEPT ICVM {
+  LANGUAGE {
+    TYPE Net = Set[Cell]
+    TYPE Cell = (Symbol, List[Wire])
+    TYPE Wire = (Cell, ℕ)
+    
+    NOTATION "C[" <Symbol> "," <Wire> ("," <Wire>)* "]" = Cell
+    NOTATION "W(" <Cell> "," <ℕ> ")" = Wire
+    
+    TYPE Symbol = ℕ  -- Symbols are just natural numbers
+    NOTATION "#" <ℕ> = Symbol
+    
+    FUNC Arity : Symbol -> ℕ =
+      LAMBDA (s : Symbol) : 
+        MATCH s
+          CASE 0 => 0  -- Number
+          CASE 1 => 2  -- Sum
+          CASE 2 => 2  -- Product
+          CASE 3 => 2  -- Exponential
+          CASE 4 => 1  -- Negative
+          CASE 5 => 1  -- Reciprocal
+          CASE 6 => 1  -- Sine
+          CASE 7 => 1  -- Cosine
+          CASE 8 => 1  -- Condition
+          CASE _ => 0  -- Constant
+    
+    FUNC Interaction : (Symbol, Symbol) -> Net =
+      LAMBDA (a : Symbol, b : Symbol) :
+        LET s = MAX(a, b), t = MIN(a, b) IN
+          MATCH (s, t)
+            CASE (1, 0) => SUM_NUM(a, b)
+            CASE (2, 0) => PROD_NUM(a, b)
+            CASE (3, 0) => EXP_NUM(a, b)
+            CASE (4, 0) => NEG_NUM(b)
+            CASE (5, 0) => RECIP_NUM(b)
+            CASE (6, 0) => SIN_NUM(b)
+            CASE (7, 0) => COS_NUM(b)
+            CASE (8, 0) => COND_NUM(a, b)
+            CASE (1, 1) => SUM_SUM(a, b)
+            CASE (2, 1) => PROD_SUM(a, b)
+            CASE (3, 1) => EXP_SUM(a, b)
+            CASE (2, 2) => PROD_PROD(a, b)
+            CASE (3, 2) => EXP_PROD(a, b)
+            CASE (3, 3) => EXP_EXP(a, b)
+            CASE _ => EMPTY_NET
+              
+    TYPE DeviceKind = CPU | GPU | TPU
+    
+    TYPE Device = {
+      kind : DeviceKind,
+      memory : Map[Address, Byte],
+      caches : Map[Address, ℕ]  -- ℕ represents cache level  
+    }
+    
+    TYPE CompilationResult = {
+      subgraph : Subgraph,
+      compiledCode : List[Instruction],
+      inputAddrs : List[Address],
+      outputAddrs : List[Address] 
+    }
+    
+    TYPE Instruction =
+      | READ(addr : Address)
+      | WRITE(addr : Address)
+      | ALLOC(size : ℕ) -> Address
+      | FREE(addr : Address)
+      | COMPUTE(op : Symbol, args : List[Value]) -> Value
+      | BRANCH(cond : Value, thenAddr : Address, elseAddr : Address)
+      | ...
+      
+    TYPE Value = 
+      | NUM(n : ℝ) 
+      | THUNK(addr : Address)
+      | ...
+    
+    FUNC CompileNet : (Net, Device) -> CompilationResult
+    FUNC Partition : Net -> Set[Subgraph] = ...
+    PRED Independent : (Subgraph, Subgraph) -> 𝔹 = ...
+
+    FUNC MemAlloc : (Device, ℕ) -> (Device, Address) 
+    FUNC MemRead : (Device, Address) -> (Device, Byte)
+    FUNC MemWrite : (Device, Address, Byte) -> Device
+    FUNC CacheRead : (Device, Address) -> (Device, Maybe[Byte])
+    FUNC CacheWrite : (Device, Address, Byte) -> Device
+    
+    FUNC InterpretInstruction : (Instruction, Device) -> (Value, Device)
+  }
+  
+  STRUCTURE State {
+    net : Net
+    env : Map[String, Net]
+    
+    devices : Map[DeviceKind, Set[Device]]
+    devCompResults : Map[Device, List[CompilationResult]]
+    devMemory : Map[Device, Map[Address, Byte]]
+    devCaches : Map[Device, Map[Address, ℕ]]
+
+    unusedDevices : Set[Device]
+    busyDevices : Set[Device]
+                  
+    TRANSITION Compile(s : Subgraph) -> (CompilationResult, Device) {
+      PRE s ∈ Partition(net) ∧ unusedDevices ≠ ∅
+
+      VAR bestDevice : Device
+      VAR bestCost : ℝ = ∞
+      FOREACH (dev : unusedDevices) {
+        VAR cost : ℝ = CompilationCost(s, dev)
+        IF (cost < bestCost) {  
+          bestDevice := dev
+          bestCost := cost
+        }
+      }
+      
+      VAR compResult : CompilationResult = CompileNet(s, bestDevice)
+      devCompResults[bestDevice] := devCompResults[bestDevice] + [compResult]
+      unusedDevices := unusedDevices - {bestDevice}  
+      busyDevices := busyDevices ∪ {bestDevice}
+
+      POST compResult.subgraph = s ∧ compResult.compiledCode ≠ []
+      RETURN (compResult, bestDevice)
+    }
+    
+    TRANSITION Execute(comp : CompilationResult, dev : Device) -> Subgraph {
+      PRE comp ∈ devCompResults[dev] ∧ dev ∈ busyDevices
+
+      VAR instructions : List[Instruction] = comp.compiledCode
+      VAR memory : Map[Address, Byte] = devMemory[dev]
+      VAR caches : Map[Address, ℕ] = devCaches[dev]
+      
+      FOREACH (inAddr : comp.inputAddrs) {
+        memory := MemWrite(dev, inAddr, Encode(Lookup(net, inAddr)))
+      }
+
+      VAR resultAddrs : List[Address] = []
+      WHILE (instructions ≠ []) {
+        VAR currInstr : Instruction = Head(instructions)
+        VAR result : Value  
+        (result, dev) := InterpretInstruction(currInstr, dev)
+        MATCH (currInstr) {
+          CASE READ(addr) => 
+            VAR (byte, _) := CacheRead(dev, addr)
+            IF (byte = None) {
+              byte := MemRead(dev, addr)
+              CacheWrite(dev, addr, byte)
+            }
+          CASE WRITE(addr) =>
+            MemWrite(dev, addr, result)
+          CASE ALLOC(size) =>
+            VAR (_, addr) := MemAlloc(dev, size)
+            resultAddrs := resultAddrs + [addr]
+          ...  
+        }
+        instructions := Tail(instructions)
+      }
+
+      devMemory[dev] := memory
+      devCaches[dev] := caches
+      
+      VAR resultCells : Set[Cell] = {
+        Decode(MemRead(dev, addr)) | addr ∈ resultAddrs  
+      }
+      
+      net := net ∪ resultCells
+      devCompResults[dev] := Remove(comp, devCompResults[dev])
+      busyDevices := busyDevices - {dev}
+      unusedDevices := unusedDevices ∪ {dev}
+      
+      POST resultCells ⊆ net 
+      RETURN Subgraph(resultCells)
+    }
+    
+    TRANSITION AddDevice(kind : DeviceKind) {
+      VAR newDev : Device = NewDevice(kind)
+      devices[kind] := devices[kind] ∪ {newDev}
+      unusedDevices := unusedDevices ∪ {newDev}
+    }
+    
+    TRANSITION Run() {
+      DO {
+        VAR subgraphs : Set[Subgraph] = Partition(net)  
+        FOREACH (s : subgraphs) {
+          VAR (comp, dev) := Compile(s)
+          Execute(comp, dev)
+        }
+      } WHILE (Reducible(net))
+      
+      POST ¬Reducible(net)
+    }
+  }
+}
+
+
+
+
+CONCEPT ICVM {
+  LANGUAGE {
+    TYPE Net = Set[Cell]
+    TYPE Cell = (Symbol, List[Wire])
+    TYPE Wire = (Cell, ℕ)
+    
+    NOTATION "C[" <Symbol> "," <Wire> ("," <Wire>)* "]" = Cell
+    NOTATION "W(" <Cell> "," <ℕ> ")" = Wire
+    
+    TYPE Symbol = ℕ  -- Symbols are just natural numbers
+    NOTATION "#" <ℕ> = Symbol
+    
+    FUNC Arity : Symbol -> ℕ
+    FUNC Interaction : (Symbol, Symbol) -> Net
+    
+    TYPE Subgraph <: Net
+    FUNC Partition : Net -> Set[Subgraph]
+    PRED Independent : (Subgraph, Subgraph) -> 𝔹
+
+    TYPE Device <: ℕ  -- Devices are natural numbers
+    NOTATION "$" <ℕ> = Device
+    
+    TYPE MemoryLayout = Device -> Map[Address, Byte]
+    TYPE CacheModel = Device -> Map[Address, ℕ]  -- ℕ represents cache level
+    
+    TYPE CompStrategy = (Subgraph, MemoryLayout, CacheModel) -> CompiledSubgraph
+    TYPE ExecStrategy = (CompiledSubgraph, Device) -> ()
+    
+    FUNC GC : Net -> Net
+    
+    TYPE Rule = (Symbol, Symbol) -> Net
+    TYPE RuleSet = Set[Rule]
+    
+    FUNC Encode : (Term, RuleSet) -> Net 
+    FUNC Decode : (Net, RuleSet) -> Term
+  }
+  
+  STRUCTURE State {
+    net : Net
+    env : Map[String, Net]
+    subgraphs : Set[Subgraph]
+    devices : Map[Device, (MemoryLayout, CacheModel, CompStrategy, ExecStrategy)]
+    compiled : Set[CompiledSubgraph]
+
+    INVARIANT Partition(net) ≡ subgraphs ∧ 
+              ∀ (s1 s2 : subgraphs) . s1 ≠ s2 => Independent(s1, s2) ∧ 
+              ∀ (c : compiled) . Wellformed(c) ∧ ICSafe(c) ∧
+              ∀ (d : devices.Keys) . WellFormed(devices[d])
+                  
+    TRANSITION Partition() {
+      subgraphs := Partition(net)
+    }
+
+    TRANSITION Schedule(s : Subgraph) : Device {
+      CHOOSE d : Device |
+        ∀ (d' : Device) . 
+          CostModel(s, devices[d].0, devices[d].1) ≤ 
+            CostModel(s, devices[d'].0, devices[d'].1)
+    }
+
+    TRANSITION Compile(s : Subgraph, d : Device) {
+      compiled := compiled ∪ {devices[d].2(s, devices[d].0, devices[d].1)}
+    }
+
+    TRANSITION Execute(c : CompiledSubgraph, d : Device) {
+      devices[d].3(c, d)
+      net := GC(net ∪ c.OutputWires())
+    }
+
+    TRANSITION Run() {
+      DO
+        Partition()
+        FOREACH s : subgraphs {
+          LET d = Schedule(s)  
+          Compile(s, d)
+        }
+        FOREACH c : compiled {
+          Execute(c, c.Device())
+        }  
+      WHILE ¬Terminal(net)
+    }
+  }
+
+  PROOFS {
+    THEOREM Soundness {
+      STATEMENT:
+        ∀ (t : Term) (rs : RuleSet) (vm : ICVM) .
+          LET init = vm WITH .net := Encode(t, rs),
+                             .env := CompileRules(rs)
+          IN  
+            t -rs->* v => ◇(Decode(init.Run().net, rs) = v)
+
+      PROOF:
+        <1>1 DEFINE R(t, v, rs) == (t -rs->* v)
+        
+        <1>2 ASSUME t -rs->* v
+        
+        <1>3 DEFINE Inv(s) == 
+               (Partition(s.net) ≡ s.subgraphs ∧
+                ∀ (s1 s2 : s.subgraphs) . s1 ≠ s2 => Independent(s1, s2) ∧
+                ∀ (c : s.compiled) . Wellformed(c) ∧ ICSafe(c) ∧
+                s.net ⇝ Encode(v, rs))
+               
+        <1>4 init.Run MAINTAINS Inv(init)  
+          <2>1 CASE Partition():
+            BY PartitionCorrectness DEF Inv
+          <2>2 CASE Schedule(s):
+            BY SchedulePreservesInv DEF Inv  
+          <2>3 CASE Compile(s, d):  
+            BY CompilationCorrectness, ICCompilationSafety DEF Inv
+          <2>4 CASE Execute(c, d):
+            BY ExecutionCorrectness, GCPreservesEncoding DEF Inv
+          <2>5 QED
+            BY <2>1, <2>2, <2>3, <2>4 DEF Run
+              
+        <1>5 init.Run DECREASES Size(init.net)  
+          BY ICReduction, NetSize
+        
+        <1>6 ◇(Terminal(init.Run().net))
+          BY <1>4, <1>5, ConvergenceTheorem
+        
+        <1>7 QED  
+          BY SMT, <1>2, <1>4, <1>6, EncodingAdequacy, DecodingAdequacy
+    }
+  }
+}
+
+
+
+
+
+
+
+CONCEPT ICVM {
+  LANGUAGE {
+    TYPE Net = Set[Cell]
+    TYPE Cell = (Symbol, List[Wire])
+    TYPE Wire = (Cell, ℕ)
+    
+    NOTATION "C[" <Symbol> "," <Wire> ("," <Wire>)* "]" = Cell
+    NOTATION "W(" <Cell> "," <ℕ> ")" = Wire
+    
+    TYPE Symbol = ℕ  -- Symbols are just natural numbers
+    NOTATION "#" <ℕ> = Symbol
+    
+    FUNC Arity(s : Symbol) : ℕ
+    FUNC Interaction(a b : Symbol) : Net
+    
+    TYPE Subgraph <: Net
+    FUNC Partition(n : Net) : Set[Subgraph]
+    PRED Independent(s1 s2 : Subgraph) : 𝔹
+
+    TYPE Device <: ℕ  -- Devices are natural numbers
+    NOTATION "$" <ℕ> = Device
+    
+    TYPE CompStrategy = Subgraph -> Device -> CompiledSubgraph
+    TYPE ExecStrategy = CompiledSubgraph -> Device -> ()
+    
+    FUNC GC(n : Net) : Net
+    
+    TYPE Rule = (Symbol, Symbol) -> Net
+    TYPE RuleSet = Set[Rule]
+    
+    FUNC Encode(t : Term, rs : RuleSet) : Net 
+    FUNC Decode(n : Net, rs : RuleSet) : Term
+  }
+  
+  STRUCTURE State {
+    net : Net
+    env : Map[String, Net]
+    subgraphs : Set[Subgraph]
+    devices : Map[Device, (CompStrategy, ExecStrategy)]
+    compiled : Set[CompiledSubgraph]
+
+    INVARIANT Disjoint(subgraphs) ∧ 
+              ∀ (c : compiled) . ICSafe(c) ∧
+              ∀ (d : devices.Keys) . WellFormed(devices[d])
+              
+    TRANSITION Partition() {
+      subgraphs := Partition(net)
+    }
+
+    TRANSITION Schedule(s : Subgraph) : Device {
+      CHOOSE d : Device |
+        ∀ (d' : Device) . 
+          Cost(s, devices[d].0) ≤ Cost(s, devices[d'].0)
+    }
+
+    TRANSITION Compile(s : Subgraph, d : Device) {
+      compiled := compiled ∪ {devices[d].0(s)}
+    }
+
+    TRANSITION Execute(c : CompiledSubgraph, d : Device) {
+      devices[d].1(c)
+      net := GC(net ∪ c.OutputWires())
+    }
+
+    TRANSITION Run() {
+      DO
+        Partition()
+        FOREACH s : subgraphs {
+          LET d = Schedule(s)  
+          Compile(s, d)
+        }
+        FOREACH c : compiled {
+          Execute(c, c.Device())
+        }  
+      WHILE ¬Terminal(net)
+    }
+  }
+
+  PROOFS {
+    THEOREM Soundness {
+      STATEMENT:
+        ∀ (t : Term) (rs : RuleSet) (vm : ICVM) .
+          LET init = vm WITH .net := Encode(t, rs),
+                             .env := CompileRules(rs)
+          IN  
+            t -rs->* v => ◇(Decode(init.Run().net, rs) = v)
+
+      PROOF:
+        <1>1 t -rs->* v => Encode(t, rs) ⇝ Encode(v, rs)
+          BY Homomorphism, Adequacy of Encoding
+        
+        <1>2 init.Run MAINTAINS 
+              (SubgraphsDisjoint(init.subgraphs) ∧ 
+               ICSafe(init.compiled) ∧ 
+               init.net ⇝ Encode(v, rs))
+          BY SMT, SubgraphPartitioning, ICCompilation, GCCorrectness
+
+        <1>3 init.Run DECREASES Size(init.net)  
+          BY InteractionReduction
+
+        <1>4 ◇(Terminal(init.Run().net))
+          BY <1>2, <1>3, ConvergenceTheorem   
+
+        <1>5 QED  
+          BY SMT, <1>1, <1>4, Adequacy of Decoding
+    }
+  }
+}
+
+
+
+
+
+CONCEPT ICVM {
+  LANGUAGE {
+    TYPE Net 
+    TYPE Node <: Net
+    TYPE Port = (Node, ℕ)
+    TYPE Pair = (Port, Port)
+    TYPE Tag = ℕ
+    
+    FUNC Encode(t : Term) : Net
+    FUNC Decode(n : Net) : Term
+
+    FUNC Arity(n : Node) : ℕ
+    FUNC Interaction(a b : Node) : Net
+    
+    FUNC MkPort(n : Node, i : ℕ) : Port
+    FUNC MkPair(a b : Port) : Pair
+
+    TYPE Subgraph <: Net
+    FUNC Partition(n : Net) : Set[Subgraph]
+    PRED Independent(s1 s2 : Subgraph) : 𝔹
+
+    TYPE Device
+    FUNC Compile(s : Subgraph, d : Device) : CompiledSubgraph 
+    FUNC Execute(c : CompiledSubgraph, d : Device) : ()
+
+    FUNC GC(n : Net) : Net
+  }
+
+  STRUCTURE SubgraphState {
+    graph : Subgraph
+    ports : Set[Port]
+  }
+
+  STRUCTURE DeviceState {
+    memoryLayout : MemoryLayout
+    cacheModel : CacheModel
+  }
+
+  STRUCTURE ICVMState {
+    net : Net
+    env : Map[String, Net]  -- compiled primitives
+    subgraphs : Set[SubgraphState]
+    devices : Map[Device, DeviceState]
+    
+    VAR compiled : Set[CompiledSubgraph]    
+
+    TRANSITION Partition() {
+      subgraphs := Partition(net)
+    }
+
+    TRANSITION Schedule(s : Subgraph) : Device {
+      CHOOSE d : Device |
+        ∀ (d' : Device) . 
+          CostModel(s, devices[d].memoryLayout, devices[d].cacheModel) ≤
+            CostModel(s, devices[d'].memoryLayout, devices[d'].cacheModel)
+    }
+
+    TRANSITION Compile(s : Subgraph, d : Device) {
+      LET c = Compile(s, devices[d].memoryLayout, devices[d].cacheModel)
+      compiled := compiled ∪ {c}
+    }
+
+    TRANSITION Execute(c : CompiledSubgraph, d : Device) {
+      Execute(c, d)
+      GarbageCollect(c.OutputPorts())
+    }
+
+    TRANSITION GarbageCollect(ports : Set[Port]) {
+      LET reachable = ReachableFrom(ports) ∩ Reachable(env)
+      net := Subgraph(reachable)
+    }
+
+    TRANSITION Run() {
+      Partition()
+      FOREACH s : subgraphs {
+        LET d = Schedule(s.graph)  
+        Compile(s.graph, d)
+      }
+      FOREACH c : compiled {
+        Execute(c, c.Device())
+      }
+    }
+  }
+
+  PROOFS {
+    THEOREM Soundness {
+      STATEMENT:
+        ∀ (vm : ICVM) (t : Term) (v : Value) .
+          vm.net = Encode(t) ∧ t -->* v =>
+            ◇(Decode(vm.net) = v)
+
+      PROOF:
+        LET t : Term, v : Value
+        
+        <1>1 t -->* v => Encode(t) ⇝ Encode(v)
+          BY Homomorphism, Adequacy of Encoding
+
+        <1>2 ASSUME vm.net = Encode(t)
+
+        <1>3 vm.Run MAINTAINS 
+               (SubgraphsDisjoint(vm.subgraphs) ∧ 
+                ICSafe(vm.compiled) ∧
+                Reachable(vm.net) = Reachable(Encode(t)))
+          BY SMT, SubgraphPartitioning, ICCompilation, ICGarbageCollection
+        
+        <1>4 vm.Run DECREASES Size(vm.net)
+          BY InteractionCombinatorReduction
+
+        <1>5 vm.Run MAINTAINS vm.net ⇝ Encode(v)
+          BY SMT, Homomorphism, SubgraphReduction, DeviceExecution  
+
+        <1>6 ◇(Reachable(vm.net) = Reachable(Encode(v)))
+          BY <1>4, <1>3, ConvergenceTheorem
+        
+        <1>7 QED
+          BY SMT, <1>5, <1>6, Adequacy of Decoding
+    }
+  }
+}

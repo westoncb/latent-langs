@@ -1,0 +1,100 @@
+CONCEPT HolographicQuantumCodes {
+  LANGUAGE {
+    TYPE Qudit = ℂ^d
+    TYPE Lattice = ℤ^n
+    TYPE Operator = Qudit -> Qudit
+    TYPE Code = Lattice -> Qudit
+    TYPE LogicalOp = Code -> Code
+
+    FUNC Stab(C : Code) : Lattice -> Operator
+    FUNC Logical(C : Code) : Lattice -> Operator
+    FUNC AncillaOp(C : Code, A : Lattice) : Operator
+    FUNC Encode(L : LogicalOp) : Code -> Code
+    FUNC Decode(C : Code) : LogicalOp
+    FUNC Correct(C : Code, E : Lattice -> Operator) : Code
+
+    AXIOM CommutingStabilizers {
+      ∀ (C : Code) (v w : Lattice) . Stab(C)(v) ∘ Stab(C)(w) = Stab(C)(w) ∘ Stab(C)(v)
+    }
+
+    AXIOM CommutingLogicals {
+      ∀ (C : Code) (v w : Lattice) . Logical(C)(v) ∘ Logical(C)(w) = Logical(C)(w) ∘ Logical(C)(v)  
+    }
+
+    AXIOM LogicalPreservation {
+      ∀ (C : Code) (L : LogicalOp) . Decode(Encode(L)(C)) = L
+    }
+
+    NOTATION "⟦_⟧" = Stab  
+    NOTATION "L(_)" = Logical
+    NOTATION "A[_]" = AncillaOp
+  }
+
+  STRUCTURE HaPPY(C : Code, χ : Lattice -> 𝔹) {
+    DEF Bulk : Lattice = { v | χ(v) }  
+    DEF Boundary : Lattice = { v | ¬χ(v) }
+
+    REQUIRE ∀ (v : Bulk) . ⟦C⟧(v) = I
+    REQUIRE ∀ (v : Boundary) . L(C)(v) = I
+
+    DEF Hamiltonian : Lattice -> Operator = v ↦ -Sum(u ~ v) ⟦C⟧(u)
+
+    FUNC Correct(E : Lattice -> Operator) : Code = 
+      C' WHERE ∀ (v : Lattice) . C'(v) = A[Boundary](E(v))(C(v))
+  }
+
+  PROOFS {
+    TACTIC SplitSum(S, P) -> (S1, S2) {
+      REWRITE Sum(S) 
+        = Sum({ x ∈ S | P(x) }) + Sum({ x ∈ S | ¬P(x) })
+        = Sum(S1) + Sum(S2)  
+        WHERE S1 = { x ∈ S | P(x) }, S2 = { x ∈ S | ¬P(x) }
+    }
+
+    THEOREM RobustEntanglement {
+      STATEMENT :
+        ∀ (C : Code) (χ : Lattice -> 𝔹) . HaPPY(C, χ) =>
+          ∀ (E : Lattice -> Operator) . (∀ (v : Bulk) . E(v) = I) =>  
+            ∀ (L : LogicalOp) . Decode(Correct(C, E)) = L
+
+      PROOF {
+        LET (C, χ) : HaPPY, E : Lattice -> Operator
+        ASSUME (H) : ∀ (v : Bulk) . E(v) = I
+
+        LET L : LogicalOp
+        
+        Decode(Correct(C, E))
+          = Decode(C') WHERE ∀ (v : Lattice) . C'(v) = A[Boundary](E(v))(C(v))  BY DEFINITION Correct
+          = L' WHERE ∀ (v : Boundary) . L'(v) = Decode(C')(v)                   BY DEFINITION Decode
+          = L' WHERE ∀ (v : Boundary) . L'(v) = Decode(A[Boundary](E(v))(C))(v)  USING PREV
+          = L' WHERE ∀ (v : Boundary) . L'(v) = Decode(C)(v)                     BY H, DEFINITION AncillaOp
+          = L                                                                    BY DEFINITION Decode
+      }
+    }
+
+    THEOREM EnergyCorrection {
+      STATEMENT :
+        ∀ (C : Code) (χ : Lattice -> 𝔹) (H : Lattice -> Operator) . HaPPY(C, χ) => 
+          ∀ (ψ : Code) (E : Lattice -> Operator) .
+            ⟨ψ, H(ψ)⟩ - ⟨Correct(C, E)(ψ), H(Correct(C, E)(ψ))⟩ = O(|Boundary|)
+
+      PROOF {
+        LET (C, χ) : HaPPY, H = HaPPY.Hamiltonian, ψ : Code, E : Lattice -> Operator
+        
+        ⟨ψ, H(ψ)⟩ - ⟨Correct(C, E)(ψ), H(Correct(C, E)(ψ))⟩
+          = Sum(v : Lattice) ⟨ψ(v), -Sum(u ~ v) ⟦C⟧(u)(ψ(v))⟩ - 
+            Sum(v : Lattice) ⟨A[Boundary](E(v))(ψ(v)), -Sum(u ~ v) ⟦C⟧(u)(A[Boundary](E(v))(ψ(v)))⟩
+          = -Sum(v : Bulk) Sum(u ~ v) ⟨ψ(v), ⟦C⟧(u)(ψ(v))⟩ +
+             Sum(v : Bulk) Sum(u ~ v) ⟨ψ(v), ⟦C⟧(u)(ψ(v))⟩ +
+            -Sum(v : Boundary) Sum(u ~ v) ⟨ψ(v), ⟦C⟧(u)(ψ(v))⟩ +  
+             Sum(v : Boundary) Sum(u ~ v) ⟨A[Boundary](E(v))(ψ(v)), ⟦C⟧(u)(A[Boundary](E(v))(ψ(v)))⟩
+            BY SplitSum(Lattice, (v) ↦ v ∈ Bulk), DEFINITION HaPPY.Hamiltonian
+          = -Sum(v : Boundary) Sum(u ~ v) ⟨ψ(v), ⟦C⟧(u)(ψ(v))⟩ +
+             Sum(v : Boundary) Sum(u ~ v) ⟨A[Boundary](E(v))(ψ(v)), ⟦C⟧(u)(A[Boundary](E(v))(ψ(v)))⟩  
+            BY HaPPY.Bulk
+          = O(|Boundary|)  
+            BY HaPPY.Boundary, DEFINITION AncillaOp, TRIANGLE INEQUALITY
+      }
+    }
+  }
+}

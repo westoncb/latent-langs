@@ -1,0 +1,100 @@
+CONCEPT AdaptiveGoalSeeking {
+  STRUCTURE {
+    [Env := Environment in which the agent operates]
+    [S := Set of possible states in Env] 
+    [A := Set of actions the agent can take]
+    [T : S × A × S → [0, 1] ↦ Transition function]
+    [R : S × A × S → ℝ ↦ Reward function]
+    [U : ℝ → ℝ ↦ Utility function over cumulative discounted rewards]
+    [γ ∈ [0, 1) ↦ Discount factor]
+    [π : S → A ↦ Policy mapping states to actions]
+    [V_π : S → ℝ ↦ State-value function for policy π]
+    [G := Set of possible goals]
+    [D : S × G → ℝ⁺ ↦ Goal distance function]
+    [ρ : G × G → [0, 1] ↦ Goal similarity function]
+    [τ : S × G → {0, 1} ↦ Goal termination predicate]
+    [w : G → ℝ ↦ Goal weighting function]
+    [ϕ : S × G → [0, 1] ↦ Goal applicability function]
+    [ψ : S × G → ℝ ↦ Goal value estimation function]
+    [α ∈ (0, 1] ↦ Learning rate]
+  }
+
+  PROOFS {
+    tactic update_weights(s, a, s', g, r, α) :
+      w(g) := w(g) + α * (r + γ * ψ(s', g) - ψ(s, g)) * ϕ(s, g)
+      ψ(s, g) := ψ(s, g) + α * (r + γ * ψ(s', g) - ψ(s, g))
+
+    theorem optimal_goal_value_convergence :
+      ∀s ∈ S, ∀g ∈ G, 
+      ψ(s, g) → ψ*(s, g) as t → ∞
+      where ψ*(s, g) = max_π E[Σ_{k=0}^∞ γ^k * R(s_k, π(s_k), s_{k+1}) * ϕ(s_k, g) | s_0 = s]
+    {
+      let s ∈ S, g ∈ G by hypothesis
+      ψ(s, g) → ψ*(s, g) as t → ∞ by {
+        ψ(s, g) is updated using temporal difference learning by update_weights
+        temporal difference learning converges to optimal value function by {
+          ψ(s, g) is a contraction mapping by {
+            |ψ(s, g) - ψ*(s, g)| ≤ γ * |ψ(s', g) - ψ*(s', g)| by definition of contraction mapping
+            |ψ(s, g) - ψ*(s, g)| ≤ γ * max_{s'} |ψ(s', g) - ψ*(s', g)| by taking max over s'
+            max_{s} |ψ(s, g) - ψ*(s, g)| ≤ γ * max_{s} |ψ(s, g) - ψ*(s, g)| by taking max over s
+            max_{s} |ψ(s, g) - ψ*(s, g)| = 0 by Banach fixed-point theorem
+          }
+        }
+      }
+    }
+
+    theorem maximizes_practicality :
+      AdaptiveGoalSeeking can be practically implemented as a reinforcement learning agent
+    {
+      implement S, A, T, R, U, γ as a Markov decision process by standard RL formulation
+      implement G, D, ρ, τ, w, ϕ as goal-related components by {
+        G: Set of symbolic goal representations
+        D: Distance function comparing state to goal (e.g. Euclidean distance, edit distance)  
+        ρ: Similarity function between goals (e.g. Jaccard index, cosine similarity)
+        τ: Termination predicate indicating if goal is reached
+        w: Trainable weights assigned to each goal
+        ϕ: Applicability of goal to state, based on D and τ
+      }
+      implement ψ as a goal-conditioned value function by {
+        ψ: Neural network mapping state and goal to expected discounted return
+        trained using temporal difference learning by update_weights
+      }
+      implement action selection as π(s) = argmax_a Σ_g w(g) * ψ(s', g) by {
+        selecting actions to maximize weighted sum of predicted goal values
+        weights reflect each goal's relative importance
+      }
+      agent interacts with environment by repeated {
+        observe state s
+        select action a = π(s)
+        take action a, observe next state s', reward r
+        update goal weights w and goal value estimates ψ by update_weights
+      }
+      agent adapts to changes in goals and environment by {
+        continually updating goal weights based on experience
+        learning goal-conditioned values to inform action selection
+      }
+    }
+  }
+
+  LANGUAGE {
+    type State
+    type Action 
+    type Goal
+    type Reward = ℝ
+    type Probability = ℝ[0, 1]
+    type Value = ℝ
+
+    func transition(s : State, a : Action) : State
+    func reward(s : State, a : Action, s' : State) : Reward
+    func utility(rewards : Reward[]) : Value
+    func distance(s : State, g : Goal) : ℝ⁺
+    func similarity(g1 : Goal, g2 : Goal) : Probability  
+    func is_terminal(s : State, g : Goal) : Boolean
+    func weight(g : Goal) : Value
+    func applicability(s : State, g : Goal) : Probability
+    func value(s : State, g : Goal) : Value
+
+    pred achieves_goal(s : State, g : Goal) = is_terminal(s, g)
+    pred relevant_goal(s : State, g : Goal) = applicability(s, g) > 0
+  }
+}

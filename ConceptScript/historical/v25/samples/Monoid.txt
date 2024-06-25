@@ -1,0 +1,106 @@
+CONCEPT Monoid {
+  LANGUAGE {
+    CLASS Monoid(T) {
+      identity : T
+      (·) : T -> T -> T
+    }
+
+    NOTATION "ε" = identity
+
+    AXIOM LeftIdentity {  
+      ∀ (M : Monoid(T)) (x : T). 
+        ε · x = x
+    }
+
+    AXIOM RightIdentity {
+      ∀ (M : Monoid(T)) (x : T).
+        x · ε = x  
+    }
+
+    AXIOM Associativity {
+      ∀ (M : Monoid(T)) (x y z : T).  
+        (x · y) · z = x · (y · z)
+    }
+  }
+
+  STRUCTURE FreeMonoid(A) : Monoid(List[A]) {
+    DEF identity : List[A] = []
+
+    DEF (·)(xs : List[A], ys : List[A]) : List[A] = xs ++ ys
+  }
+
+  STRUCTURE NatAddMonoid : Monoid(Nat) {
+    DEF identity : Nat = 0
+
+    DEF (·)(m : Nat, n : Nat) : Nat = m + n  
+  }
+
+  PROOFS {
+    TACTIC Induction(P, xs) = 
+      P([]) ∧ (∀ (x : A) (xs : List[A]). P(xs) ⇒ P(x :: xs)) ⇒ ∀ (xs : List[A]). P(xs)
+
+    THEOREM FreeMonoidHomomorphism {
+      STATEMENT:  
+        ∀ (M : Monoid(T)) (f : A -> T). 
+          ∃! (φ : List[A] -> T).
+            φ(ε) = M.identity ∧ 
+            ∀ (xs ys : List[A]). φ(xs ++ ys) = φ(xs) · φ(ys) ∧
+            ∀ (x : A). φ([x]) = f(x)
+              
+      PROOF:
+        LET M : Monoid(T), f : A -> T
+        DEF φ(xs : List[A]) : T =  
+          MATCH xs {
+            [] -> M.identity
+            [x] -> f(x)  
+            x :: xs -> f(x) · φ(xs)
+          }
+        SHOW φ(ε) = M.identity BY DEFINITION
+        SHOW ∀ (xs ys : List[A]). φ(xs ++ ys) = φ(xs) · φ(ys) BY {  
+          LET xs ys : List[A]
+          INDUCTION (λ xs. φ(xs ++ ys) = φ(xs) · φ(ys), xs) {
+            CASE [] ->  
+              φ([] ++ ys) 
+                = φ(ys)                  BY DEFINITION(++)
+                = M.identity · φ(ys)     BY LeftIdentity
+                = φ([]) · φ(ys)          BY DEFINITION(φ)
+            CASE x :: xs -> 
+              ASSUME φ(xs ++ ys) = φ(xs) · φ(ys)
+              SHOW φ((x :: xs) ++ ys) = φ(x :: xs) · φ(ys) BY {  
+                φ((x :: xs) ++ ys) 
+                  = φ(x :: (xs ++ ys))                BY DEFINITION(++)
+                  = f(x) · φ(xs ++ ys)                BY DEFINITION(φ)
+                  = f(x) · (φ(xs) · φ(ys))            BY INDUCTION_HYPOTHESIS  
+                  = (f(x) · φ(xs)) · φ(ys)            BY Associativity
+                  = φ(x :: xs) · φ(ys)                BY DEFINITION(φ)
+              }
+          }
+        }
+        SHOW ∀ (x : A). φ([x]) = f(x) BY DEFINITION(φ)
+        SHOW ∃! (ψ : List[A] -> T). 
+          ψ(ε) = M.identity ∧ 
+          ∀ (xs ys : List[A]). ψ(xs ++ ys) = ψ(xs) · ψ(ys) ∧
+          ∀ (x : A). ψ([x]) = f(x)
+        BY {
+          ASSUME ∃ (ψ : List[A] -> T). 
+            ψ(ε) = M.identity ∧ 
+            ∀ (xs ys : List[A]). ψ(xs ++ ys) = ψ(xs) · ψ(ys) ∧
+            ∀ (x : A). ψ([x]) = f(x)
+          SHOW ∀ (xs : List[A]). ψ(xs) = φ(xs) BY {
+            LET xs : List[A]  
+            INDUCTION (λ xs. ψ(xs) = φ(xs), xs) {
+              CASE [] ->
+                ψ([]) = M.identity = φ([])    BY ASSUME  
+              CASE x :: xs ->
+                ASSUME ψ(xs) = φ(xs)  
+                ψ(x :: xs) 
+                  = ψ([x] ++ xs)             BY DEFINITION(++)
+                  = ψ([x]) · ψ(xs)           BY ASSUME
+                  = f(x) · φ(xs)             BY ASSUME, INDUCTION_HYPOTHESIS
+                  = φ(x :: xs)               BY DEFINITION(φ)
+            }
+          }
+        }  
+    }
+  }
+}

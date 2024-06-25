@@ -1,0 +1,96 @@
+CONCEPT LanguageProofDuality {
+  LANGUAGE {
+    ; A language system L and proof system P over a common signature S
+    type L = S × F;  type P = S × R
+    
+    ; Signature, formula/proposition, inference rule types  
+    type S;  type F;  type R
+    
+    ; Interpretation, provability, satisfaction relations
+    func I: S -> U;  pred ⊢ ⊆ ℘(F) × F;  pred ⊨ ⊆ U × F
+    
+    ; Abstraction and representation functors
+    func α: L -> P;  func ρ: P -> L
+    
+    ; Axiomatic and holographic boundaries
+    func ∂ₐ: L -> S;  func ∂ₕ: S -> L × P 
+    
+    ; Duality and boundary operators  
+    func ∗: L -> P;  func ∂: L ⊔ P -> L × P
+    
+    ; Duality and holography axioms  
+    ∀φ ∈ L. φ∗∗ = φ;  ∀φ ∈ L. φ ⊢ ψ <-> φ∗ ⊨ ψ∗
+    ∀φ ∈ L. ∂φ = (φ, φ∗);  ∀r ∈ P. ∂r = (r∗, r)
+    ∀Σ ⊆ S. ∂ₕ(Σ) = (Σ, Σ);  ∀Σ ⊆ S. ∂ₐ(Σ) = Σ
+  }
+  
+  STRUCTURE {
+    ; Language is pre-axiomatic, proof is post-axiomatic
+    ∀φ ∈ F. (∅ ⊢ φ) -> (∃Σ ⊆ S. Σ ⊢ φ)
+    ∀r ∈ R. (∃Σ ⊆ S. r ∈ Σ) -> (∀φ ∈ F. r ⊬ φ)
+    
+    ; Abstraction-representation form a Galois connection  
+    ∀φ ∈ L, ψ ∈ P. α(φ) ⊢ ψ <-> φ ⊢ ρ(ψ)
+    
+    ; Holographic principle: boundary encodes bulk
+    ∀φ ∈ L. ∂ₕ(∂ₐ(φ)) = ∂φ
+    ∀r ∈ P. ∂ₐ(∂ₕ⁻¹(r)) = ∂⁻¹(r)
+  }
+  
+  PROOFS {
+    theorem DualityTheorem: ∀φ ∈ L. φ ⊢ ψ <-> φ∗ ⊨ ψ∗ {
+      assume φ ∈ L
+      
+      (->): 
+        assume φ ⊢ ψ
+        α(φ) ⊢ α(ψ)     ; by α preserving ⊢
+        α(φ) = φ∗       ; by definition
+        α(ψ) = ψ∗       ; by definition  
+        hence φ∗ ⊢ ψ∗
+        φ∗ ⊨ ψ∗         ; by soundness
+        
+      (<-):
+        assume φ∗ ⊨ ψ∗
+        φ∗∗ ⊨ ψ∗∗       ; by (-)
+        φ ⊨ ψ           ; by involutivity of ∗
+        φ ⊢ ψ           ; by completeness
+    }
+    
+    theorem HolographyTheorem: ∀Σ ⊆ S. (∂ₕ(Σ) ⊢ φ <-> Σ ⊢ φ) ∧ (∂ₕ(Σ) ⊨ φ <-> Σ ⊨ φ) {
+      assume Σ ⊆ S
+      
+      have ∂ₕ(Σ) = (Σ, Σ)  ; by definition
+      
+      (->):
+        assume ∂ₕ(Σ) ⊢ φ
+        then Σ ⊢ φ        ; by above
+        
+      (<-):  
+        assume Σ ⊢ φ
+        then Σ ⊢ φ and Σ ⊢ φ  ; by above
+        hence ∂ₕ(Σ) ⊢ φ      ; by definition
+        
+      (->):
+        assume ∂ₕ(Σ) ⊨ φ  
+        then Σ ⊨ φ and Σ ⊨ φ  ; by definition
+        hence Σ ⊨ φ          ; by above
+        
+      (<-):
+        assume Σ ⊨ φ
+        then Σ ⊨ φ        ; by above
+        hence ∂ₕ(Σ) ⊨ φ   ; by definition
+    }
+  }
+}
+
+The key ideas captured in this Concept are:
+
+Language L and proof P are dual systems over a common signature S. The duality is witnessed by involutive maps ∗: L -> P and ∗: P -> L.
+Language is pre-axiomatic in the sense that formulas can be asserted without proof from axioms. Proofs are post-axiomatic in the sense that inference rules cannot derive new axioms.
+There is an axiomatic boundary ∂ₐ: L -> S that extracts the signature from a language, and a holographic boundary ∂ₕ: S -> L × P that splits a signature into a language and proof system.
+The holographic principle states that the boundary ∂φ = (φ, φ∗) of a formula φ encodes the bulk in the sense that ∂ₕ(∂ₐ(φ)) = ∂φ, and similarly for inference rules.
+The duality theorem shows that provability φ ⊢ ψ in the language is equivalent to satisfaction φ∗ ⊨ ψ∗ in the proof system, and the holography theorem shows that the axiomatic content Σ of a boundary ∂ₕ(Σ) is complete, in the sense that ∂ₕ(Σ) ⊢ φ iff Σ ⊢ φ and ∂ₕ(Σ) ⊨ φ iff Σ ⊨ φ.
+
+
+language is dual to proof
+language is pre-axiomatic, proof is post-axiomatic

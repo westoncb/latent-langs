@@ -1,0 +1,135 @@
+CONCEPT InteractionHomotopy {
+  LANGUAGE {
+    TYPE Symbol
+    TYPE Cell = (Symbol, List[Port])
+    TYPE Port = (Cell, ℕ)
+    TYPE Net = (Set[Cell], Set[Port], Set[(Port, Port)])
+    
+    TYPE Path[A : Net, x : A, y : A] <: Net
+    TYPE Homotopy[A : Net, f g : A -> A] = (x : A) -> Path[A, f(x), g(x)]
+    
+    FUNC Arity : Symbol -> ℕ
+    FUNC Interaction : (Symbol, Symbol) -> Maybe[Net]
+    PRED Reduced : Net -> 𝔹
+    
+    AXIOM PortCount {
+      ∀ (s : Symbol) (c : Cell) (ps : List[Port]) . 
+        (c = (s, ps)) => Length(ps) = Arity(s) + 1
+    }
+    
+    AXIOM PortDistinct {
+      ∀ (c : Cell) (ps : List[Port]) (i j : ℕ) . 
+        ((c, ps) ∈ Net ∧ (c, i) ∈ ps ∧ (c, j) ∈ ps ∧ i ≠ j) => (c, i) ≠ (c, j)
+    }
+  }
+  
+  NOTATION {
+    "f ∼ g" = Homotopy(f, g)
+    "f ≡ g" = (f ∼ g) ∧ (g ∼ f)
+  }
+
+  TRANSFORMERS {
+    TACTIC Substitution(+ : Net, c : Cell, ? : Net) -> Net = {  
+      MATCH + WITH
+      | ({c} ∪ cs, ps, ws) ->  (cs ∪ ?.Cells, <c ↦ ?.Ports>ps, <c ↦ ?.Wires>ws)
+    }
+    
+    TACTIC HomotopySubstitution(h : Homotopy[A, f, g], x : A.Cell) -> Path[A, f(x), g(x)] = {
+      MATCH x WITH
+      | (s, ps) -> (
+          {(s, <p ↦ h(p)>ps) | p ∈ ps},
+          {(p, <p ↦ h(p)>q) | (p, q) ∈ x.Wires},
+          {((p, <p ↦ h(p)>q), (q, <q ↦ h(q)>p)) | ((p, q), (q, p)) ∈ x.Wires}
+        )
+    }
+  }
+  
+  STRUCTURE HomotopyInteractionSystem EXTENDS InteractionSystem {
+    REQUIRE ∀ (f g : Net -> Net), (a b : Symbol) . 
+      f ∼ g => (Interaction(a, b) = α => Interaction(f(a), g(b)) = f(α))
+  }
+    
+  PROOFS {
+    THEOREM HomotopyInvariance {
+      STATEMENT:
+        ∀ (S : HomotopyInteractionSystem) (f g : Net -> Net) (+ : Net) .
+          (f ∼ g) => (+ --*S--> &) <=> (f(+) --*S--> g(&))
+          
+      PROOF:
+        LET S : HomotopyInteractionSystem, f g : Net -> Net, + : Net
+        ASSUME (H) : f ∼ g, (+) : + --*S--> &
+        
+        SHOW f(+) --*S--> g(&) {
+          REWRITE f(+) 
+            = f(.1) --S--> ... --S--> f(
+          REWRITE f(+) 
+            = f(.1) --S--> ... --S--> f(&)
+          REWRITE g(&)
+            = g(.1) --S--> ... --S--> g(&)
+          
+          SUFFICES_TO_SHOW ∀ i . f(.i) --S--> g(.i+1) {
+            BY Induction on i
+            BASE_CASE: i = 1
+              HAVE f(.1) --S--> g(.2) BY {
+                LET h = H(.1)  
+                REWRITE f(.1) BY HomotopySubstitution(h, .1)
+                HENCE f(.1) --S--> g(.2) BY S.REQUIRE 
+              }
+            
+            INDUCTIVE_CASE: f(.i) --S--> g(.i+1) => f(.i+1) --S--> g(.i+2)
+              ASSUME (HI) : f(.i) --S--> g(.i+1)
+              
+              HAVE f(.i+1) --S--> g(.i+2) BY {
+                LET h = H(.i+1)
+                REWRITE f(.i+1) BY HomotopySubstitution(h, .i+1)
+                HENCE f(.i+1) --S--> g(.i+2) BY S.REQUIRE
+              }
+              
+            THUS ∀ i . f(.i) --S--> g(.i+1)  
+          }
+        }
+        
+        SHOW + --*S--> & ASSUMING f(+) --*S--> g(&) {
+          REWRITE f(+) 
+            = f(.1) --S--> ... --S--> f(&)
+          
+          SUFFICES_TO_SHOW ∀ i . .i --S--> .i+1 {
+            BY Induction on i
+            BASE_CASE: i = 1
+              HAVE .1 --S--> .2 BY {
+                LET h = H(.1)
+                REWRITE .1 BY HomotopySubstitution(h.symm, f(.1))
+                HENCE .1 --S--> .2 BY S.REQUIRE
+              }
+              
+            INDUCTIVE_CASE: .i --S--> .i+1 => .i+1 --S--> .i+2
+              ASSUME (HI) : .i --S--> .i+1
+              
+              HAVE .i+1 --S--> .i+2 BY {
+                LET h = H(.i+1)  
+                REWRITE .i+1 BY HomotopySubstitution(h.symm, f(.i+1))
+                HENCE .i+1 --S--> .i+2 BY S.REQUIRE
+              }
+            
+            THUS ∀ i . .i --S--> .i+1
+          }
+          
+          THUS + --*S--> &
+        }
+        
+        THEREFORE (f ∼ g) => (+ --*S--> &) <=> (f(+) --*S--> g(&))
+        
+        QED
+    }
+  }
+}
+
+This Concept combines the interaction combinators from the first example with homotopy type theory ideas from the second. The key additions are:
+
+Defining a notion of Path and Homotopy on Nets. A Path is a Net connecting two Nets, and a Homotopy is a mapping of Paths between two Net transformations.
+Adding a HomotopySubstitution tactic that applies a homotopy to transform one Net into another.
+Defining a HomotopyInteractionSystem structure that requires homotopic Net transformations to preserve interactions.
+Proving a HomotopyInvariance theorem showing that reduction is invariant under homotopic transformations in a HomotopyInteractionSystem.
+
+The proof proceeds by induction on the reduction sequence, using the HomotopySubstitution tactic and the HomotopyInteractionSystem requirement to show that each reduction step is preserved by the homotopy.
+Let me know if you would like me to explain or modify any part of this! The goal was to demonstrate understanding by meaningfully combining ideas from the examples into a new Concept with its own definitions, transformers, structures and proofs.

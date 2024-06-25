@@ -1,0 +1,546 @@
+STRUCTURE NeuralDreamUniverse {
+  PARAMETERS {
+    Dimensionality : Int # Number of dimensions in the latent space
+    ComplexityBudget : Float # Constrains the dream's complexity
+    LocalConsistencyStrength : Float # Encourages local consistency
+    GlobalConsistencyStrength : Float # Encourages global consistency
+  }
+
+  NOTATION {
+    DT(·) := DiffusionTransformer(·)
+    LD(z) := LocalDensity(z)
+    GD(z) := GlobalDensity(z)
+    d(x, y) := Distance(x, y)
+  }
+
+  DEF LatentSpace := TensorLike[[Dimensionality], Float]
+
+  STRUCTURE DiffusionTransformer {
+    # Architecture details omitted for brevity
+    DEF forward(z : LatentSpace, t : Float) -> LatentSpace
+  }
+
+  DEF LocalDensity(z : LatentSpace) -> Float := EXP(-SUM(d(z, z_i)^2 FOR z_i : Neighborhood(z)))
+
+  DEF GlobalDensity(z : LatentSpace) -> Float := EXP(-d(z, PrincipalComponents(DreamHistory)))
+
+  DEF Neighborhood(z : LatentSpace) -> List[LatentSpace] := (
+    [z_i FOR z_i : DreamHistory IF d(z, z_i) < LocalRadius]
+  )
+
+  DEF LocalRadius := LatentSpace.shape[0] ^ (-1/Dimensionality)
+
+  DEF PrincipalComponents(history : List[LatentSpace]) -> LatentSpace := (
+    # Compute principal components of dream history
+    # Details omitted for brevity
+  )
+
+  DEF DreamHistory : List[LatentSpace]
+
+  DEF Dream(num_steps : Int) -> List[LatentSpace] := (
+    DreamHistory := []
+    z := RANDOM_NORMAL(LatentSpace.shape)
+  
+    FOR t : RANGE(num_steps) {
+      z := DT.forward(z, t/num_steps)
+      z += LocalConsistencyStrength * GRAD(LD(z))
+      z += GlobalConsistencyStrength * GRAD(GD(z))
+      z := NORMALIZE(z)
+      DreamHistory.append(z)
+    }
+
+    DreamHistory
+  )
+
+  DEF Render(z : LatentSpace) -> Any := (
+    # Decode latent vector into observable "universe"
+    # Details depend on the specific domain (e.g., physics, biology, etc.)
+  )
+
+  [∀t : Range(num_steps) .
+    LET (z1, z2) := (Dream(t), Dream(t+1)) IN
+    d(Render(z1), Render(z2)) < ComplexityBudget
+  ] # Complexity constraint
+
+  [∀z : DreamHistory .
+    LD(z) > ThresholdDensity
+  ] # Local consistency
+
+  [∀z : DreamHistory .
+    GD(z) > ThresholdDensity  
+  ] # Global consistency
+
+  RETURN (Dream, Render)
+}
+
+In this formulation:
+
+The universe is 'dreamed up' by a diffusion process in a high-dimensional latent space. The diffusion transformer iteratively refines a random latent vector over a series of timesteps.
+Local consistency is encouraged by a term in the refinement process that pulls the latent vector towards nearby points in the latent space, as measured by a local density function. This captures the idea that nearby regions of the 'dream' should be consistent with each other.
+Global consistency is encouraged by a term that pulls the latent vector towards the principal components of the entire dream history. This captures high-level patterns and regularities that emerge over the course of the dream.
+The complexity of the dream is constrained by a budget parameter, which limits how much the rendered universe can change from one timestep to the next. This prevents the dream from being too chaotic or incoherent.
+The 'dream' in the latent space is rendered into an observable universe by a decoder function. The specifics of this function would depend on the domain being modeled (e.g., physics, biology, etc.).
+Assertions check that the local and global consistency terms maintain a certain threshold density throughout the dream, and that the complexity constraint is satisfied.
+
+The key ideas are that (a) consistency can emerge from a diffusion process with the right constraints and regularities, and (b) the 'dream' unfolds in a latent space that is then rendered into an observable universe. The latent space allows for an abstract representation of the universe that can capture high-level structure and patterns.
+
+
+
+
+STRUCTURE NeuralDreamSimulation {
+  PARAMETERS {
+    LatentDim : Int # Dimensionality of the latent space
+    NumLayers : Int # Number of transformer layers 
+    NumSteps : Int # Number of diffusion steps
+  }
+
+  NOTATION {
+    DiffusionTransformer(z, t) := DiffusionTransformer.forward(z, t)
+    p_θ(z_t | z_{t-1}) := GaussianTransition(z_t ; DiffusionTransformer(z_{t-1}, t))
+    x := Decode(z_0)
+    ConsistencyLoss(x) := ∑_{p ∈ Properties} λ_p * Divergence(Satisfy(x, p), p) 
+  }
+
+  # Prior distribution in the latent space
+  DEF PriorDistribution := Gaussian(0, I) 
+
+  # Decoder from latent space to observation space
+  STRUCTURE Decoder {
+    # ... Decoder implementation ...
+    DEF forward(z : TensorLike[LatentDim]) -> TensorLike[ObservationDim]
+  }
+
+  # Diffusion transformer for iterative refinement
+  STRUCTURE DiffusionTransformer {
+    # ... Transformer layers implementation ...
+    DEF forward(z : TensorLike[LatentDim], 
+                t : Int) -> TensorLike[LatentDim]
+  }
+
+  # Property functions for consistency regularization
+  DEF Properties : List[[TensorLike[ObservationDim] -> Boolean]]
+
+  # Sampling process 
+  DEF sample() -> TensorLike[ObservationDim] := {
+    # Sample from the prior distribution
+    z_T ~ PriorDistribution
+
+    # Iterative diffusion process
+    FOREACH t IN REVERSE(1..NumSteps) {
+      # Refine the latent variable using the transformer
+      z_t ~ p_θ(z_t | z_{t+1}) 
+    }
+    
+    # Map the final latent variable to the observation space
+    RETURN Decoder.forward(z_0)
+  }
+
+  # Consistency regularized training objective
+  DEF Loss(x : TensorLike[ObservationDim], 
+           z_1 : TensorLike[LatentDim]) -> Float := (
+    LET z_0 := Decoder.forward(z_1), # Reconstruct observation 
+        recon_loss := SquaredError(x, z_0), # Reconstruction error
+        consistency_loss := ConsistencyLoss(z_0) # Consistency regularization
+    IN recon_loss + consistency_loss
+  )
+
+  # 1st Consistency Assertion: 
+  # The diffusion process should converge to a fixed point
+  [∃ ẑ : TensorLike[LatentDim] . 
+    ∀ t : Int . DiffusionTransformer(ẑ, t) = ẑ
+  ]
+
+  # 2nd Consistency Assertion:
+  # Decoded observations should satisfy all consistency properties  
+  [∀ z : TensorLike[LatentDim] .
+    ∀ p : Properties . Satisfy(Decode(z), p)  
+  ]
+
+  RETURN sample
+}
+
+Key aspects of this formulation:
+
+The "dream" universe is represented by a latent space, which is iteratively refined by a diffusion transformer over a number of steps. This allows for generating complex, self-consistent structures.
+The final latent representation is decoded into the observation space, analogous to perceiving the "dream".
+Consistency of the generated universe is encouraged via a regularization term in the training loss, which penalizes divergence from a set of defined consistency properties. These properties capture the "mathematical rigor" expected in the generated universe.
+Assertions state that (a) the diffusion process should converge to a fixed point for a stable universe, and (b) all decoded observations should satisfy the consistency properties.
+Sampling from this model generates a new "dream" universe by first sampling from a prior distribution in the latent space, then iteratively refining and decoding it.
+
+The key idea is that consistency emerges from the regularized training process and the iterative refinement of the latent space, rather than being explicitly enforced at each step. The transformer architecture allows capturing complex dependencies for a rich generative process.
+
+
+
+
+STRUCTURE PhysicallyConsistentDreamUniverse {
+  PARAMETERS {
+    Dimensionality : Int
+    ConsistencyStrength : Float
+    LawComplexityLimit : Int
+    LocalConsistencyRadius : Float
+    GlobalConsistencyStrength : Float
+  }
+
+  NOTATION {
+    DT(·) := DiffusionTransformer(·)
+    LC(z, laws) := LocalConsistency(z, laws)
+    GC(z, laws) := GlobalConsistency(z, laws)
+    Δ(z1, z2) := SymmetricDifference(Support(z1), Support(z2))
+    𝓛 := PhysicalLaws
+  }
+
+  DEF LatentSpace := TensorLike[[Dimensionality], Float]
+  
+  DEF PhysicalLaws := [
+    # List of PDEs or variational principles representing physical laws
+    # E.g., Einstein field equations, principle of least action, etc.
+  ]
+
+  STRUCTURE DiffusionTransformer {
+    # Architecture details omitted for brevity
+    DEF forward(z : LatentSpace, t : Float) -> LatentSpace
+  }
+
+  DEF Support(z : LatentSpace) -> Set[Entity] := {
+    # Extracts the set of entities (particles, fields, etc.) 
+    # that are non-zero in the latent representation z
+  }
+
+  DEF LocalConsistency(z : LatentSpace, laws : PhysicalLaws) -> Float := (
+    LET neighborhood := [z' FOR z' : LatentSpace 
+                         IF |z - z'| < LocalConsistencyRadius] IN
+    MEAN(SUM(Follows(z', law) FOR law : laws) / LENGTH(laws)
+         FOR z' : neighborhood)
+  )
+
+  DEF GlobalConsistency(z : LatentSpace, laws : PhysicalLaws) -> Float := (
+    LET history := PreviousStates(z) IN
+    MEAN(SUM(Follows(z', law) FOR law : laws) / LENGTH(laws)
+         FOR z' : history)
+  )
+
+  DEF Follows(z : LatentSpace, law : PhysicalLaw) -> Boolean := (
+    # Checks whether the state z satisfies the given physical law
+    # E.g., by variational methods, PDE solution, etc.
+  )
+
+  DEF Dream(num_steps : Int) -> List[LatentSpace] := (
+    z := RANDOM_NORMAL(LatentSpace.shape)
+    history := []
+    
+    FOR t : RANGE(num_steps) {
+      z := DT.forward(z, t/num_steps)
+      z += ConsistencyStrength * GRAD(LC(z, 𝓛) + GC(z, 𝓛)) 
+      z := NORMALIZE(z)
+      history.append(z)
+    }
+
+    history  
+  )
+
+  DEF Render(z : LatentSpace) -> PhysicalState := (
+    # Decodes the latent vector z into a physical state
+    # (configuration of particles, fields, etc.)
+  )
+
+  [∀law : 𝓛 .
+    COMPLEXITY(law) < LawComplexityLimit
+  ] # Physical laws should not be too complex
+
+  [∀z1, z2 : Dream(num_steps) .
+    |Δ(z1, z2)| / |Support(z1) ∪ Support(z2)| < SMALL
+  ] # Entities should not appear/disappear too frequently
+  
+  [∀z : Dream(num_steps) .
+    LC(z, 𝓛) > THRESHOLD
+  ] # Local physical consistency
+
+  [∀z : Dream(num_steps) .
+    GC(z, 𝓛) > THRESHOLD
+  ] # Global physical consistency
+
+  RETURN (Dream, Render)
+}
+
+
+
+STRUCTURE PhysicallyConsistentDreamUniverse {
+  PARAMETERS {
+    Dimensionality : Int
+    ConsistencyStrength : Float
+    LocalSymmetryStrength : Float
+    GlobalSymmetryStrength : Float
+    CausalityStrength : Float
+  }
+
+  NOTATION {
+    DT(·) := DiffusionTransformer(·)
+    LC(z) := LocalConsistencyMeasure(z)
+    GC(z) := GlobalConsistencyMeasure(z)
+    LS(z) := LocalSymmetryMeasure(z)
+    GS(z) := GlobalSymmetryMeasure(z)
+    CC(z, z_prev) := CausalConsistencyMeasure(z, z_prev)
+  }
+
+  DEF LatentSpace := TensorLike[[Dimensionality], Float]
+
+  STRUCTURE DiffusionTransformer {
+    # Architecture details omitted for brevity
+    DEF forward(z : LatentSpace, t : Float) -> LatentSpace
+  }
+
+  # Local consistency: nearby points in the dream have similar physical properties
+  DEF LocalConsistencyMeasure(z : LatentSpace) -> Float := (
+    LET neighbors := NEARBY_POINTS(z) IN
+    MEAN(SIMILARITY(PHYSICAL_PROPERTIES(z), PHYSICAL_PROPERTIES(n)) FOR n : neighbors)
+  )
+
+  # Global consistency: the dream as a whole obeys consistent physical laws
+  DEF GlobalConsistencyMeasure(z : LatentSpace) -> Float := (
+    LET laws := EXTRACT_PHYSICAL_LAWS(DREAM_HISTORY) IN
+    MEAN(SATISFIES(z, law) FOR law : laws)
+  )
+
+  # Local symmetry: the dream is invariant under small translations and rotations
+  DEF LocalSymmetryMeasure(z : LatentSpace) -> Float := (
+    LET transformed := [TRANSFORM(z, t) FOR t : LOCAL_SYMMETRY_TRANSFORMATIONS] IN
+    MEAN(SIMILARITY(z, t) FOR t : transformed)
+  )
+
+  # Global symmetry: the dream respects large-scale symmetries (e.g., CPT invariance)
+  DEF GlobalSymmetryMeasure(z : LatentSpace) -> Float := (
+    MEAN(SIMILARITY(z, TRANSFORM(z, t)) FOR t : GLOBAL_SYMMETRY_TRANSFORMATIONS)
+  )
+
+  # Causal consistency: the dream evolves in a causally consistent manner
+  DEF CausalConsistencyMeasure(z : LatentSpace, 
+                               z_prev : LatentSpace) -> Float := (
+    LET effects := CAUSAL_EFFECTS(z_prev) IN
+    MEAN(CONTAINS(z, e) FOR e : effects)                           
+  )
+
+  DEF Dream(num_steps : Int) -> List[LatentSpace] := (
+    z := RANDOM_NORMAL(LatentSpace.shape)
+    history := [z]
+
+    FOR t : RANGE(1, num_steps) {
+      z_prev := history[t-1]
+      z := DT.forward(z_prev, t/num_steps)
+      z += ConsistencyStrength * GRAD(LC(z) + GC(z))
+      z += LocalSymmetryStrength * GRAD(LS(z))  
+      z += GlobalSymmetryStrength * GRAD(GS(z))
+      z += CausalityStrength * GRAD(CC(z, z_prev))
+      z := NORMALIZE(z)
+      history.append(z)
+    }
+
+    history
+  )
+
+  DEF Render(z : LatentSpace) -> Any := (
+    # Decode the latent vector into an observable "universe"
+    # Details depend on the specific physics being modeled
+  )
+
+  RETURN (Dream, Render)
+}
+
+
+
+
+STRUCTURE PhysicalConsistencyInOurUniverse {
+  NOTATION {
+    QFT(fields) := QuantumFieldTheory(fields)
+    GR(metric) := GeneralRelativity(metric)
+    SM(particles) := StandardModel(particles)
+    ΛCDM(params) := LambdaCDMCosmology(params)
+    S[A] := Action(A)
+    Z[J] := PartitionFunction(J)
+    𝒟[Φ] := PathIntegral(Φ)
+    𝒪(obs) := Observable(obs)
+    ⟨A⟩ := ExpectationValue(A)
+  }
+
+  # Quantum Field Theory: Unifies quantum mechanics and special relativity
+  STRUCTURE QuantumFieldTheory {
+    DEF Fields := # Specify the quantum fields and their properties
+    DEF Lagrangian := # Specify the Lagrangian density of the fields
+    DEF Action := ∫ d^4x Lagrangian
+
+    DEF PartitionFunction(J) := 𝒩 ∫ 𝒟[Φ] EXP(i * (S[Φ] + ∫ d^4x J(x)·Φ(x)))
+    DEF Propagator(x, y) := 1/(Z[0]) * δ^2(Z[J])/δJ(x)δJ(y) |_{J=0}
+    DEF Observables := # Specify observables as functionals of fields
+
+    [δS[Φ]/δΦ(x) = 0] # Principle of stationary action (Euler-Lagrange equations)
+    [⟨𝒪(Φ)⟩ = 1/(Z[0]) * ∫ 𝒟[Φ] 𝒪(Φ) * EXP(i * S[Φ])] # Expectation values
+  }
+
+  # General Relativity: Describes gravity as curvature of spacetime
+  STRUCTURE GeneralRelativity {
+    DEF Metric := # Specify the metric tensor g_μν
+    DEF Curvature := # Specify the Riemann curvature tensor R_μνρσ
+    DEF StressEnergy := # Specify the stress-energy tensor T_μν
+
+    [R_μν - 1/2 * g_μν * R = 8πG * T_μν] # Einstein field equations
+    [∇_μ T^μν = 0] # Conservation of stress-energy
+    [δS[g]/δg_μν = 0] # Principle of stationary action (Einstein-Hilbert action)
+  }
+
+  # Standard Model: Describes the fundamental particles and their interactions
+  STRUCTURE StandardModel {
+    DEF Particles := {Quarks, Leptons, Gauge Bosons, Higgs}
+    DEF Interactions := {Strong, Electromagnetic, Weak}
+
+    DEF Lagrangian := # Specify the Standard Model Lagrangian
+    DEF Action := ∫ d^4x Lagrangian
+
+    [δS[Φ]/δΦ = 0] # Principle of stationary action (Euler-Lagrange equations)
+    [U(1) × SU(2) × SU(3) Gauge Invariance] # Gauge symmetries
+  }
+
+  # ΛCDM Cosmology: Describes the large-scale structure and evolution of the universe
+  STRUCTURE LambdaCDMCosmology {
+    DEF Parameters := {H0, ΩM, ΩΛ, ΩR, Ωk} # Cosmological parameters
+    DEF FriedmannEqs := # Friedmann equations for scale factor a(t)
+
+    [FriedmannEqs(a(t), Parameters)] # Governs expansion history
+    [Structure Formation from Primordial Perturbations] # Origin of cosmic structure
+    [Consistency with Cosmological Observations] # e.g., CMB, BAO, SN Ia
+  }
+
+  # Unification and Consistency
+  [QFT(SM.Fields) compat SM(SM.Particles)] # QFT describes SM particles
+  [GR(Metric) couples StressEnergy(SM.Fields)] # GR couples to SM fields
+  [ΛCDM(Parameters) emerges_from SM + GR] # ΛCDM arises from SM + GR
+  [∀t : Time . Consistent(Laws(t), Observations(t))] # Consistency across time
+}
+
+
+
+
+STRUCTURE NeuralDreamSubstrate {
+  PARAMETERS {
+    LatentDimension : Int # Dimensionality of the latent space
+    DiffusionSteps : Int # Number of diffusion steps
+    DenoisingNetwork : NeuralNetwork # Network for denoising latent representations
+    PhysicsEmbedding : Embedding # Embedding of physical theories into latent space
+    ConsistencyLoss : Loss # Loss function for enforcing consistency conditions
+  }
+  
+  NOTATION {
+    z := LatentRepresentation # Latent representation of the physical state
+    ε := NoiseVariable # Noise variable for diffusion
+    θ := ModelParameters # Parameters of the neural networks
+    𝒩 := GaussianDistribution # Normal distribution for noise
+    𝒫 := PhysicalConsistency # Physical consistency model
+    ℒ := ConsistencyLoss # Consistency loss function
+  }
+  
+  STRUCTURE LatentRepresentation := TensorLike[LatentDimension]
+
+  STRUCTURE DiffusionProcess {
+    PARAMETERS {
+      Schedule : DiffusionSchedule # Schedule for noise levels
+    }
+
+    # Forward diffusion process
+    DEF Forward(z_0, t) -> LatentRepresentation := (
+      LET ε ~ 𝒩(0, 1),
+          α_t := Schedule.Alpha(t),
+          σ_t := SQRT(1 - α_t^2)
+      IN SQRT(α_t) * z_0 + σ_t * ε
+    )
+
+    # Reverse diffusion process  
+    DEF Reverse(z_t, t) -> LatentRepresentation := (
+      LET z_pred := DenoisingNetwork(z_t, t),
+          z_0 ~ 𝒩(z_pred, σ_t^2 * I)  
+      IN z_0
+    )
+  }
+
+  STRUCTURE HamiltonianDynamics {
+    PARAMETERS {
+      KineticEnergy : Function # Kinetic energy of the latent representation 
+      PotentialEnergy : Function # Potential energy derived from consistency loss
+    }
+
+    DEF Evolve(z, t, Δt) -> LatentRepresentation := (
+      LET dz_dt := - ∇_z PotentialEnergy(z) # Hamiltonian equations of motion
+      IN LEAPFROG_INTEGRATE(z, dz_dt, t, Δt) # Symplectic integration
+    )
+  }
+
+  STRUCTURE SymmetryRegularization {
+    PARAMETERS {
+      Symmetries : List[SymmetryGroup] # Symmetries to regularize
+    }
+
+    DEF Regularize(z) -> LatentRepresentation := (
+      MEAN(APPLY_SYMMETRY(z, s) FOR s : Symmetries) # Symmetrize the latent representation  
+    )
+  }
+
+  # Training process
+  DEF Train(physical_theories : List[PhysicalConsistency]) -> ModelParameters := (
+    # Embed physical theories into latent space
+    z_0 := PhysicsEmbedding(physical_theories)
+
+    # Diffusion process
+    FOREACH t IN [1..DiffusionSteps] {
+      z_t := DiffusionProcess.Forward(z_0, t) 
+      z_0 := DiffusionProcess.Reverse(z_t, t)
+    }
+
+    # Hamiltonian dynamics  
+    FOREACH t IN [0..TMax] {
+      z_0 := HamiltonianDynamics.Evolve(z_0, t, Δt)
+    }
+
+    # Symmetry regularization
+    z_0 := SymmetryRegularization.Regularize(z_0)
+    
+    # Consistency loss
+    ℒ := ConsistencyLoss(z_0, physical_theories)
+
+    # Optimize model parameters
+    θ := ADAM_OPTIMIZER(ℒ, θ)
+  )
+
+  # Generation process  
+  DEF Generate(physical_theory : PhysicalConsistency) -> PhysicalState := (
+    # Embed physical theory into latent space
+    z_0 := PhysicsEmbedding(physical_theory)
+
+    # Diffusion process
+    FOREACH t IN REVERSE([1..DiffusionSteps]) {
+      z_t := DiffusionProcess.Forward(z_0, t)
+      z_0 := DiffusionProcess.Reverse(z_t, t)  
+    }
+
+    # Decode latent representation into physical state
+    RETURN PHYSICS_DECODER(z_0)
+  )
+
+  RETURN (Train, Generate)
+}
+
+Key components of this neural dream substrate:
+
+The physical state is represented in a latent space, with dimensionality specified by LatentDimension. The PhysicsEmbedding maps physical theories into this latent space.
+The core of the substrate is a diffusion process, defined in the DiffusionProcess structure. It consists of a forward process that adds noise to the latent representation, and a reverse process that denoises it using the DenoisingNetwork.
+In addition to diffusion, the substrate incorporates HamiltonianDynamics to evolve the latent representation according to a learned potential energy derived from the consistency loss. This encourages the system to explore physically consistent configurations.
+The SymmetryRegularization structure enforces the symmetries of the physical theory by averaging the latent representation over symmetry transformations.
+The ConsistencyLoss measures the deviation of the latent representation from the consistency conditions of the physical theory, as defined in the PhysicalConsistency model.
+
+The training process works as follows:
+
+Embed the target physical theories into the latent space.
+Run the diffusion process forward and backward to denoise the latent representation.
+Evolve the latent representation according to Hamiltonian dynamics.
+Regularize the latent representation by enforcing symmetries.
+Compute the consistency loss and optimize the model parameters to minimize it.
+
+The generation process takes a physical theory as input, embeds it into the latent space, runs the diffusion process to denoise it, and then decodes the final latent representation into a concrete physical state that obeys the theory.
+The key idea is that by combining diffusion, Hamiltonian dynamics, symmetry regularization, and consistency loss, the neural substrate can learn to generate physical states that emerge from the constraints and principles of the target physical theory.
+The diffusion process provides a way to explore the space of possible configurations, while the Hamiltonian dynamics and symmetry regularization guide this exploration towards physically meaningful and consistent states. The consistency loss acts as a driving force, shaping the landscape of the latent space to align with the desired physical laws.

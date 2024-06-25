@@ -1,0 +1,215 @@
+CONCEPT VariationalAutoencoder {
+  PARAMETERS {
+    X : TYPE  -- Data space
+    Z : TYPE  -- Latent space
+    Θ : TYPE  -- Parameter space for encoder
+    Φ : TYPE  -- Parameter space for decoder
+  }
+
+  CONTEXT {
+    TYPES {
+      DataPoint := X
+      LatentVector := Z
+      
+      Distribution := FUNC(LatentVector) -> Real
+      ConditionalDistribution := FUNC(DataPoint) -> Distribution
+      
+      Encoder := STRUCTURE {
+        FIELD mean : FUNC(DataPoint, Θ) -> LatentVector
+        FIELD logvar : FUNC(DataPoint, Θ) -> LatentVector
+      }
+      
+      Decoder := FUNC(LatentVector, Φ) -> ConditionalDistribution
+      
+      LossFunction := FUNC(DataPoint, DataPoint, Distribution, Distribution) -> Real
+    }
+
+    STRUCTURES {
+      STRUCTURE VAE {
+        FIELD encoder : Encoder
+        FIELD decoder : Decoder
+        FIELD prior : Distribution
+        
+        FUNC encode(x : DataPoint, θ : Θ) -> Distribution {
+          RETURN GaussianDistribution(encoder.mean(x, θ), EXP(encoder.logvar(x, θ)))
+        }
+        
+        FUNC decode(z : LatentVector, φ : Φ) -> ConditionalDistribution {
+          RETURN decoder(z, φ)
+        }
+        
+        FUNC reparameterize(μ : LatentVector, σ : LatentVector) -> LatentVector {
+          LET ε = SampleFromStandardNormal()
+          RETURN μ + σ * ε
+        }
+        
+        FUNC loss(x : DataPoint, x_recon : DataPoint, q_z : Distribution, p_z : Distribution) -> Real {
+          RETURN ReconstructionLoss(x, x_recon) + KLDivergence(q_z, p_z)
+        }
+      }
+    }
+
+    ASSERTIONS {
+      AXIOM EncoderGaussian {
+        FORALL (vae : VAE, x : DataPoint, θ : Θ) .
+          vae.encode(x, θ) IS GaussianDistribution
+      }
+      
+      AXIOM PriorIsStandardNormal {
+        FORALL (vae : VAE) .
+          vae.prior = StandardNormalDistribution
+      }
+      
+      AXIOM EvidenceLowerBound {
+        FORALL (vae : VAE, x : DataPoint, θ : Θ, φ : Φ) .
+          LOG(p(x)) >= Expectation(q(z|x))[LOG(p(x|z))] - KLDivergence(q(z|x), p(z))
+          WHERE q(z|x) = vae.encode(x, θ)
+                p(x|z) = vae.decode(z, φ)(x)
+                p(z) = vae.prior
+      }
+    }
+
+    NOTATION {
+      p(x) := Marginal likelihood of data
+      q(z|x) := Approximate posterior
+      p(x|z) := Generative model
+      p(z) := Prior distribution
+      KL(P || Q) := Kullback-Leibler divergence between P and Q
+      𝔼[x] := Expectation of x
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE SampleLatentVector(vae : VAE, x : DataPoint, θ : Θ) -> LatentVector {
+      LET μ = vae.encoder.mean(x, θ)
+      LET σ = SQRT(EXP(vae.encoder.logvar(x, θ)))
+      IN vae.reparameterize(μ, σ)
+    }
+    
+    SIMPLIFY ComputeELBO(vae : VAE, x : DataPoint, θ : Θ, φ : Φ) -> Real {
+      LET q_z = vae.encode(x, θ)
+      LET z = SampleLatentVector(vae, x, θ)
+      LET x_recon = vae.decode(z, φ)
+      IN -vae.loss(x, x_recon, q_z, vae.prior)
+    }
+  }
+
+  PROOFS {
+    THEOREM VAEOptimizesELBO {
+      FORALL (vae : VAE, D : SET(DataPoint)) .
+        OPTIMUM(θ : Θ, φ : Φ) [
+          MEAN(x in D)[ComputeELBO(vae, x, θ, φ)]
+        ] APPROXIMATES MAXIMUM(θ : Θ, φ : Φ) [
+          MEAN(x in D)[LOG(p(x))]
+        ]
+    }
+    PROOF {
+      GIVEN vae : VAE, D : SET(DataPoint)
+      
+      <1>. FORALL (x : DataPoint) .
+        LOG(p(x)) = ELBO(x) + KL(q(z|x) || p(z|x))
+        WHERE ELBO(x) = 𝔼_q(z|x)[LOG(p(x,z)) - LOG(q(z|x))]
+      <2>. KL(q(z|x) || p(z|x)) >= 0 BY properties of KL divergence
+      <3>. HENCE LOG(p(x)) >= ELBO(x)
+      <4>. MEAN(x in D)[LOG(p(x))] >= MEAN(x in D)[ELBO(x)]
+      <5>. ComputeELBO(vae, x, θ, φ) IS unbiased estimator of ELBO(x)
+      <6>. OPTIMIZING MEAN(x in D)[ComputeELBO(vae, x, θ, φ)]
+           APPROXIMATES OPTIMIZING MEAN(x in D)[ELBO(x)]
+      <7>. BY <4> and <6>, OPTIMIZING MEAN(x in D)[ComputeELBO(vae, x, θ, φ)]
+           APPROXIMATES MAXIMIZING MEAN(x in D)[LOG(p(x))]
+      
+      QED
+    }
+
+    THEOREM VAERegularization {
+      FORALL (vae : VAE, x : DataPoint, θ : Θ) .
+        KLDivergence(vae.encode(x, θ), vae.prior) = 
+          0.5 * SUM(
+            1 + vae.encoder.logvar(x, θ) - vae.encoder.mean(x, θ)^2 - EXP(vae.encoder.logvar(x, θ))
+          )
+    }
+    PROOF {
+      GIVEN vae : VAE, x : DataPoint, θ : Θ
+      
+      <1>. LET q(z|x) = vae.encode(x, θ)
+      <2>. LET p(z) = vae.prior = StandardNormalDistribution
+      <3>. KL(q(z|x) || p(z)) = 𝔼_q(z|x)[LOG(q(z|x)) - LOG(p(z))]
+      <4>. q(z|x) = N(μ, σ^2) WHERE μ = vae.encoder.mean(x, θ), σ^2 = EXP(vae.encoder.logvar(x, θ))
+      <5>. LOG(q(z|x)) = -0.5 * (LOG(2π) + LOG(σ^2) + (z-μ)^2/σ^2)
+      <6>. LOG(p(z)) = -0.5 * (LOG(2π) + z^2)
+      <7>. KL = 𝔼_q[-0.5 * (LOG(σ^2) + (z-μ)^2/σ^2 - z^2)]
+      <8>. = -0.5 * (LOG(σ^2) + 1 - μ^2 - σ^2)
+      <9>. = 0.5 * (1 + LOG(σ^2) - μ^2 - σ^2)
+      <10>. = 0.5 * SUM(1 + vae.encoder.logvar(x, θ) - vae.encoder.mean(x, θ)^2 - EXP(vae.encoder.logvar(x, θ)))
+      
+      QED
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE ImageVAE {
+      LET X = RealMatrix(28, 28)  -- 28x28 grayscale images
+      LET Z = Real^32  -- 32-dimensional latent space
+      
+      LET vae = VAE {
+        encoder = Encoder {
+          mean = ConvolutionalNetwork(
+            CONV(32, 3, 3) -> RELU -> CONV(64, 3, 3) -> RELU -> DENSE(32)
+          ),
+          logvar = ConvolutionalNetwork(
+            CONV(32, 3, 3) -> RELU -> CONV(64, 3, 3) -> RELU -> DENSE(32)
+          )
+        },
+        decoder = DeconvolutionalNetwork(
+          DENSE(7*7*32) -> RESHAPE(7, 7, 32) -> DECONV(64, 3, 3) -> RELU -> 
+          DECONV(32, 3, 3) -> RELU -> DECONV(1, 3, 3) -> SIGMOID
+        ),
+        prior = StandardNormalDistribution(32)
+      }
+      
+      COMPUTE encoded = SampleLatentVector(vae, LoadImage("digit.png"), TrainedParams)
+      COMPUTE decoded = vae.decode(encoded, TrainedParams)
+      
+      ASSERT ImageSimilarity(decoded, LoadImage("digit.png")) > 0.9
+      
+      COMPUTE interpolated = [
+        vae.decode(LinearInterpolate(encoded, ZERO_VECTOR, t), TrainedParams)
+        FOR t IN LINSPACE(0, 1, 10)
+      ]
+      
+      VISUALIZE interpolated AS "Latent Space Interpolation"
+    }
+    
+    EXAMPLE MoleculeVAE {
+      LET X = GraphStructure  -- Molecular graphs
+      LET Z = Real^64  -- 64-dimensional latent space
+      
+      LET vae = VAE {
+        encoder = Encoder {
+          mean = GraphNeuralNetwork(
+            GRAPH_CONV(32) -> RELU -> GRAPH_CONV(64) -> RELU -> 
+            GLOBAL_POOLING -> DENSE(64)
+          ),
+          logvar = GraphNeuralNetwork(
+            GRAPH_CONV(32) -> RELU -> GRAPH_CONV(64) -> RELU -> 
+            GLOBAL_POOLING -> DENSE(64)
+          )
+        },
+        decoder = GraphGenerativeNetwork(
+          DENSE(64) -> RELU -> DENSE(128) -> RESHAPE(32, 4) -> 
+          GRAPH_DECONV(32) -> RELU -> GRAPH_DECONV(16) -> SIGMOID
+        ),
+        prior = StandardNormalDistribution(64)
+      }
+      
+      COMPUTE encoded = SampleLatentVector(vae, LoadMolecule("aspirin.mol"), TrainedParams)
+      COMPUTE decoded = vae.decode(encoded, TrainedParams)
+      
+      ASSERT MoleculeSimilarity(decoded, LoadMolecule("aspirin.mol")) > 0.8
+      
+      COMPUTE novel_molecule = vae.decode(SampleFromPrior(), TrainedParams)
+      ASSERT IsDrugLike(novel_molecule)
+      VISUALIZE novel_molecule AS "Generated Drug-Like Molecule"
+    }
+  }
+}

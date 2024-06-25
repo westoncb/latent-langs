@@ -1,0 +1,131 @@
+CONCEPT GenerativeAdversarialNetwork[InputDim, LatentDim] {
+  LANGUAGE {
+    TYPE ℝ[N] = Vector[ℝ, N]  // N-dimensional real vector
+    TYPE 𝒟[A] = Distribution[A]  // Distribution over type A
+    TYPE Gen = ℝ[LatentDim] -> ℝ[InputDim]  // Generator network
+    TYPE Dis = ℝ[InputDim] -> ℝ  // Discriminator network
+    FUNC 𝔼[D: 𝒟[A], f: A -> ℝ]: ℝ  // Expectation of f with respect to distribution D
+    PRED Generates(G: Gen, D: Dis, X: 𝒟[ℝ[InputDim]]) = 𝒫(G(z)) ≈ 𝒫(X)
+    PRED Distinguishes(D: Dis, X: 𝒟[ℝ[InputDim]], G: Gen) = 𝔼[X, x => log D(x)] + 𝔼[𝒩(0,1), z => log (1 - D(G(z)))] is maximized
+  }
+
+  NOTATION {
+    𝒱(D,X,G) = 𝔼[X, x => log D(x)] + 𝔼[𝒩(0,1), z => log (1 - D(G(z)))]  // Discriminator loss
+    ℒ(G,D) = 𝔼[𝒩(0,1), z => log (1 - D(G(z)))]  // Generator loss
+    G(z) = G(z) where z ~ 𝒩(0,1)  // Generator applied to latent variable z
+    D(x) = D(x) where x ~ X  // Discriminator applied to real data x
+    ∇_θ(f) = Gradient of f with respect to parameters θ
+  }
+
+  TRANSFORMERS {
+    TACTIC MaximizeDiscriminator(D: Dis, X: 𝒟[ℝ[InputDim]], G: Gen) -> Dis {
+      RETURN D - λ · ∇_D(𝒱(D,X,G)) for some learning rate λ
+    }
+
+    TACTIC MinimizeGenerator(G: Gen, D: Dis) -> Gen {
+      RETURN G - λ · ∇_G(ℒ(G,D)) for some learning rate λ
+    }
+
+    PROC TrainGAN(G: Gen, D: Dis, X: 𝒟[ℝ[InputDim]], n_critics: ℕ, n_iters: ℕ) -> (Gen, Dis) {
+      FOR i = 1 TO n_iters:
+        FOR j = 1 TO n_critics:
+          D := MaximizeDiscriminator(D, X, G)
+        G := MinimizeGenerator(G, D)
+      RETURN (G, D)
+    }
+  }
+
+  STRUCTURE MultiLayerPerceptron[L: ℕ, U: ℕ] {
+    PARAM weights: List[ℝ[U, U]]  // Layer weight matrices
+    PARAM biases: List[ℝ[U]]      // Layer bias vectors
+
+    FUNC Apply(x: ℝ[U]) -> ℝ[U] {
+      VAR h = x
+      FOR (W, b) IN Zip(weights, biases):
+        h := ReLU(W · h + b)
+      RETURN Sigmoid(Last(weights) · h + Last(biases))
+    }
+
+    REQUIRE Length(weights) = Length(biases) = L
+  }
+
+  STRUCTURE DCGAN[GeneratorLayers: ℕ, GeneratorUnits: ℕ, DiscriminatorLayers: ℕ, DiscriminatorUnits: ℕ] {
+    LET Generator = MultiLayerPerceptron[GeneratorLayers, GeneratorUnits]
+    LET Discriminator = MultiLayerPerceptron[DiscriminatorLayers, DiscriminatorUnits]
+  }
+
+  STRUCTURE WGAN[GeneratorLayers: ℕ, GeneratorUnits: ℕ, DiscriminatorLayers: ℕ, DiscriminatorUnits: ℕ] {
+    LET Generator = MultiLayerPerceptron[GeneratorLayers, GeneratorUnits]
+    LET Discriminator = MultiLayerPerceptron[DiscriminatorLayers, DiscriminatorUnits]
+
+    REQUIRE ∀ (x: ℝ[InputDim]) . |Discriminator.Apply(x)| ≤ 1  // Lipschitz constraint
+  }
+
+  PROOFS {
+    THEOREM GANConvergence {
+      STATEMENT:
+        ∀ (G: Gen) (D: Dis) (X: 𝒟[ℝ[InputDim]]) .
+          LET (G', D') = TrainGAN(G, D, X, n_critics, n_iters)
+          n_critics -> ∞ ∧ n_iters -> ∞
+            => Generates(G', D', X) ∧ Distinguishes(D', X, G')
+
+      PROOF:
+        LET G: Gen, D: Dis, X: 𝒟[ℝ[InputDim]]
+        ASSUME (G', D') = TrainGAN(G, D, X, n_critics, n_iters),
+               n_critics -> ∞, n_iters -> ∞
+
+        SHOW Distinguishes(D', X, G'):
+          𝒱(D',X,G')
+            = 𝔼[X, x => log D'(x)] + 𝔼[𝒩(0,1), z => log (1 - D'(G'(z)))]  // Defn of 𝒱
+            ≥ 𝒱(D,X,G) - ε for any ε > 0  // By MaximizeDiscriminator as n_critics -> ∞
+          HENCE Distinguishes(D', X, G')  // Defn of Distinguishes
+            
+        SHOW Generates(G', D', X):
+          ℒ(G',D')
+            = 𝔼[𝒩(0,1), z => log (1 - D'(G'(z)))]  // Defn of ℒ
+            ≤ ℒ(G,D') + ε for any ε > 0  // By MinimizeGenerator as n_iters -> ∞
+          𝒫(G'(z))
+            = ∫ 𝒫(G'(z)|z) · 𝒫(z) dz   // Law of Total Probability
+            ≈ ∫ 𝒫(x|z) · 𝒫(z) dz       // As ℒ(G',D') is minimized
+            = 𝒫(X)                     // Marginal Distribution
+          HENCE Generates(G', D', X)   // Defn of Generates
+                  
+        QED
+    }
+
+    THEOREM WassersteinGANConvergence {
+      STATEMENT:
+        ∀ (X: 𝒟[ℝ[InputDim]]) .
+          LET G = WGAN[4,128,4,128].Generator, D = WGAN[4,128,4,128].Discriminator
+          (G', D') = TrainGAN(G, D, X, n_critics, n_iters) ∧
+          n_critics -> ∞ ∧ n_iters -> ∞
+            => W(𝒫(G'(z)), 𝒫(X)) -> 0  // Wasserstein distance
+            
+      PROOF:
+        LET G = WGAN[4,128,4,128].Generator, D = WGAN[4,128,4,128].Discriminator, X: 𝒟[ℝ[InputDim]]
+        ASSUME (G', D') = TrainGAN(G, D, X, n_critics, n_iters),
+               n_critics -> ∞, n_iters -> ∞
+
+        LET 𝒟_G = 𝒫(G'(z)), 𝒟_X = 𝒫(X)
+
+        HAVE W(𝒟_G, 𝒟_X) ≥ - 𝒱(D,X,G) - ε for any ε > 0:
+          W(𝒟_G, 𝒟_X)
+            = sup_{f: 1-Lipschitz} 𝔼[𝒟_G, x => f(x)] - 𝔼[𝒟_X, x => f(x)]  // Defn of W
+            ≥ 𝔼[𝒟_G, x => D'(x)] - 𝔼[𝒟_X, x => D'(x)]  // D' is 1-Lipschitz
+            = 𝔼[𝒩(0,1), z => D'(G'(z))] - 𝔼[X, x => D'(x)]
+            = - 𝒱(D',X,G')  // Defn of 𝒱
+            ≥ - (𝒱(D,X,G) + ε) for any ε > 0  // By MaximizeDiscriminator as n_critics -> ∞
+
+        HAVE W(𝒟_G, 𝒟_X) ≤ - 𝒱(D,X,G) + ε for any ε > 0:
+          W(𝒟_G, 𝒟_X)
+            = sup_{f: 1-Lipschitz} 𝔼[𝒟_G, x => f(x)] - 𝔼[𝒟_X, x => f(x)]  // Defn of W
+            ≤ 𝔼[𝒟_G, x => D(x)] - 𝔼[𝒟_X, x => D(x)] + ε for any ε > 0  // By MinimizeGenerator as n_iters -> ∞ 
+            = - 𝒱(D,X,G) + ε
+
+        THEREFORE - 𝒱(D,X,G) - ε ≤ W(𝒟_G, 𝒟_X) ≤ - 𝒱(D,X,G) + ε
+        HENCE W(𝒟_G, 𝒟_X) -> 0
+
+        QED
+    }
+  }
+}

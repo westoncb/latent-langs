@@ -1,0 +1,196 @@
+CONCEPT SymbolicDualityEmergence {
+  IMPORT SymbolicGaugeGravity
+
+  LANGUAGE {
+    TYPE Theory = {
+      StateSpace : SymMan,
+      Quantities : SET(SymTensor),
+      Dynamics : Action
+    }
+
+    TYPE Duality = {
+      T1 : Theory,
+      T2 : Theory,
+      StateMap : Bijection(T1.StateSpace, T2.StateSpace),
+      QuantityMap : Bijection(T1.Quantities, T2.Quantities)
+    }
+
+    AXIOM DualityConsistency :
+      ∀ (d : Duality) (s : d.T1.StateSpace) .
+        d.StateMap(extremize(d.T1.Dynamics, s)) = extremize(d.T2.Dynamics, d.StateMap(s))
+
+    TYPE Emergence = {
+      Fine : Theory,
+      Coarse : Theory,  
+      Approximation : Fine.StateSpace -> Coarse.StateSpace,
+      CoarseGraining : Fine.Quantities -> Coarse.Quantities,
+      Novel : SET(Coarse.Quantities),
+      Robust : (Fine.Quantities -> PROP(Coarse.Quantities))
+    }
+
+    FUNC GaugeTheory : GaugeGroup -> Theory
+    FUNC GravityTheory : SymMan -> Theory
+
+    TYPE StringTheory <: Theory {
+      FreeDOF : SET(SymTensor)
+      REQUIRE FreeDOF ⊇ metric ∪ gauge_field
+    }
+  }
+
+  PROOFS {
+    THEOREM DualityEmergenceComplementarity {
+      STATEMENT :
+        ∀ (T1 T2 : Theory) (d : Duality(T1, T2)) .
+          (∃ (E : Emergence) . (E.Fine = T1) ∧ (E.Coarse = T2)) <->
+          ¬(∀ (q1 : T1.Quantities) (q2 : T2.Quantities) . 
+              (d.QuantityMap(q1) = q2) -> (Fundamental(q1) <-> Fundamental(q2)))
+
+      PROOF {
+        LET T1, T2 : Theory, d : Duality(T1, T2)
+
+        (∃ (E : Emergence) . (E.Fine = T1) ∧ (E.Coarse = T2))
+          <-> ∃ (E : Emergence) . 
+                (E.Fine.StateSpace = T1.StateSpace) ∧ 
+                (E.Fine.Quantities = T1.Quantities) ∧
+                (E.Coarse.StateSpace = T2.StateSpace) ∧
+                (E.Coarse.Quantities = T2.Quantities)  
+                BY DefinitionOfEmergence
+          <-> ∃ (E : Emergence) .
+                (E.Approximation : T1.StateSpace -> T2.StateSpace) ∧
+                (E.CoarseGraining : T1.Quantities -> T2.Quantities) ∧
+                (E.Novel ⊆ T2.Quantities) ∧ 
+                (E.Robust : (T1.Quantities -> PROP(T2.Quantities)))
+                BY ExpandingEmergenceStructure
+          <-> ∃ (CG : T1.Quantities -> T2.Quantities), (N ⊆ T2.Quantities) .
+                (∀ (q : T1.Quantities) . CG(q) ∈ T2.Quantities) ∧
+                (∀ (q : N) . Fundamental(q)) ∧
+                (∃ (R : T1.Quantities -> PROP(T2.Quantities)) . 
+                   ∀ (q1 : T1.Quantities) . ∀ (q2 : R(q1)) . Robust(q1, q2))
+                BY UnpackingEmergenceComponents
+          <-> ¬(∀ (q1 : T1.Quantities) (q2 : T2.Quantities) .
+                 (d.QuantityMap(q1) = q2) -> (Fundamental(q1) <-> Fundamental(q2)))
+                BY ComplementarityOfDualityAndEmergence  
+      }
+    }
+      
+    THEOREM StringUniversality {
+      STATEMENT :  
+        ∀ (T : Theory) . 
+          ∃ (ST : StringTheory), (E : Emergence) .
+            (E.Fine = ST) ∧ (E.Coarse = T)
+
+      PROOF {
+        LET T : Theory
+
+        CHOOSE ST : StringTheory {  
+          StateSpace = SymbolicManifold(metric ∪ gauge_field ∪ FreeDOF, ST.GaugeGroup)
+          Quantities = SET(SymTensor[ST.StateSpace])
+          Dynamics = StringAction(metric, gauge_field, FreeDOF)
+        }
+        
+        DEFINE Approximation : ST.StateSpace -> T.StateSpace {
+          LET s_ST : ST.StateSpace, 
+          s_ST_trunc = truncate(s_ST, T.StateSpace.dim),
+          s_ST_gauge_fixed = gauge_fix(s_ST, T.GaugeGroup)
+          
+          s_T = project(s_ST_trunc, s_ST_gauge_fixed)  
+        }
+
+        DEFINE CoarseGraining : ST.Quantities -> T.Quantities {
+          LET q_ST : ST.Quantities,
+          
+          q_T = average(q_ST, T.StateSpace.Neighborhoods)
+        }
+
+        DEFINE Novel : SET(T.Quantities) {
+          LET q_T : T.Quantities
+          
+          q_T ∈ Novel <-> ¬∃ (q_ST : ST.Quantities) . CoarseGraining(q_ST) = q_T   
+        }
+        
+        CHOOSE Robust : (ST.Quantities -> PROP(T.Quantities)) {
+          ∀ (q_ST : ST.Quantities) . ∀ (q_T : T.Quantities) .
+            q_T ∈ Robust(q_ST) <-> 
+              ∃ (ε : Real+) . ∀ (δq_ST : ST.Quantities) .
+                (|δq_ST - q_ST| < ε) =>
+                  (|CoarseGraining(δq_ST) - CoarseGraining(q_ST)| < ε)
+        }
+
+        TAKE E : Emergence {
+          Fine = ST,
+          Coarse = T,
+          Approximation = Approximation,  
+          CoarseGraining = CoarseGraining,
+          Novel = Novel,
+          Robust = Robust
+        }
+
+        CONCLUDE ∃ (ST : StringTheory), (E : Emergence) . 
+                   (E.Fine = ST) ∧ (E.Coarse = T)
+      }
+    }  
+  }
+
+  PHILOSOPHY {
+    THEOREM EmergentGravity {
+      STATEMENT :
+        ∀ (G : GaugeGroup), (M : SymMan), (d : Duality) . 
+          (d.T1 = GaugeTheory(G)) ∧ (d.T2 = GravityTheory(M)) =>
+            ∃ (ST : StringTheory), (E1 : Emergence), (E2 : Emergence) .
+              (E1.Fine = ST) ∧ (E1.Coarse = d.T1) ∧ 
+              (E2.Fine = ST) ∧ (E2.Coarse = d.T2)
+        
+      ARGUMENT {
+        "If gauge theory and gravity are dual, then they must both emerge from a more fundamental string theory."
+        
+        LET G : GaugeGroup, M : SymMan, 
+            GT = GaugeTheory(G), GR = GravityTheory(M),
+            d : Duality(GT, GR)
+
+        ASSUME (d.T1 = GT) ∧ (d.T2 = GR)
+        
+        LET ST : StringTheory, E_GT : Emergence(ST, GT), E_GR : Emergence(ST, GR)
+            SUCH THAT (E_GT.Fine = ST) ∧ (E_GT.Coarse = GT) ∧ 
+                       (E_GR.Fine = ST) ∧ (E_GR.Coarse = GR) 
+            BY StringUniversality[GT], StringUniversality[GR]
+            
+        CONCLUDE ∃ (ST : StringTheory), (E1 : Emergence), (E2 : Emergence) .
+                   (E1.Fine = ST) ∧ (E1.Coarse = d.T1) ∧
+                   (E2.Fine = ST) ∧ (E2.Coarse = d.T2)   
+      }
+    }
+
+    PROPOSITION HolographicPrinciple {
+      STATEMENT : 
+        ∀ (T_boundary : Theory), (T_bulk : Theory), (E : Emergence) .
+          (E.Fine = T_bulk) ∧ (E.Coarse = T_boundary) =>
+            (T_boundary.StateSpace.dim + 1 = T_bulk.StateSpace.dim) ∧
+            (T_boundary.Dynamics = DualDynamics(T_bulk.Dynamics, E.Approximation))
+      
+      ARGUMENT {
+        "A holographic duality relates a bulk theory to a boundary theory of one lower dimension,
+         such that the boundary dynamics is determined by the bulk dynamics and the emergence map."
+
+        LET T_boundary : Theory, T_bulk : Theory,
+            E : Emergence(T_bulk, T_boundary)
+        
+        ASSUME (E.Fine = T_bulk) ∧ (E.Coarse = T_boundary)
+
+        LET d_boundary = T_boundary.StateSpace.dim,
+            d_bulk = T_bulk.StateSpace.dim
+          
+        ARGUE (d_boundary + 1 = d_bulk) FROM
+          "The holographic principle relates theories in adjacent dimensions"
+        
+        LET DualDynamics(Bulk : Dynamics, Approx : StateMap) : Dynamics = 
+          λ (s_boundary : T_boundary.StateSpace) .
+            LET s_bulk = Inverse(Approx)(s_boundary),
+                s_bulk' = Bulk(s_bulk)
+            IN Approx(s_bulk')
+            
+        ARGUE (T_boundary.Dynamics = DualDynamics(T_bulk.Dynamics, E.Approximation)) FROM
+          "The boundary dynamics is the projection of the bulk dynamics by the emergence map" 
+      }    
+    }
+  }
+}

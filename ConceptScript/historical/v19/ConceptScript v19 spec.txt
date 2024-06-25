@@ -1,0 +1,1487 @@
+ConceptScript v19 (CFC Optimized)
+
+<Concept> ::= "CONCEPT" <ConceptName> ["EXTENDS" <ConceptName>+]? "{"
+               <TypeDeclarations>
+               <FunctionDeclarations>
+               <PredicateDeclarations>
+               <NotationDeclarations>
+               <AxiomDeclarations>
+               <TheoremDeclarations>
+               <ConstructorDeclarations>
+               <InterfaceDeclarations>
+             "}"
+
+<TypeDeclarations> ::= "TYPES" "{" (<TypeDeclaration> | <TypeAliasDeclaration> | <DataTypeDeclaration>)* "}"
+
+<TypeDeclaration> ::= <TypeName> [":" <Kind>]?
+
+<TypeAliasDeclaration> ::= <TypeName> "=" <Type>
+
+<DataTypeDeclaration> ::= <TypeName> "=" <Constructor>+
+
+<FunctionDeclarations> ::= "FUNCTIONS" "{" <FunctionDeclaration>* "}"
+
+<FunctionDeclaration> ::= <FunctionName> ":" <Type>
+
+<PredicateDeclarations> ::= "PREDICATES" "{" <PredicateDeclaration>* "}"
+
+<PredicateDeclaration> ::= <PredicateName> ":" <Type>
+
+<NotationDeclarations> ::= "NOTATIONS" "{" <NotationDeclaration>* "}"
+
+<NotationDeclaration> ::= <NotationName> ":" <Type> "=" <Expression>
+
+<AxiomDeclarations> ::= "AXIOMS" "{" <AxiomDeclaration>* "}"
+
+<AxiomDeclaration> ::= <AxiomName> ":" <Formula>
+
+<TheoremDeclarations> ::= "THEOREMS" "{" <TheoremDeclaration>* "}"
+
+<TheoremDeclaration> ::= <TheoremName> ":" <Formula> ["PROOF" <Proof>]?
+
+<ConstructorDeclarations> ::= "CONSTRUCTORS" "{" <ConstructorDeclaration>* "}"
+
+<ConstructorDeclaration> ::= <ConstructorName> ":" <Type> "=" <Expression>
+
+<InterfaceDeclarations> ::= "INTERFACES" "{" <InterfaceDeclaration>* "}"
+
+<InterfaceDeclaration> ::= <InterfaceName> "{" 
+                             (<FunctionDeclaration> | <PredicateDeclaration> | <NotationDeclaration>)*
+                           "}"
+
+<Type> ::= <BasicType> | <FunctionType> | <ProductType> | <SumType> | <DependentType> | 
+           <PolymorphicType> | <InductiveType> | <CoInductiveType>
+           
+<BasicType> ::= <TypeName> | "Int" | "Real" | "Bool" | "String" | "Unit"
+
+<FunctionType> ::= <Type> "->" <Type>
+
+<ProductType> ::= <Type> "*" <Type>
+
+<SumType> ::= <Type> "+" <Type>
+
+<DependentType> ::= "(" <Variable> ":" <Type> ")" "->" <Type>
+
+<PolymorphicType> ::= "forall" <TypeVariable>+ "." <Type>
+
+<InductiveType> ::= "mu" <TypeVariable> "." <Type>
+
+<CoInductiveType> ::= "nu" <TypeVariable> "." <Type>
+
+<Kind> ::= "*" | <Kind> "->" <Kind>
+
+<Formula> ::= <AtomicFormula> | <NotFormula> | <AndFormula> | <OrFormula> | 
+              <ImpliesFormula> | <IffFormula> | <ForallFormula> | <ExistsFormula>
+
+<AtomicFormula> ::= <PredicateApplication> | <Equation>              
+
+<NotFormula> ::= "not" <Formula>
+
+<AndFormula> ::= <Formula> "and" <Formula>
+
+<OrFormula> ::= <Formula> "or" <Formula>
+
+<ImpliesFormula> ::= <Formula> "implies" <Formula>
+
+<IffFormula> ::= <Formula> "iff" <Formula>
+
+<ForallFormula> ::= "forall" "(" <Variable> ":" <Type> ")" <Formula>
+
+<ExistsFormula> ::= "exists" "(" <Variable> ":" <Type> ")" <Formula>
+
+<PredicateApplication> ::= <PredicateName> <Argument>*
+
+<Equation> ::= <Expression> "=" <Expression>
+
+<Expression> ::= <Variable> | <FunctionApplication> | <LambdaAbstraction> | <Constant>
+
+<FunctionApplication> ::= <FunctionName> <Argument>*
+
+<Argument> ::= "(" <Expression> ")" | <Expression>
+
+<LambdaAbstraction> ::= "\" <Variable>+ "->" <Expression>  
+
+<Constant> ::= <Number> | <Boolean> | <String> | "()"
+
+<Proof> ::= <ProofCommand>+
+
+<ProofCommand> ::= <Assumption> | <LetBinding> | <HaveAssertion> | <ShowAssertion> |
+                   <CaseAnalysis> | <Induction> | <Apply> | <Rewrite> | <Reflexivity> |
+                   <Symmetry> | <Transitivity> | <Contradiction> | <Instantiate> | <Existential> |
+                   <Witness> | <Unfold> | <Fold> | <Simplify> | <Normalize> | <Quit>
+
+<Assumption> ::= "assume" <Identifier> ":" <Formula>
+
+<LetBinding> ::= "let" <Identifier> [":" <Type>]? "=" <Expression>
+
+<HaveAssertion> ::= "have" <Identifier> ":" <Formula> ["by" <Proof>]?
+
+<ShowAssertion> ::= "show" <Identifier> ":" <Formula> ["by" <Proof>]?
+
+<CaseAnalysis> ::= "case" <Expression> "of" <CaseClause>+
+
+<CaseClause> ::= <Pattern> "->" <Proof>
+
+<Induction> ::= "induction" <Identifier> "on" <Expression> <InductionClause>+
+
+<InductionClause> ::= <Constructor> <Identifier>* "->" <Proof>
+
+<Apply> ::= "apply" <Identifier> <Argument>*
+
+<Rewrite> ::= "rewrite" <Identifier> ["in" <Proof>]?
+
+<Reflexivity> ::= "reflexivity"
+
+<Symmetry> ::= "symmetry" <Identifier>
+
+<Transitivity> ::= "transitivity" <Identifier> <Identifier>
+
+<Contradiction> ::= "contradiction" <Identifier>+
+
+<Instantiate> ::= "instantiate" <Identifier> <Argument>+
+
+<Existential> ::= "existential" <Identifier> [":" <Type>]?
+
+<Witness> ::= "witness" <Expression>
+
+<Unfold> ::= "unfold" <Identifier>
+
+<Fold> ::= "fold" <Identifier>
+
+<Simplify> ::= "simplify" <Expression>
+
+<Normalize> ::= "normalize" <Expression>
+
+<Quit> ::= "quit"
+
+
+
+
+
+
+The key changes and features in this version that support CFCs are:
+
+Explicit syntax for declaring TYPES, FUNCTIONS, PREDICATES, NOTATIONS, AXIOMS, THEOREMS, CONSTRUCTORS, and INTERFACES. This allows for clear separation and organization of the different components of a CFC.
+Support for dependent types, polymorphic types, inductive types, and coinductive types. This enables expressing complex type-level relationships and constraints that are common in CFCs.
+Expanded proof language with commands for case analysis, induction, rewriting, instantiation, existential quantification, unfolding/folding definitions, simplification, and normalization. This provides a rich set of tools for constructing and manipulating proofs within CFCs.
+Inclusion of CONSTRUCTORS as first-class citizens, allowing CFCs to define canonical ways of building and combining instances of the structures they define.
+Addition of INTERFACES for specifying the public API and contracts of a CFC, facilitating modular composition and extension.
+Convenient notation for function types, product types, and sum types, as well as built-in types for integers, reals, booleans, strings, and the unit type. This allows for concise and readable type signatures.
+Support for lambda abstractions and higher-order functions, enabling the definition and manipulation of complex computational objects.
+Comprehensive set of formula constructors, including atomic predicates, propositional connectives, and first-order quantifiers. This allows for expressing a wide range of logical statements and constraints.
+Streamlined syntax for function and predicate applications, as well as equations and other common formula patterns. This enhances readability and writability of specifications.
+
+With these features, ConceptScript v19 provides a powerful and expressive language for defining CFCs that capture the essential abstractions, properties, and constructions of a particular domain. The enhanced proof language and type system also enable rigorous reasoning and verification of the correctness and consistency of these frameworks.
+
+
+
+
+
+CONCEPT Graph EXTENDS Countable, Finite {
+  TYPES {
+    Vertex : Type
+    Edge : Type = (Vertex * Vertex)
+    Graph : Type = (Set Vertex * Set Edge)
+    Path : Type = List Vertex
+    EulerPath : Type = (g : Graph) -> Path
+      where (forall (v : Vertex) in g.1) 
+              (Degree v g.2) mod 2 = 0 or
+              (Degree v g.2) mod 2 = 1 and 
+                (v = (head p) and v = (last p))
+  }
+  
+  FUNCTIONS {
+    Degree : Vertex -> Graph -> Nat
+    Neighbors : Vertex -> Graph -> Set Vertex
+    AddVertex : Vertex -> Graph -> Graph
+    AddEdge : Edge -> Graph -> Graph
+    RemoveVertex : Vertex -> Graph -> Graph
+    RemoveEdge : Edge -> Graph -> Graph
+    Union : Graph -> Graph -> Graph
+    Intersection : Graph -> Graph -> Graph
+  }
+  
+  PREDICATES {
+    Connected : Graph
+    Acyclic : Graph
+    Complete : Graph
+    Bipartite : Graph
+    Planar : Graph
+  }
+  
+  NOTATIONS {
+    "(u ~ v)" : Edge = (u, v)
+    "(V, E)" : Graph = (Set V * Set E)
+    "G + v" : Graph = AddVertex v G
+    "G - v" : Graph = RemoveVertex v G
+    "G + e" : Graph = AddEdge e G
+    "G - e" : Graph = RemoveEdge e G
+    "G1 ∪ G2" : Graph = Union G1 G2
+    "G1 ∩ G2" : Graph = Intersection G1 G2
+  }
+  
+  AXIOMS {
+    EmptyGraph : Graph = (∅, ∅)
+    
+    SingletonGraph (v : Vertex) : Graph = ({v}, ∅)
+    
+    Degree_Def (v : Vertex) (G : Graph) : 
+      Degree v G = Cardinality (Neighbors v G)
+      
+    Neighbors_Def (v : Vertex) (G : Graph) :
+      Neighbors v G = { u : Vertex | (u ~ v) in G.2 or (v ~ u) in G.2 }
+        
+    AddVertex_Def (v : Vertex) (G : Graph) :
+      AddVertex v G = (G.1 ∪ {v}, G.2)
+      
+    AddEdge_Def (e : Edge) (G : Graph) :
+      AddEdge (u, v) G = (G.1, G.2 ∪ {(u, v)})
+        where u in G.1 and v in G.1
+      
+    RemoveVertex_Def (v : Vertex) (G : Graph) :
+      RemoveVertex v G = (G.1 - {v}, { e : Edge | e in G.2 and fst e != v and snd e != v })
+      
+    RemoveEdge_Def (e : Edge) (G : Graph) : 
+      RemoveEdge e G = (G.1, G.2 - {e})
+      
+    Union_Def (G1 G2 : Graph) :
+      Union G1 G2 = (G1.1 ∪ G2.1, G1.2 ∪ G2.2) 
+      
+    Intersection_Def (G1 G2 : Graph) :
+      Intersection G1 G2 = (G1.1 ∩ G2.1, G1.2 ∩ G2.2)
+      
+    Connected_Def (G : Graph) :
+      Connected G <-> 
+        (forall (u v : Vertex) in G.1) 
+          (exists (p : Path) (PathIn p G) and (head p) = u and (last p) = v)
+          
+    Acyclic_Def (G : Graph) :
+      Acyclic G <->
+        (forall (p : Path) (PathIn p G)) (head p) != (last p)
+        
+    Complete_Def (G : Graph) :
+      Complete G <->
+        (forall (u v : Vertex) in G.1) ((u, v) in G.2)
+        
+    Bipartite_Def (G : Graph) :
+      Bipartite G <->
+        (exists (A B : Set Vertex))
+          (G.1 = A ∪ B) and (Disjoint A B) and
+          (forall (e : Edge) in G.2) 
+            ((fst e) in A and (snd e) in B) or ((fst e) in B and (snd e) in A)
+            
+    Planar_Def (G : Graph) :
+      Planar G <->
+        (exists (f : Vertex -> RxR))
+          (forall ((u, v) : Edge) in G.2)
+            (Segments (f u) (f v)) are Non-Crossing
+  }
+  
+  THEOREMS {
+    EulerPath_Existence (g : Graph) : 
+      (forall (v : Vertex) in g.1) (Even (Degree v g.2)) -> exists (p : EulerPath) (g, p)
+    PROOF {
+      assume (g : Graph) and (H : (forall (v : Vertex) in g.1) (Even (Degree v g.2)))
+      
+      let (S : Set Edge) = g.2 
+      
+      have (Path_Existence : exists (p : Path) (PathIn p g))
+        by Connected_Def, H, Induction on Cardinality S {
+          case 0 => 
+            let p = [] 
+            show (PathIn p g) by Acyclic_Def
+          case n + 1 =>  
+            let e = (u, v) where e in S
+            let g' = g - e
+            have (exists (p : Path) (PathIn p g')) by IH
+            let p' = witness
+            let p = [u] ++ p' ++ [v]  
+            show (PathIn p g)
+        }
+      
+      let (p : Path) = witness
+      let (v0 : Vertex) = (head p)
+      
+      have (Euler_Criterion : (forall (v : Vertex) in g.1) ((v = v0) or (Even (Degree v g.2))))
+        by H, ConnectedComponents_Partition g p
+      
+      show (EulerCycle : exists (c : Path) (PathIn c g) and (head c) = (last c))  
+        by Euler_Criterion, Induction on Cardinality S {
+          case 0 => 
+            let c = [v0]
+            show (head c) = (last c) and (PathIn c g) by Acyclic_Def
+          case n + 1 =>
+            let (u, v) = e where (u ~ v) in S and (u = (last p))
+            let g' = g - e
+            have ((forall (v : Vertex) in g'.1) ((v = v0) or (Even (Degree v g'.2)))) by Euler_Criterion
+            have (exists (c : Path) (PathIn c g') and (head c) = (last c) and (head c) = u)
+              by IH g' p u  
+            let c' = witness
+            let c = (init c') ++ [(last c'), v, v0]
+            show (PathIn c g) and (head c) = (last c)
+        }
+        
+      let (c : Path) = witness
+      
+      show (EulerPath p c) by EulerCycle_To_EulerPath c v0
+    }
+  }
+  
+  CONSTRUCTORS {
+    EmptyGraph : Graph = (∅, ∅)
+    
+    AddVertex (G : Graph) (v : Vertex) : Graph =
+      (G.1 ∪ {v}, G.2)
+      
+    AddEdge (G : Graph) (e : Edge) : Graph =
+      (G.1, G.2 ∪ {e})
+      
+    RemoveVertex (G : Graph) (v : Vertex) : Graph =  
+      (G.1 - {v}, { e : G.2 | fst e != v and snd e != v })
+      
+    RemoveEdge (G : Graph) (e : Edge) : Graph =
+      (G.1, G.2 - {e})
+    
+    FromVertices (V : Set Vertex) : Graph =
+      (V, ∅)
+      
+    FromEdges (E : Set Edge) : Graph =  
+      ({ v : Vertex | (exists (e : Edge) in E) (fst e = v or snd e = v) }, E)
+      
+    FromAdjacencyList (V : Set Vertex) (f : Vertex -> Set Vertex) : Graph =
+      (V, { e : Edge | (exists (v : Vertex) in V) (fst e = v and snd e in f v) })
+  }
+  
+  INTERFACES {
+    CountableGraph {
+      Cardinality : Graph -> Nat
+    }
+    
+    FiniteGraph {
+      Finite : Graph -> Bool
+    }
+    
+    UndirectedGraph {
+      Undirected (G : Graph) : ((u, v) : Edge) in G.2 <-> ((v, u) : Edge) in G.2
+    }
+    
+    WeightedGraph {
+      Weight : Edge -> Real
+    }
+  }
+}
+
+CONCEPT SimpleGraph EXTENDS Graph {
+  CONSTRUCTORS {
+    MyGraph : Graph = 
+      let A = Vertex{}
+      let B = Vertex{}
+      let C = Vertex{}  
+      let D = Vertex{}
+      FromEdges {
+        (A ~ B),
+        (A ~ C),
+        (A ~ D),  
+        (B ~ D),
+        (C ~ D)
+      }
+  }
+  
+  THEOREMS {
+    MyGraph_EulerPath : exists (p : EulerPath) (MyGraph, p)
+    PROOF {
+      have (forall (v : Vertex) in MyGraph.1) (Even (Degree v MyGraph.2)) by {
+        let A = witness 
+        have Degree A MyGraph.2 = 3 by Degree_Def, Neighbors_Def
+        let B = witness
+        have Degree B MyGraph.2 = 2 by Degree_Def, Neighbors_Def  
+        let C = witness
+        have Degree C MyGraph.2 = 2 by Degree_Def, Neighbors_Def
+        let D = witness  
+        have Degree D MyGraph.2 = 3 by Degree_Def, Neighbors_Def
+      }
+      
+      show exists (p : EulerPath) (MyGraph, p) by EulerPath_Existence MyGraph
+    }
+    
+    MyGraph_Properties : Connected MyGraph and
+                         not (Acyclic MyGraph) and
+                         not (Complete MyGraph) and 
+                         not (Bipartite MyGraph) and
+                         Planar MyGraph
+    PROOF {
+      show Connected MyGraph by {
+        let (u, v) = (witness, witness) where u in MyGraph.1 and v in MyGraph.1
+        exists (p : Path) (PathIn p MyGraph) and (head p) = u and (last p) = v by {
+          cases (u, v) of
+            (A, A) => [A]  
+            (A, B) => [A, B]
+            (A, C) => [A, C]
+            (A, D) => [A, D]
+            (B, A) => [B, D, A]
+            (B, B) => [B]
+            (B, C) => [B, D, C]
+            (B, D) => [B, D]
+            (C, A) => [C, A]
+            (C, B) => [C, D, B]  
+            (C, C) => [C]
+            (C, D) => [C, D]
+            (D, A) => [D, A]
+            (D, B) => [D, B]
+            (D, C) => [D, C]
+            (D, D) => [D]
+        }
+      }
+      
+      show not (Acyclic MyGraph) by {
+        exists (p : Path) (PathIn p MyGraph) and (head p) = (last p) by
+          [A, B, D, A]
+      }
+      
+      show not (Complete MyGraph) by {
+        exists (u v : Vertex) in MyGraph.1 where not ((u, v) in MyGraph.2) by 
+          (B, C)
+      }  
+      
+      show not (Bipartite MyGraph) by {
+        forall (A B : Set Vertex) where (MyGraph.1 = A ∪ B) and (Disjoint A B)
+          exists ((u, v) : Edge) in MyGraph.2 where 
+            not ((u in A and v in B) or (u in B and v in A)) by {
+              case (A = {A, C}, B = {B, D}) => (A ~ C)
+              case (A = {A, B}, B = {C, D}) => (A ~ D)
+              case (A = {A, D}, B = {B, C}) => (B ~ D)
+              case _ => contradiction  
+            }
+      }
+      
+      show Planar MyGraph by {
+        let f = { A -> (0, 0), B -> (1, 1), C -> (-1, -1), D -> (0, -1) }
+        have forall ((u, v) : Edge) in MyGraph.2)
+          (Segments (f u) (f v)) are Non-Crossing by {
+            case (A ~ B) => Segment((0, 0), (1, 1))  
+            case (A ~ C) => Segment((0, 0), (-1, -1))
+            case (A ~ D) => Segment((0, 0), (0, -1))
+            case (B ~ D) => Segment((1, 1), (0, -1))
+            case (C ~ D) => Segment((-1, -1), (0, -1))
+          }
+      }
+    }
+  }
+}
+
+
+
+
+
+
+CONCEPT FormalLanguage {
+  TYPES {
+    Symbol : Type
+    String : Type = List Symbol
+    Language : Type = Set String
+    Grammar : Type
+    RegularExpression : Type  
+    ContextFreeGrammar : Type
+    
+    Production : Type = (Symbol * String)
+    Derivation : Type = List Production
+  }
+  
+  FUNCTIONS {
+    Union : Language -> Language -> Language
+    Concatenation : Language -> Language -> Language
+    KleeneStar : Language -> Language
+    
+    Generates (G : Grammar) (s : String) : Bool
+    Generates (r : RegularExpression) (s : String) : Bool
+    
+    Derives (G : ContextFreeGrammar) (u v : String) : Bool
+  }
+  
+  PREDICATES {
+    Regular : Language  
+    ContextFree : Language
+    Recursive : Language
+    RecursivelyEnumerable : Language
+    
+    Nullable : ContextFreeGrammar -> Symbol -> Bool
+  }
+  
+  NOTATIONS {
+    "ε" : String = []
+    "∅" : Language = {}
+    "Σ*" (Σ : Set Symbol) : Language = { s : String | forall (x : Symbol) in s, x in Σ }
+    "L₁ ∪ L₂" (L₁ L₂ : Language) : Language = Union L₁ L₂ 
+    "L₁ • L₂" (L₁ L₂ : Language) : Language = Concatenation L₁ L₂
+    "L*" (L : Language) : Language = KleeneStar L  
+    
+    "u ⇒ v" (u v : String) : Derivation = [(u, v)]
+    "u ⇒* v" (u v : String) : Derivation = transitive closure of ⇒
+  }
+  
+  AXIOMS {
+    String_Monoid : 
+      (forall (s : String), s • ε = s) and
+      (forall (s : String), ε • s = s) and 
+      (forall (r s t : String), (r • s) • t = r • (s • t))
+      
+    Language_Semiring :  
+      (forall (L : Language), L ∪ ∅ = L) and
+      (forall (L : Language), ∅ ∪ L = L) and
+      (forall (L₁ L₂ L₃ : Language), (L₁ ∪ L₂) ∪ L₃ = L₁ ∪ (L₂ ∪ L₃)) and
+      (forall (L₁ L₂ : Language), L₁ ∪ L₂ = L₂ ∪ L₁) and
+      (forall (L : Language), L ∪ L = L) and
+      (forall (L : Language), L • ∅ = ∅) and
+      (forall (L : Language), ∅ • L = ∅) and  
+      (forall (L₁ L₂ L₃ : Language), (L₁ • L₂) • L₃ = L₁ • (L₂ • L₃)) and
+      (forall (L₁ L₂ L₃ : Language), L₁ • (L₂ ∪ L₃) = (L₁ • L₂) ∪ (L₁ • L₃)) and
+      (forall (L₁ L₂ L₃ : Language), (L₁ ∪ L₂) • L₃ = (L₁ • L₃) ∪ (L₂ • L₃))
+      
+    Derives_Reflexive (G : ContextFreeGrammar) : 
+      forall (u : String), u ⇒* u
+      
+    Derives_Transitive (G : ContextFreeGrammar) :
+      forall (u v w : String), (u ⇒* v) -> (v ⇒* w) -> (u ⇒* w)
+  }
+  
+  THEOREMS {  
+    RegExp_Kleene (r s : RegularExpression) :
+      Generates (Union r s) = Union (Generates r) (Generates s)
+      Generates (Concatenation r s) = Concatenation (Generates r) (Generates s) 
+      Generates (KleeneStar r) = KleeneStar (Generates r)
+    PROOF {
+      ; by induction on the structure of regular expressions, appealing to 
+      ; the definitions of Union, Concatenation, KleeneStar on languages  
+    }
+      
+    CFG_Pumping (L : Language) : 
+      ContextFree L -> 
+        exists (p : Nat) (forall (s : String) in L) (length s >= p) ->
+          (exists (u v w x y : String)) 
+            s = u • v • w • x • y and
+            (length v + length x > 0) and
+            (length v • w • x <= p) and  
+            (forall (i : Nat), u • v^i • w • x^i • y in L)
+    PROOF {
+      ; by assuming L is generated by some context-free grammar G, 
+      ; choosing p to be larger than the number of nonterminals in G,
+      ; and analyzing the derivation tree of any string s in L with length >= p.
+      ; The path from the root to the deepest leaf must contain a nonterminal repeating,
+      ; allowing the subtree rooted there to be "pumped" up and down, generating
+      ; the sequence of strings u • v^i • w • x^i • y.
+    }
+  }
+  
+  CONSTRUCTORS {
+    EmptyString : String = ε
+    EmptyLanguage : Language = ∅
+    
+    SingletonString (x : Symbol) : String = [x]
+    SingletonLanguage (s : String) : Language = {s}  
+    
+    UnionLanguage (L₁ L₂ : Language) : Language = L₁ ∪ L₂
+    ConcatenationLanguage (L₁ L₂ : Language) : Language = L₁ • L₂
+    KleeneStarLanguage (L : Language) : Language = L*
+    
+    Symbol_w (Σ : Set Symbol) : RegularExpression = ...  ; omitted
+    EmptyString_w : RegularExpression = ...             ; omitted
+    EmptySet_w : RegularExpression = ...                ; omitted
+    
+    Union_w (r s : RegularExpression) : RegularExpression = ...    ; omitted  
+    Concatenation_w (r s : RegularExpression) : RegularExpression = ...  ; omitted
+    KleeneStar_w (r : RegularExpression) : RegularExpression = ...        ; omitted  
+    
+    ContextFreeGrammar (V T P S : Set Symbol) : ContextFreeGrammar = 
+      ; V = variables (nonterminals)  
+      ; T = terminals (disjoint from V)
+      ; P = productions of form (A, α) with A in V and α in (V ∪ T)*  
+      ; S = start symbol in V
+  }
+  
+  INTERFACES {
+    DFA {
+      States : Set Symbol
+      Alphabet : Set Symbol
+      Transition : States -> Alphabet -> States
+      Start : States  
+      Final : Set States
+      
+      Accepts (s : String) : Bool
+    }
+    
+    NFA {
+      States : Set Symbol
+      Alphabet : Set Symbol 
+      Transition : States -> (Alphabet ∪ {ε}) -> Set States
+      Start : Set States
+      Final : Set States
+      
+      Accepts (s : String) : Bool  
+    }
+    
+    PDA {
+      States : Set Symbol
+      InputAlphabet : Set Symbol
+      StackAlphabet : Set Symbol
+      Transition : States -> (InputAlphabet ∪ {ε}) -> StackAlphabet -> States -> List StackAlphabet  
+      Start : States
+      Final : Set States
+      
+      Accepts (s : String) : Bool
+    }
+  }
+}
+
+CONCEPT AnBnLanguage EXTENDS FormalLanguage {
+  CONSTRUCTORS {
+    G : ContextFreeGrammar = 
+      let S = Symbol{"S"}  
+      let A = Symbol{"A"}
+      let a = Symbol{"a"}
+      let b = Symbol{"b"} 
+      ContextFreeGrammar {S, A} {a, b} {
+        (S, [A]),
+        (A, [a, A, b]),
+        (A, [])  
+      } S
+      
+    L : Language = { s : String | Generates G s }  
+  }
+  
+  THEOREMS {
+    L_is_ContextFree : ContextFree L
+    PROOF {
+      trivial by definition of L
+    }
+    
+    L_is_not_Regular : not (Regular L)  
+    PROOF {
+      assume Regular L
+      let p = witness by CFG_Pumping L
+      
+      let s = a^p • b^p
+      have s in L by {
+        S ⇒ A  ⇒^p a^p A b^p  ⇒ a^p b^p
+      }
+      
+      obtain (u v w x y : String) by CFG_Pumping L s where
+        s = u • v • w • x • y and
+        (length v + length x > 0) and
+        (length v • w • x <= p) and
+        (forall (i : Nat), u • v^i • w • x^i • y in L)
+        
+      case length v > 0 =>
+        let t = u • v^2 • w • x • y
+        have length v <= p by (length v • w • x <= p) 
+        have t = a^(p + length v) • b^p
+        have t in L by CFG_Pumping
+        contradiction  
+        
+      case length x > 0 => symmetric to previous case
+      
+      case length v = 0 and length x = 0 => contradiction
+    }
+  }
+}
+
+
+
+
+CONCEPT BlackHole {
+  TYPES {
+    M : Real  ; Mass
+    J : Vector  ; Angular momentum
+    Q : Real  ; Electric charge
+    
+    Metric : M * J * Q -> Tensor[4, 4]  ; Spacetime metric
+    Horizon : M * J * Q -> Surface  ; Event horizon
+    Ergosphere : M * J * Q -> Surface  ; Ergosphere  
+    SingularitySpacelike : M * J * Q -> Surface  ; Spacelike singularity
+    SingularityTimelike : M * J * Q -> Surface  ; Timelike singularity
+    
+    Temperature : M * J * Q -> Real  ; Hawking temperature
+    Entropy : M * J * Q -> Real  ; Bekenstein-Hawking entropy  
+    AngularVelocity : M * J * Q -> Real  ; Angular velocity of the horizon
+    ElectrostaticPotential : M * J * Q -> Real  ; Electrostatic potential at the horizon
+    
+    Action : Tensor[4, 4] * Surface -> Real  ; Einstein-Hilbert action with matter fields
+    StressEnergy : Tensor[4, 4] * Surface -> Tensor[4, 4]  ; Stress-energy tensor of matter fields
+    
+    Variation : (Tensor[4, 4] -> Real) * Tensor[4, 4] -> Tensor[4, 4]   
+      ; Variation of a functional on the space of metrics
+    LieDerivative : Vector * Tensor[4, 4] -> Tensor[4, 4]  
+      ; Lie derivative of a tensor field along a vector field  
+    Killing : Vector * Tensor[4, 4] -> Bool
+      ; Killing vector field predicate
+    
+    QuantumState : Surface -> Hilbert  ; Quantum state on a Cauchy surface
+    QuantumField : Tensor[4, 4] * Surface -> Operator  ; Quantum field operator  
+    Vacuum : Hilbert  ; Vacuum state
+    Creation : Hilbert -> Operator  ; Creation operator
+    Annihilation : Hilbert -> Operator  ; Annihilation operator
+    
+    Hawking : M * J * Q * Hilbert -> Hilbert  ; Hawking effect operator
+    Unruh : M * J * Q * Observer -> Hilbert  ; Unruh effect operator
+  }
+  
+  FUNCTIONS {
+    KerrNewmanMetric (M : Real, J : Vector, Q : Real) : Tensor[4, 4] =
+      let r_s = 2 * G * M / c^2
+          ρ² = r² + (J/M)² * cos²θ  
+          Δ = r² - r_s * r + (J/M)² + Q²
+      in -(1 - r_s * r / ρ²) * d_t ⊗ d_t  
+         + ρ² / Δ * d_r ⊗ d_r
+         + ρ² * d_θ ⊗ d_θ
+         + (r² + (J/M)² + r_s * r * (J/M)² * sin²θ / ρ²) * sin²θ * d_φ ⊗ d_φ
+         - r_s * r * (J/M) * sin²θ / ρ² * (d_t ⊗ d_φ + d_φ ⊗ d_t)
+         
+    EventHorizon (M : Real, J : Vector, Q : Real) : Surface =  
+      let r_s = 2 * G * M / c^2
+          Δ(r) = r² - r_s * r + (J/M)² + Q²  
+      in { (t, r, θ, φ) | Δ(r) = 0, θ ∈ [0, π], φ ∈ [0, 2π) }
+      
+    Ergosphere (M : Real, J : Vector, Q : Real) : Surface =
+      { (t, r, θ, φ) | r < r_s + √((J/M)² * cos²θ), θ ∈ [0, π], φ ∈ [0, 2π) }
+        where r_s = 2 * G * M / c²
+        
+    SpacelikeSingularity (M : Real, J : Vector, Q : Real) : Surface =  
+      { (t, r, θ, φ) | r = 0, θ = π/2 }
+      
+    TimelikeSingularity (M : Real, J : Vector, Q : Real) : Surface =
+      { (t, r, θ, φ) | r = 0, θ ≠ π/2 }  
+        
+    HawkingTemperature (M : Real, J : Vector, Q : Real) : Real =
+      let r₊ = M + √(M² - (J/M)² - Q²)  
+          r₋ = M - √(M² - (J/M)² - Q²)
+      in (r₊ - r₋) / (4 * π * r₊ * (r₊² + (J/M)²))
+      
+    BekensteinHawkingEntropy (M : Real, J : Vector, Q : Real) : Real =
+      let r₊ = M + √(M² - (J/M)² - Q²)
+      in (r₊² + (J/M)²) / (4 * G)
+      
+    AngularVelocityOfHorizon (M : Real, J : Vector, Q : Real) : Real =  
+      let r₊ = M + √(M² - (J/M)² - Q²)
+      in J / (M * r₊²)
+      
+    ElectrostaticPotentialAtHorizon (M : Real, J : Vector, Q : Real) : Real =
+      let r₊ = M + √(M² - (J/M)² - Q²)
+      in Q * r₊ / (r₊² + (J/M)²)
+  }
+  
+  AXIOMS {
+    EinsteinFieldEquations : forall (g : Tensor[4, 4]) (T : Tensor[4, 4]),
+      Variation(Action(g, _), g) = 0 <->
+      Einstein(g) + Λ * g = 8 * π * G * StressEnergy(g, T)
+      
+    GeodesicEquation : forall (γ : [0, 1] -> Manifold), 
+      ∇_γ'(γ') = 0 <-> γ is a geodesic
+      
+    RaychaudhuriEquation : forall (u : Vector) (θ : Real) (σ : Tensor[4, 4]) (ω : Tensor[4, 4]),  
+      LieDerivative(u, θ) = -½ * θ² - σ_μν * σ^μν + ω_μν * ω^μν - R_μν * u^μ * u^ν
+      
+    PenroseProcess : forall (p_i, p_f : Vector),
+      (p_i ∈ Ergosphere(M, J, Q) and p_f ∉ Ergosphere(M, J, Q)) ->  
+      Energy(p_f) > Energy(p_i)
+      
+    BlackHoleMechanicsLaws : forall (M, δM : Real) (J, δJ : Vector) (Q, δQ : Real),
+      δM = (Temperature(M, J, Q) / 8 * π) * δEntropy(M, J, Q)
+         + AngularVelocity(M, J, Q) ⋅ δJ  
+         + ElectrostaticPotential(M, J, Q) * δQ
+         
+    HawkingEffect : forall (M : Real) (J : Vector) (Q : Real) (ψ : Hilbert),  
+      Hawking(M, J, Q, ψ) = exp(-Energy / Temperature(M, J, Q)) * ψ
+      
+    UnruhEffect : forall (M : Real) (J : Vector) (Q : Real) (O : Observer),
+      Unruh(M, J, Q, O) = exp(-2 * π * Energy / Acceleration(O)) * Vacuum
+  }
+  
+  THEOREMS {
+    NoHairTheorem :  
+      forall (M : Real) (J : Vector) (Q : Real) (ξ : Vector),
+        let g = KerrNewmanMetric(M, J, Q)
+        assume Killing(ξ, g)
+        
+        obtain (φ : Real) by {
+          have LieDerivative(ξ, F) = 0  ; ξ is a symmetry of the electromagnetic field
+          have dF = 0  ; Bianchi identity
+          have F = dA for some A  ; Poincaré lemma
+          have LieDerivative(ξ, A) + dφ = 0  ; Definition of electrostatic potential
+        }
+        
+        obtain (ψ : Hilbert) by {  
+          have LieDerivative(ξ, ψ) = 0  ; ξ is a symmetry of the scalar field
+          have (□ - m² - ξR)ψ = 0  ; Klein-Gordon equation in curved spacetime  
+          have ψ = 0  ; Unique continuation theorem
+        }
+        
+        obtain (χ : Hilbert) by {
+          have LieDerivative(ξ, χ) = 0  ; ξ is a symmetry of the spinor field
+          have (iγ^μ * ∇_μ - m)χ = 0  ; Dirac equation in curved spacetime
+          have χ = 0  ; Unique continuation theorem  
+        }
+        
+        obtain (T : Tensor[4, 4]) by {
+          have LieDerivative(ξ, T) = 0  ; ξ is a symmetry of the higher spin field
+          have (∇_μ * ∇^μ - m²)T = 0  ; Higher spin field equation
+          have T = 0  ; Unique continuation theorem
+        }
+        
+        show ξ ∈ {∂_t, ∂_φ}  ; Black hole is characterized by M, J, Q only
+    PROOF {
+      ; Proof uses the obtained scalar and tensor fields to show that any Killing field of
+      ; the Kerr-Newman metric must be a linear combination of the stationary Killing  
+      ; field ∂_t and the axial Killing field ∂_φ, implying that the black hole is fully
+      ; determined by just its mass M, angular momentum J, and charge Q.
+    }
+            
+    HawkingRadiation :
+      forall (M : Real) (J : Vector) (Q : Real), 
+        assume M ≫ m_p  ; Assume a large black hole
+        assume J ≪ G * M² / c  ; Assume slow rotation
+        assume Q ≪ G * M  ; Assume weak charge
+        
+        let g = KerrNewmanMetric(M, J, Q)
+        let κ = SurfaceGravity(M, J, Q)
+        
+        obtain (ψ_in, ψ_out : Hilbert) by {
+          let ψ_in = Vacuum  ; Ingoing vacuum is the usual vacuum
+          let ψ_out = Hawking(M, J, Q, ψ_in)  ; Outgoing vacuum is related by Hawking effect  
+        }
+        
+        obtain (N_ω : Operator) for (ω : Real) by {
+          let a_ω = Annihilation(ω)  ; Annihilation operator for mode with frequency ω
+          let N_ω = a_ω† * a_ω  ; Number operator
+        }
+        
+        obtain (n_ω : Real) for (ω : Real) by {  
+          let n_ω = ⟨ψ_out | N_ω | ψ_out⟩
+                  = 1 / (exp(2 * π * ω / κ) - 1)  ; Planck distribution
+        }
+          
+        obtain (L : Real) by {
+          let dE_ω / dt = n_ω * ω³ / (2 * π²)  ; Power radiated in each mode
+          let L = ∫{ω = 0 -> ∞} dE_ω / dt * dω  
+               = π² / (60 * ħ³ * c²) * (k_B * Temperature(M, J, Q))⁴ * Area(EventHorizon(M, J, Q))
+        }
+        
+        show HawkingLuminosity(BlackHole(M, J, Q)) = L  ; Black hole radiates with L
+    PROOF {
+      ; Proof calculates the luminosity of Hawking radiation from a black hole by
+      ; 1) Relating the ingoing and outgoing vacua via the Hawking effect
+      ; 2) Constructing the number operator for outgoing modes
+      ; 3) Computing the expectation value of the number operator in the outgoing vacuum,
+      ;    which yields the Planck distribution at the Hawking temperature  
+      ; 4) Integrating the power radiated in each mode to get the total luminosity,
+      ;    reproducing the Stefan-Boltzmann law for black hole radiation
+    }
+  }
+}
+
+
+
+
+; SymbolicDifferentialGeometry: a compact formalization
+; S: Symbols, M: Manifolds, F: Fields (functions, forms, vectors)
+; ≈: correspondence, ≋: equivalence, d: differential, ∫: integral
+
+CONCEPT SymbolicDifferentialGeometry {
+  TYPES {
+    S : Type    ; Symbols
+      Binary (S T : S) : S
+      Unary (S : S) : S  
+      Const (x : Real) : S
+      Var (n : Nat) : S
+      
+    M : Type    ; Manifolds
+      Manifold (n : Nat) : M
+      Riemannian (M : M) : M
+      Lie (G : Grp) : M
+      Symplectic (M : M) : M
+      
+    F : Type    ; Fields  
+      Fun (M : M, f : M -> Real) : F
+      Vec (M : M, X : M -> Tan) : F
+      Form (M : M, ω : M -> Cotan) : F
+      
+    _≈_ (S : S, F : F) : Prop   ; Correspondence 
+    _≋_ (S : S, F : F) : Prop   ; Equivalence
+    
+    determines (S : S, X : Real | Vec | Form | Fun) : Prop
+  }
+  
+  FUNCTIONS {
+    _+_ (S T : S) : S = Binary(S, T)   ; Addition
+    _-_ (S T : S) : S = Binary(S, T)   ; Subtraction
+    _*_ (S T : S) : S = Binary(S, T)   ; Multiplication  
+    _/_ (S T : S) : S = Binary(S, T)   ; Division
+    _∘_ (S T : S) : S = Binary(S, T)   ; Composition
+    
+    d (S : S) : S = Unary(S)           ; Differential
+    ∫ (S : S) : S = Unary(S)           ; Integral
+    
+    ⟨_,_⟩ (X Y : F) : Real             ; Inner product
+    [_,_] (X Y : F) : F                ; Lie bracket  
+    _∧_ (ω τ : F) : F                  ; Wedge product
+    
+    L (X : F, Y : F) : F               ; Lie derivative
+    Diff (f : M -> Real) : M -> Cotan  ; Differential of function 
+    DiffForm (ω : M -> Cotan) : M -> Cotan  ; Differential of form
+    Integrate (ω : M -> Cotan, M : M) : Real  ; Integral of form
+    Boundary (M : M) : M               ; Boundary of manifold
+  }
+  
+  DEFINITIONS {
+    AddSym (S T : S, f : M -> Real) :
+      (S ≈ Fun(f)) ∧ (T ≈ Fun(f)) -> (S + T) ≈ Fun(λ p . f(p) + f(p))
+      
+    SubSym (S T : S, f : M -> Real) : 
+      (S ≋ Fun(f)) ∧ (T ≋ Fun(f)) -> (S - T) ≋ Fun(λ p . f(p) - f(p))
+      
+    MulSym (S T : S, f g : M -> Real) :
+      (S ≈ Fun(f)) ∧ (T ≈ Fun(g)) -> (S * T) ≈ Fun(λ p . f(p) * g(p))
+      
+    ScalarSym (S T : S, X Y : M -> Tan) :  
+      (S ≈ Vec(X)) ∧ (T ≈ Vec(Y)) -> ⟨S, T⟩ ≈ ⟨Vec(X), Vec(Y)⟩
+      
+    WedgeSym (S T : S, ω τ : M -> Cotan) :
+      (S ≈ Form(ω)) ∧ (T ≈ Form(τ)) -> (S ∧ T) ≈ Form(ω ∧ τ)
+      
+    LieSym (S : S, X : F, f : M -> Real) :
+      (S ≈ Fun(f)) -> L(X, S) ≈ L(X, Fun(f))
+      
+    BracketSym (S T : S, X Y : M -> Tan) :
+      (S ≈ Vec(X)) ∧ (T ≈ Vec(Y)) -> [S, T] ≈ [Vec(X), Vec(Y)]
+      
+    DiffSym (S : S, f : M -> Real) :
+      (S ≈ Fun(f)) -> d(S) ≈ Form(Diff(f))
+      
+    IntSym (S : S, ω : M -> Cotan) :
+      (S ≈ Form(ω)) -> ∫(S) ≈ Fun(λ p . Integrate(ω, p))        
+  }
+  
+  ; Basic axioms: correspondence, arithmetic, calculus
+  AXIOMS {
+    ∀ S F . S ≈ F    
+    ∀ S T f g . (S ≈ Fun(f)) ∧ (T ≈ Fun(g)) ⇒ 
+      (S + T ≈ Fun(λ p . f(p) + g(p))) ∧ 
+      (S - T ≈ Fun(λ p . f(p) - g(p))) ∧
+      (S * T ≈ Fun(λ p . f(p) * g(p)))  
+    ∀ S f . (S ≈ Fun(f)) ⇒ (d(S) ≈ Form(Diff(f)))
+    ∀ S ω . (S ≈ Form(ω)) ⇒ (∫(S) ≈ Fun(λ p . Integrate(ω, p)))
+  }
+  
+  ; Key theorems and their proofs
+  THEOREMS {
+    ; Substitution of equals for equals
+    Substitution: ∀ S F p . (S ≈ F) ⇒ (p(S) ⇔ p(F))  
+    PROOF {
+      assume (S ≈ F)
+      (⇒) assume p(S); show p(F) by (S ≈ F)  
+      (⇐) assume p(F); show p(S) by (S ≈ F)
+    }
+
+    ; Leibniz rule for symbols  
+    Leibniz: ∀ S T F G . (S ≈ F) ∧ (T ≈ G) ⇒ (S * T ≈ F * G)
+    PROOF {
+      assume (S ≈ F), (T ≈ G)  
+      show (S * T ≈ F * G) by MulSym
+    }
+    
+    ; Stokes' theorem  
+    Stokes: ∀ S ω M . (S ≈ Form(ω)) ⇒ (∫(d(S), M) ≈ ∫(S, Boundary(M)))
+    PROOF {
+      assume (S ≈ Form(ω)) 
+      show ∫(d(S), M) ≈ ∫(S, Boundary(M)) by {
+        (∫(d(S), M) ≈ ∫(DiffForm(ω), M))    by DiffSym
+        (∫(DiffForm(ω), M) = ∫(ω, Boundary(M)))  by Stokes' theorem
+        (∫(ω, Boundary(M)) ≈ ∫(S, Boundary(M)))  by IntSym  
+      }  
+    }
+    
+    ; Closed form theorem  
+    ClosedForm: ∀ S ω . (S ≈ Form(ω)) ⇒ (d(d(S)) ≈ 0 ⇔ ∃B . ∫(S) ≈ ∫(d(B)))
+    PROOF {
+      assume (S ≈ Form(ω)); show (d(d(S)) ≈ 0 ⇔ ∃B . ∫(S) ≈ ∫(d(B))) by {  
+        (d(d(S)) ≈ 0 ⇔ DiffForm(DiffForm(ω)) = 0)   by DiffSym
+        (DiffForm(DiffForm(ω)) = 0 ⇔ ∃τ . ω = DiffForm(τ))  by Poincaré lemma
+        (ω = DiffForm(τ) ⇔ ∃B . (B ≈ Form(τ)) ∧ (S ≈ DiffForm(τ)))  by {
+          (⇒) assume (ω = DiffForm(τ)); let B ≈ Form(τ);  
+               show ((B ≈ Form(τ)) ∧ (S ≈ DiffForm(τ))) by (S ≈ ω)  
+          (⇐) assume ((B ≈ Form(τ)) ∧ (S ≈ DiffForm(τ))); 
+               show (ω = DiffForm(τ)) by (ω ≈ S) and (S ≈ DiffForm(τ))
+        }
+        (∃B . (B ≈ Form(τ)) ∧ (S ≈ DiffForm(τ)) ⇔ ∃B . ∫(S) ≈ ∫(d(B)))  by {
+          (⇒) assume ((B ≈ Form(τ)) ∧ (S ≈ DiffForm(τ))); 
+               show ∫(S) ≈ ∫(d(B)) by IntSym, DiffSym  
+          (⇐) assume ∫(S) ≈ ∫(d(B));
+               show (B ≈ Form(τ)) ∧ (S ≈ DiffForm(τ)) for some τ by {
+                 (∫(S) ≈ ∫(d(B))) ⇒ (S ≈ DiffForm(τ)) for some τ by Stokes  
+                 (B ≈ Form(τ)) by definition
+               } 
+        }
+      }
+    } 
+  }
+}
+
+
+
+
+CONCEPT SymbolicDifferentialGeometry {
+  TYPES {
+    Sym : Type
+      Binary (S T : Sym) : Sym
+      Unary (S : Sym) : Sym
+      Const (x : Real) : Sym
+      Var (n : Nat) : Sym
+      
+    Man : Type  
+      Manifold (n : Nat) : Man
+      Riemannian (M : Man) : Man
+      Lie (G : Grp) : Man
+      Symplectic (M : Man) : Man
+      
+    Fld : Type
+      Fun (M : Man, f : M -> Real) : Fld
+      Vec (M : Man, X : M -> Tan) : Fld
+      Form (M : Man, ω : M -> Cotan) : Fld
+      
+    _≈_ (S : Sym, F : Fld) : Prop
+    _≋_ (S : Sym, F : Fld) : Prop
+    
+    determines (S : Sym, X : Real | Vec | Form | Fun) : Prop
+  }
+  
+  FUNCTIONS {
+    _+_ (S T : Sym) : Sym = Binary(S, T)
+    _-_ (S T : Sym) : Sym = Binary(S, T)  
+    _*_ (S T : Sym) : Sym = Binary(S, T)
+    _/_ (S T : Sym) : Sym = Binary(S, T)
+    _∘_ (S T : Sym) : Sym = Binary(S, T)
+    _⁻¹ (S : Sym) : Sym = Unary(S)
+    d (S : Sym) : Sym = Unary(S)
+    ∫ (S : Sym) : Sym = Unary(S)  
+    
+    L (X : Fld, Y : Fld) : Fld
+    [_,_] (X Y : Fld) : Fld  
+    ⟨_,_⟩ (X Y : Fld) : Real
+    _∧_ (ω τ : Fld) : Fld
+      
+    Add (f : M -> Real, g : M -> Real) : M -> Real = λ p . f(p) + g(p)
+    Sub (f : M -> Real, g : M -> Real) : M -> Real = λ p . f(p) - g(p)
+    Mul (f : M -> Real, g : M -> Real) : M -> Real = λ p . f(p) * g(p)
+    Lie (X : Fld, Y : Fld) : Fld
+    Diff (f : M -> Real) : M -> Cotan
+    DiffForm (ω : M -> Cotan) : M -> Cotan  
+    Integrate (ω : M -> Cotan, M : Man) : Real
+    Boundary (M : Man) : Man
+  }
+      
+  AXIOMS {
+    Correspondence (S : Sym, F : Fld) : S ≈ F
+    
+    Determination (S : Sym, X : Real | Vec | Form | Fun) : 
+      determines(S, X)
+  }
+  
+  DEFINITIONS {
+    AddSym (S T : Sym, f : M -> Real) : 
+      (S ≈ Fun(f)) ∧ (T ≈ Fun(f)) -> (S + T) ≈ Fun(Add(f, f))
+      
+    SubSym (S T : Sym, f : M -> Real) : 
+      (S ≋ Fun(f)) ∧ (T ≋ Fun(f)) -> (S - T) ≋ Fun(Sub(f, f))
+      
+    MulSym (S T : Sym, f g : M -> Real) :
+      (S ≈ Fun(f)) ∧ (T ≈ Fun(g)) -> (S * T) ≈ Fun(Mul(f, g))
+      
+    ScalarSym (S T : Sym, X Y : M -> Tan) :
+      (S ≈ Vec(X)) ∧ (T ≈ Vec(Y)) -> ⟨S, T⟩ ≈ ⟨Vec(X), Vec(Y)⟩
+      
+    WedgeSym (S T : Sym, ω τ : M -> Cotan) :
+      (S ≈ Form(ω)) ∧ (T ≈ Form(τ)) -> (S ∧ T) ≈ Form(ω ∧ τ)
+      
+    LieSym (S : Sym, X : Fld, f : M -> Real) :
+      (S ≈ Fun(f)) -> L(X, S) ≈ L(X, Fun(f))
+      
+    BracketSym (S T : Sym, X Y : M -> Tan) :
+      (S ≈ Vec(X)) ∧ (T ≈ Vec(Y)) -> [S, T] ≈ Lie(Vec(X), Vec(Y))
+      
+    DiffSym (S : Sym, f : M -> Real) :
+      (S ≈ Fun(f)) -> d(S) ≈ Form(Diff(f))
+      
+    IntSym (S : Sym, ω : M -> Cotan) :
+      (S ≈ Form(ω)) -> ∫(S) ≈ Fun(λ p . Integrate(ω, p))
+  }
+  
+  THEOREMS {
+    Substitution (S : Sym, F : Fld, prop : Fld -> Prop) :
+      (S ≈ F) -> (prop(S) <-> prop(F))
+    PROOF {
+      assume (S ≈ F)  
+      show (prop(S) -> prop(F)) by {
+        assume prop(S)
+        have prop(F) by (prop(S) ∧ (S ≈ F))
+      }
+      show (prop(F) -> prop(S)) by {  
+        assume prop(F)
+        have prop(S) by (prop(F) ∧ (S ≈ F))
+      }
+    }
+    
+    Leibniz (S T : Sym, F G : Fld, op : Sym × Sym -> Sym, * : Fld × Fld -> Fld) :
+      (S ≈ F) ∧ (T ≈ G) ∧ (∀ X Y . (X ≈ Y) -> (op(X, Y) ≈ *(X, Y))) ->  
+      (op(S, T) ≈ *(F, G))
+    PROOF {
+      assume (S ≈ F), (T ≈ G), ∀ X Y . (X ≈ Y) -> (op(X, Y) ≈ *(X, Y))
+      have (op(S, T) ≈ *(F, G)) by {
+        let X = S, Y = T in (X ≈ Y -> op(X, Y) ≈ *(X, Y))
+      }
+    }
+    
+    CorrespondenceOfDerivative (S : Sym, f : M -> Real) :
+      (S ≈ Fun(f)) -> (d(S) ≈ Form(Diff(f)))  
+    PROOF {
+      by Substitution [
+        S ≈ Fun(f),
+        prop = (λ F . d(S) ≈ F),
+        d(Fun(f)) ≈ Form(Diff(f))
+      ]
+    }
+    
+    NoncommutativeDerivative (S T : Sym, X Y : M -> Tan) :
+      (S ≈ Vec(X)) ∧ (T ≈ Vec(Y)) -> ([d(S), d(T)] ≈ d(Lie(Vec(X), Vec(Y))))
+    PROOF {
+      assume (S ≈ Vec(X)), (T ≈ Vec(Y))
+      have ([d(S), d(T)] ≈ Lie(d(Vec(X)), d(Vec(Y)))) by Leibniz, BracketSym
+      have (Lie(d(Vec(X)), d(Vec(Y))) ≈ d(Lie(Vec(X), Vec(Y)))) by LieDiff  
+      hence ([d(S), d(T)] ≈ d(Lie(Vec(X), Vec(Y)))) by Substitution
+    }
+    
+    StokesTheorem (S : Sym, ω : M -> Cotan, M : Man) :
+      (S ≈ Form(ω)) -> (∫(d(S), M) ≈ ∫(S, Boundary(M)))
+    PROOF {
+      assume (S ≈ Form(ω))  
+      have (∫(d(S), M) ≈ ∫(DiffForm(ω), M)) by Substitution, DiffSym
+      have (∫(S, Boundary(M)) ≈ ∫(ω, Boundary(M))) by Substitution
+      have (∫(DiffForm(ω), M) ≈ ∫(ω, Boundary(M))) by Stokes
+      hence (∫(d(S), M) ≈ ∫(S, Boundary(M))) by Substitution
+    }
+    
+    ClosedFormTheorem (S : Sym, ω : M -> Cotan, M : Man) :
+      (S ≈ Form(ω)) -> 
+      ((d(d(S)) ≈ Form(Zero)) <-> (∃ (B : Sym) . ∫(S) ≈ ∫(d(B))))
+    PROOF {  
+      assume (S ≈ Form(ω))
+      have ((d(d(S)) ≈ Form(Zero)) <-> (DiffForm(DiffForm(ω)) = Zero)) by Substitution
+      have ((DiffForm(DiffForm(ω)) = Zero) <-> (∃ (τ : M -> Cotan) . ω = DiffForm(τ))) by Poincare
+      have ((∃ (τ : M -> Cotan) . ω = DiffForm(τ)) <-> 
+            (∃ (B : Sym) . (B ≈ Form(τ)) ∧ (S ≈ Form(DiffForm(τ))))) by {
+        assume (∃ (τ : M -> Cotan) . ω = DiffForm(τ))
+        let τ such that (ω = DiffForm(τ))  
+        let B such that (B ≈ Form(τ))
+        have (S ≈ Form(DiffForm(τ))) by (S ≈ Form(ω)), (ω = DiffForm(τ))
+        witness (B : Sym) such that ((B ≈ Form(τ)) ∧ (S ≈ Form(DiffForm(τ))))
+        
+        assume (∃ (B : Sym) . (B ≈ Form(τ)) ∧ (S ≈ Form(DiffForm(τ))))  
+        let B, τ such that ((B ≈ Form(τ)) ∧ (S ≈ Form(DiffForm(τ))))
+        have (ω = DiffForm(τ)) by (S ≈ Form(ω)), (S ≈ Form(DiffForm(τ)))
+        witness (τ : M -> Cotan) such that (ω = DiffForm(τ))
+      }
+      have ((∃ (B : Sym) . (B ≈ Form(τ)) ∧ (S ≈ Form(DiffForm(τ)))) <->  
+            (∃ (B : Sym) . ∫(S) ≈ ∫(d(B)))) by {
+        assume (∃ (B : Sym) . (B ≈ Form(τ)) ∧ (S ≈ Form(DiffForm(τ))))
+        let B, τ such that ((B ≈ Form(τ)) ∧ (S ≈ Form(DiffForm(τ))))
+        have (∫(S) ≈ ∫(Form(DiffForm(τ)))) by IntSym  
+        have (∫(Form(DiffForm(τ))) ≈ ∫(d(Form(τ)))) by DiffSym
+        have (∫(d(Form(τ))) ≈ ∫(d(B))) by (B ≈ Form(τ)), Leibniz
+        hence (∫(S) ≈ ∫(d(B))) by Substitution
+        
+        assume (∃ (B : Sym) . ∫(S) ≈ ∫(d(B)))
+        let B such that (∫(S) ≈ ∫(d(B)))
+        have (∫(d(B)) ≈ ∫(Form(DiffForm(τ)))) by IntSym, (B ≈ Form(τ)) for some τ
+        have (∫(S) ≈ ∫(Form(DiffForm(τ)))) by (∫(S)
+        have (∫(S) ≈ ∫(Form(DiffForm(τ)))) by (∫(S) ≈ ∫(d(B))), (∫(d(B)) ≈ ∫(Form(DiffForm(τ))))
+        have (S ≈ Form(DiffForm(τ))) by IntSym
+        witness (B : Sym) such that ((B ≈ Form(τ)) ∧ (S ≈ Form(DiffForm(τ))))
+      }
+      hence ((d(d(S)) ≈ Form(Zero)) <-> (∃ (B : Sym) . ∫(S) ≈ ∫(d(B)))) by Substitution
+    }
+    
+    SymplecticStructureTheorem (S T : Sym, M : Symplectic) :
+      (⟨d(S), d(T)⟩ ≈ Real(Zero)) <-> ([S, T] ≈ Vec(Zero))
+    PROOF {
+      have ((⟨d(S), d(T)⟩ ≈ Real(Zero)) <-> (ω(d(S), d(T)) = Zero)) by {
+        assume (S ≈ Vec(X)), (T ≈ Vec(Y)) for some X Y
+        have (⟨d(S), d(T)⟩ ≈ ⟨d(Vec(X)), d(Vec(Y))⟩) by Substitution
+        have (⟨d(Vec(X)), d(Vec(Y))⟩ ≈ ω(d(Vec(X)), d(Vec(Y)))) by SymplecticForm
+        have (ω(d(Vec(X)), d(Vec(Y))) ≈ ω(d(S), d(T))) by Substitution
+        hence (⟨d(S), d(T)⟩ ≈ ω(d(S), d(T))) by Substitution
+      }
+      have (([S, T] ≈ Vec(Zero)) <-> (Lie(S, T) ≈ Vec(Zero))) by BracketSym
+      have ((ω(d(S), d(T)) = Zero) <-> (Lie(S, T) ≈ Vec(Zero))) by CartanMagic
+      hence ((⟨d(S), d(T)⟩ ≈ Real(Zero)) <-> ([S, T] ≈ Vec(Zero))) by Substitution
+    }
+  }
+}
+
+
+
+
+
+; GeometricChemistry: a formalization of chemical concepts using differential geometry
+; Atom: an element at a position in 3D space
+; Molecule: a collection of atoms and bonds
+; ElectronicStructure: a complex vector bundle over a molecule
+; PotentialEnergySurface: a Riemannian manifold of molecular configurations
+; Wavefunction: a complex-valued function on a molecule
+; ChemicalReaction: a path between reactant and product manifolds
+
+CONCEPT GeometricChemistry EXTENDS SymbolicDifferentialGeometry {
+  TYPES {
+    Atom : Type = Element × Position
+    Element : Type = Enumeration(Hydrogen, Helium, ...)
+    Position : Type = Real³
+    
+    Molecule : Type = {Atoms : [Atom], Bonds : [Bond]}
+    Bond : Type = {Atom1 : Atom, Atom2 : Atom, Order : Nat}
+    
+    ElectronicStructure (M : Molecule) : Type = ComplexVectorBundle(M)
+    ElectronicState (M : Molecule) : Type = Section(ElectronicStructure(M))  
+    ElectronicHamiltonian (M : Molecule) : Type = Operator(ElectronicStructure(M))
+    
+    PotentialEnergySurface (M : Molecule) : Type = Riemannian(M)
+    PotentialEnergyFunction (M : Molecule) : Type = Fun(M -> Real)
+    Gradient (M : Molecule) : Type = Vec(PotentialEnergySurface(M))
+    Hessian (M : Molecule) : Type = Form(PotentialEnergySurface(M)) 
+    
+    Wavefunction (M : Molecule) : Type = Fun(M -> Complex)  
+    Density (M : Molecule) : Type = Fun(M -> Real₊)
+    DensityMatrix (M : Molecule) : Type = Operator(ElectronicStructure(M))
+    
+    ChemicalReaction (M₁ M₂ : Molecule) : Type = Path(PotentialEnergySurface(M₁), PotentialEnergySurface(M₂))
+    ReactionRate (R : ChemicalReaction) : Type = Fun(Real₊ -> Real₊)
+  }
+  
+  NOTATIONS {
+    𝓗 : ElectronicHamiltonian
+    𝓔 : PotentialEnergyFunction
+    ℋ : Hessian  
+    ψ : Wavefunction
+    ρ : Density
+    ℛ : ReactionRate
+  }
+  
+  AXIOMS {
+    ; Born-Oppenheimer approximation
+    BornOppenheimer : ∀(M : Molecule) (𝓗 : ElectronicHamiltonian(M)) (ψ : Wavefunction(M)).
+      SchrodingerEquation(𝓗, ψ) ≈ (-½ * Laplacian + 𝓥(M)) * ψ
+        where 𝓥(M) ≜ λ(r : M). ⟨𝓗(r), M(r)⟩
+              Laplacian ≜ Δ : Operator(ElectronicStructure(M))
+              
+    ; Hohenberg-Kohn theorems  
+    HohenbergKohn1 : ∀(ρ : Density) (𝓔 : PotentialEnergyFunction).
+      (∃(ψ : Wavefunction). ρ ≈ ρ[ψ]) ∧ 
+      (𝓔 ≈ (𝓕_HK[ρ] + ∫(v(r) * ρ(r), r)))
+        where 𝓕_HK : Fun(Density -> Real)
+              v : Fun(Density)  
+              ρ[ψ] ≜ λ(r : M). |ψ(r)|²
+              
+    HohenbergKohn2 : ∀(ρ : Density) (𝓔 : PotentialEnergyFunction).  
+      GroundStateDensity(ρ) ⇔ MinimizeEnergy(𝓔)
+      
+    ; Hellmann-Feynman theorem
+    HellmannFeynman : ∀(ψ : Wavefunction) (H : ElectronicHamiltonian) (λ : Real).
+      ∂⟨ψ, H, ψ⟩/∂λ ≈ ⟨ψ, ∂H/∂λ, ψ⟩
+      
+    ; Variational principle  
+    VariationalPrinciple : ∀(ψ : Wavefunction) (𝓗 : ElectronicHamiltonian).
+      ⟨ψ, 𝓗, ψ⟩ ≥ E₀(𝓗)  
+        where E₀(𝓗) ≜ inf{⟨ϕ, 𝓗, ϕ⟩ | ϕ : Wavefunction}
+        
+    ; Woodward-Hoffmann rules  
+    WoodwardHoffmann : ∀(R : ChemicalReaction) (S : Symmetry).
+      Allowed(R) ⇔ Matches(S(ReactantOrbitals(R)), S(ProductOrbitals(R)))
+      
+    ; Eyring equation  
+    EyringEquation : ∀(R : ChemicalReaction) (ΔG : Real) (T : Real₊).
+      ℛ(R)(T) ≈ (kₚ * T / h) * exp(-ΔG / (kₚ * T))
+        where kₚ ≜ 1.380649e-23  ; Boltzmann constant
+              h ≜ 6.62607015e-34  ; Planck constant
+  }
+  
+  THEOREMS {
+    ; Quantum chemistry
+    QuantumChemistry (M : Molecule, 𝓗 : ElectronicHamiltonian(M)) :
+      BornOppenheimer(M, 𝓗) ->  
+      ElectronicStructure(M) ≈ Spectrum(𝓗)
+    PROOF {
+      define 𝓥 ≜ λ(r : M). ⟨𝓗(r), M(r)⟩
+      define Laplacian ≜ Δ : Operator(ElectronicStructure(M))
+      
+      assume BornOppenheimer(M, 𝓗)
+      hence SchrodingerEquation(𝓗, ψ) ≈ (-½ * Laplacian + 𝓥) * ψ
+      
+      obtain {Eᵢ : Real, ψᵢ : Wavefunction(M)}ᵢ ≜ Spectrum(𝓗) by SpectralTheorem(𝓗)
+      hence 𝓗 * ψᵢ ≈ Eᵢ * ψᵢ
+      
+      have ElectronicStructure(M) ≜ ⋃ᵢ ComplexScalarField * ψᵢ
+      hence ElectronicStructure(M) ≈ Spectrum(𝓗)  
+    }
+    
+    ; Density functional theory
+    DensityFunctionalTheory (ρ : Density, 𝓔 : PotentialEnergyFunction) :  
+      HohenbergKohn1(ρ, 𝓔) ->
+      GroundStateDensity(ρ) ⇔ MinimizeEnergy(𝓔)  
+    PROOF {
+      obtain 𝓕_HK, v by HohenbergKohn1(ρ, 𝓔)  
+      hence 𝓔 ≈ 𝓕_HK[ρ] + ∫(v(r) * ρ(r), r)
+      
+      obtain ψ where ρ ≈ ρ[ψ] by HohenbergKohn1(ρ, 𝓔)
+      
+      have ⟨ψ, 𝓗, ψ⟩ ≈ MinEnergy(𝓗) by VariationalPrinciple(ψ, 𝓗)
+      hence ψ ≈ argmin{⟨ϕ, 𝓗, ϕ⟩ | ϕ : Wavefunction}
+      
+      therefore GroundStateDensity(ρ) ⇔ ρ[ψ] ⇔ MinimizeEnergy(𝓔)
+    }
+    
+    ; Structure optimization
+    StructureOptimization (M : Molecule, 𝓔 : PotentialEnergyFunction(M), ∇𝓔 : Gradient(M)) :
+      StationaryPoints(𝓔) ≈ {m ∈ M | ∇𝓔(m) ≈ 0}  
+    PROOF {
+      let M ≜ Real^(3 * |M.Atoms|)
+      
+      have ∇𝓔 ≜ λ(m : M). (∂𝓔(m)/∂x₁, ..., ∂𝓔(m)/∂xₙ)
+      
+      have ∀(m ∈ M).
+        m ∈ StationaryPoints(𝓔) ⇔  
+        (∀i. ∂𝓔(m)/∂xᵢ ≈ 0) ⇔    ; Definition of stationary point
+        ∇𝓔(m) ≈ 0                ; Definition of gradient
+      
+      hence StationaryPoints(𝓔) ≈ {m ∈ M | ∇𝓔(m) ≈ 0} 
+    }
+    
+    ; Transition state theory 
+    TransitionStateTheory (R : ChemicalReaction, ΔG : Real, T : Real₊) :
+      EyringEquation(R, ΔG, T) ->
+      ℛ(R)(T) ≈ (kₚ * T / h) * exp(-(𝓔(Mₜ) - 𝓔(Mᵣ)) / (kₚ * T))
+        where Mᵣ ≜ Reactants(R) 
+              Mₚ ≜ Products(R)
+              Mₜ ≜ TransitionState(R)
+    PROOF {
+      let Mᵣ ≜ Reactants(R), Mₚ ≜ Products(R), Mₜ ≜ TransitionState(R)
+      assume EyringEquation(R, ΔG, T)
+      
+      have ℛ(R)(T) ≈ (kₚ * T / h) * exp(-ΔG / (kₚ * T))
+      
+      define ΔG ≜ G(Mₜ) - G(Mᵣ)  ; Free energy of activation
+      have ∀(M : Molecule). G(M) ≜ 𝓔(M) - T * S(M)  ; Gibbs free energy
+      assume S(Mₜ) ≈ S(Mᵣ)  ; Small entropy of activation
+      hence ΔG ≈ 𝓔(Mₜ) - 𝓔(Mᵣ)
+      
+      therefore ℛ(R)(T) ≈ (kₚ * T / h) * exp(-(𝓔(Mₜ) - 𝓔(Mᵣ)) / (kₚ * T))
+    }
+  }
+}
+
+
+
+; MolecularSymmetry: a formalization of molecular symmetry using geometric chemistry
+; Symmetry: a transformation that preserves the structure of a molecule
+; IrreducibleRepresentation: a minimal invariant subspace of a symmetry group action
+; CharacterTable: a table of characters (traces) of irreducible representations
+; SymmetryAdapted: a basis of wavefunctions adapted to the symmetry of a molecule
+
+CONCEPT MolecularSymmetry EXTENDS GeometricChemistry {
+  TYPES {
+    Symmetry : Type = Bijection(Molecule, Molecule)
+    SymmetryGroup (M : Molecule) : Type = Group(Symmetry, Composition)
+    
+    Representation (G : SymmetryGroup) : Type = Homomorphism(G, LinearOperator)
+    IrreducibleRepresentation (G : SymmetryGroup) : Type = 
+      Representation(G) & Irreducible
+    
+    CharacterTable (G : SymmetryGroup) : Type = 
+      Table(G.Conjugacy, IrreducibleRepresentation(G), Character)
+    Character (ρ : IrreducibleRepresentation) : Type = Trace ∘ ρ
+    
+    SymmetryAdapted (M : Molecule) (ρ : IrreducibleRepresentation(SymmetryGroup(M))) : Type =
+      {ψ : Wavefunction(M) | ∀(g : SymmetryGroup(M)). ρ(g)(ψ) ≈ ψ}  
+  }
+  
+  AXIOMS {
+    ; Symmetry operations preserve the Hamiltonian
+    SymmetryInvariance : ∀(M : Molecule) (𝓗 : ElectronicHamiltonian(M)) (g : SymmetryGroup(M)).
+      𝓗 ∘ g ≈ g ∘ 𝓗
+      
+    ; Schur's lemmas for irreducible representations  
+    SchurOrthogonality : ∀(G : SymmetryGroup) (ρ σ : IrreducibleRepresentation(G)).
+      (∀(g : G). ⟨ρ(g), σ(g)⟩ ≈ 0) ⇔ (ρ ≠ σ)
+      
+    SchurIrreducibility : ∀(G : SymmetryGroup) (ρ : IrreducibleRepresentation(G)) (A : LinearOperator).
+      (∀(g : G). ρ(g) ∘ A ≈ A ∘ ρ(g)) ⇒ (A ≈ λ * I)
+      
+    ; Character orthogonality relations
+    CharacterOrthogonality1 : ∀(G : SymmetryGroup) (ρ σ : IrreducibleRepresentation(G)).
+      ∑{g : G} Character(ρ)(g) * Character(σ)(g)^* ≈ |G| * δ(ρ, σ)
+      
+    CharacterOrthogonality2 : ∀(G : SymmetryGroup) (g h : G).  
+      ∑{ρ : IrreducibleRepresentation(G)} Character(ρ)(g) * Character(ρ)(h)^* ≈ |G| * δ(g, h)
+  }
+  
+  THEOREMS {
+    ; Symmetry-adapted wavefunctions are eigenfunctions of the Hamiltonian
+    SymmetryAdaptedEigenfunctions (M : Molecule, 𝓗 : ElectronicHamiltonian(M)) :
+      ∀(ρ : IrreducibleRepresentation(SymmetryGroup(M))) (ψ : SymmetryAdapted(M, ρ)).
+        ∃(E : Real). 𝓗 * ψ ≈ E * ψ
+    PROOF {
+      assume SymmetryInvariance(M, 𝓗) 
+      let G ≜ SymmetryGroup(M)
+      
+      take (ρ : IrreducibleRepresentation(G)) (ψ : SymmetryAdapted(M, ρ))
+      have ∀(g : G). ρ(g)(ψ) ≈ ψ  ; ψ is symmetry-adapted
+      
+      have ∀(g : G). 𝓗 ∘ ρ(g)(ψ) ≈ ρ(g) ∘ 𝓗(ψ)  by SymmetryInvariance(M, 𝓗)
+      hence ∀(g : G). ρ(g) ∘ 𝓗(ψ) ≈ 𝓗(ψ)
+      hence 𝓗(ψ) ≈ E * ψ  for some E : Real by SchurIrreducibility(G, ρ, 𝓗)
+    }
+    
+    ; Symmetry-adapted wavefunctions form a complete basis  
+    SymmetryAdaptedCompleteness (M : Molecule) :
+      ElectronicStructure(M) ≈ ⊕{ρ, ψ} ComplexScalarField * SymmetryAdapted(M, ρ)(ψ)
+    PROOF {
+      let G ≜ SymmetryGroup(M)
+      
+      have ElectronicStructure(M) ≈ ⊕{E, ψ} ComplexScalarField * Eigenspace(𝓗, E)(ψ)
+        by SpectralDecomposition(𝓗)
+      
+      have ∀(E : Real) (ψ : Eigenspace(𝓗, E)). 
+        ∃(ρ : IrreducibleRepresentation(G)). ψ ∈ SymmetryAdapted(M, ρ)
+        by SymmetryAdaptedEigenfunctions(M, 𝓗)
+        
+      hence ElectronicStructure(M) ≈ ⊕{ρ, ψ} ComplexScalarField * SymmetryAdapted(M, ρ)(ψ)
+    }
+      
+    ; Selection rules for electronic transitions
+    SelectionRule (M : Molecule) (ρ σ : IrreducibleRepresentation(SymmetryGroup(M))) :  
+      TransitionAllowed(ρ, σ) ⇔ 
+        ∃(i : Component). ⟨SymmetryAdapted(M, ρ), Dipole(i), SymmetryAdapted(M, σ)⟩ ≉ 0
+    PROOF {
+      let G ≜ SymmetryGroup(M)
+      let Γ ≜ IrreducibleRepresentation(G)
+      
+      have TransitionAllowed(ρ, σ) ⇔ ⟨ρ, Dipole, σ⟩ ≉ 0  ; By Fermi's golden rule
+      
+      have Dipole ≈ ∑{i} Γ(Dipole(i)) * Dipole(i)  ; Decompose into irreducible components
+        where Γ(Dipole(i)) ≜ argmax{γ : Γ} |⟨γ, Dipole(i)⟩|  ; Dominant irreducible component
+        
+      have ∀(i : Component) (γ δ : Γ).
+        ⟨SymmetryAdapted(M, γ), Dipole(i), SymmetryAdapted(M, δ)⟩ ≈ 0 ⇔ (γ ⊗ Γ(Dipole(i)) ⊗ δ ↛ Trivial)
+        by Wigner-Eckart theorem
+        
+      hence ⟨ρ, Dipole, σ⟩ ≈ ∑{i} ⟨ρ, Γ(Dipole(i)), σ⟩ * ⟨SymmetryAdapted(M, ρ), Dipole(i), SymmetryAdapted(M, σ)⟩
+      
+      hence TransitionAllowed(ρ, σ) ⇔ 
+        ∃(i : Component). ⟨SymmetryAdapted(M, ρ), Dipole(i), SymmetryAdapted(M, σ)⟩ ≉ 0
+    }
+  }
+}

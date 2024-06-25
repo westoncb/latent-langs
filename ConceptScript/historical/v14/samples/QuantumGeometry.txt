@@ -1,0 +1,102 @@
+CONCEPT QuantumGeometry {
+  LANGUAGE {
+    type Hilb = FiniteHilbertSpace | SeparableHilbertSpace
+    type Obs = BoundedOperator | UnboundedOperator
+    type Alg = CAR | CCR | vNAlgebra | CAlgebra
+    type Mor = CompletelyPositiveMap | UnitPreservingMap
+
+    notation "A ⊗ B" = TensorProduct(A: Hilb, B: Hilb)
+    notation "A ⊕ B" = DirectSum(A: Hilb, B: Hilb)
+    notation "A ≅ B" = Isomorphic(A: Hilb, B: Hilb)
+    notation "⟨A⟩" = AlgebraicSpan(A: Obs)
+    notation "A′" = Commutant(A: Alg)
+    notation "A ∨ B" = JoinAlgebra(A: Alg, B: Alg)
+    notation "𝔼(A)" = ExpectedValue(A: Obs)
+    
+    notation "φ : A → B" = Morphism(φ: Mor, A: Alg, B: Alg)
+    notation "φ*" = Adjoint(φ: Mor)
+    notation "id[A]" = Identity(A: Hilb)
+
+    axiom TensorFunctor(A, B, C, D: Hilb):  
+      (A ⊗ B) ≅ (B ⊗ A),  (A ⊗ (B ⊗ C)) ≅ ((A ⊗ B) ⊗ C),  A ⊗ (B ⊕ C) ≅ (A ⊗ B) ⊕ (A ⊗ C)
+    axiom DoubleCommutant(A: Alg): (A′)′ = A″ = A  
+    axiom Stinespring(φ: Mor, A, B: Alg, K: Hilb):
+      φ : A → B  ⇒  ∃ V : A → B(K).  φ(a) = V* a V  
+  }
+
+  STRUCTURE {
+    [HilbertSpace: 
+      {H: InnerProductSpace, complete(H), ⟨φ, ψ⟩ = ⟨ψ, φ⟩*,  ⟨αφ + βψ, χ⟩ = α⟨φ, χ⟩ + β⟨ψ, χ⟩}
+    ]
+
+    [AlgebraOfObservables(H: Hilb):  
+      {A: Subset(Obs(H)), I ∈ A,  A, B ∈ A ⇒ A + B ∈ A,  A ∈ A ⇒ A* ∈ A}
+    ]
+    
+    GelfandNaimarkTheorem:
+      Every C*-algebra is isomorphic to an algebra of bounded operators on some Hilbert space.
+
+    [Functor(F, C, D: Category):
+      F: Obj(C) → Obj(D),  F: Mor(C) → Mor(D),  
+      F(id[A]) = id[F(A)],  F(g ∘ f) = F(g) ∘ F(f)
+    ]
+  }
+
+  PROOFS {
+    tactic Spectral(A: Obs):
+      have A = ∫ λ dE(λ)  ; Spectral theorem
+      
+    tactic TomitaTakesaki(A: Alg, Ω: Hilb):
+      assume (A, Ω) is standard
+      let S = J Δ^(1/2) where J is modular conjugation, Δ is modular operator
+      have S* a Ω = a* Ω ∀ a ∈ A  ; Tomita-Takesaki theorem
+      hence J A J = A′  
+      
+    theorem NoncommutativeStone(A: Alg, H: Hilb, U: Unitary):  
+      (A ⊆ B(H)) ∧ (U ∈ A) ∧ (spectrum(U) = S^1) ⊢ ∃ φ: ℝ → Aut(A).  φ_t(U) = e^(it) U
+    {
+      assume A ⊆ B(H), U ∈ A, spectrum(U) = S^1
+      Spectral(U)
+      have U = ∫_{S^1} λ dE(λ)
+      define φ_t(a) = ∫_{S^1} λ^t dE(λ) a ∫_{S^1} λ^(-t) dE(λ)  ; Integral form of automorphism
+      have φ_t(U) = ∫_{S^1} λ λ^t dE(λ) = e^(it) U
+      have t ↦ φ_t is strongly continuous group homomorphism
+    }
+
+    theorem Haag(A, B: Alg, H, K: Hilb):  
+      (A ⊆ B(H)) ∧ (B ⊆ B(K)) ∧ (A ≅ B) ⊢ ∃ U: H ≅ K.  B = U A U*
+    {
+      assume A ⊆ B(H), B ⊆ B(K), A ≅ B
+      let φ: A → B witness the isomorphism 
+
+      TomitaTakesaki(A, Ω) for cyclic, separating Ω
+      have J_A A J_A = A′ 
+      TomitaTakesaki(B, φ(Ω))
+      have J_B B J_B = B′
+      
+      define U a Ω = φ(a) φ(Ω) ∀ a ∈ A
+      have U A Ω = B φ(Ω)  ; By definition
+      have U A′ Ω = J_B B J_B φ(Ω) = B′ φ(Ω)  ; Commutant
+      hence U H = K  ; Ω, φ(Ω) cyclic
+      have U A U* = B  ; By construction
+    }
+   
+    theorem QuantumDeRham(A: Alg, H: Hilb, d: Derivation(A)):
+      ∃ δ ∈ Obs(H).  d(a) = δ a - a δ  ∀ a ∈ A
+    {
+      assume d: A → A is derivation 
+      have d is closable  ; It is a *-derivation
+      let K be domain of closure of d
+      have K is AF C*-algebra  ; Smooth domain theorem
+      let A_n = K ∩ B(H_n) for expanding H_n ↗ H
+      
+      have d|A_n = ad(δ_n) for some δ_n ∈ B(H_n)  ; Quantum derivations are inner
+      have ∥δ_n - δ_{n+1}∥ → 0  ; Coherence of derivations
+      let δ = lim δ_n ∈ Obs(H)
+      have d(a) = lim ad(δ_n)(a) = ad(δ)(a) ∀ a ∈ ⋃ A_n
+      
+      have ⋃ A_n is core for d  ; Closure is AF
+      hence d(a) = ad(δ)(a) ∀ a ∈ dom(d)  
+    }
+  }
+}

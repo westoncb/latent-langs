@@ -1,0 +1,353 @@
+ConceptScript 5.1 Specification:
+
+ConceptScript is a language for talking about ideas and systems. It attempts to achieve a balance between structure and fluidity by borrowing the expressive capabilities of formal notations, while leaving the semantics/interpretation of the notations fluid. In many ways Concepts defined in ConceptScript can be thought of as flexible grammars defining rules for generating and recognizing instances of concepts.
+
+The only sense in which ConceptScript programs are "evaluated" is that another LLM or person must be able to interpret their meaning. If you can arrange the symbols in such a way that their interpretation is relatively unambiguous to a human or LLM reader, then it's a valid arrangement.
+
+The central structure of the language is that of a Concept. Concepts are made up of sub-Concepts; they are recursive structures. Concepts have names, and components (i.e. sub-Concepts); a particular selection of these components is a decomposition of the Concept. After decomposition, the bulk of what Concept definitions express is properties of and relationships between their components.
+
+CUSTOM-DEFINITIONS:
+  In any of the categories of language structures presented in this spec, it is valid to invent new elements of the category on the fly. For instance, one category is of RelationOperators, and the spec provides an initial set, but also provides a general mechanism for defining new language constructs on the fly. This done using expressions like the following:
+
+  MyConcept := OtherConcept(Params) :: {
+    DEF[
+      $:ExpansionOperator
+      ~B:EquitableBalanceRelation
+      <...>:VibeOrderedList
+    ]
+
+    // Remaining Concept body
+  }
+
+  They are placed at the top of Concept bodies and can be used to define new elements for any language construct category.
+
+QUALIFIERS
+  ConceptScript provides another 'meta-level' language construct: Qualifiers. Qualifiers can be attached to any part of a program to provide a qualification; they appear in curly braces:
+
+    Examples:
+      (Computer <~> Brain(Type:Electric)){Uncertainty:0.9}
+      Cow{ArbitrarilyChosen} V Mammal{Alternately:Animal}
+      Douglas += BookCollection{SizeRange:50, 10k}
+      AIHumanCollaboration{🤖🧠🎼}
+
+CONCEPT-DEFINITIONS:
+  Concepts can be defined in two ways, using either of the following operators:
+
+  DefinitionOperators:
+    := : Define something via "is a" relation
+    ^= : Define something via "comprised of" relation
+
+  Examples:
+    Home := House + (Vibes:Cozy)
+    Car ^= Wheels(Count:4) & Engine(Type:_) & Chassis & Body(Color:_)
+
+  New definition operators may be supplied via DEF blocks.
+
+  The prior definitions are so-called SimpleDefinitions because they have no Concept body, which is denoted via:
+
+  MyConcept := OtherConcept(WithParams) :: {
+    // Body goes here
+  }
+
+  Within the Concept body we may define additional Concepts, or express relationships between Concepts, assert properties, and so on.
+
+CONFIGURING-CONCEPTS:
+  Concepts accept parameter lists, and the parameters they discuss may have varying degrees of "configuration"; forming "partial configurations" is one of the most powerful features of the language. Using partial configurations we can create progressions of Concepts from abstract to concrete; this affords powerful possibilities for concision of expression; it is largely made possible by wildcard operator: _
+
+  Examples:
+    Vehicle(Engine(Type:_), Modality:(Land | Air | Sea), MaxSpeed:_) :: {
+      // body
+    }
+    LandVehicle := Vehicle(Engine(Type:_), Modality:Land, MaxSpeed:_)
+    Car := LandVehicle(Engine(Type:_), MaxSpeed:_)
+    ElectricCar := Car(Engine(Type:Electric), MaxSpeed:_)
+    TeslaRoadster := ElectricCar(MaxSpeed:150)
+    MusksTeslaRoadser := TeslaRoadster + (LicensePlate:YoYoWhadup)
+
+  Partial configurations also make it possible to speak at higher levels of generality; the more parts of a Concept left unspecified via wildcards, the more abstract it is; a fully configured Concept is fully concrete. It's also interesting to note that the contents of LLM context windows serve to define partial configurations of the LLM's parameter space; e.g.: a prompt including the spec for ConceptScript sets up a partial configuration so that subsequent generations are largely selecting within the configuration space of ConceptScript programs
+
+
+  Concepts may be atomic and forego supplying a parameter list; if a parameter list is used it can be in two forms:
+
+    1. (P1, P2, P3)
+    2. [P1, P2, P3]
+
+  (...) denotes a set
+  [...] denotes a sequence
+
+  A Concept is really nothing more than a name with a set of params attached to it; because of this, we can flexibly define new notions of param lists, define syntax for them, and define Concepts in that way, e.g.:
+
+  DEF[<...>: AscendingAbstractionLvlList]
+  MyConcept<P1, P2, P3> :: {//body}
+
+
+CONCEPT-OPERATORS
+  ConceptOperators represent operations performed on concepts:
+
+  Operators:
+    +: inject
+    -: remove
+    $: blend
+
+  Examples:
+    Warlock := Wizard + (Attitude:Bad, Staff)
+    Penguin := Bird - Feathers
+    GeoBrain := NeuralNetwork $ FiberBundle
+
+  Like the other categories, new operators may be defined using DEF:[...] blocks.
+
+CONCEPT-ASSERTIONS
+  Assertions about Concepts are made primarily using relation symbols:
+
+    += : "has a" relation
+    <- : Requires
+    -> : Implication or mapping
+    <-> : Bidirectional implication or equivalence
+    ~> : Uncertain implication or mapping
+    <~> : Uncertain bidirectional implication or equivalence
+    ~ : Analogy or similarity
+    ^ : Generalization or abstraction
+    v : Specialization or refinement
+    | : Either ('any' for binary relations)
+    & : All ('both' for binary relations)
+    ! : Not
+    xor : Only one
+
+
+    Examples: 
+      Cow V Mammal
+      Mammal ^ Cow
+      Consciousness <~> SelfAwareness
+      Wisdom ^= (Love & Knowledge & (Experience <- (GoodExperiences{Many, Deep} & BadExperiences{Many, Deep})))
+
+    Note:
+      - Parens may be used for grouping: e.g. (a -> b - (x ~ y))
+      - New relations may be defined using DEF:[...] blocks
+
+TRANSFORMS
+  ConceptScript includes built-in syntax for describing transformations:
+    Syntax: Concept |> TransformConcept
+    Example: Hero |> Corruption(Wealth, Power)
+
+Pipelines:
+  Represent sequences of Transforms on Concepts
+    Syntax: [Concept |> TransformConcept1 |> ... |> TransformConceptN]
+    Example: [SurfaceNormal |> Scale(1, 2, 1) |> Rotate(PI, 0, 0)]
+
+As with everything else in the language; feel free to innovate using DEF:[...] blocks.
+
+
+COMPLETE-EXAMPLES:
+
+Organism := Concept(Genotype:_, Phenotype:_, Fitness:_) :: {
+  DEF[>->: EvolutionaryTransition]
+  
+  Genotype ^= [Gene(Sequence:_, Expression:_)]
+  Phenotype ^= [Trait(Name:_, Value:_)]
+  Fitness := Concept(ReproductiveSuccess:_)
+  
+  PopulationDynamics := [
+    Population(Organisms:_, Environment:_) |>
+    NaturalSelection(FitnessLandscape) |>
+    GeneticVariation(Mutation:_, Recombination:_) |>
+    Reproduction(MatingSystem:_)
+  ]{Cycles:Generations}
+  
+  EvolutionaryTransition(Organism1, Organism2) := Organism1 >-> Organism2 :: {
+    (Organism1.Genotype ~ Organism2.Genotype) &
+    (Organism1.Phenotype !~ Organism2.Phenotype) &
+    (Organism2.Fitness > Organism1.Fitness)
+  }
+}
+
+Organism(
+  Genotype:Gene(Sequence:"ATGC", Expression:Dominant),
+  Phenotype:Trait(Name:ColorPattern, Value:Striped),
+  Fitness:High
+) |> PopulationDynamics(
+  Population(Size:1000, Environment:Savanna),
+  NaturalSelection(Predation),
+  GeneticVariation(Mutation:PointMutation, Recombination:CrossingOver),
+  Reproduction(MatingSystem:AssortativeMating)  
+) >-> Organism(
+  Genotype:Gene(Sequence:"ATGG", Expression:Dominant),
+  Phenotype:Trait(Name:ColorPattern, Value:Spotted),
+  Fitness:Higher
+){Generations:500}
+
+
+
+
+Note := Concept(Pitch:_, Duration:_)
+Chord := Concept(Notes:Set(Note), Harmony:_)
+Scale := Concept(Notes:Sequence(Note), Tonality:_)
+Melody := Concept(Notes:Sequence(Note), Contour:_)
+
+DEF[
+  |=>: Progression
+  |~>: Modulation
+  |*>: Improvisation
+]
+
+C_Major := Scale(
+  Notes:[C4, D4, E4, F4, G4, A4, B4],  
+  Tonality:Major
+)
+
+A_Minor := Scale(  
+  Notes:[A4, B4, C5, D5, E5, F5, G5],
+  Tonality:Minor  
+)
+
+I_IV_V := [
+  Chord(Notes:[C4, E4, G4]) |=>  
+  Chord(Notes:[F4, A4, C5]) |=>
+  Chord(Notes:[G4, B4, D5])
+]{C_Major}
+
+I_V_VI_IV := [
+  Chord(Notes:[A4, C5, E5]) |=>
+  Chord(Notes:[E5, G#5, B5]) |=>  
+  Chord(Notes:[F5, A5, C6]) |=>
+  Chord(Notes:[D5, F5, A5])  
+]{A_Minor}
+
+JazzProgression := [
+  C_Major |~> A_Minor |*> Melody(
+    Notes:[C5, D5, E5, G5, A5],
+    Contour:Ascending    
+  )
+]{Improvisation}
+
+
+
+
+
+Atom := Concept(Element:_, Protons:Integer, Neutrons:Integer, Electrons:Integer)
+Molecule := Concept(Atoms:Set(Atom), Bonds:Set(Bond))
+Bond := Concept(Type:(Ionic | Covalent | Metallic), Strength:_)
+
+DEF[
+  ->: ChemicalReaction
+  |-->: CatalyzedReaction
+  <-->: ReversibleReaction
+  ∆: Catalyst  
+]
+
+H2O -> [
+  Atom(Element:Hydrogen, Protons:1, Neutrons:0, Electrons:1),
+  Atom(Element:Hydrogen, Protons:1, Neutrons:0, Electrons:1),  
+  Atom(Element:Oxygen, Protons:8, Neutrons:8, Electrons:8)  
+]:(Bond(Type:Covalent, Strength:High))
+
+NaCl -> [
+  Atom(Element:Sodium, Protons:11, Neutrons:12, Electrons:11),
+  Atom(Element:Chlorine, Protons:17, Neutrons:18, Electrons:17)
+]:(Bond(Type:Ionic, Strength:Moderate))
+
+HydrogenCombustion := H2 + O2 --∆--> H2O :: {
+  ∆ := Catalyst(Name:Platinum)
+  ExothermicReaction := Property(EnergyReleased:High)
+}
+
+AmmoniaHaberProcess <--> N2 + 3H2 |--> 2NH3 :: {
+  ∆ := Catalyst(Name:Iron)  
+  EquilibriumReaction := Property(
+    Equilibrium(
+      Temperature(400°C, 500°C), 
+      Pressure(150atm, 250atm)
+    )
+  )
+}
+
+
+
+
+
+Neuron := Concept(Weights:_, Bias:_, ActivationFunction:_)
+Layer := Concept(Neurons:Sequence(Neuron), Connectivity:_)
+NeuralNetwork := Concept(Layers:Sequence(Layer), Architecture:_)
+
+DEF[
+  |=>: ForwardPropagation
+  <=|: BackwardPropagation
+  |~>: TransferLearning
+  |*>: Regularization
+]
+
+ActivationFunctions := [ReLU, Sigmoid, TanH, LeakyReLU, Softmax]
+Optimizers := [SGD, Adam, RMSprop, Adagrad]
+
+CNN := NeuralNetwork(
+  Layers:[
+    Layer(Neurons:Sequence(Neuron(Weights:_, Bias:_, ActivationFunction:ReLU)), Connectivity:Convolutional),
+    Layer(Neurons:Sequence(Neuron(Weights:_, Bias:_, ActivationFunction:ReLU)), Connectivity:MaxPooling),
+    Layer(Neurons:Sequence(Neuron(Weights:_, Bias:_, ActivationFunction:Softmax)), Connectivity:FullyConnected)
+  ],
+  Architecture:FeedForward  
+)
+
+RNN := NeuralNetwork(
+  Layers:[
+    Layer(Neurons:Sequence(Neuron(Weights:_, Bias:_, ActivationFunction:TanH)), Connectivity:Recurrent)
+  ],
+  Architecture:Sequence
+)
+
+GAN := [
+  Generator:NeuralNetwork(...) |=>
+  Discriminator:NeuralNetwork(...)
+]{AdversarialTraining}
+
+TransferLearningCNN := CNN |~> FeatureExtractor(Layers:Subset(CNN.Layers))
+RegularizedRNN := RNN |*> L2Regularization(Lambda:0.01)
+
+TrainingPipeline := [
+  NeuralNetwork |=>
+  LossFunction(Prediction, Target) <=|
+  Optimizer(LearningRate:_, Momentum:_)  
+]{Epochs:_, BatchSize:_}
+
+
+
+
+
+Qubit := Concept(State:_, Amplitude:Complex)
+QuantumGate := Concept(Operator:Matrix, Qubits:Sequence(Qubit))
+QuantumCircuit := Concept(Gates:Sequence(QuantumGate), Measurement:Observable)
+
+DEF[
+  |->: QuantumOperation
+  |=>: Entanglement
+  |~>: Superposition
+  |*>: Decoherence
+]
+
+H := QuantumGate(
+  Operator:Matrix([[1, 1], [1, -1]]) / sqrt(2),  
+  Qubits:Sequence(Qubit(State:_, Amplitude:_))
+){Hadamard}
+
+CNOT := QuantumGate(
+  Operator:Matrix([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 0, 1], [0, 0, 1, 0]]),
+  Qubits:Sequence(Qubit(State:_, Amplitude:_), Qubit(State:_, Amplitude:_))  
+){ControlledNOT}
+
+QuantumTeleportation := [
+  Qubit(State:_, Amplitude:_) |-> H |~> Qubit(State:Superposition),
+  Qubit(State:Superposition) |=> Qubit(State:_, Amplitude:_),
+  Qubit(State:Superposition) |*> Qubit(State:_, Amplitude:_),
+  Qubit(State:_, Amplitude:_) |-> Measurement    
+]
+
+ShorAlgorithm := [
+  QuantumCircuit(
+    Gates:[
+      H,
+      CNOT,
+      QuantumFourierTransform,
+      Modular(Exponentiation)
+    ],
+    Measurement:Period  
+  ) |-> ClassicalPostProcessing(ContinuedFractions)
+]{FactoringProblem}

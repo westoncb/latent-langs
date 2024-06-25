@@ -1,0 +1,108 @@
+CONCEPT SemanticSheafOperad {
+  LANGUAGE {
+    TYPE SemanticSpace <: TopologicalSpace
+    TYPE SemanticUnit
+    TYPE LocalOperad <: Operad(SemanticUnit)
+    TYPE GlobalOperad <: Operad(LocalOperad)
+
+    FUNC 𝒪 : SemanticSpace -> CATEGORY(LocalOperad)  -- The sheaf
+    FUNC 𝒪(U ⊆ V) : 𝒪(V) -> 𝒪(U)  -- Restriction map
+
+    FUNC Encode : SemanticUnit -> SemanticSpace
+    FUNC Decode : SemanticSpace -> SemanticUnit
+
+    AXIOM SheafCondition {
+      ∀ (U ⊆ SemanticSpace) (𝒰 : OpenCover(U)) (s : SECTION(𝒰, 𝒪)).
+        (∀ (Uᵢ, Uⱼ ∈ 𝒰) (x ∈ Uᵢ ∩ Uⱼ). 𝒪(Uᵢ ∩ Uⱼ ⊆ Uᵢ)(s(Uᵢ))(x) = 𝒪(Uᵢ ∩ Uⱼ ⊆ Uⱼ)(s(Uⱼ))(x)) 
+          <=> ∃! (t : SECTION(U, 𝒪)). ∀ (Uᵢ ∈ 𝒰). t|Uᵢ = s(Uᵢ)
+    }
+
+    AXIOM EncodingConsistency {
+      ∀ (s : SemanticUnit). Decode(Encode(s)) = s
+    }
+  }
+
+  STRUCTURE LocalStructure {
+    LET U ⊆ SemanticSpace  -- An open set in the semantic space
+    LET 𝒪|U : LocalOperad   -- The local operad over U
+
+    FUNC Content(s : SemanticUnit) : 𝒪|U  -- Mapping from semantic units to their local content
+    FUNC Structure(ω : Operation(𝒪|U)) : GlobalOperad  -- Mapping from local operations to global structure
+
+    FUNC Interpret(ω : LIST(SemanticUnit)) : {
+      LET 𝒰 : OpenCover(U) = {Encode(s) | s ∈ ω}
+      LET s : SECTION(𝒰, 𝒪|U) = (V ∈ 𝒰) ↦ Content(Decode(V))
+      RETURN THE t : SECTION(U, 𝒪|U) SUCH THAT ∀ (V ∈ 𝒰). t|V = s(V)
+    }
+  }
+
+  STRUCTURE GlobalStructure {
+    LET 𝒪 : SemanticSpace -> CATEGORY(LocalOperad)  -- The sheaf of local operads
+
+    FUNC LiftStructure(ω : Operation(LocalOperad), U ⊆ SemanticSpace) : GlobalOperad = {
+      LET V ⊇ U
+      RETURN Structure(𝒪(U ⊆ V)(ω))
+    }
+
+    FUNC LowerContent(Ω : GlobalOperad, U ⊆ SemanticSpace) : LIST(SemanticUnit) = {
+      LET 𝒰 : OpenCover(U)
+      LET σ : SECTION(U, 𝒪) = (V ∈ 𝒰) ↦ THE ω : 𝒪(V) SUCH THAT Structure(ω) = Ω|V
+      RETURN [Decode(V) | V ∈ 𝒰]
+    }
+  }
+
+  STRUCTURE CognitiveProcess {
+    FUNC Analogy(Ω₁, Ω₂ : GlobalOperad) : GlobalOperad = {
+      -- Find the pullback (i.e., common substructure) of Ω₁ and Ω₂ in the category of global operads
+      -- Construct the pushout (i.e., blended structure) of this common substructure
+    }
+
+    FUNC Generalization(Ω : LIST(GlobalOperad)) : GlobalOperad = {
+      -- Find the limit (i.e., universal substructure) of the Ωs in the category of global operads
+    }
+
+    FUNC Categorization(s : SemanticUnit) : GlobalOperad = {
+      -- Find the initial object in the category of global operads that admit a morphism from Structure(Content(s))
+    }
+
+    FUNC Instantiation(Ω : GlobalOperad) : SemanticUnit = {
+      -- Find the terminal object in the category of semantic units that admit a morphism to LowerContent(Ω, U) for some U
+    }
+
+    FUNC SemanticBlend(s₁, s₂ : SemanticUnit) : SemanticUnit = {
+      LET Ω₁ = Categorization(s₁)
+      LET Ω₂ = Categorization(s₂)
+      LET Ω = Analogy(Ω₁, Ω₂)
+      RETURN Instantiation(Ω)
+    }
+  }
+
+  PROOFS {
+    THEOREM SheafConsistency {
+      STATEMENT:
+        ∀ (U ⊆ SemanticSpace) (𝒰₁, 𝒰₂ : OpenCover(U)). 
+          LET t₁ = THE t : SECTION(U, 𝒪) SUCH THAT ∀ (V ∈ 𝒰₁). t|V = Interpret([Decode(V)])
+          LET t₂ = THE t : SECTION(U, 𝒪) SUCH THAT ∀ (V ∈ 𝒰₂). t|V = Interpret([Decode(V)])
+          SHOW t₁ = t₂  
+
+      PROOF:
+        LET 𝒰 = 𝒰₁ ∪ 𝒰₂
+        HAVE: 𝒰 : OpenCover(U)
+        HAVE: ∀ (V ∈ 𝒰). t₁|V = Interpret([Decode(V)]) ∧ t₂|V = Interpret([Decode(V)])
+          BY {
+            CASE V ∈ 𝒰₁: 
+              HAVE: t₁|V = Interpret([Decode(V)]) BY definition of t₁
+              HAVE: t₂|V = Interpret([Decode(V)]) BY {
+                LET W ∈ 𝒰₂ SUCH THAT V ⊆ W  -- Such a W exists because 𝒰₂ is a cover
+                HAVE: t₂|W = Interpret([Decode(W)]) BY definition of t₂
+                HAVE: t₂|V = (t₂|W)|V = Interpret([Decode(W)])|V = Interpret([Decode(V)]) 
+                  BY restriction and locality
+              }
+            CASE V ∈ 𝒰₂: Symmetric argument
+          }
+        HENCE: ∃! (t : SECTION(U, 𝒪)). ∀ (V ∈ 𝒰). t|V = Interpret([Decode(V)]) 
+          BY SheafCondition
+        HENCE: t₁ = t₂ BY uniqueness
+    }
+  }
+}

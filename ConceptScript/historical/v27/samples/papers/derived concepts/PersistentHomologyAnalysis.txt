@@ -1,0 +1,110 @@
+CONCEPT PersistentHomologyAnalysis {
+  NOTATION {
+    X = Finite metric space of data points
+    𝓒_ε(X) = Vietoris-Rips complex on X at scale ε
+    f_X = PL interpolation of pairwise distances on X
+    PHT_X = PHT(f_X) ∈ D^b(Shv(𝕊^(X.dim-1) × ℝ))
+  }
+
+  LANGUAGE {
+    TYPE Data = Finite metric space
+    TYPE Filtration = R-indexed diagram of simplicial complexes
+    TYPE PersistenceSheaf = D^b(Shv(𝕊^(d-1) × ℝ))
+
+    FUNC VietorisRipsComplex(X: Data, ε: ℝ≥0): SimplicialComplex =
+      {σ ⊆ X | diam(σ) ≤ ε}
+
+    FUNC RipsFiltration(X: Data): Filtration = 
+      {𝓒_ε(X) ↪ 𝓒_δ(X)}_(ε≤δ)
+
+    FUNC PairwiseDistances(X: Data): X × X → ℝ =
+      λ(x,x'). d(x,x') 
+
+    FUNC PLInterpolation(f: X × X → ℝ): |X| × |X| → ℝ =
+      Piecewise-linear interpolation of f on geometric realization
+  }
+
+  STRUCTURES {
+    STRUCTURE DataPHT {
+      FIELD Data: Data
+      FIELD PHTSheaf: PersistenceSheaf = PHT(PLInterpolation(PairwiseDistances(Data)))
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE Stability: 
+      d_I(PHT_X, PHT_Y) ≤ d_GH(X, Y)
+      WHERE d_GH is Gromov-Hausdorff distance
+      
+    SIMPLIFY PersistenceDiagram:
+      Dgm(i, PHT_X)(v) ≃ Dgm(i, RipsFiltration(X))
+  }
+
+  PROOFS {
+    THEOREM StabilityTheorem: 
+      ∀ X, Y: Data . d_I(PHT_X, PHT_Y) ≤ 2d_GH(X, Y)
+    {
+      d_I(PHT_X, PHT_Y) 
+        ≤ d_I(PHT_X, PHT(f_Z)) + d_I(PHT(f_Z), PHT_Y)  
+          FOR ANY Z ⊆ X ⊔ Y with X,Y ⊆_ε Z            BY Interleaving triangle ineq
+        ≤ 2ε                                            BY PHTStability 
+        ≤ 2d_GH(X, Y)                                   BY def of d_GH
+    }
+    
+    THEOREM DiagramApproximation:
+      Dgm(i, PHT_X)(v) ≃ Dgm(i, RipsFiltration(X))  
+    {
+      Dgm(i, PHT_X)(v) 
+        ≃ Dgm(i, PHT(𝓒_*(X)))(v)     BY Nerve Theorem: 𝓒_*(X) ≃ |X|
+        ≃ Dgm(i, RipsFiltration(X))   BY def of PHT & Rips
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE PointCloudPHT:
+      GIVEN X: 10000 points sampled from a torus in R^3
+      CONSTRUCT PHT_X: DataPHT
+      ENSURE 
+        Dgm(0, PHT_X) has 1 infinite bar
+        Dgm(1, PHT_X) has 2 bars of length ≃ 2π, 2π 
+        Dgm(2, PHT_X) has 1 bar of length ≃ 4π^2
+
+    EXAMPLE ImagePatchPHT:
+      GIVEN X: 1000 random 5x5 patches from natural images
+      CONSTRUCT PHT_X: DataPHT
+      ENSURE
+        Barcodes of PHT_X capture the distribution of 
+        topological features across image patches
+        
+    EXAMPLE TimeSeries:  
+      GIVEN X: Sliding window embedding of time series
+      CONSTRUCT PHT_X: DataPHT
+      ENSURE  
+        Barcodes of PHT_X represent the evolution of 
+        topological features across time
+  }
+}
+
+This Concept demonstrates how the PHT can be used for topological data analysis by applying it to finite metric spaces sampled from shapes, images, time series etc. The key components are:
+
+1. Construct a piecewise-linear function on the data via Vietoris-Rips complexes
+2. Compute the PHT of this function to get a sheaf encoding multi-scale topology
+3. Use sheaf-theoretic stability and approximation to robustly extract topological features
+4. Represent these features via persistence diagrams in different directions
+
+The Concept leverages the theoretical properties of the PHT to provide a principled framework for computing stable and informative topological descriptors of data. The higher-order interactions captured by the PHT provide a rich language for expressing complex structural features.
+
+
+------
+
+The key novel ideas from the provided Concepts are:
+
+1. Mobius inversion on posets can be used to decompose functions on a system into contributions from its subsystems. This provides a unifying framework for expressing higher-order interactions in various domains.
+
+2. The Persistent Homology Transform (PHT) represents the multi-scale topology of a shape as a sheaf over the space of directions and scales. This allows studying a shape from the perspective of its sublevel sets in different directions.
+
+3. The PHT is stable to perturbations of the shape, allowing approximate computation from noisy samples. The PHT also determines the shape up to homotopy equivalence.
+
+4. Sheaf-theoretic operations like descent and interleaving distances can be used to analyze and compare PHTs.
+
+Building on these ideas, here is a new Concept for multi-scale topological analysis of data using the PHT:

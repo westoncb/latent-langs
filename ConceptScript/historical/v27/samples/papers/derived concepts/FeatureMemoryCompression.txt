@@ -1,0 +1,133 @@
+CONCEPT FeatureMemoryCompression {
+  NOTATION {
+    ρ_i = encode(B_i)    -- Pattern stored by feature f_i's neighborhood B_i
+    r_i = radius(B_i)    -- Neighborhood radius
+    features(x) = {f_i : x ∈ B_i}  -- Active features for input x
+    reconstr(x) = ∑_{f∈features(x)} decode(ρ_f) / |features(x)|  -- Reconstructed input
+
+    capacity(f) = V_n(radius(f)) / ∫_Ω p_D(x) · 𝟙[x ∈ hood(f)] dx  -- Feature capacity
+    usage(f) = 𝔼_D[x ∈ hood(f)] / V_n(radius(f))  -- Feature usage
+    utilization = ∑_f usage(f) / ∑_f capacity(f)  -- Overall memory utilization
+
+    memCost(M) = ∑_f ∑_i ENTROPY(M.features(x_i))  -- Encoding cost
+    reconstrErr(M,D) = 𝔼_{x∈D}[‖x - M.reconstr(x)‖²]  -- Reconstruction error
+  }
+
+  LANGUAGE {
+    FUNC encode(B: Neighborhood): Pattern = CENTER(B)
+    FUNC decode(ρ: Pattern): Pattern = ρ
+    FUNC radius(B: Neighborhood): Real = B.1
+    FUNC hood(f: FeatureVector): Neighborhood = (encode(B_f), radius(B_f))
+
+    FUNC patternSimilarity(x: Pattern, y: Pattern): Real = EXP(-‖x-y‖²)
+    FUNC featuresFromInput(x: Pattern, F: Set[FeatureVector]): Set[FeatureVector] =
+      {f ∈ F : patternSimilarity(x, encode(B_f)) ≥ EXP(-radius(B_f)²)}
+
+    FUNC reconstructFromFeatures(x: Pattern, F: Set[FeatureVector]): Pattern = 
+      ∑_{f∈featuresFromInput(x,F)} decode(encode(B_f)) / |featuresFromInput(x,F)|
+
+    FUNC intrinsicDim(M: Model): Int =  -- Estimate by fitting PCA 
+      MIN d : ∑_{i=1}^d λ_i / ∑_{i=1}^n λ_i > 0.95  WHERE (λ_i) = spectrum(Cov(M.DataPatterns))
+  }
+
+  STRUCTURES {
+    STRUCTURE FeatureMemory EXTENDS TransformerMemory {
+      Features: Set[FeatureVector]
+      UsageMap: FeatureVector -> Real = f -> 𝔼_D[x ∈ hood(f)] / V_Dim(radius(f))
+      CapacityMap: FeatureVector -> Real = f -> V_Dim(radius(f)) / ∫_Ω EmpiricalDensity(x)·𝟙[x ∈ hood(f)] dx
+      Utilization: Real = ∑_{f∈Features} UsageMap(f) / ∑_{f∈Features} CapacityMap(f) 
+
+      FUNC Cov(X: Set[Pattern]): Matrix = 𝔼_X[(x-𝔼_X[x])ᵀ(x-𝔼_X[x])]
+    }
+  }
+
+  THEOREMS {
+    MemoryCompression: 
+      LET M = FeatureMemory, d = intrinsicDim(M)
+      memCost(M) ≈ |M.DataPatterns| · ENTROPY(M.EmpiricalDensity)  
+                 ≈ |M.DataPatterns| · LOG(d)
+      reconstrErr(M,D) ≤ 4 · R_max^2 · (1 - M.Utilization)
+      WHERE R_max = max_{f∈M.Features} radius(f)
+
+    FeatureAmplification:
+      LET D = ActivationDataset, F = {FeatureVector}, prompt = String 
+      FeatureComposition.emergent_behavior(M, prompt, F, F, Infinity) ⟺ 
+        ∀ f1,f2∈F. ∃ x∈D. 
+          features(x) = {f1, f2} ∧
+          f1 ∉ features(reconstr(x-ρ_f2)) ∧ f2 ∉ features(reconstr(x-ρ_f1))
+
+    CapacityUtilizationBound:
+      ∀ f∈M.Features. usage(f) ≤ min(1, capacity(f)) 
+      M.Utilization ≤ 1
+  }
+
+  PROOFS {
+    PROOF MemoryCompression {
+      memCost(M) = ∑_f ∑_i ENTROPY(M.features(x_i))  
+                 ≈ ∑_i ENTROPY(M.features(x_i))      -- Assuming feature independence
+                 ≤ ∑_i LOG |M.features(x_i)|
+                 ≤ |M.DataPatterns| · LOG(|M.Features|)
+                 ≈ |M.DataPatterns| · ENTROPY(M.EmpiricalDensity)   -- Asymptotic equipartition
+                 ≈ |M.DataPatterns| · LOG(intrinsicDim(M))         -- Manifold assumption
+
+      reconstrErr(M,D) 
+        = 𝔼_D[‖x - ∑_{f∈features(x)} decode(ρ_f) / |features(x)| ‖²]
+        ≤ 𝔼_D[(∑_{f∈M.Features\features(x)} ‖decode(ρ_f)‖)² / |M.Features|²]   -- Cauchy-Schwarz
+        ≤ (∑_{f∈M.Features} V_Dim(radius(f)) · (1-usage(f)))² / |M.Features|²  -- Bounding ‖ρ_f‖
+        ≤ (|M.Features| · V_Dim(R_max) · (1-M.Utilization))² / |M.Features|²   
+        = V_Dim(R_max)² · (1-M.Utilization)²
+        ≤ 4 · R_max^2 · (1-M.Utilization)   -- Since V_Dim(r) ≤ 2ʳ for r ≥ 1
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE CompressGPT2Small {
+      MODEL WITH 
+        Dim = 768
+        N = 125M = 2048 features/layer * 12 layers * 5000 patterns/feature 
+      DATASET WITH
+        D = 100M tokens, 50k distinct
+      COMPRESSION TO
+        d ≈ 50  -- Intrinsic dimension of token embeddings
+        |F| ≈ 24k features over all layers
+        memCost ≈ 100M · LOG(50) ≈ 564M  vs  N · LOG(|Vocab|) = 125M · LOG(50k) ≈ 36B
+        reconstrErr ≈ 0.1  -- Assuming 80% utilization, R_max ≈ 1
+    }
+
+    EXAMPLE EmergentCompositionality {
+      FOR 
+        location_features = {f_1, f_2, ...},  -- Neighborhoods around prototypical locations
+        object_features = {f_1', f_2', ...}   -- Neighborhoods around prototypical objects
+      OBSERVE
+        CompositionalityScore = MEAN(f ∈ location_features, f' ∈ object_features :
+          ∃ x∈D. features(x) = {f,f'} ∧ f ∉ features(reconstr(x-ρ_f')) ∧ f' ∉ features(reconstr(x-ρ_f))
+        ) > 0.7
+      MEANING
+        >70% of location/object feature pairs f_i, f_j' have an input x whose reconstruction 
+        from x-ρ_j' loses f_i (and vice versa), indicating compositional behavior 
+    }
+
+    EXAMPLE OvercompleteDictionary {
+      FOR 
+        M = FeatureMemory WITH Utilization ≈ 1.5,
+        D = ActivationDataset WITH N = 1e12, Dim = 1024, d = 128
+      BY CapacityUtilizationBound 
+        |M.Features| ≥ 1.5 · (1e12 / V_1024(R_max))  -- R_max ≈ 2.5 usually
+      SO
+        |M.Features| = Ω(1e12)  >>  N/d = 1e12/128 = 7.8e9
+      MEANING  
+        Overcomplete feature dictionary: >1 feature per input on average
+    }
+  }
+}
+
+This Concept extends the idea of interpretable features as neighborhood-based memory patterns, and formalizes the relationships between feature composition, memory utilization, and emergent behavior in Transformer language models.
+The key insights are:
+
+Memory compression: The set of interpretable features forms a compressed representation of the training data, with a memory cost determined by the entropy of the empirical data distribution and the intrinsic dimensionality of the data manifold. The reconstruction error is bounded by the utilized capacity of the feature neighborhoods.
+Feature amplification: Emergent compositional behavior arises when there exist inputs that activate a sparse set of features, such that removing any one feature's neighborhood from the input leads to the loss of the other features in the reconstruction. This indicates that the features amplify each other's presence.
+Capacity utilization: The usage of each feature is bounded by its neighborhood capacity, which depends on the neighborhood radius and the empirical data density. The overall memory utilization is the ratio of total usage to total capacity, and is bounded by 1.
+Overcomplete representations: In practice, the number of features learned by a Transformer can be much larger than the number of input patterns divided by the intrinsic dimensionality. This suggests an overcomplete feature representation, with more than one feature activated per input on average.
+
+The Concept includes theorems and proofs bounding the memory compression and reconstruction error, as well as examples illustrating the compression of GPT-2, the emergence of compositional behavior, and the overcompleteness of practical feature dictionaries.
+These ideas provide a unifying perspective on the relationships between interpretability, compositionality, and efficiency in Transformer language models, grounded in the associative memory and manifold learning frameworks. 

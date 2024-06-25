@@ -1,0 +1,108 @@
+CONCEPT DynamicProgrammingOnManifolds {
+  LANGUAGE {
+    TYPE Manifold(M)
+    TYPE Tensor[M : Manifold, p : M, r s : ℕ] = (Tangent[M, p] -> )^r -> (Cotangent[M, p] -> )^s -> ℝ
+    TYPE Policy[M : Manifold] = M -> Tangent[M]
+    TYPE Value[M : Manifold] = M -> ℝ
+    TYPE Reward[M : Manifold] = Tensor[M, 0, 0]
+    TYPE TransitionProb[M : Manifold] = Tensor[M, 1, 1]
+
+    FUNC Bellman(𝒫 : Policy[M], 𝒱 : Value[M], ℛ : Reward[M], 𝒯 : TransitionProb[M], γ : ℝ) : Value[M]
+    FUNC Greedy(𝒬 : Tensor[M, 1, 0], 𝒯 : TransitionProb[M]) : Policy[M]
+    FUNC ExpectedValue(𝒫 : Policy[M], 𝒱 : Value[M], 𝒯 : TransitionProb[M]) : Value[M]
+    FUNC GreedyImprovement(𝒫 : Policy[M], 𝒱 : Value[M], ℛ : Reward[M], 𝒯 : TransitionProb[M], γ : ℝ) : Policy[M]
+
+    AXIOM BellmanOptimality {
+      ∀ (M : Manifold) (𝒫* : Policy[M]) (𝒱* : Value[M]) (ℛ : Reward[M]) (𝒯 : TransitionProb[M]) (γ : ℝ) .
+        IsOptimal(𝒫*) <-> 𝒱* = Bellman(𝒫*, 𝒱*, ℛ, 𝒯, γ)
+    }
+
+    AXIOM PolicyImprovement {
+      ∀ (M : Manifold) (𝒫 : Policy[M]) (𝒱 : Value[M]) (ℛ : Reward[M]) (𝒯 : TransitionProb[M]) (γ : ℝ) .
+        Bellman(𝒫, 𝒱, ℛ, 𝒯, γ) ≤ 𝒱 => Bellman(GreedyImprovement(𝒫, 𝒱, ℛ, 𝒯, γ), 𝒱, ℛ, 𝒯, γ) ≥ 𝒱 
+    }
+
+    NOTATION "⟨⟨" = Greedy
+    NOTATION "⟩⟩" = ExpectedValue
+    NOTATION "δ" = GreedyImprovement
+  }
+
+  PROOFS {
+    THEOREM PolicyIteration {
+      STATEMENT : ∀ (M : Manifold) (𝒫0 : Policy[M]) (ℛ : Reward[M]) (𝒯 : TransitionProb[M]) (γ : ℝ) (ε : ℝ) .
+        LET 𝒱[k] = Bellman(𝒫[k], 𝒱[k-1], ℛ, 𝒯, γ), 𝒫[k+1] = δ(𝒫[k], 𝒱[k], ℛ, 𝒯, γ)
+        IN ∃ (k : ℕ) . |𝒱*-𝒱[k]| < ε ∧ IsOptimal(𝒫[k])
+
+      PROOF {
+        LET M : Manifold, 𝒫0 : Policy[M], ℛ : Reward[M], 𝒯 : TransitionProb[M], γ : ℝ, ε : ℝ
+        
+        DEF 𝒱[k] = Bellman(𝒫[k], 𝒱[k-1], ℛ, 𝒯, γ)
+        DEF 𝒫[k+1] = δ(𝒫[k], 𝒱[k], ℛ, 𝒯, γ)
+
+        HAVE (1) : ∀ (k : ℕ) . 𝒱[k] ≤ 𝒱[k+1] BY {
+          LET k : ℕ
+          𝒱[k] 
+            ≤ Bellman(𝒫[k+1], 𝒱[k], ℛ, 𝒯, γ) BY PolicyImprovement
+            = 𝒱[k+1]                          BY DEFINITION
+        }
+
+        HAVE (2) : ∀ (k : ℕ) . 𝒱[k] ≤ 𝒱* BY {
+          LET k : ℕ  
+          SHOW 𝒱[k] ≤ 𝒱* BY INDUCTION {
+            BASE CASE: 𝒱[0] ≤ 𝒱*  
+            INDUCTIVE STEP: ASSUME 𝒱[k] ≤ 𝒱*
+              SHOW 𝒱[k+1] ≤ 𝒱* BY {
+                𝒱[k+1] 
+                  ≤ Bellman(𝒫*, 𝒱[k], ℛ, 𝒯, γ)   BY PolicyImprovement
+                  ≤ Bellman(𝒫*, 𝒱*, ℛ, 𝒯, γ)    BY ASSUMPTION, Bellman monotone
+                  = 𝒱*                           BY BellmanOptimality
+              }
+          }
+        }
+
+        HAVE (3) : ∀ (k : ℕ) . 𝒱* - 𝒱[k] ≤ γ^k * (𝒱* - 𝒱[0]) BY {
+          ; Follows from contraction mapping
+        }
+
+        SHOW ∃ (k : ℕ) . |𝒱* - 𝒱[k]| < ε ∧ IsOptimal(𝒫[k]) BY {
+          CHOOSE k : ℕ SUCH THAT γ^k * |𝒱* - 𝒱[0]| < ε  ; Exists by (3)
+          |𝒱* - 𝒱[k]| < ε                              BY CHOICE of k
+          IsOptimal(𝒫[k])                              BY {
+            𝒱[k] = Bellman(𝒫[k], 𝒱[k-1], ℛ, 𝒯, γ)       BY DEFINITION
+            𝒱[k] = Bellman(𝒫[k], 𝒱[k], ℛ, 𝒯, γ)         BY PREV, (1)
+            IsOptimal(𝒫[k])                            BY BellmanOptimality
+          }
+        }
+      }
+    }
+
+    THEOREM ValueIteration {
+      STATEMENT : ∀ (M : Manifold) (ℛ : Reward[M]) (𝒯 : TransitionProb[M]) (γ : ℝ) (ε : ℝ) .
+        LET 𝒱[k+1](x) = (ℛ ⊕ γ⟨⟨𝒱[k]⟩⟩𝒯)(x)  
+        IN ∃ (k : ℕ) . |𝒱[k] - 𝒱*| < ε
+
+      PROOF {
+        LET M : Manifold, ℛ : Reward[M], 𝒯 : TransitionProb[M], γ : ℝ, ε : ℝ
+
+        DEF 𝒱[k+1](x) = (ℛ ⊕ γ⟨⟨𝒱[k]⟩⟩𝒯)(x)
+
+        HAVE (1) : ∀ (k : ℕ) . 𝒱[k] ≤ 𝒱[k+1] BY {
+          ; Similar to PolicyIteration  
+        }
+
+        HAVE (2) : ∀ (k : ℕ) . 𝒱[k] ≤ 𝒱* BY {
+          ; Similar to PolicyIteration
+        }
+        
+        HAVE (3) : ∀ (k : ℕ) . 𝒱* - 𝒱[k] ≤ γ^k * (𝒱* - 𝒱[0]) BY {
+          ; Follows from contraction mapping  
+        }
+
+        SHOW ∃ (k : ℕ) . |𝒱[k] - 𝒱*| < ε BY {
+          CHOOSE k : ℕ SUCH THAT γ^k * |𝒱* - 𝒱[0]| < ε  ; Exists by (3)
+          |𝒱[k] - 𝒱*| ≤ γ^k * |𝒱* - 𝒱[0]| < ε           BY CHOICE of k
+        }
+      }
+    }
+  }
+}

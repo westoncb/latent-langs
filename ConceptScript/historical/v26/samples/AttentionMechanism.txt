@@ -1,0 +1,146 @@
+CONCEPT AttentionMechanism {
+  LANGUAGE {
+    TYPE Vector[N] = List[ℝ] WHERE Length(Self) = N
+    TYPE Matrix[M, N] = List[Vector[N]] WHERE Length(Self) = M
+    TYPE AttentionLayer = (Query: Vector, Keys: Matrix, Values: Matrix) -> Vector
+    TYPE Mask = Matrix
+
+    FUNC Softmax(v: Vector): Vector
+    FUNC Exp(v: Vector): Vector
+    FUNC Normalize(v: Vector): Vector
+    FUNC MatMul(A: Matrix[M, K], B: Matrix[K, N]): Matrix[M, N]
+    FUNC Transpose(A: Matrix[M, N]): Matrix[N, M]
+    FUNC Hadamard(A: Matrix[M, N], B: Matrix[M, N]): Matrix[M, N]
+    FUNC Concat(v1: Vector[N], v2: Vector[M]): Vector[N+M]
+    FUNC Mask(A: Matrix[M, N], mask: Mask[M, N]): Matrix[M, N]
+  }
+
+  NOTATION {
+    σ(v) = Softmax(v)
+    exp(v) = Exp(v)
+    norm(v) = Normalize(v)
+    A · B = MatMul(A, B)
+    Aᵀ = Transpose(A)
+    A ⊙ B = Hadamard(A, B)
+    v1 ++ v2 = Concat(v1, v2)
+    A ◾ mask = Mask(A, mask)
+
+    α(Q, K) = σ((Q · Kᵀ) / √Dim(Q))
+    Attention(Q, K, V) = α(Q, K) · V
+    MultiHead(Q, K, V) = (head_1 ++ ... ++ head_h) · W_O
+      WHERE head_i = Attention(Q · W_i_Q, K · W_i_K, V · W_i_V)
+    MaskedAttention(Q, K, V, mask) = α(Q, K, mask) · V
+    ℚ = Vector  // Query vector space
+    𝕂 = Vector  // Key vector space
+    𝕍 = Vector  // Value vector space
+  }
+
+  TRANSFORMERS {
+    FUNC DotProductAttention(Q: ℚ, K: 𝕂, V: 𝕍): 𝕍 = {
+      LET d = Dim(Q)
+      REQUIRE Dim(K) = d AND Dim(V) = d
+      RETURN σ((Q · Kᵀ) / √d) · V
+    }
+
+    FUNC ScaledDotProductAttention(Q: Matrix, K: Matrix, V: Matrix): Matrix = {
+      LET d = Dim(Q[0])
+      REQUIRE ∀ (q: Q, k: K, v: V) . Dim(q) = Dim(k) = Dim(v) = d
+      RETURN σ((Q · Kᵀ) / √d) · V
+    }
+
+    FUNC MultiHeadAttention(Q: Matrix, K: Matrix, V: Matrix, h: ℕ): Matrix = {
+      LET d = Dim(Q[0])
+      REQUIRE ∀ (q: Q, k: K, v: V) . Dim(q) = Dim(k) = Dim(v) = d
+      REQUIRE d % h = 0
+      LET d_h = d / h
+
+      LET heads = []
+      FOR i = 1 TO h:
+        LET W_i_Q, W_i_K, W_i_V = RandomMatrix(d, d_h)
+        LET head_i = ScaledDotProductAttention(Q · W_i_Q, K · W_i_K, V · W_i_V)
+        heads := Append(heads, head_i)
+
+      RETURN (heads[1] ++ ... ++ heads[h]) · W_O
+    }
+
+    FUNC MaskedAttention(Q: Matrix, K: Matrix, V: Matrix, mask: Mask): Matrix = {
+      REQUIRE Dim(mask) = (Dim(Q), Dim(K))
+      LET scores = (Q · Kᵀ) / √Dim(Q[0])
+      LET masked_scores = scores ◾ mask
+      LET attention_weights = σ(masked_scores)
+      RETURN attention_weights · V
+    }
+  }
+
+  STRUCTURE TransformerBlock[InputDim, HiddenDim, NumHeads, OutputDim] {
+    FUNC Apply(input: Matrix): Matrix = {
+      LET Q, K, V = Linear(input, HiddenDim)
+      LET attention_output = MultiHeadAttention(Q, K, V, NumHeads)
+      LET intermediate_output = LayerNorm(Linear(attention_output, HiddenDim) + input)
+      LET output = LayerNorm(Linear(intermediate_output, OutputDim) + intermediate_output)
+      RETURN output
+    }
+  }
+
+  PROOFS {
+    THEOREM SoftmaxPreservesPositionInvariance {
+      STATEMENT:
+        ∀ (v: Vector, c: ℝ) . σ(v + [c, ..., c]) = σ(v)
+
+      PROOF:
+        LET v: Vector, c: ℝ
+
+        HAVE exp(v + [c, ..., c]) = exp(v) · exp([c, ..., c])
+          BY Properties of Exponentiation and Vector Addition
+
+        LET k = exp(c)
+        HAVE k > 0
+          BY Properties of Exponentiation
+
+        SHOW σ(v + [c, ..., c]) = σ(v):
+          σ(v + [c, ..., c])
+            = norm(exp(v + [c, ..., c]))      BY Definition of σ
+            = norm(exp(v) · [k, ..., k])      BY Previous Result
+            = norm(exp(v)) · k / k            BY Properties of Normalization
+            = norm(exp(v)) · 1                BY Algebra
+            = σ(v)                            BY Definition of σ
+
+        QED
+    }
+
+    THEOREM AttentionIsInvariantToKeyScaling {
+      STATEMENT:
+        ∀ (Q: ℚ, K: 𝕂, V: 𝕍, c: ℝ) . Attention(Q, c·K, V) = Attention(Q, K, V)
+
+      PROOF:
+        LET Q: ℚ, K: 𝕂, V: 𝕍, c: ℝ
+
+        SHOW Attention(Q, c·K, V) = Attention(Q, K, V):
+          Attention(Q, c·K, V)
+            = α(Q, c·K) · V                                 BY Definition of Attention
+            = σ((Q · (c·K)ᵀ) / √Dim(Q)) · V                  BY Definition of α
+            = σ(c · (Q · Kᵀ) / √Dim(Q)) · V                  BY Properties of Transpose and Scalar Multiplication
+            = σ((Q · Kᵀ) / √Dim(Q) + log(c)) · V             BY Properties of Logarithm
+            = σ((Q · Kᵀ) / √Dim(Q)) · V                      BY SoftmaxPreservesPositionInvariance
+            = α(Q, K) · V                                   BY Definition of α
+            = Attention(Q, K, V)                            BY Definition of Attention
+
+        QED
+    }
+
+    THEOREM AttentionIsInvariantToValueScaling {
+      STATEMENT:
+        ∀ (Q: ℚ, K: 𝕂, V: 𝕍, c: ℝ) . Attention(Q, K, c·V) = c · Attention(Q, K, V)
+
+      PROOF:
+        LET Q: ℚ, K: 𝕂, V: 𝕍, c: ℝ
+
+        Attention(Q, K, c·V)
+          = α(Q, K) · (c·V)                 BY Definition of Attention
+          = c · (α(Q, K) · V)               BY Properties of Scalar Multiplication and Matrix Multiplication
+          = c · Attention(Q, K, V)          BY Definition of Attention
+
+        QED
+    }
+  }
+}

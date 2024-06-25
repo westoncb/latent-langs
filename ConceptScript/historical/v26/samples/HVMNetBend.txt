@@ -1,0 +1,168 @@
+# Neuron type
+type Neuron:
+  Neuron { bias: f24, activation: ActivationFunction }
+
+# Synapse type
+type Synapse:
+  Synapse { weight: f24, pre: Neuron, post: Neuron }
+
+# Layer type
+type Layer:
+  Layer { neurons: List[Neuron], synapses: List[Synapse] }
+
+# HVMNet type
+type HVMNet:
+  HVMNet { layers: List[Layer] }
+
+# Activation function type
+type ActivationFunction:
+  Sigmoid
+  ReLU
+  Tanh
+
+# Interact function (inherently parallel)
+def Interact(synapse):
+  open Synapse: synapse
+  pre_act = Activate(synapse.pre, 0.0)
+  post_act = Activate(synapse.post, pre_act * synapse.weight)
+  return Synapse { weight: synapse.weight, pre: Neuron { bias: synapse.pre.bias, activation: post_act }, post: synapse.post }
+
+# Activate function (pure function, can be parallelized)
+def Activate(neuron, input):
+  open Neuron: neuron
+  return neuron.activation(input + neuron.bias)
+
+# Forward function (recursive, inherently parallel)
+def Forward(layer, input):
+  match layer:
+    case Layer:
+      # Compute neuron activations in parallel
+      activations = List/Nil
+      for neuron_id in range(len(layer.neurons)):
+        use neuron = layer.neurons[neuron_id]
+        activation = Activate(neuron, input[neuron_id])
+        activations = List/Cons(activation, activations)
+
+      # Update synapses in parallel
+      synapses' = List/Nil
+      for synapse_id in range(len(layer.synapses)):
+        use synapse = layer.synapses[synapse_id]
+        synapse' = Interact(synapse)
+        synapses' = List/Cons(synapse', synapses')
+
+      return Layer { neurons: activations, synapses: synapses' }
+
+# Backward function (parallel backpropagation)
+def Backward(layer, input, output, error, learning_rate):
+  match layer:
+    case Layer:
+      # Compute gradients for each neuron in parallel
+      gradients = List/Nil
+      for neuron_id in range(len(layer.neurons)):
+        use neuron = layer.neurons[neuron_id]
+        use synapse = layer.synapses[neuron_id]
+        gradient = ComputeGradient(neuron, synapse, error[neuron_id])
+        gradients = List/Cons(gradient, gradients)
+
+      # Update neuron biases in parallel
+      neurons' = List/Nil
+      for neuron_id in range(len(layer.neurons)):
+        use neuron = layer.neurons[neuron_id]
+        use gradient = gradients[neuron_id]
+        bias' = neuron.bias - learning_rate * gradient
+        neuron' = Neuron { bias: bias', activation: neuron.activation }
+        neurons' = List/Cons(neuron', neurons')
+
+      # Update synapse weights in parallel
+      synapses' = List/Nil
+      for synapse_id in range(len(layer.synapses)):
+        use synapse = layer.synapses[synapse_id]
+        use gradient = gradients[synapse_id]
+        weight' = synapse.weight - learning_rate * gradient
+        synapse' = Synapse { weight: weight', pre: synapse.pre, post: synapse.post }
+        synapses' = List/Cons(synapse', synapses')
+
+      return Layer { neurons: neurons', synapses: synapses' }
+
+# Compute gradient for a single neuron (pure function)
+def ComputeGradient(neuron, synapse, error):
+  open Neuron: neuron
+  open Synapse: synapse
+  pre_act = Activate(synapse.pre, 0.0)
+  post_act = Activate(neuron, pre_act * synapse.weight)
+  return error * Derive(neuron.activation)(post_act) * pre_act
+
+# Derivative of activation function (pure function)
+def Derive(activation):
+  match activation:
+    case Sigmoid:
+      return lambda x: x * (1.0 - x)
+    case ReLU:
+      return lambda x: if x > 0.0 then 1.0 else 0.0
+    case Tanh:
+      return lambda x: 1.0 - x * x
+
+# Train function (recursive, inherently parallel)
+def Train(net, inputs, targets, depth, learning_rate):
+  match depth:
+    case 0:
+      return net
+    case _:
+      # Forward pass
+      outputs = List/Nil
+      for input_id in range(len(inputs)):
+        use input = inputs[input_id]
+        output = Forward(net, input)
+        outputs = List/Cons(output, outputs)
+
+      # Backward pass
+      errors = List/Nil
+      for output_id in range(len(outputs)):
+        use output = outputs[output_id]
+        use target = targets[output_id]
+        error = output - target
+        errors = List/Cons(error, errors)
+
+      net' = HVMNet { layers: List/Nil }
+      for layer_id in range(len(net.layers)):
+        use layer = net.layers[layer_id]
+        use input = inputs[layer_id]
+        use output = outputs[layer_id]
+        use error = errors[layer_id]
+        layer' = Backward(layer, input, output, error, learning_rate)
+        net'.layers = List/Cons(layer', net'.layers)
+
+      # Recursive call for next iteration
+      Train(net', inputs, targets, depth - 1, learning_rate)
+
+# Main function
+def main:
+  # Create an example HVMNet
+  net = HVMNet { layers: List/Nil }
+  for depth in range(3):
+    neurons = List/Nil
+    for neuron_id in range(2):
+      neuron = Neuron { bias: 0.0, activation: Sigmoid }
+      neurons = List/Cons(neuron, neurons)
+
+    synapses = List/Nil
+    for synapse_id in range(2):
+      synapse = Synapse { weight: 1.0, pre: Neuron { bias: 0.0, activation: Sigmoid }, post: Neuron { bias: 0.0, activation: Sigmoid } }
+      synapses = List/Cons(synapse, synapses)
+
+    layer = Layer { neurons: neurons, synapses: synapses }
+    net.layers = List/Cons(layer, net.layers)
+
+  # Example inputs and targets
+  inputs = [[1.0, 1.0], [0.0, 0.0], [1.0, 0.0]]
+  targets = [[0.0], [0.0], [1.0]]
+
+  # Train the network
+  learning_rate = 0.1
+  trained_net = Train(net, inputs, targets, 10, learning_rate)
+
+  # Perform forward pass on trained network
+  test_input = [1.0, 0.0]
+  output = Forward(trained_net, test_input)
+
+  return output

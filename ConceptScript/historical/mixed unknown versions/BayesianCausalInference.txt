@@ -1,0 +1,80 @@
+CONCEPT BayesianCausalInference {
+  LANGUAGE {
+    type Variable = Symbol
+    type Value = Symbol | Number
+    type Dataset = List<Map<Variable, Value>>
+    type BayesNet = (Set<Variable>, Map<Variable, Set<Variable>>, Map<Variable, CPT>) 
+    type CPT = Map<Map<Variable, Value>, Probability>
+    type Intervention = Map<Variable, Value>
+    type Query = (Variable, Map<Variable, Value>)
+
+    func Parents : BayesNet × Variable -> Set<Variable>
+    func Probability : BayesNet × Map<Variable, Value> -> Real
+    func Intervene : BayesNet × Intervention -> BayesNet
+    func Marginal : BayesNet × Query -> Probability
+    func LearnStructure : Dataset -> BayesNet
+    func LearnParameters : Dataset × BayesNet -> BayesNet  
+  }
+    
+  STRUCTURE {
+    ; Bayesian network axioms
+    ∀(B: BayesNet) (x: Map<Variable, Value>).
+      Probability(B, x) = ∏_{v ∈ B.Variables} B.CPT[v][x|_{Parents(B, v)}]
+
+    ∀(B: BayesNet) (i: Intervention).
+      Intervene(B, i) = (B.Variables, B.Parents, B.CPT|_{B.Variables - i.Keys})
+
+    ∀(B: BayesNet) ((v, e): Query).  
+      Marginal(B, (v, e)) = ∑_{x|_{B.Variables - {v} - e.Keys}} Probability(B, x ∪ e ∪ {(v, *)})
+
+    ; Causal inference axioms  
+    ∀(B: BayesNet) (i: Intervention) ((v, e): Query).
+      Marginal(Intervene(B, i), (v, e)) = P(v | do(i), e)
+
+    ∀(B: BayesNet) (i: Intervention) (x: Map<Variable, Value>).  
+      Probability(Intervene(B, i), x) = (∏_{v ∈ B.Variables - i.Keys} B.CPT[v][x|_{Parents(B, v)}]) × ∏_{v ∈ i.Keys} 𝟙{x[v] = i[v]}
+  }
+   
+  PROOFS {
+    theorem CausalEffect<B, i, v> {
+      assume B: BayesNet, i: Intervention, Marginal(B, (v, ∅))
+      
+      let B' = Intervene(B, i)
+      
+      ; Law of total probability  
+      Marginal(B, (v, ∅)) 
+        = ∑_{x|_{B.Variables - {v}}} Probability(B, x ∪ {(v, *)})
+
+      ; Intervention axiom
+      Marginal(B', (v, ∅))  
+        = ∑_{x|_{B'.Variables - {v}}} Probability(B', x ∪ {(v, *)})
+        = P(v | do(i))
+
+      ; Difference in marginals  
+      Marginal(B', (v, ∅)) - Marginal(B, (v, ∅))
+        = P(v | do(i)) - P(v)
+        = CausalEffect(i, v) 
+        
+      hence CausalEffect(i, v) = Marginal(Intervene(B, i), (v, ∅)) - Marginal(B, (v, ∅))
+    }
+    
+    theorem Identifiability<B, D> {
+      assume ∀B, B'. (Marginal(B, *) = Marginal(B', *)) => (B = B')
+      
+      let B = LearnStructure(D)  
+      let B' = LearnParameters(D, B)
+      
+      Marginal(B', *) = Marginal(B, *) = Pr(D)
+      
+      hence Pr(D) identifies a unique B'
+    }
+  }
+}
+
+This Concept demonstrates several powerful features of ConceptScript:
+
+The use of complex data types, such as maps, sets, and tuples, to define Bayesian networks, probability distributions, interventions, and queries in a structured and modular way.
+The use of mathematical functions and operators, such as products, sums, and indicators, to express probabilistic and causal relationships concisely.
+The formalization of key axioms of Bayesian networks and causal inference, such as factorization, intervention, and marginalization, using equational and logical reasoning.
+The use of structured proofs to derive important results, such as the identification of causal effects and the uniqueness of learned Bayesian networks, using the defined concepts and axioms.
+The integration of learning algorithms, such as structure and parameter learning, as primitive functions within the language, allowing for a seamless connection between data and models.

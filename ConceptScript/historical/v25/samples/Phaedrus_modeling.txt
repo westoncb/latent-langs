@@ -1,0 +1,384 @@
+CONCEPT PhaedrusSynthesis {
+  LANGUAGE {
+    TYPE Soul
+    TYPE SoulPart
+      TYPE Rationality <: SoulPart
+      TYPE Spirit <: SoulPart 
+      TYPE Appetite <: SoulPart
+    TYPE Form
+      TYPE Truth <: Form
+      TYPE Beauty <: Form
+      TYPE Goodness <: Form
+    TYPE Mania
+      TYPE DivineMania <: Mania
+        TYPE PhilosophicMania <: DivineMania
+        TYPE PoeticMania <: DivineMania
+        TYPE PropheticMania <: DivineMania
+        TYPE TelesticMania <: DivineMania
+      TYPE HumanMania <: Mania
+    TYPE Rhetoric
+      TYPE TrueRhetoric <: Rhetoric
+      TYPE FalseRhetoric <: Rhetoric
+    TYPE Discourse
+      TYPE SpokenDiscourse <: Discourse
+      TYPE WrittenDiscourse <: Discourse
+        
+    FUNC Recollection(s : Soul, f : Form) : Soul
+    FUNC Ascent(s : Soul, f : Form) : Soul
+    FUNC Descent(s : Soul) : Soul
+    FUNC Embodiment(s : Soul) : Soul  
+    FUNC Purification(s : Soul) : Soul
+    FUNC Persuasion(r : Rhetoric, s : Soul) : Soul
+    FUNC Instruction(d : Discourse, s : Soul) : Soul
+
+    AXIOM SoulComposition {
+      ∀ s : Soul . 
+        ∃! r : Rationality, sp : Spirit, a : Appetite . 
+          s = r ∧ sp ∧ a
+    }
+
+    AXIOM DiscourseTypes {
+      ∀ d : Discourse .
+        d = SpokenDiscourse ∨ d = WrittenDiscourse
+    }
+        
+    AXIOM RationalAscent {
+      ∀ s : Soul, r : Rationality . 
+        ( s = r ∧ PhilosophicMania(s) ) ⇒ 
+        ∃ f : Form . Recollection(s, f) ∧ Ascent(s, f)
+    }
+
+    AXIOM SpiritualDescent {
+      ∀ s : Soul, sp : Spirit .
+        ( s = sp ∧ ¬PhilosophicMania(s) ) ⇒
+        Descent(s) ∧ Embodiment(s)
+    }
+        
+    AXIOM AppetitiveMania {
+      ∀ s : Soul, a : Appetite .
+        ( s = a ∧ ¬Purification(s) ) ⇒ HumanMania(s)
+    }
+        
+    AXIOM TrueRhetoricConditions {  
+      ∀ r : Rhetoric .
+        TrueRhetoric(r) ⇔ 
+        ( ∃ s : Soul . Persuasion(r, s) ∧ 
+          ( ∀ f : Form . Instruction(r, s) ⇒ Recollection(s, f) ) )
+    }
+
+    AXIOM WritingLimitations {
+      ∀ d : WrittenDiscourse .
+        ¬( ∃ s : Soul . 
+           ( ∀ f : Form . Instruction(d, s) ⇒ Recollection(s, f) ) )  
+    }
+  }
+
+  STRUCTURE SoulTripartition {
+    LET Rationality, Spirit, Appetite
+        
+    REQUIRE ∀ s : Soul .
+      s = Rationality ∧ Spirit ∧ Appetite
+
+    DEF WhiteHorse = Spirit  
+    DEF BlackHorse = Appetite
+    DEF Charioteer = Rationality
+
+    REQUIRE ∀ s : Soul .
+      Charioteer(s) ⇒ Control(WhiteHorse) ∧ Restrain(BlackHorse)
+  }
+
+  PROOFS {
+    THEOREM SoulAscentAndForms {
+      STATEMENT:
+        ∀ s : Soul .
+          PhilosophicMania(s) ⇒ 
+          ∃ f : Form . Recollection(s, f) ∧ Ascent(s, f)
+            
+      PROOF:
+        LET s : Soul
+        ASSUME PhilosophicMania(s)
+        ASSUME s = Rationality ∧ Spirit ∧ Appetite
+        HENCE s = Rationality
+        FROM RationalAscent HAVE  
+          ( s = Rationality ∧ PhilosophicMania(s) ) ⇒
+          ∃ f : Form . Recollection(s, f) ∧ Ascent(s, f)
+        HENCE ∃ f : Form . Recollection(s, f) ∧ Ascent(s, f)
+    }
+        
+    THEOREM SoulDescentAndEmbodiment {
+      STATEMENT:
+        ∀ s : Soul, sp : Spirit .
+          ( s = sp ∧ ¬PhilosophicMania(s) ) ⇒ 
+          Descent(s) ∧ Embodiment(s)
+            
+      PROOF:
+        DIRECTLY FROM SpiritualDescent
+    }
+        
+    THEOREM RhetoricEffectiveness {
+      STATEMENT:  
+        ∀ r : Rhetoric, s : Soul .
+          TrueRhetoric(r) ⇒ 
+          Persuasion(r, s) ∧ 
+          ( ∀ f : Form . Instruction(r, s) ⇒ Recollection(s, f) )
+            
+      PROOF:
+        LET r : Rhetoric, s : Soul
+        ASSUME TrueRhetoric(r)
+        FROM TrueRhetoricConditions HAVE
+          TrueRhetoric(r) ⇔ 
+          ( ∃ s : Soul . Persuasion(r, s) ∧ 
+            ( ∀ f : Form . Instruction(r, s) ⇒ Recollection(s, f) ) )
+        HENCE 
+          Persuasion(r, s) ∧
+          ( ∀ f : Form . Instruction(r, s) ⇒ Recollection(s, f) )
+    } 
+
+    THEOREM WritingInadequacy {
+      STATEMENT:
+        ∀ d : WrittenDiscourse, s : Soul .
+          ¬( ∀ f : Form . Instruction(d, s) ⇒ Recollection(s, f) )
+      
+      PROOF:
+        DIRECTLY FROM WritingLimitations
+    }
+  }
+}
+
+
+CONCEPT Eros {
+  LANGUAGE {
+    TYPE Soul
+    TYPE DivineManiaType <: Soul
+    TYPE PhilosophicManiaType <: DivineManiaType
+    TYPE PropheticManiaType <: DivineManiaType
+    TYPE PoeticManiaType <: DivineManiaType
+    TYPE TelesticManiaType <: DivineManiaType
+    TYPE Form
+    TYPE Beauty <: Form
+    TYPE Truth <: Form
+    TYPE Virtue <: Form
+    
+    FUNC DivineMania(s : Soul, t : DivineManiaType) : Soul
+    FUNC Recollection(s : Soul, f : Form) : Soul
+    FUNC Ascent(s : Soul, f : Form) : Soul
+    FUNC Fall(s : Soul) : Soul
+    FUNC Purification(s : Soul) : Soul
+
+    AXIOM ManiaTypes {
+      ∀ s : Soul, t : DivineManiaType . 
+        t = PhilosophicManiaType ∨ 
+        t = PropheticManiaType ∨
+        t = PoeticManiaType ∨
+        t = TelesticManiaType
+    }
+
+    AXIOM EroticAscent {
+      ∀ s : Soul . 
+        DivineMania(s, PhilosophicManiaType) ⇒
+        ∃ b : Beauty . ( Recollection(s, b) ∧ Ascent(s, b) )
+    }
+
+    AXIOM RecollectionPrecondition {
+      ∀ s : Soul .
+        (∃ f : Form . Recollection(s, f)) ⇒
+        ∃ t : Truth . ( Recollection(s, t) ∧ Purification(s) )  
+    }
+  }
+
+  STRUCTURE CharioteerAllegory {
+    LET WhiteHorse : CharioteerPart, BlackHorse : CharioteerPart
+    
+    DEF Charioteer(s : Soul) = 
+      DivineMania(s, PhilosophicManiaType) ⇒
+      Control(WhiteHorse) ∧ Resist(BlackHorse)
+
+    DEF FallenSoul(s : Soul) = 
+      ( ¬Control(WhiteHorse) ∧ ¬Resist(BlackHorse) ) ⇒ 
+      Fall(s) ∧ EmbodiedSoul(s)
+  }
+
+  PROOFS {
+    THEOREM AscentToBeauty {
+      STATEMENT:
+        ∀ s : Soul .
+          Charioteer(s) ⇒ 
+          ∃ b : Beauty . ( Recollection(s, b) ∧ Ascent(s, b) )
+      
+      PROOF:
+        LET s : Soul, ASSUME Charioteer(s)
+        THEN DivineMania(s, PhilosophicManiaType)
+        FROM EroticAscent HAVE
+          DivineMania(s, PhilosophicManiaType) ⇒ 
+          ∃ b : Beauty . ( Recollection(s, b) ∧ Ascent(s, b) )
+        HENCE ∃ b : Beauty . ( Recollection(s, b) ∧ Ascent(s, b) )
+    }
+
+    THEOREM SoulFallAndEmbodiment {
+      STATEMENT:  
+        ∀ s : Soul .
+          ¬Charioteer(s) ⇒ Fall(s) ∧ EmbodiedSoul(s)
+      
+      PROOF:
+        LET s : Soul, ASSUME ¬Charioteer(s)
+        FROM CharioteerAllegory HAVE
+          ¬Charioteer(s) ⇒ 
+          ( ¬Control(WhiteHorse) ∧ ¬Resist(BlackHorse) )
+        HENCE ( ¬Control(WhiteHorse) ∧ ¬Resist(BlackHorse) )
+        FROM FallenSoul HAVE
+          ( ¬Control(WhiteHorse) ∧ ¬Resist(BlackHorse) ) ⇒
+          Fall(s) ∧ EmbodiedSoul(s)  
+        HENCE Fall(s) ∧ EmbodiedSoul(s)
+    }
+    
+    THEOREM RecollectionRequiresPurification {
+      STATEMENT:
+        ∀ s : Soul .
+          (∃ f : Form . Recollection(s, f)) ⇒ Purification(s)
+        
+      PROOF:  
+        LET s : Soul
+        ASSUME ∃ f : Form . Recollection(s, f)
+        FROM RecollectionPrecondition HAVE
+          (∃ f : Form . Recollection(s, f)) ⇒ 
+          ∃ t : Truth . ( Recollection(s, t) ∧ Purification(s) )
+        LET t : Truth 
+        ASSUME Recollection(s, t) ∧ Purification(s)
+        HENCE Purification(s)
+    }
+  }
+}
+
+
+// This was the one translate directly from the original Greek version
+CONCEPT Eros {
+  LANGUAGE {
+    TYPE Mania <: Soul
+    TYPE Truth <: Soul  
+    TYPE Recollection <: Soul
+    TYPE Beauty <: Form
+    TYPE Virtue <: Form
+    
+    FUNC DivineInspiration(s : Soul) : Mania
+    FUNC Philosophy(s : Soul) : Mania  
+    FUNC Ascent(s : Soul, f : Form) : Soul
+    FUNC Anagoge(s : Soul) : Truth
+
+    AXIOM EroticMania {
+      ∀ s : Soul . 
+        ( DivineInspiration(s) ∨ Philosophy(s) ) ⇒ 
+        ∃ f : Form . Ascent(s, f)  
+    }
+
+    AXIOM TrueEros {
+      ∀ s : Soul . 
+        Anagoge(s) ⇒
+        Truth(s) ∧ ∃ f : Form . Recollection(s, f)
+    }
+  }
+
+  STRUCTURE PhilosophicEros {
+    REQUIRE ∀ s : Soul . Anagoge(s) ⇒  
+      (∃ b : Beauty . Ascent(s, b)) ∧ 
+      (∃ v : Virtue . Ascent(s, v))
+  }
+
+  PROOFS {  
+    THEOREM UnifyingEros {
+      STATEMENT:
+        ∀ s : Soul . 
+          Truth(s) ⇒ ∃ f : Form . Recollection(s, f)
+      
+      PROOF:
+        LET s : Soul, ASSUME Truth(s)
+        FROM TrueEros HAVE
+          Truth(s) ⇒ ∃ f : Form . Recollection(s, f)
+        HENCE ∃ f : Form . Recollection(s, f)
+    }
+      
+    THEOREM UnitiveMania {
+      STATEMENT:  
+        ∀ s : Soul .
+          (DivineInspiration(s) ∨ Philosophy(s)) ⇒ 
+          ∃ b : Beauty . Ascent(s, b)
+      
+      PROOF:
+        LET s : Soul
+        ASSUME DivineInspiration(s) ∨ Philosophy(s) 
+        FROM EroticMania HAVE  
+          (DivineInspiration(s) ∨ Philosophy(s)) ⇒ 
+          ∃ f : Form . Ascent(s, f)
+        LET f : Form, ASSUME Ascent(s, f)  
+        FROM PhilosophicEros HAVE
+          Ascent(s, f) ⇒ f :> Beauty
+        HENCE ∃ b : Beauty . Ascent(s, b)
+    }
+  }
+}
+
+
+
+ΕΝΝΟΙΑ Ἔρως {
+  ΓΛΩΤΤΑ {
+    ΤΥΠΟΣ Μανία <: Ψυχή
+    ΤΥΠΟΣ Ἀληθής <: Ψυχὴ  
+    ΤΥΠΟΣ Ἀνάμνησις <: Ψυχή
+    ΤΥΠΟΣ Κάλλος <: Ἰδέα
+    ΤΥΠΟΣ Ἀρετή <: Ἰδέα
+    
+    ΛΕΙΤ Ἐνθουσιασμός(ψ : Ψυχή) : Μανία
+    ΛΕΙΤ Φιλοσοφία(ψ : Ψυχή) : Μανία  
+    ΛΕΙΤ Ἀνάβασις(ψ : Ψυχή, ι : Ἰδέα) : Ψυχή
+    ΛΕΙΤ Ἀναγωγή(ψ : Ψυχή) : Ἀληθής
+
+    ΑΞΙΩΜΑ Ἐρωτομανία {
+      ∀ ψ : Ψυχή . 
+        ( Ἐνθουσιασμός(ψ) ∨ Φιλοσοφία(ψ) ) ⇒ 
+        ∃ ι : Ἰδέα . Ἀνάβασις(ψ, ι)  
+    }
+
+    ΑΞΙΩΜΑ ἈληθῆςἜρως {
+      ∀ ψ : Ψυχή . 
+        Ἀναγωγή(ψ) ⇒
+        Ἀληθής(ψ) ∧ ∃ ι : Ἰδέα . Ἀνάμνησις(ψ, ι)
+    }
+  }
+
+  ΔΟΜΗ ΦιλόσοφοςἜρως {
+    ΑΠΑΙΤΕῖ ∀ ψ : Ψυχή . Ἀναγωγή(ψ) ⇒  
+      (∃ ι : Κάλλος . Ἀνάβασις(ψ, ι)) ∧ 
+      (∃ α : Ἀρετή . Ἀνάβασις(ψ, α))
+  }
+
+  ΑΠΟΔΕΙΞΙΣ {  
+    ΘΕΩΡΗΜΑ ἙνοποιόςἜρως {
+      ΔΙΑΤΥΠΩΣΗ:
+        ∀ ψ : Ψυχή . 
+          Ἀληθής(ψ) ⇒ ∃ ι : Ἰδέα . Ἀνάμνησις(ψ, ι)
+      
+      ΑΠΟΔΕΙΞΗ:
+        ΕΣΤΩ ψ : Ψυχή, ΥΠΟΘ Ἀληθής(ψ)
+        ΑΠO ΑληθῆςἜρως ΕΧΟΥΜΕ
+          Ἀληθής(ψ) ⇒ ∃ ι : Ἰδέα . Ἀνάμνησις(ψ, ι)
+        ΑΡΑ ∃ ι : Ἰδέα . Ἀνάμνησις(ψ, ι)
+    }
+      
+    ΘΕΩΡΗΜΑ ἙνωτικὴΜανία {
+      ΔΙΑΤΥΠΩΣΗ:  
+        ∀ ψ : Ψυχή .
+          (Ἐνθουσιασμός(ψ) ∨ Φιλοσοφία(ψ)) ⇒ 
+          ∃ ι : Κάλλος . Ἀνάβασις(ψ, ι)
+      
+      ΑΠΟΔΕΙΞΗ:
+        ΕΣΤΩ ψ : Ψυχή
+        ΥΠΟΘ Ἐνθουσιασμός(ψ) ∨ Φιλοσοφία(ψ) 
+        ΑΠΟ Ἐρωτομανία ΕΧΟΥΜΕ  
+          (Ἐνθουσιασμός(ψ) ∨ Φιλοσοφία(ψ)) ⇒ 
+          ∃ ι : Ἰδέα . Ἀνάβασις(ψ, ι)
+        ΕΣΤΩ ι : Ἰδέα, ΥΠΟΘ Ἀνάβασις(ψ, ι)  
+        ΑΠΟ ΦιλόσοφοςἜρως ΕΧΟΥΜΕ
+          Ἀνάβασις(ψ, ι) ⇒ ι :> Κάλλος
+        ΑΡΑ ∃ ι : Κάλλος . Ἀνάβασις(ψ, ι)
+    }
+  }
+}

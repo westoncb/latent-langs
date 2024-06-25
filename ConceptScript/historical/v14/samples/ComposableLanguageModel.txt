@@ -1,0 +1,150 @@
+CONCEPT ComposableLanguageModel {
+  LANGUAGE {
+    type Token = String
+    type Embedding = Vector<𝕽>
+    type Context = Token[]
+    type Attention = Context -> (Token -> 𝕽)
+    type FFN = Embedding -> Embedding
+    type TransformerLayer = {
+      selfAttention: Attention,
+      ffn: FFN,
+      layerNorm1: Embedding -> Embedding,
+      layerNorm2: Embedding -> Embedding
+    }
+    type TransformerStack = TransformerLayer[]
+
+    func Tokenize(text: String): Token[] = ...
+    func Embed(token: Token): Embedding = ...
+    func Encode(context: Context, stack: TransformerStack): Embedding =
+      let embeddings = context.map(Embed)
+      stack.foldl(ApplyLayer, embeddings).last()
+      
+    func ApplyLayer(embeddings: Embedding[], layer: TransformerLayer): Embedding[] =
+      let attended = embeddings.map(e => {
+        let scores = layer.selfAttention(embeddings)(e)
+        let weighted = zip(embeddings, scores).map(([e, s]) => e * s)
+        weighted.sum()
+      })
+      let normalized1 = attended.map(layer.layerNorm1) 
+      let feedforward = normalized1.map(layer.ffn)
+      let normalized2 = feedforward.map(layer.layerNorm2)
+      normalized2
+        
+    func Decode(prompt: Context, inputEmbedding: Embedding, 
+                stack: TransformerStack, vocabSize: ℕ): Token =
+      let embeddings = prompt.map(Embed)
+      let contextEmbedding = Encode(prompt, stack)
+      let combinedEmbedding = Concatenate(contextEmbedding, inputEmbedding)
+      let logits = Linear(combinedEmbedding, vocabSize)
+      let probs = Softmax(logits)
+      let tokenIndex = ArgMax(probs)
+      let token = IndexToToken(tokenIndex)
+      token
+
+    pred Fluent(text: String) = ...
+    pred Accurate(text: String, knowledge: String) = 
+      Supported(text, knowledge) ∧ ¬Contradicts(text, knowledge)
+    pred Coherent(text: String) = ... 
+    pred Relevant(text: String, context: String) = ...
+  }
+  
+  STRUCTURE {
+    [LanguageModel(K: TransformerStack, V: TransformerStack) = {
+      encode: Context -> Embedding = Encode(_, K),
+      decode: (Context, Embedding) -> Token = Decode(_, _, V, vocabSize)
+    }]
+
+    [Generate(model: LanguageModel, prompt: String, maxTokens: ℕ): String =
+      let tokens = Tokenize(prompt)
+      let context = []
+      while length(tokens) < maxTokens do
+        let embedding = model.encode(context)
+        let nextToken = model.decode(context, embedding)
+        tokens.append(nextToken)
+        context.append(nextToken)
+      tokens.join()
+    ]
+
+    [Compose(model1: LanguageModel, model2: LanguageModel): LanguageModel =
+      let encode(context: Context): Embedding =
+        let embedding1 = model1.encode(context)
+        let embedding2 = model2.encode(context) 
+        Concatenate(embedding1, embedding2)
+      let decode(context: Context, embedding: Embedding): Token =
+        let [embedding1, embedding2] = Split(embedding)
+        let token1 = model1.decode(context, embedding1)
+        let token2 = model2.decode(context, embedding2)
+        if Perplexity(token1, context) < Perplexity(token2, context) 
+        then token1 else token2
+      {encode, decode}  
+    ]
+  }
+  
+  PROOFS {
+    theorem ComposabilityPreservesProperties:
+      ∀M1, M2: LanguageModel. 
+        (∀p: String. Fluent(Generate(M1, p, _)) ∧ 
+                      Fluent(Generate(M2, p, _))) ⇒
+        ∀p: String. Fluent(Generate(Compose(M1, M2), p, _))
+    {
+      assume M1, M2: LanguageModel
+      assume ∀p: String. Fluent(Generate(M1, p, _)) ∧ 
+                          Fluent(Generate(M2, p, _))
+      
+      let M = Compose(M1, M2)
+      assume p: String
+      let text = Generate(M, p, maxTokens)
+      
+      have ∀i. Fluent(text[:i])
+        proof by induction on i:
+          case i = 0: vacuously true
+          case i > 0:
+            let context = Tokenize(text[:i-1])
+            let embedding = M.encode(context)
+            let token1 = M1.decode(context, Split(embedding)[0])
+            let token2 = M2.decode(context, Split(embedding)[1])
+            have Fluent(text[:i-1] + token1)  ; by assumption
+            have Fluent(text[:i-1] + token2)  ; by assumption
+            let token = if Perplexity(token1, context) < Perplexity(token2, context) 
+                        then token1 else token2
+            have Fluent(text[:i-1] + token)   
+              ; since appending lower perplexity token preserves fluency
+            text[i] = token                    ; by definition of M.decode
+            hence Fluent(text[:i])
+
+      therefore, Fluent(text)
+    }
+
+    theorem ComposePreservesAccuracy:
+      ∀M1, M2: LanguageModel, db: String.
+        (∀p: String. Accurate(Generate(M1, p, _), db) ∧ 
+                     Accurate(Generate(M2, p, _), db)) ⇒
+        ∀p: String. Accurate(Generate(Compose(M1, M2), p, _), db)
+    {
+      ... // Similar structure to fluency proof
+      let token = ...
+      have Supported(text[:i-1] + token, db) ∧ ¬Contradicts(text[:i-1] + token, db)
+        ; since both models are accurate w.r.t db and composition selects
+        ; the token with lower perplexity / higher likelihood given context
+      ...
+    }
+
+    theorem ComposePreservesCoherence:
+      ∀M1, M2: LanguageModel. 
+        (∀p: String. Coherent(Generate(M1, p, _)) ∧ 
+                     Coherent(Generate(M2, p, _))) ⇒
+        ∀p: String. Coherent(Generate(Compose(M1, M2), p, _))
+    { 
+      ... // Similar to fluency proof
+    }
+    
+    theorem ComposePreservesRelevance:
+      ∀M1, M2: LanguageModel, context: String. 
+        (∀p: String. Relevant(Generate(M1, p, _), context) ∧ 
+                     Relevant(Generate(M2, p, _), context)) ⇒
+        ∀p: String. Relevant(Generate(Compose(M1, M2), p, _), context)  
+    {
+      ... // Similar to fluency proof
+    }
+  }
+}

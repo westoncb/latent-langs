@@ -1,0 +1,91 @@
+CONCEPT SelfOptimizingComputationalMatter_v1 {
+  IMPORT ComputationalMatter_v1.*
+  IMPORT SelfOptimizingMatter_v1.*
+
+  LANGUAGE {
+    SelfOptimizingProgram := sop(L, F, O, A)
+    sop(L, F, O, A): self-optimizing program with logic L, data flow F, 
+                     objective O, and adaptation mechanisms A
+    
+    AdaptationMechanism := am(T, E, C)
+    am(T, E, C): adaptation mechanism of type T with effects E and conditions C
+    
+    Adaptive{m, P} ⟺ ∃A. P = sop(_, _, _, A)
+    SelfOptimizing{m, P, O} ⟺ Adaptive{m, P} ∧ ∀a ∈ A{P}. O ≻ O{E{a}}
+    AutoReconfigurable{m, P} ⟺ Adaptive{m, P} ∧ ∀a ∈ A{P}. S{E{a}} ≠ S{m}
+    RobustlyOptimal{m, P, ε, δ} ⟺ ∀m', P'. d{(m,P), (m',P')} < δ ⇒ 
+                                    |O{m,P} - O{m',P'}| < ε  
+    notation m[P] = m(S{m}, P, A{m})
+  }
+
+  STRUCTURE {
+    [AdaptiveComputation:
+      ∀m, P, t. m[P] ⊢ t ⇒ ∃P'. P ≠ P' ∧ m[P'] ⊢ t
+    ]
+
+    [ReconfigurableStructure:
+      ∀m, t. m ⊢ t ⇒ ∃S. m(S, _, _) ⊢ t 
+    ]
+
+    [RobustProgramming:
+      ∀m, P, ε, δ. Robust{m, ε, δ} ⇒ ∃P'. RobustlyOptimal{m, P', ε, δ} 
+    ]
+  }
+
+  TACTIC {
+    ProgramAdaptation{m, P, O} ⊢ SelfOptimizing{m, P, O} ⇐
+      ∃a ∈ A{P}. ∀P'. O{m, P'} ≤ O{m, (P/a){E{a}}}
+      
+    StructuralAdaptation{m, P} ⊢ AutoReconfigurable{m, P} ⇐
+      ∃a ∈ A{P}. S{E{a}} ≠ S{m}
+      
+    RobustOptimization{m, P, ε, δ} ⊢ RobustlyOptimal{m, P, ε, δ} ⇐
+      ∀P'. d{P, P'} < δ ⇒ |O{m,P} - O{m,P'}| < ε
+  }
+
+  PROOF {
+    theorem ∀m, O. ∃P. SelfOptimizing{m, P, O}
+    {
+      S := S{m}
+      L := l(∅, {O})
+      A := {am(mutation, E, ⊤) | ∀P'. O{m, P'} ≤ O{m, E{P'}}}
+      P := sop(L, ∅, O, A)
+      
+      SelfOptimizing{m, P, O} by ProgramAdaptation{m, P, O}
+    }
+    
+    theorem ∀m. Programmable{m} ⇒ ∃P. AutoReconfigurable{m, P}
+    {
+      assume Programmable{m}
+      let a := am(reconfiguration, m', C) where
+        m' := m(S', _, _) such that S' ≠ S{m} and
+        C := {S{m} ⊨ t}
+      
+      P := sop(∅, ∅, ∅, {a}) 
+      
+      AutoReconfigurable{m, P} by StructuralAdaptation{m, P}
+    }
+    
+    theorem ∀m, O, ε, δ. ∃P. RobustlyOptimal{m, P, ε, δ}
+    {
+      L := l(∅, {O})
+      A := {am(adaptation, P', {d{P, P'} < δ}) | |O{m,P} - O{m,P'}| < ε}
+      P := sop(L, ∅, O, A)
+      
+      RobustlyOptimal{m, P, ε, δ} by RobustOptimization{m, P, ε, δ}
+    }
+      
+    theorem ∀m, t. Universal{m, T} ∧ t ∈ T ⇒ ∃P. m[P] ⊢ t
+    { 
+      assume Universal{m, T} ∧ t ∈ T
+      
+      ∀t' ⊏ t. m ⊢ t' by {
+        t' ∈ T by definition of ⊏  
+        hence ∃S. m(S, _, _) ⊨ t' by Universal{m, T}
+        hence m ⊢ t' by AdaptiveComputation  
+      }
+      
+      m ⊢ t by InductiveReasoning{m, t, T}
+    }
+  }
+}

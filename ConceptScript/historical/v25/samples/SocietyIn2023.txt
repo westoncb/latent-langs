@@ -1,0 +1,102 @@
+The key ideas in this modeling of society in 2023:
+
+We have moved beyond the electric age into a new "post-Internet" era, characterized by a hybridized, iconic culture that is immersive and participatory but no longer tribal or holistic. A new dominant sense of the "haptic" (touch-based interaction).
+Social media extends our social faculties but obsolesces privacy, retrieves oral culture dynamics, and reverses into isolation. It transforms literate society into the post-Internet form.
+Smartphones extend the body but obsolesce embodiment itself, retrieve mobility and reverse into dependency. They make all environments "applike".
+Virtual reality extends simulation but obsolesces reality, retrieves the "dreamtime" of ancient myth, and reverses into alienation.
+AI extends cognition but obsolesces human agency, retrieves the notion of servant daemons, and reverses into potential human domination by machines.
+The post-Internet society emerges from the combined effects of these electric technologies, layered atop the already electric/retribal society previously created by TV and computers.
+
+So in 2023, we see a fragmentation of the incipient global village McLuhan saw forming via television in 1969. Digital technology pushes us into a new post-Internet configuration marked by immersion, icon-based media, and the haptic modality of smartphones and VR - but also deeper fragmentation and a loss of cohesive tribal identity. The environment becomes dreamlike and "applike" as electric media pervade every aspect of life. Embodied, private, literate and agentic modes are obsolesced.
+
+
+
+CONCEPT SocietyIn2023 {
+  IMPORT McLuhanPlayboyInterview1969
+
+  STRUCTURE PostInternet {
+    REQUIRE ∀ (s: Sense). Balance(this, s)
+    REQUIRE ∃ (s: Sense). Dominant(s, this) ∧ s = Haptic  
+    REQUIRE ∀ (e: Environment | Create(_) = e).
+              Immersive(e) ∧ Participatory(e) ∧ Iconic(this) ∧ ¬Literate(this)
+    REQUIRE ¬Tribal(this) ∧ ¬Holistic(this) ∧ Hybrid(this)
+  }
+
+  STRUCTURE SocialMedia : Technology {
+    ASSUME ∀ (s: Sense). Extend(this, s)
+    DEFINE SELF.Tetrad := (
+      Extend(this, Social), 
+      Obsolesce(this, Privacy), 
+      Retrieve(Create(this), OralCulture),
+      Reverse(this) = Isolation
+    )
+  }
+
+  STRUCTURE Smartphone : Technology {
+    ASSUME ∀ (s: Sense). Extend(this, s)  
+    DEFINE SELF.Tetrad := (
+      Extend(this, BodyExtension),
+      Obsolesce(this, Embodiment),  
+      Retrieve(Create(this), Mobility),
+      Reverse(this) = Dependency  
+    )
+  }
+
+  STRUCTURE VirtualReality : Technology {
+    ASSUME Immersive(Create(this))
+    DEFINE SELF.Tetrad := (
+      Extend(this, Simulation),
+      Obsolesce(this, Reality),
+      Retrieve(Create(this), Dreamtime),  
+      Reverse(this) = Alienation
+    )
+  }
+
+  STRUCTURE ArtificialIntelligence : Technology {
+    ASSUME Interactive(Create(this))  
+    DEFINE SELF.Tetrad := (
+      Extend(this, Cognition),
+      Obsolesce(this, HumanAgency),
+      Retrieve(Create(this), ServantDaemons),
+      Reverse(this) = Domination  
+    )
+  }
+
+  PROOFS {
+    THEOREM SocialMediaTransformsLiterateToPostInternet {
+      ASSUME Extend(SocialMedia, Social) ∧ ¬Tribal(PostInternet)
+      SHOW Transform(
+             Create(SocialMedia),
+             LiterateVisualSociety  
+           ) = PostInternet
+    }
+
+    THEOREM SmartphonesMakeRealityApplike {
+      ASSUME Extend(Smartphone, BodyExtension)  
+      SHOW Reverse(Smartphone) = Dependency
+      HENCE ∀ (e : Environment | Create(Smartphone) = e).
+              AppLike(e)
+    }
+
+    THEOREM VRObsolescesRealReturnsToDreamtime {
+      ASSUME Immersive(Create(VirtualReality))
+             ∧ Obsolesce(VirtualReality, Reality)
+      SHOW Retrieve(Create(VirtualReality)) = Dreamtime  
+    }
+
+    THEOREM AIExtendsAndObsolescesHumanAgency {
+      ASSUME Interactive(Create(ArtificialIntelligence))  
+      SHOW Extend(ArtificialIntelligence, Cognition)
+           ∧ Obsolesce(ArtificialIntelligence, HumanAgency)
+    }
+
+    THEOREM TransformationToPostInternet {
+      ASSUME ∀ (t : Technology | t ∈ {SocialMedia, Smartphone, VirtualReality, ArtificialIntelligence}).
+               Electric(t)  
+      SHOW Transform(
+             ⋃(t : Technology | Electric(t)). Create(t),  
+             ElectricRetriebalSociety
+           ) = PostInternet
+    }
+  }
+}

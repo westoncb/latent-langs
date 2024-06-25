@@ -1,0 +1,185 @@
+CONCEPT ComputabilityTheory {
+  LANGUAGE {
+    type ℕ̂ = ℕ ∪ { ω }         ; Natural numbers with infinity
+    type 𝔹 = { 0, 1 }          ; Booleans
+    
+    type PartialFunc = ℕ ⇀ ℕ   ; Partial functions on natural numbers
+    type TotalFunc = ℕ → ℕ     ; Total functions on natural numbers
+    type Predicate = ℕ → 𝔹     ; Predicates on natural numbers
+    
+    func μ(R: PartialFunc): ℕ̂         ; Least element operator (unbounded search)
+    func eval(e: ℕ, x: ℕ): ℕ̂          ; Evaluation function for encoded programs
+  
+    notation "We" = λ x . eval(e, x)  ; Partial computable function with index e
+    notation "φₑ" = We               ; Alternative notation
+    
+    pred Halts(e: ℕ, x: ℕ) = eval(e, x) ≠ ω   ; Halting predicate
+    pred Computable(f: TotalFunc) = ∃ e. ∀ x. f(x) = φₑ(x)   ; Computable functions
+    
+    pred ComputableEnumerable(S: 𝒫(ℕ)) = ∃ e. S = { x | φₑ(x) ≃ 0 }  ; C.e. sets
+    pred Recursive(S: 𝒫(ℕ)) = λ x . [x ∈ S] is Computable   ; Recursive sets
+  }
+ 
+  STRUCTURE {
+    ComputabilityAxioms: {
+      ; Basic functions  
+      Z = λ x . 0 is Computable  
+      S = λ x . x + 1 is Computable
+      Id = λ x . x is Computable
+      
+      ; Closure properties
+      f, g is Computable ⇒ (λ x . f(g(x))) is Computable  ; Composition
+      f is Computable ⇒ (λ x y . f(<x, y>)) is Computable ; Primitive recursion
+      ∀ g. (λ y . g(x, y)) is Computable ⇒ (μ y . g(x, y) = 0) is Computable ; Minimization
+    }
+    
+    UnsolvableProblems: {
+      ; Halting Problem
+      HP = λ e . Halts(e, e)   ; Halting predicate applied diagonally
+      HP is not Computable
+        
+      ; Busy Beaver Function
+      BB = λ n . max { σ(M) | M is a halting n-state TM }
+        where σ(M) = number of 1s on tape when M halts
+      BB is not Computable
+        
+      ; Kolmogorov Complexity  
+      K = λ w . min { |p| | φ_U(p) = w }
+        where U is a universal prefix TM
+      K is not Computable
+        
+      ; Gödel Incompleteness
+      Truth(PA) = λ ⌜φ⌝ . (ℕ ⊨ φ) 
+        where ⌜φ⌝ is an arithmetic encoding of a PA formula φ
+      Truth(PA) is not Computable
+    }
+      
+    Hierarchies: {
+      ; Arithmetical Hierarchy
+      Σ₀ = { S | S is Recursive }
+      Σₙ₊₁ = { S | S is ComputableEnumerable in Σₙ }
+      Πₙ = co-Σₙ = { S | Sᶜ ∈ Σₙ }
+      Δₙ = Σₙ ∩ Πₙ  
+        
+      ; Analytical Hierarchy  
+      Σ¹₁ = { S | S is ComputableEnumerable in ℘(ℕ) } 
+      Σ¹ₙ₊₁ = { S | S is ComputableEnumerable in Σ¹ₙ }
+      Π¹ₙ = co-Σ¹ₙ = { S | Sᶜ ∈ Σ¹ₙ }  
+      Δ¹ₙ = Σ¹ₙ ∩ Π¹ₙ
+    }
+  }
+   
+  PROOFS {
+    theorem UniversalFunction:
+      ∃ u: ℕ. ∀ e, x. eval(u, <e, x>) ≃ eval(e, x)
+    {
+      Define T: ℕ² → 𝔹 such that: 
+        T(<e, x, t>) = 1 iff φₑ(x) halts within t steps
+      
+      Claim: T is Computable.
+      Proof: By simulation. To compute T(<e, x, t>):
+        1. Simulate the computation of φₑ(x) for t steps.
+        2. If φₑ(x) halts within t steps, output 1, else 0.
+        
+      Define g: ℕ² → ℕ̂ by:
+        g(e, x) = μ t . T(<e, x, t>) = 1
+        
+      Claim: g is Computable. 
+      Proof: g can be expressed as minimization of a computable predicate.
+      
+      let u be an index of g, i.e., φᵤ(e, x) ≃ g(e, x) for all e, x. 
+      
+      Then for any e, x:
+        eval(u, <e, x>) 
+          ≃ φᵤ(<e, x>)  ; by definition of u
+          ≃ g(e, x)     ; by definition of g
+          ≃ μ t . T(<e, x, t>) = 1
+          ≃ μ t . φₑ(x) halts within t steps
+          ≃ φₑ(x)       ; by unbounded search
+          ≃ eval(e, x)  ; by definition of φₑ
+    }
+    
+    theorem HaltingProblem: 
+      ¬∃ e. ∀ x. Halts(e, x) = Halts(x, x)
+    {
+      Assume for contradiction that HP is Computable, i.e.,
+        ∃ e. ∀ x. φₑ(x) = [Halts(x, x)] = [φₓ(x)↓]   ; Halting predicate
+      
+      Define g: ℕ → ℕ̂ by:
+        g(x) = if φₑ(x) = 1 then ω else 0  ; ω represents divergence
+      
+      Claim: g is Computable.
+      Proof: g can be expressed as composition of computable functions.
+      
+      let g̲ be an index of g, i.e., φg̲ = g.
+      
+      Observe: 
+        Halts(g̲, g̲) = 1 
+          ⟺ φg̲(g̲)↓        ; by definition of Halts
+          ⟺ g(g̲)↓          ; since φg̲ = g
+          ⟺ if φₑ(g̲) = 1 then ω else 0 ↓
+          ⟺ φₑ(g̲) = 0      ; by definition of ω
+          ⟺ Halts(g̲, g̲) = 0 ; by assumption on e
+
+      Contradiction. Therefore, HP is not Computable.
+    }
+    
+    theorem Arithmetic_Σₙ_Πₙ_Δₙ_hierarchy: {
+      1. ∀ n, Σₙ ∪ Πₙ ⊆ Δₙ₊₁ ⊆ Σₙ₊₁ ∩ Πₙ₊₁
+      2. ∀ n, Σₙ ⊊ Σₙ₊₁ and Πₙ ⊊ Πₙ₊₁ 
+      3. ∀ n, Σₙ \ Πₙ ≠ ∅ and Πₙ \ Σₙ ≠ ∅
+    }
+    
+    theorem Post_Correspondence_Problem:
+      PCP = { <P, Q> | P, Q : 𝔽(<Σ*>), ∃ w ∈ <Σ*>*. P(w) = Q(w) } is not Computable
+    {
+      Proof by reduction from Halting Problem:
+      
+      Given an instance (M, w) of HP, construct (P, Q):
+        P = { [1ᵐ0] | m ∈ ℕ }
+        Q = { [1ⁿ0] | n = |w| if (M halts on w within n steps)} 
+            ∪ { [1] }
+            
+      Then:
+        M halts on w ⟺ ∃ n . M halts on w within n steps
+                    ⟺ ∃ n . Q contains [1ⁿ0] where n = |w|
+                    ⟺ ∃ w . P(w) = [1ᵐ0] and Q(w) = [1ᵐ0]
+                    ⟺ (P, Q) ∈ PCP
+                    
+      Thus, PCP ≼ HP. Since HP is not Computable, PCP is not Computable.
+    }
+    
+    theorem Kolmogorov_Complexity:
+      ∀ n. |{ w ∈ 𝔹* | K(w) < n }| < 2ⁿ
+    {
+      Proof by counting argument:
+        Suppose |{ w | K(w) < n }| ≥ 2ⁿ
+        By pigeonhole principle, ∃ p₁ ≠ p₂ such that φ_U(p₁) = φ_U(p₂)
+        Contradiction to injectivity of φ_U.
+          
+      Corollary: ∃ c. ∀ w. K(w) ≤ |w| + c 
+        i.e., K is bounded above by a logarithmic function.
+    }
+  }
+}
+
+This Concept formalizes the basic notions of computability theory, including computable functions, undecidable problems, arithmetical and analytical hierarchies, and Kolmogorov complexity.
+The language section introduces types for partial and total functions on natural numbers, predicates, and operators for unbounded search and program evaluation. It also defines notions of computability and computable enumerability for functions and sets.
+The structure section lists some computability axioms (basic computable functions and closure properties), examples of unsolvable problems (Halting problem, Busy Beaver function, Kolmogorov complexity, truth predicate for Peano arithmetic), and the arithmetical and analytical hierarchies of sets based on quantifier alternation.
+The proofs section contains several fundamental theorems:
+
+The existence of a universal computable function that can simulate any other computable function given its index.
+The undecidability of the Halting problem via diagonalization.
+The strict separation of levels in the arithmetical hierarchy, and the existence of sets at each level that are not in the lower levels.
+The unsolvability of the Post Correspondence Problem by reduction from the Halting problem.
+Bounds on the number of strings with low Kolmogorov complexity, and the incomputability of Kolmogorov complexity itself.
+
+The Concept tries to convey the essential ideas and techniques of computability theory, including:
+
+Encoding of programs and data as natural numbers
+Diagonalization to prove impossibility results
+Reduction between problems to show relative undecidability
+Hierarchies of increasing unsolvability based on logical complexity
+Limitations on the compressibility of strings and the uncomputability of optimal compression
+
+The goal is to characterize the fundamental limits of computation and to classify problems based on their degree of unsolvability. The Concept builds on the notion of computation from lambda calculus and Turing machines to reason about the existence and non-existence of algorithms in a general sense.

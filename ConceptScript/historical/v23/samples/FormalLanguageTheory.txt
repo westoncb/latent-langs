@@ -1,0 +1,300 @@
+CONCEPT FormalLanguageTheory {
+  
+  LANGUAGE {
+    TYPE Symbol
+    TYPE Alphabet = 𝒫(Symbol)
+    TYPE String = [Symbol]
+    TYPE Language = 𝒫(String)
+    TYPE Grammar = ⟨
+      Variables : 𝒫(Symbol),
+      Terminals : Alphabet,
+      Productions : 𝒫(⟨Variable : Symbol, Body : [Symbol]⟩),  
+      Start : Symbol
+    ⟩
+    TYPE Automaton = ⟨
+      States : 𝒫(Symbol),
+      Alphabet : Alphabet, 
+      Transition : States × Alphabet -> 𝒫(States),
+      Start : States,
+      Accept : 𝒫(States)  
+    ⟩
+    
+    FUNC Generates(G : Grammar, s : String) -> 𝔹
+    FUNC Accepts(A : Automaton, s : String) -> 𝔹
+    FUNC Closure(L : Language, Op : Language -> Language) -> Language
+
+    PRED Regular(L : Language) <-> ∃ (A : Automaton) . ∀ (s : String) . s ∈ L <-> Accepts(A, s)
+    PRED ContextFree(L : Language) <-> ∃ (G : Grammar) . IsContextFree(G) ∧ ∀ (s : String) . s ∈ L <-> Generates(G, s)
+  }
+
+  STRUCTURE {
+    DEF String = [Symbol]
+    DEF ε : String = []
+    DEF Concat(s : String, t : String) : String = s ++ t
+    DEF Union(L1 : Language, L2 : Language) : Language = L1 ∪ L2
+    DEF Intersection(L1 : Language, L2 : Language) : Language = L1 ∩ L2
+    DEF Complement(L : Language) : Language = {s : String | s ∉ L}
+    DEF KleeneStar(L : Language) : Language = ⋃ (i : ℕ) Lⁱ WHERE Lⁱ = IF i = 0 THEN {ε} ELSE Concat(L, Lⁱ⁻¹)
+    DEF Generates(G : Grammar, s : String) = s ∈ {
+        t : String 
+        | ∃ (d : DerivationTree) . 
+            Root(d) = G.Start ∧
+            ∀ (n : Node(d)) .
+              (IsLeaf(n) -> Label(n) ∈ G.Terminals) ∧
+              (¬IsLeaf(n) -> ⟨Label(n), Labels(Children(n))⟩ ∈ G.Productions)
+      }
+    DEF Accepts(A : Automaton, s : String) = ∃ (p : Path(A)) . 
+      Start(p) = A.Start ∧ 
+      End(p) ∈ A.Accept ∧ 
+      ∀ (i : 0..|s|) . ⟨State(p, i), sᵢ, State(p, i+1)⟩ ∈ A.Transition
+    DEF Closure(L : Language, Op : Language -> Language) : Language =
+      μ (X : Language) . L ∪ Op(X)
+    DEF IsContextFree(G : Grammar) <-> 
+      ∀ (⟨V, α⟩ : G.Productions) . |α| ≥ 1 ∧ α[0] ∈ G.Variables ∧ (∀ (i : 1..|α|) . α[i] ∈ G.Terminals)
+  }
+  
+  PROOFS {
+    THEOREM RegularClosureProperties {
+      STATEMENT: ∀ (L1 L2 : Language) . Regular(L1) ∧ Regular(L2) -> 
+        Regular(Union(L1, L2)) ∧ 
+        Regular(Concat(L1, L2)) ∧
+        Regular(KleeneStar(L1)) ∧
+        Regular(Intersection(L1, L2)) ∧
+        Regular(Complement(L1))
+
+      PROOF {
+        ASSUME [L1 L2 : Language] : 
+          Regular(L1),
+          Regular(L2)
+        
+        LET [A1 A2 : Automaton] :
+          ∀ (s : String) . s ∈ L1 <-> Accepts(A1, s),
+          ∀ (s : String) . s ∈ L2 <-> Accepts(A2, s)
+        
+        SHOW Regular(Union(L1, L2)) BY {
+          DEFINE AUnion : Automaton = ⟨
+            States ↦ {qStart} ∪ A1.States ∪ A2.States,
+            Alphabet ↦ A1.Alphabet ∪ A2.Alphabet,
+            Transition ↦ A1.Transition ∪ A2.Transition ∪ {
+              ⟨qStart, ε, q⟩ | q ∈ {A1.Start, A2.Start}  
+            },
+            Start ↦ qStart,
+            Accept ↦ A1.Accept ∪ A2.Accept
+          ⟩
+          
+          ∀ (s : String) . s ∈ Union(L1, L2) 
+            <-> s ∈ L1 ∨ s ∈ L2
+            <-> Accepts(A1, s) ∨ Accepts(A2, s) 
+            <-> Accepts(AUnion, s)
+        }
+
+        SHOW Regular(Concat(L1, L2)) BY {
+          DEFINE AConcat : Automaton = ⟨
+            States ↦ A1.States ∪ A2.States,
+            Alphabet ↦ A1.Alphabet ∪ A2.Alphabet,
+            Transition ↦ A1.Transition ∪ A2.Transition ∪ {
+              ⟨q, ε, A2.Start⟩ | q ∈ A1.Accept  
+            },
+            Start ↦ A1.Start,
+            Accept ↦ A2.Accept
+          ⟩
+          
+          ∀ (s : String) . s ∈ Concat(L1, L2)
+            <-> ∃ (s1 s2 : String) . s = Concat(s1, s2) ∧ s1 ∈ L1 ∧ s2 ∈ L2
+            <-> ∃ (s1 s2 : String) . s = Concat(s1, s2) ∧ Accepts(A1, s1) ∧ Accepts(A2, s2)
+            <-> Accepts(AConcat, s)
+        }
+        
+        SHOW Regular(KleeneStar(L1)) BY {
+          DEFINE AStar : Automaton = ⟨
+            States ↦ {qStart, qAccept} ∪ A1.States,
+            Alphabet ↦ A1.Alphabet,
+            Transition ↦ A1.Transition ∪ {
+              ⟨qStart, ε, A1.Start⟩,
+              ⟨qStart, ε, qAccept⟩
+            } ∪ {
+              ⟨q, ε, qAccept⟩ | q ∈ A1.Accept
+            } ∪ {  
+              ⟨q, ε, A1.Start⟩ | q ∈ A1.Accept
+            },
+            Start ↦ qStart,
+            Accept ↦ {qAccept}
+          ⟩
+          
+          ∀ (s : String) . s ∈ KleeneStar(L1)
+            <-> ∃ (k : ℕ) (s1 ... sₖ : String) . s = Concat(s1, ..., sₖ) ∧ ∀ (i : 1..k) . sᵢ ∈ L1
+            <-> ∃ (k : ℕ) (s1 ... sₖ : String) . s = Concat(s1, ..., sₖ) ∧ ∀ (i : 1..k) . Accepts(A1, sᵢ)  
+            <-> Accepts(AStar, s)
+        }
+        
+        SHOW Regular(Intersection(L1, L2)) BY {
+          Regular(Complement(Union(Complement(L1), Complement(L2))))
+        }
+        
+        SHOW Regular(Complement(L1)) BY {
+          DEFINE AComplement : Automaton = ⟨
+            States ↦ A1.States ∪ {qReject},
+            Alphabet ↦ A1.Alphabet,
+            Transition ↦ A1.Transition ∪ {
+              ⟨q, a, qReject⟩ | q ∈ A1.States, a ∈ A1.Alphabet, ∄ q' . ⟨q, a, q'⟩ ∈ A1.Transition  
+            } ∪ {
+              ⟨qReject, a, qReject⟩ | a ∈ A1.Alphabet
+            },
+            Start ↦ A1.Start,
+            Accept ↦ A1.States \ A1.Accept
+          ⟩
+          
+          ∀ (s : String) . s ∈ Complement(L1)
+            <-> s ∉ L1
+            <-> ¬Accepts(A1, s)
+            <-> Accepts(AComplement, s)
+        }
+      }
+    }
+    
+    THEOREM ContextFreeClosureProperties {
+      STATEMENT: ∀ (L1 L2 : Language) . ContextFree(L1) ∧ ContextFree(L2) ->
+        ContextFree(Union(L1, L2)) ∧
+        ContextFree(Concat(L1, L2)) ∧
+        ContextFree(KleeneStar(L1)) ∧
+        ContextFree(Intersection(L1, Regular(L2)))
+
+      PROOF {
+        ASSUME [L1 L2 : Language] :
+          ContextFree(L1),
+          ContextFree(L2)
+
+        LET [G1 G2 : Grammar] :
+          IsContextFree(G1) ∧ ∀ (s : String) . s ∈ L1 <-> Generates(G1, s),
+          IsContextFree(G2) ∧ ∀ (s : String) . s ∈ L2 <-> Generates(G2, s)
+        
+        SHOW ContextFree(Union(L1, L2)) BY {
+          DEFINE GUnion : Grammar = ⟨
+            Variables ↦ {S} ∪ G1.Variables ∪ G2.Variables,
+            Terminals ↦ G1.Terminals ∪ G2.Terminals, 
+            Productions ↦ G1.Productions ∪ G2.Productions ∪ {
+              ⟨S, [G1.Start]⟩,
+              ⟨S, [G2.Start]⟩  
+            },
+            Start ↦ S
+          ⟩
+          
+          IsContextFree(GUnion),
+          ∀ (s : String) . s ∈ Union(L1, L2)
+            <-> s ∈ L1 ∨ s ∈ L2  
+            <-> Generates(G1, s) ∨ Generates(G2, s)
+            <-> Generates(GUnion, s)
+        }
+        
+        SHOW ContextFree(Concat(L1, L2)) BY {
+          DEFINE GConcat : Grammar = ⟨
+            Variables ↦ {S} ∪ G1.Variables ∪ G2.Variables,
+            Terminals ↦ G1.Terminals ∪ G2.Terminals,
+            Productions ↦ G1.Productions ∪ G2.Productions ∪ {
+              ⟨S, [G1.Start, G2.Start]⟩  
+            },
+            Start ↦ S
+          ⟩
+          
+          IsContextFree(GConcat),
+          ∀ (s : String) . s ∈ Concat(L1, L2)
+            <-> ∃ (s1 s2 : String) . s = Concat(s1, s2) ∧ s1 ∈ L1 ∧ s2 ∈ L2
+            <-> ∃ (s1 s2 : String) . s = Concat(s1, s2) ∧ Generates(G1, s1) ∧ Generates(G2, s2)
+            <-> Generates(GConcat, s)
+        }
+        
+        SHOW ContextFree(KleeneStar(L1)) BY {
+          DEFINE GStar : Grammar = ⟨
+            Variables ↦ {S} ∪ G1.Variables,
+            Terminals ↦ G1.Terminals,
+            Productions ↦ G1.Productions ∪ {
+              ⟨S, [ε]⟩,
+              ⟨S, [S, G1.Start]⟩
+            },
+            Start ↦ S
+          ⟩
+          
+          IsContextFree(GStar),
+          ∀ (s : String) . s ∈ KleeneStar(L1)  
+            <-> s = ε ∨ ∃ (k : ℕ) (s1 ... sₖ : String) . s = Concat(s1, ..., sₖ) ∧ ∀ (i : 1..k) . sᵢ ∈ L1
+            <-> s = ε ∨ ∃ (k : ℕ) (s1 ... sₖ : String) . s = Concat(s1, ..., sₖ) ∧ ∀ (i : 1..k) . Generates(G1, sᵢ)
+            <-> Generates(GStar, s)
+        }
+        
+        SHOW ContextFree(Intersection(L1, Regular(L2))) BY {
+          LET A : Automaton . ∀ (s : String) . s ∈ L2 <-> Accepts(A, s)
+          
+          DEFINE GIntersect : Grammar = ⟨
+            Variables ↦ G1.Variables × A.States × A.States,
+            Terminals ↦ G1.Terminals,
+            Productions ↦ {
+              ⟨⟨X, p, q⟩, α⟩ 
+              | ⟨X, β⟩ ∈ G1.Productions,
+                α ∈ {
+                  [⟨Y₁, p, r₁⟩, ..., ⟨Yₖ, rₖ₋₁, q⟩]
+                  | β = [Y₁, ..., Yₖ] ∈ G1.Variables^k,
+                    ∃ (r₁ ... rₖ₋₁ : A.States) .
+                      ∀ (i : 1..k-1) . ⟨rᵢ₋₁, Yᵢ, rᵢ⟩ ∈ A.Transition
+                } ∪ {
+                  [a] 
+                  | a ∈ G1.Terminals,
+                    ⟨p, a, q⟩ ∈ A.Transition  
+                }
+            },
+            Start ↦ ⟨G1.Start, A.Start, q⟩ WHERE q ∈ A.Accept
+          ⟩
+          
+          IsContextFree(GIntersect),
+          ∀ (s : String) . s ∈ Intersection(L1, L2)
+            <-> s ∈ L1 ∧ s ∈ L2
+            <-> Generates(G1, s) ∧ Accepts(A, s)
+            <-> Generates(GIntersect, s)
+        }
+      }
+    }
+    
+    THEOREM PumpingLemma {
+      STATEMENT: ∀ (L : Language) . Regular(L) -> 
+        ∃ (p : ℕ) . ∀ (s : String) . s ∈ L ∧ |s| ≥ p ->
+          ∃ (x y z : String) . s = Concat(x, y, z) ∧ |y| ≥ 1 ∧ |Concat(x, y)| ≤ p ∧ 
+            ∀ (i : ℕ) . Concat(x, Repeat(y, i), z) ∈ L
+            
+      PROOF {
+        ASSUME [L : Language] : Regular(L)
+        
+        LET A : Automaton . ∀ (s : String) . s ∈ L <-> Accepts(A, s)
+        LET p = |A.States|
+        
+        ASSUME [s : String] : s ∈ L ∧ |s| ≥ p
+        
+        LET π : Path(A) . 
+          Start(π) = A.Start ∧ 
+          End(π) ∈ A.Accept ∧
+          ∀ (i : 0..|s|) . ⟨State(π, i), sᵢ, State(π, i+1)⟩ ∈ A.Transition
+          
+        LET i < j ≤ p . State(π, i) = State(π, j)
+        
+        CHOOSE:
+          x = s[0..i],
+          y = s[i..j],
+          z = s[j..]
+          
+        HAVE: |y| ≥ 1 BECAUSE i < j
+        HAVE: |Concat(x, y)| ≤ p BECAUSE j ≤ p
+        
+        SHOW: ∀ (k : ℕ) . Concat(x, Repeat(y, k), z) ∈ L BY {
+          LET t = Concat(x, Repeat(y, k), z)
+          
+          DEFINE πᵏ : Path(A) = 
+            π[0..i] ++ Repeat(π[i..j], k) ++ π[j..]
+            
+          HAVE: Start(πᵏ) = A.Start ∧ End(πᵏ) ∈ A.Accept
+          HAVE: ∀ (i : 0..|t|) . ⟨State(πᵏ, i), tᵢ, State(πᵏ, i+1)⟩ ∈ A.Transition
+          
+          HENCE Accepts(A, t)
+          HENCE t ∈ L
+        }
+      }
+    }
+  }
+}

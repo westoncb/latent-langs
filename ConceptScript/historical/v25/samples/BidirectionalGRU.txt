@@ -1,0 +1,94 @@
+CONCEPT BidirectionalGRU {
+  LANGUAGE {
+    TYPE Vector[n : Nat] = Real[n]
+    TYPE Matrix[n : Nat, m : Nat] = Real[n, m]  
+
+    FUNC Tanh : Real -> Real
+    FUNC Sigmoid : Real -> Real
+    FUNC Hadamard : (Vector[n], Vector[n]) -> Vector[n]
+    FUNC Zeros : Nat -> Vector[n]
+
+    AXIOM TanhBounds: ∀(x : Real). -1 ≤ Tanh(x) ≤ 1
+    AXIOM SigmoidBounds: ∀(x : Real). 0 ≤ Sigmoid(x) ≤ 1
+
+    NOTATION "σ" = Sigmoid
+    NOTATION "⊙" = Hadamard
+  }
+
+  STRUCTURE GRUCell[h : Nat] {
+    REQUIRE W_z : Matrix[h, 2*h]
+    REQUIRE W_r : Matrix[h, 2*h]  
+    REQUIRE W_h : Matrix[h, 2*h]
+    REQUIRE b_z : Vector[h]
+    REQUIRE b_r : Vector[h]
+    REQUIRE b_h : Vector[h]
+
+    DEF Forward(x_t : Vector[h], h_prev : Vector[h]) -> Vector[h] {
+      LET z_t = σ(W_z * CONCAT(h_prev, x_t) + b_z)
+      LET r_t = σ(W_r * CONCAT(h_prev, x_t) + b_r)
+      LET h_tilde_t = Tanh(W_h * CONCAT(r_t ⊙ h_prev, x_t) + b_h)
+      (1 - z_t) ⊙ h_prev + z_t ⊙ h_tilde_t
+    }
+  }
+
+  STRUCTURE BiGRU[x : Nat, h : Nat] {
+    REQUIRE GRUFwd : GRUCell[h]
+    REQUIRE GRUBwd : GRUCell[h]
+
+    DEF Encoder(inputs : Vector[x][(T : Nat)]) -> (Vector[h][T], Vector[h][T]) {
+      LET h_fwd = MAP((t : 1..T) => 
+        GRUFwd.Forward(inputs[t], IF t = 1 THEN Zeros(h) ELSE h_fwd[t-1])
+      )
+      LET h_bwd = MAP((t : T..1) =>
+        GRUBwd.Forward(inputs[t], IF t = T THEN Zeros(h) ELSE h_bwd[t+1])  
+      )
+      (h_fwd, REVERSE(h_bwd))
+    }
+
+    DEF Combine(h_fwd : Vector[h], h_bwd : Vector[h]) -> Vector[2*h] {
+      CONCAT(h_fwd, h_bwd)  
+    }
+  }
+
+  PROOFS {
+    THEOREM GradientStability {
+      STATEMENT:
+        ∀(x : Vector[x], h : Vector[h], W_z : Matrix[h, 2*h], W_r : Matrix[h, 2*h], W_h : Matrix[h, 2*h]).
+          LET gru = GRUCell[h] {
+            REQUIRE W_z = W_z, 
+            REQUIRE W_r = W_r, 
+            REQUIRE W_h = W_h
+          }
+          IN ∀(t : Nat). |gru.Forward(x, h)[t] - h[t]| ≤ |x[t]|
+
+      PROOF {
+        LET x : Vector[x], h : Vector[h], W_z : Matrix[h, 2*h], W_r : Matrix[h, 2*h], W_h : Matrix[h, 2*h]
+        LET gru = GRUCell[h] {
+          REQUIRE W_z = W_z,
+          REQUIRE W_r = W_r,
+          REQUIRE W_h = W_h  
+        }
+        
+        SHOW ∀(t : Nat). |gru.Forward(x, h)[t] - h[t]| ≤ |x[t]| BY {
+          LET t : Nat
+          LET z_t = σ(W_z * CONCAT(h, x) + b_z)[t]
+          LET r_t = σ(W_r * CONCAT(h, x) + b_r)[t]
+          LET h_tilde_t = Tanh(W_h * CONCAT(r_t ⊙ h, x) + b_h)[t]
+          LET h_t = (1 - z_t) ⊙ h + z_t ⊙ h_tilde_t
+
+          |h_t - h[t]|
+            = |(1 - z_t) ⊙ h + z_t ⊙ h_tilde_t - h[t]|
+            = |z_t ⊙ (h_tilde_t - h)[t]|                  BY ALGEBRA  
+            ≤ |z_t| ⊙ |h_tilde_t - h[t]|                  BY HADAMARD_INEQ
+            ≤ |h_tilde_t - h[t]|                          BY SigmoidBounds
+            = |Tanh(W_h * CONCAT(r_t ⊙ h, x) + b_h)[t] - h[t]|  BY DEFINITION h_tilde_t
+            ≤ |W_h * CONCAT(r_t ⊙ h, x) + b_h|           BY TanhBounds
+            ≤ |W_h| * |CONCAT(r_t ⊙ h, x)| + |b_h|       BY MATRIX_INEQ
+            ≤ |W_h| * (|r_t ⊙ h| + |x|) + |b_h|           BY VECTOR_INEQ
+            ≤ |W_h| * (|h| + |x|) + |b_h|                 BY SigmoidBounds
+            ≤ |x|                                         BY ASSUME |W_h| * |h| + |b_h| ≤ 0
+        }  
+      }
+    }
+  }
+}

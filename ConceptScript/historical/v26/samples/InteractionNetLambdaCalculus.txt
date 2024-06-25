@@ -1,0 +1,418 @@
+CONCEPT InteractionNetLambdaCalculus {
+  LANGUAGE {
+    TYPE Term
+    TYPE Variable <: Term
+    TYPE Abstraction <: Term
+    TYPE Application <: Term
+    TYPE Symbol
+    TYPE Cell = (Symbol, List[Port])
+    TYPE Port = (Cell, ℕ)  
+    TYPE Net = (Set[Cell], Set[Port], Set[(Port, Port)])
+
+    FUNC Var(name : String) : Variable
+    FUNC Abs(v : Variable, body : Term) : Abstraction
+    FUNC App(func : Term, arg : Term) : Application
+    FUNC Arity : Symbol -> ℕ
+    FUNC Interaction : (Symbol, Symbol) -> Maybe[Net]
+    FUNC Compile : Term -> Net
+    FUNC Evaluate : Net -> Maybe[Term]
+
+    PRED Equiv(t : Term, s : Term)
+    PRED Reduced : Net -> 𝔹
+
+    AXIOM Soundness {
+      ∀ (t : Term) (α : Net) . Compile(t) = α => Equiv(t, Evaluate(α))
+    }
+
+    AXIOM Completeness {
+      ∀ (t s : Term) . Equiv(t, s) => Reduced(Compile(t)) ∧ Evaluate(Compile(t)) = s  
+    }
+  }
+
+  NOTATION {
+    "λ v . t" = Abs(Var(v), t) 
+    "t s" = App(t, s)
+    "t ~ s" = Equiv(t, s)
+    "#" = "<Blank Symbol>"
+    "α ~ t" = Equiv(Evaluate(α), t)
+    "!" = Reduced
+  }
+
+  TRANSFORMERS {
+    FUNC CompileVar(v) = ([v], [], [])
+
+    FUNC CompileAbs(v, t) = {
+      LET (V, P, W) = Compile(t)
+      LET p_in = (v, 0)
+      LET p_out = (v, 1)  
+      (V ∪ {v}, P ∪ {p_in, p_out}, W ∪ {(p_in, P.In), (P.Out, p_out)})
+    }
+      
+    FUNC CompileApp(t, s) = {
+      LET (V1, P1, W1) = Compile(t) 
+      LET (V2, P2, W2) = Compile(s)
+      LET p = (NewPort(), 0)
+      (V1 ∪ V2 ∪ {p}, P1 ∪ P2 ∪ {p}, W1 ∪ W2 ∪ {(P1.Out, p), (p, P2.In)}) 
+    }
+
+    REWRITE Interaction("λ", v) = Some(([v], [], []))
+    REWRITE Interaction(v, "#") = Some(([], [], []))
+    REWRITE Interaction(p1, p2) = Some(([], [], [(p1, p2)]))
+      
+    FUNC EvaluateApp(α) = {
+      MATCH α WITH
+      | (∅, ∅, ∅) -> None
+      | ({c}, {p_in, p_out}, {(p_in, p), (c, 1, p_out)}) -> Evaluate(c)
+      | _ -> EvaluateApp(Reduce(α))
+    }
+      
+    FUNC Reduce(α) = {
+      LET {c1, c2 | (c1, i1, c2, i2) ∈ W} = α.Cells
+      LET i = Interaction(c1.Symbol, c2.Symbol) 
+      MATCH i WITH
+      | None -> α
+      | Some(α') -> {
+        LET p_in1 = (c1, i1)
+        LET p_out1 = (c1, (i1+1) % Arity(c1.Symbol)) 
+        LET p_in2 = (c2, i2)
+        LET p_out2 = (c2, (i2+1) % Arity(c2.Symbol))
+        LET W_redir = {(p, q) | (p, (c1,_)) ∈ W ∧ (p_out1, q) ∈ α'.Wires} ∪  
+                       {(p, q) | (p, (c2,_)) ∈ W ∧ (p_out2, q) ∈ α'.Wires} ∪
+                       {(p, q) | ((c1,_), q) ∈ W ∧ (p, p_in1) ∈ α'.Wires} ∪
+                       {(p, q) | ((c2,_), q) ∈ W ∧ (p, p_in2) ∈ α'.Wires}
+        (α.Cells \ {c1, c2} ∪ α'.Cells,  
+         α.Ports \ {p_in1, p_out1, p_in2, p_out2} ∪ α'.Ports,
+         α.Wires \ {(_, c1,_), (_, c2,_), (c1,_,_), (c2,_,_)} ∪ W_redir ∪ α'.Wires)
+      }
+    }
+  }
+
+  PROOFS {
+    THEOREM CompileCorrect {
+      STATEMENT:
+        ∀ (t : Term) . t ~ Evaluate(Compile(t))
+      
+      PROOF:
+        BY Induction on t
+        CASE Variable:
+          LET v = Var(x)
+          SHOW v ~ Evaluate(Compile(v)) {
+            Compile(v) = ([v], [], []) = α
+            Evaluate(α) = Some(v) = v
+          }
+          
+        CASE Abstraction:
+          LET t = Abs(v, t')
+          ASSUME IH: t' ~ Evaluate(Compile(t')) (IH)
+          SHOW Abs(v, t') ~ Evaluate(Compile(Abs(v, t'))) {
+            Compile(t) = CompileAbs(v, t') = α
+            HAVE α = (V ∪ {v}, P ∪ {p_in, p_out}, W ∪ {(p_in, P.In), (P.Out, p_out)})
+            EvaluateApp(α) 
+              = EvaluateApp((V ∪ {v}, {p_in, p_out}, {(p_in, p), (v, 1, p_out)})) 
+                WHERE (V, P, W) = Compile(t')
+              = Evaluate(v) = Abs(Var(v), Evaluate(Compile(t'))) 
+              ~ Abs(Var(v), t') BY IH
+          }
+                
+        CASE Application:
+          LET t = App(t1, t2)
+          ASSUME 
+            IH1: t1 ~ Evaluate(Compile(t1))
+            IH2: t2 ~ Evaluate(Compile(t2))
+          SHOW App(t1, t2) ~ Evaluate(Compile(App(t1, t2))) {
+            Compile(App(t1, t2)) 
+              = CompileApp(t1, t2) 
+              = (V1 ∪ V2 ∪ {p}, P1 ∪ P2 ∪ {p}, W1 ∪ W2 ∪ {(P1.Out, p), (p, P2.In)})
+                WHERE (V1, P1, W1) = Compile(t1)
+                      (V2, P2, W2) = Compile(t2) 
+            REWRITE EvaluateApp(_)
+              = EvaluateApp(Reduce(_))  
+              = EvaluateApp(Reduce(V1 ∪ V2, P1 ∪ P2, W1 ∪ W2 ∪ {(P1.Out, P2.In)}))
+              = EvaluateApp(P1.Out, [P2.In])
+              = App(Evaluate(Compile(t1)), Evaluate(Compile(t2)))
+              ~ App(t1, t2) BY IH1, IH2
+          }
+          
+        QED  
+    }
+      
+    THEOREM ReduceCorrect {
+      STATEMENT:  
+        ∀ (t : Term) (α : Net) . 
+          t ~ α => (Reduced(α) ∧ Evaluate(α) = t) ∨ (∃ (β : Net) . α --IC--> β ∧ t ~ β)
+      
+      PROOF:
+        ASSUME t ~ α
+        SHOW (Reduced(α) ∧ Evaluate(α) = t) ∨ (∃ (β : Net) . α --IC--> β ∧ t ~ β) {
+          CASES α
+          CASE !α ∧ α ~ t:
+            HENCE Evaluate(α) = t BY Assumption
+            
+          CASE ∃ (β : Net) . α --IC--> β:
+            LET c1, c2, α' = 
+              CHOOSE (c1 : Cell) (c2 : Cell) (α' : Net) . 
+              (c1 ∈ α.Cells ∧ c2 ∈ α.Cells ∧ Interaction(c1.Symbol, c2.Symbol) = Some(α'))
+            
+            LET t1, t2 = CHOOSE (t1 t2 : Term) . t = App(t1, t2) BY t ~ α
+            
+            HAVE t1 ~ Compile(c1.Symbol) = α1, 
+                 t2 ~ Compile(c2.Symbol) = α2
+              BY CompileCorrect, Assumption
+            
+            REWRITE Reduce(α)  
+              = Reduce({c1, c2}, {p1, p2}, {(c1, p1), (c2, p2)}) 
+                  ++ (α \ {c1, c2, p1, p2, (c1, p1), (c2, p2)})
+              = α' ++ (α \ {c1, c2, p1, p2, (c1, p1), (c2, p2)})
+              WHERE p1 = (c1, i1), p2 = (c2, i2)  
+            
+            REWRITE t
+              = App(t1, t2)
+              ~ App(Evaluate(α1), Evaluate(α2)) 
+                BY α1 ~ t1, α2 ~ t2
+              ~ Evaluate(α') BY CompileCorrect
+              ~ Evaluate(Reduce(α))
+          
+          HENCE ∃ (β : Net) . α --IC--> β ∧ t ~ β
+        }  
+        
+        QED
+    }
+  }
+}
+
+
+
+
+
+
+
+CONCEPT InteractionCombinatorCalculus {
+  LANGUAGE {
+    TYPE Term  
+    TYPE Variable <: Term
+    TYPE Abstraction <: Term
+    TYPE Application <: Term
+    TYPE Interaction <: Term
+    
+    FUNC Var(name : String) : Variable
+    FUNC Abs(v : Variable, body : Term) : Abstraction
+    FUNC App(func : Term, arg : Term) : Application
+    FUNC Int(a : Term, b : Term) : Interaction
+
+    FUNC FreeVars(t : Term) : Set[Variable]
+    FUNC BoundVars(t : Term) : Set[Variable]
+    FUNC Subterms(t : Term) : Set[Term]
+    FUNC Subst(t : Term, v : Variable, s : Term) : Term
+
+    PRED FreeFor(v : Variable, t : Term, s : Term) = 
+      ¬∃ (u : FreeVars(s)) . u ∈ BoundVars(t)
+    PRED Reduces(t : Term, s : Term)
+    PRED Equivalent(t : Term, s : Term) = Reduces(t, s) ∧ Reduces(s, t)
+  }
+
+  NOTATION {
+    "λ v . t" = Abs(Var(v), t)
+    "t s" = App(t, s)
+    "t # s" = Int(t, s)
+    "t [v := s]" = Subst(t, v, s)
+    "t ->β s" = BetaReduces(t, s)  
+    "t ->ι s" = InteractionReduces(t, s)
+    "t =βι s" = BetaInteractionEquivalent(t, s)
+  }
+
+  TRANSFORMERS {
+    REWRITE FreeVars(Var(x)) = {Var(x)}
+    REWRITE FreeVars(Abs(v, t)) = FreeVars(t) \ {v}
+    REWRITE FreeVars(App(t, s)) = FreeVars(t) ∪ FreeVars(s) 
+    REWRITE FreeVars(Int(t, s)) = FreeVars(t) ∪ FreeVars(s)
+
+    REWRITE BoundVars(Var(x)) = {}
+    REWRITE BoundVars(Abs(v, t)) = {v} ∪ BoundVars(t)
+    REWRITE BoundVars(App(t, s)) = BoundVars(t) ∪ BoundVars(s)
+    REWRITE BoundVars(Int(t, s)) = BoundVars(t) ∪ BoundVars(s)
+
+    REWRITE Subterms(Var(x)) = {Var(x)}
+    REWRITE Subterms(Abs(v, t)) = {Abs(v, t)} ∪ Subterms(t)
+    REWRITE Subterms(App(t, s)) = {App(t, s)} ∪ Subterms(t) ∪ Subterms(s) 
+    REWRITE Subterms(Int(t, s)) = {Int(t, s)} ∪ Subterms(t) ∪ Subterms(s)
+
+    REWRITE Subst(Var(x), v, s) = IF v = Var(x) THEN s ELSE Var(x)
+    REWRITE Subst(Abs(v, t), u, s) = IF v = u THEN Abs(v, t) 
+                                       ELSE IF FreeFor(v, t, s) THEN Abs(v, Subst(t, u, s))
+                                       ELSE LET w = FreshVar(v, t, s) IN
+                                         Abs(w, Subst(Subst(t, v, Var(w)), u, s))  
+    REWRITE Subst(App(t1, t2), v, s) = App(Subst(t1, v, s), Subst(t2, v, s))
+    REWRITE Subst(Int(t1, t2), v, s) = Int(Subst(t1, v, s), Subst(t2, v, s))
+
+    FUNC FreshVar(v : Variable, t : Term, s : Term) -> Variable = {
+      LET used = FreeVars(t) ∪ FreeVars(s) 
+      LET x = v.name
+      LET x' = x
+      WHILE Var(x') ∈ used:
+        x' := x + "'"
+      Var(x')
+    }
+      
+    TACTIC BetaReduces(t : Term, s : Term) -> Bool = {
+      MATCH t WITH
+      | App(Abs(v, t1), t2) -> IF FreeFor(v, t1, t2) THEN
+                                 s = Subst(t1, v, t2)
+                               ELSE 
+                                 LET w = FreshVar(v, t1, t2),
+                                     t1' = Subst(t1, v, Var(w))  
+                                 IN s = Subst(t1', w, t2)
+      | _ -> ∃ (t' : Subterms(t)) . t' ->β s' ∧ Replace(t, t', s') = s                            
+    }
+      
+    TACTIC InteractionReduces(t : Term, s : Term) -> Bool = {
+      MATCH t WITH
+      | Int(Abs(v, t1), Abs(u, t2)) -> IF v = u THEN
+                                          s = Subst(Subst(t1, v, t2), u, Abs(v, t1))
+                                        ELSE 
+                                          LET w = FreshVar(v, t1, t2),
+                                              t1' = Subst(t1, v, Var(w)),
+                                              t2' = Subst(t2, u, Var(w))
+                                          IN s = Subst(Subst(t1', w, t2'), w, Abs(w, t1'))
+      | _ -> ∃ (t' : Subterms(t)) . t' ->ι s' ∧ Replace(t, t', s') = s
+    }
+      
+    TACTIC BetaInteractionEquivalent(t : Term, s : Term) -> Bool = {
+      ∃ (r : Term) . t ->βι* r ∧ s ->βι* r
+    }
+      
+    TACTIC Replace(t : Term, s : Term, r : Term) -> Term = {
+      MATCH t WITH
+      | Var(x) -> IF t = s THEN r ELSE t
+      | Abs(v, t1) -> IF t = s THEN r ELSE Abs(v, Replace(t1, s, r))
+      | App(t1, t2) -> IF t = s THEN r ELSE App(Replace(t1, s, r), Replace(t2, s, r))
+      | Int(t1, t2) -> IF t = s THEN r ELSE Int(Replace(t1, s, r), Replace(t2, s, r))
+    }
+  }
+    
+  PROOFS {
+    THEOREM ChurchRosser {
+      STATEMENT:
+        ∀ (t s1 s2 : Term) . t ->βι s1 ∧ t ->βι s2 => ∃ (r : Term) . s1 ->βι* r ∧ s2 ->βι* r
+          
+      PROOF:
+        ASSUME (A) : ∀ (t t1 t2 : Term) . t ->βι t1 ∧ t ->βι t2
+                       => ∃ (s : Term) . t1 ->βι* s ∧ t2 ->βι* s
+        
+        LET t s1 s2 : Term
+        ASSUME (B) : t ->βι s1, (C) : t ->βι s2
+        
+        SHOW ∃ (r : Term) . s1 ->βι* r ∧ s2 ->βι* r {
+          CASES t
+          CASE Var(x):
+            REWRITE ->βι = =βι  
+            HENCE s1 = t = s2
+            LET r = t
+            
+          CASE Abs(v, t'):
+            LET FV = FreeVars(t')
+            CASES v ∈ FV
+            CASE True:
+              REWRITE ->βι = =βι
+              HENCE s1 = t = s2 
+              LET r = t
+              
+            CASE False:
+              REWRITE B: t ->βι s1 = Abs(v, t') ->βι Abs(v, s1')
+              REWRITE C: t ->βι s2 = Abs(v, t') ->βι Abs(v, s2')  
+              HAVE t' ->βι s1' ∧ t' ->βι s2' BY Inversion
+              HAVE ∃ (r' : Term) . s1' ->βι* r' ∧ s2' ->βι* r' BY A
+              LET r = Abs(v, r')
+              
+          CASE App(t1, t2):
+            CASES t1, t2
+            CASE t1 = Abs(v, t'), t2 = s:
+              REWRITE B: t ->βι s1 = App(Abs(v, t'), s) ->β Subst(t', v, s)
+              REWRITE C: t ->βι s2 = App(Abs(v, t'), s) ->β Subst(t', v, s)
+              LET r = Subst(t', v, s)
+              
+            CASE t1 ->βι t1', t2 ->βι t2':  
+              HAVE ∃ (r1 r2 : Term) . t1' ->βι* r1 ∧ t1 ->βι* r1 ∧
+                                       t2' ->βι* r2 ∧ t2 ->βι* r2 BY A
+              LET r = App(r1, r2)
+              
+          CASE Int(t1, t2):
+            CASES t1, t2
+            CASE t1 = Abs(v, t'), t2 = Abs(u, s):
+              REWRITE B: t ->βι s1 = Int(Abs(v, t'), Abs(u, s)) ->ι Subst(Subst(t', v, s), u, Abs(v, t'))
+              REWRITE C: t ->βι s2 = Int(Abs(v, t'), Abs(u, s)) ->ι Subst(Subst(t', v, s), u, Abs(v, t'))
+              LET r = Subst(Subst(t', v, s), u, Abs(v, t'))
+              
+            CASE t1 ->βι t1', t2 ->βι t2':
+              HAVE ∃ (r1 r2 : Term) . t1' ->βι* r1 ∧ t1 ->βι* r1 ∧ 
+                                       t2' ->βι* r2 ∧ t2 ->βι* r2 BY A
+              LET r = Int(r1, r2)  
+        }
+        
+        QED
+    }
+      
+    THEOREM TranslationTheorem {
+      STATEMENT:
+        ∀ (t s : Term) . t ->β s <=> Tr(t) ->ι Tr(s)  
+          
+      PROOF:
+        DEFINE Tr(t) = MATCH t WITH
+                       | Var(x) -> Var(x)
+                       | Abs(v, t) -> Abs(v, Tr(t))
+                       | App(t, s) -> Int(Abs(x, Tr(t)), Abs(x, Tr(s))) WHERE x = FreshVar(t, s)
+        
+        FORWARD DIRECTION:
+          ASSUME t ->β s
+          SHOW Tr(t) ->ι Tr(s) BY Induction on t {
+            CASE Var(x):
+              REWRITE ->β = =β 
+              HENCE t = s
+              THUS Tr(t) = Tr(s)
+              
+            CASE Abs(v, t'):
+              t ->β s = Abs(v, t') ->β Abs(v, s')
+              HENCE t' ->β s'
+              IH: Tr(t') ->ι Tr(s')
+              REWRITE Tr(Abs(v, t')) = Abs(v, Tr(t'))
+              REWRITE Tr(Abs(v, s')) = Abs(v, Tr(s'))
+              HENCE Tr(t) ->ι Tr(s)
+              
+            CASE App(t1, t2):  
+              t ->β s = App(t1, t2) ->β App(s1, s2)
+              CASES t1, t2
+              CASE t1 = Abs(v, t'), t2 = r:
+                REWRITE t ->β s = App(Abs(v, t'), r) ->β Subst(t', v, r)
+                LET x = FreshVar(t', r)
+                REWRITE Tr(App(Abs(v, t'), r)) 
+                  = Int(Abs(x, Tr(Abs(v, t'))), Abs(x, Tr(r)))
+                  = Int(Abs(x, Abs(v, Tr(t'))), Abs(x, Tr(r)))
+                  ->ι Subst(Subst(Tr(t'), v, Tr(r)), x, Abs(v, Tr(t')))
+                  = Tr(Subst(t', v, r))
+                  
+              CASE t1 ->β s1, t2 ->β s2:
+                IH1: Tr(t1) ->ι Tr(s1)  
+                IH2: Tr(t2) ->ι Tr(s2)
+                LET x = FreshVar(s1, s2)
+                REWRITE Tr(App(t1, t2))
+                  = Int(Abs(x, Tr(t1)), Abs(x, Tr(t2)))
+                  ->ι Int(Abs(x, Tr(s1)), Abs(x, Tr(s2)))
+                  = Tr(App(s1, s2))
+          }
+          
+        BACKWARD DIRECTION:
+          ASSUME Tr(t) ->ι Tr(s)
+          SHOW t ->β s BY Induction on Tr(t) {
+            CASE Var(x):
+              REWRITE ->ι = =ι
+              HENCE Tr(t) = Tr(s)
+              THUS t = s
+              
+            CASE Abs(v, Tr(t')):
+              Tr(t) ->ι Tr(s) = Abs(v, Tr(t')) ->ι Abs(v, Tr(s'))
+              HENCE Tr(t') ->ι Tr(s')
+              IH: t' ->β s'
+              REWRITE t = Abs(v, t')
+              REWRITE s = Abs(v, s')
+              HENCE t ->β s
+              
+            CASE Int(Abs(x, Tr(t1)), Abs(x,

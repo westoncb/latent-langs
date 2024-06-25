@@ -1,0 +1,118 @@
+CONCEPT AdaptiveRadixSort {
+  LANGUAGE {
+    TYPE Digit
+    TYPE Key = List[Digit]
+    TYPE Bucket = List[Key]  
+
+    FUNC Sort(keys : List[Key]) : List[Key]
+    FUNC MaxLen(keys : List[Key]) : Nat
+    FUNC GetDigit(key : Key, i : Nat) : Digit
+    FUNC CollectDigits(keys : List[Key], i : Nat) : List[Digit]
+    FUNC Freq(digits : List[Digit]) : List[Nat]
+    FUNC ToBuckets(keys : List[Key], i : Nat) : List[Bucket]
+    FUNC Flatten(buckets : List[Bucket]) : List[Key]
+
+    AXIOM Sorted {
+      ∀ (k : List[Key]) (i : Nat) . 
+        i ≥ MaxLen(k) ⇒ Sorted(k)
+    }
+
+    AXIOM Partitioned {
+      ∀ (bb : List[Bucket]) (i : Nat) . 
+        (∀ (b : Bucket) . b ∈ bb ⇒ 
+          (∀ (k1 k2 : Key) . k1 ∈ b ∧ k2 ∈ b ⇒ 
+            Take(k1, i) = Take(k2, i))) ⇒
+        Partitioned(bb, i)
+    }
+  }
+
+  STRUCTURE AdaptiveRadixSort {
+    DEF Sort(keys : List[Key]) : List[Key] = 
+      LET maxLen = MaxLen(keys)
+          f(i) = IF i ≥ maxLen THEN keys
+                 ELSE LET digits = CollectDigits(keys, i)
+                          freq = Freq(digits)
+                      IN IF Uniform(freq) 
+                         THEN f(i+1) 
+                         ELSE LET buckets = ToBuckets(keys, i)
+                              IN Flatten(Map(b ↦ Sort(b), buckets))
+      IN f(0)
+
+    DEF Uniform(freq : List[Nat]) : 𝔹 = 
+      All(n ↦ n = freq[0], freq)
+
+    DEF CollectDigits(keys : List[Key], i : Nat) : List[Digit] =
+      FlatMap(k ↦ [GetDigit(k, i)], keys)
+      
+    DEF Freq(digits : List[Digit]) : List[Nat] =
+      Map(d ↦ Count(Equals(d), digits), Unique(digits)) 
+
+    DEF ToBuckets(keys : List[Key], i : Nat) : List[Bucket] =
+      LET buckets = Map(d ↦ [], Unique(CollectDigits(keys, i)))
+      IN Foldl((acc, k) ↦ Update(GetDigit(k, i), acc, Append(Get(GetDigit(k, i), acc), k)), 
+               buckets, 
+               keys)
+  }
+  
+  PROOFS {
+    TACTIC SortedAfterMaxLen(keys, i) -> 𝔹 {
+      LET maxLen = MaxLen(keys)
+      IF i ≥ maxLen THEN 
+        SHOW Sorted(keys) BY Sorted
+      ELSE 
+        SHOW ∃ (i' > i) . SortedAfterMaxLen(keys, i')
+    }
+
+    TACTIC PartitionedIntoSingletons(keys, i) -> 𝔹 {
+      LET buckets = ToBuckets(keys, i)
+      SHOW ∀ (b : Bucket) . b ∈ buckets ⇒ |b| ≤ 1 {
+        LET b : Bucket, b ∈ buckets
+        LET k1 k2 : Key, k1 ∈ b, k2 ∈ b  
+        SHOW k1 = k2 BY {
+          Take(k1, i) = Take(k2, i) BY Partitioned
+          k1 = k2 BY MaxLen(b) ≤ i, Sorted
+        }
+        HENCE |b| ≤ 1
+      }
+    }
+    
+    THEOREM Correctness {
+      STATEMENT:
+        ∀ (keys : List[Key]) . Sorted(Sort(keys))
+      
+      PROOF:
+        LET keys : List[Key]
+        
+        DEFINE P(i) = 
+          LET digits = CollectDigits(keys, i)
+              freq = Freq(digits)
+          IN IF Uniform(freq) THEN SortedAfterMaxLen(keys, i)
+             ELSE PartitionedIntoSingletons(keys, i)
+        
+        SHOW P(0) BY {
+          LET i = 0
+          LET digits = CollectDigits(keys, i)
+          CASE Uniform(Freq(digits)):
+            SHOW SortedAfterMaxLen(keys, i) BY SortedAfterMaxLen
+          CASE ¬Uniform(Freq(digits)): 
+            LET buckets = ToBuckets(keys, i)
+            SHOW ∀ (b : Bucket) . b ∈ buckets ⇒ Sorted(Sort(b)) {
+              LET b : Bucket, b ∈ buckets
+              SHOW Sorted(Sort(b)) BY Correctness
+            }
+            SHOW Partitioned(buckets, i) BY PartitionedIntoSingletons
+            SHOW ∀ (b1 b2 : Bucket) . b1 ≠ b2 ⇒ ∀ (k1 ∈ b1) (k2 ∈ b2) . k1 ≤ k2 {
+              LET b1 b2 : Bucket, b1 ≠ b2, k1 ∈ b1, k2 ∈ b2
+              GetDigit(k1, i) < GetDigit(k2, i) BY ToBuckets
+              HENCE k1 ≤ k2  
+            }
+            HENCE Sorted(Flatten(Map(Sort, buckets)))
+        }
+
+        HENCE ∀ (i : Nat) . P(i) ⇒ P(i+1)
+        HENCE ∀ (i : Nat) . P(i)  
+        HENCE P(MaxLen(keys))
+        HENCE Sorted(Sort(keys)) 
+    }
+  }
+}

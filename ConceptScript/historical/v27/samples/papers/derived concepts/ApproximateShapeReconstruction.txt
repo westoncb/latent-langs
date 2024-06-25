@@ -1,0 +1,101 @@
+CONCEPT ApproximateShapeReconstruction {
+  NOTATION {
+    M = d-dimensional manifold
+    X = Finite (ε,R)-sample of M  
+    Cech(X, r) = Cech complex of X at scale r
+    PHT(X, r) = PHT(Cech(X, r))
+  }
+
+  LANGUAGE {
+    TYPE Sample = Finite subset of R^d
+    PRED IsCover(𝓤, M) = ⋃𝓤 ⊇ M
+    PRED IsPartition(𝓟, M) = IsCover(𝓟, M) ∧ ∀ U,V ∈ 𝓟. U≠V ⇒ U∩V = ∅ 
+    PRED IsSubordinate(𝓤, 𝓟) = ∀ U ∈ 𝓤. ∃ V ∈ 𝓟. U ⊆ V
+    PRED IsNerve(K, 𝓤) = ∀ σ ∈ K. ⋂σ ≠ ∅
+    
+    FUNC Partition(X: Sample, r: R>0): Cover = 
+      {B(x,r) ∩ X | x ∈ X}
+
+    FUNC Subordinate(𝓟: Partition, s: R>0): Cover =
+      {U | ∃ x ∈ X. U = B(x,s) ∩ ⋃{V ∈ 𝓟 | x ∈ V}}
+  }
+
+  STRUCTURES {
+    STRUCTURE CechApproximation {
+      FIELD Sample: X
+      FIELD Scale: r
+
+      COMPUTE Nerve: Cech(X, r) = {σ ⊆ X | diam(σ) ≤ r}
+      COMPUTE PHT: PHT(X, r) = PHT(Cech(X, r))
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE PartitionedPHT: 
+      PHT(X, r) ≃ PHT(Partition(X, r), r)
+
+    REWRITE SubordinatePHT:
+      PHT(𝓟, r) ≃ PHT(𝓤, r) IF IsSubordinate(𝓤, 𝓟)
+  }
+
+  PROOFS {
+    THEOREM ApproximateNerveTheorem: 
+      Cech(X, r) ≃ M IF X is (ε,R)-sample of M AND r ∈ (4ε, R/4)  
+    {
+      DEFINE 𝓟 := Partition(X, r/2)
+      DEFINE 𝓤 := Subordinate(𝓟, r/4)
+
+      IsPartition(𝓟, M)                   BY SamplePartition 
+      IsSubordinate(𝓤, 𝓟)                 BY SubordinatePartition
+      IsCover(𝓤, M)                       BY Subordinate ⇒ Cover
+      Cech(𝓤, r) ≃ M                      BY NerveTheorem
+      Cech(𝓤, r) ≃ Cech(X, r)             BY SubordinateNerve
+    }
+
+    THEOREM ApproximatePHT:
+      d_I(PHT(M), PHT(X, r)) ≤ Cε w.h.p. IF X is (ε,R)-sample of M AND r ∈ (4ε, R/4)
+    {
+      Cech(X, r) ≃ M                      BY ApproximateNerveTheorem
+      d_I(PHT(M), PHT(Cech(X, r))) ≤ Cε   BY PHTStability
+      PHT(Cech(X, r)) = PHT(X, r)          BY def
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE CircleSample: 
+      X = {x_i = (cos(2πi/n), sin(2πi/n)) | i = 1,...,n}
+      r = 2 sin(π/n)
+      ⇒ PHT(X, r) ≃ PHT(S^1)
+
+    EXAMPLE TorusSample:
+      X = {x_ij = ((2+cos(2πi/n))cos(2πj/m), (2+cos(2πi/n))sin(2πj/m), sin(2πi/n)) | i,j = 1,...,n}  
+      r = sqrt(2-2cos(2π/n))
+      ⇒ PHT(X, r) ≃ PHT(𝕋²) 
+  }
+}
+
+This Concept leverages the stability and descent properties of the PHT to compute the homology of a manifold M from only a finite noisy sample X. The key steps are:
+
+1. Construct a partition 𝓟 of X at a carefully chosen scale r/2. 
+2. Refine 𝓟 to a subordinate cover 𝓤 at scale r/4.
+3. Compute the PHT of the Cech complex Cech(X, r), which by the Approximate Nerve Theorem is homotopy equivalent to M.
+4. The resulting PHT is provably close to the true PHT of M by stability.
+
+The ability to characterize the shape of M from only a finite sample is a powerful capability enabled by combining the key insights from the previous Concepts. This demonstrates the value of the "building blocks" approach, where identifying the right key structures and theorems allows the concise expression of important new mathematical concepts.
+
+
+
+
+------
+
+The key novel ideas expressed in the previous Concepts are:
+
+1. Mobius inversion on a decomposition lattice allows expressing a global property Q(S) as a sum of local contributions q(t) over the lattice. This unifies many examples across fields.
+
+2. The Persistent Homology Transform (PHT) represents the shape of a space M as a sheaf of persistence modules over the sphere S^(d-1) x R. This fully characterizes the shape up to homotopy.
+
+3. The PHT is stable to perturbations of the input shape M, allowing approximate computation from finite samples. The approximation quality is controlled by the sampling density.
+
+4. The PHT satisfies a descent theorem, allowing it to be computed by a Cech complex built from a cover of the input space M. This enables tractable computation.
+
+Building on these ideas, here is a new Concept for computing the homology of a manifold from noisy point cloud samples:

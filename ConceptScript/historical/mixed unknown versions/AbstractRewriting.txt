@@ -1,0 +1,93 @@
+CONCEPT AbstractRewriting {
+  LANGUAGE {
+    type System
+    type Expression
+    type Rule<S>
+    type Strategy<S>
+    type Derivation<S>
+
+    func Apply<S>(r: Rule<S>, e: Expression): Expression
+    func Normalize<S>(s: Strategy<S>, e: Expression): Expression
+    func IsNormalForm<S>(e: Expression, s: System): Bool
+
+    pred Reduces<S>(e: Expression, e': Expression, s: System)  
+    
+    notation "e ~>[s] e'" = Reduces<S>(e, e', s)
+    notation "e ![s] e'" = Reduces<S>(e, e', s) ∧ IsNormalForm<S>(e', s)
+
+    infer NormalFormUniqueness<S>(s: System):
+      ∀e, e1, e2: Expression. e ![s] e1 ∧ e ![s] e2 -> e1 = e2
+
+    infer ChurchRosser<S>(s: System):
+      ∀e, e1, e2: Expression. e ~>*[s] e1 ∧ e ~>*[s] e2 
+        -> ∃e'. e1 ~>*[s] e' ∧ e2 ~>*[s] e'
+
+    infer Confluence<S>(s: System):
+      ∀e, e1, e2: Expression. e ~>[s] e1 ∧ e ~>[s] e2
+        -> ∃e'. e1 ~>*[s] e' ∧ e2 ~>*[s] e'
+
+    infer Termination<S>(s: System):
+      ∀e: Expression. ∃n: Nat. ∀e'. e ~>^n[s] e' -> IsNormalForm<S>(e', s)
+
+    infer NormalizeCorrect<S>(s: Strategy<S>):
+      ∀e, e': Expression. Normalize<S>(s, e) = e' <-> e ![s] e'
+
+    infer OptimalNormalization<S>(s: Strategy<S>):
+      ∀t: Strategy<S>. 
+        (∀e. IsNormalForm<S>(Normalize<S>(t, e), s)) ->
+        ∀e. Length(Derivation<S>(s, e)) ≤ Length(Derivation<S>(t, e))
+  }
+
+  STRUCTURE {
+    ; Compatibility: Reduces is compatible with equality
+    ∀S, e, e', e'': Expression.
+      e ~>[S] e' ∧ e ≃ e'' -> ∃e'''. e'' ~>[S] e''' ∧ e' ≃ e'''
+
+    ; Compositionality: Reduces is compatible with Apply  
+    ∀S, c: Context, e, e': Expression, r: Rule<S>.
+      e ~>[S] e' -> c[e] ~>[S] c[e'] 
+      c[Apply<S>(r, e)] ~>[S] c[e'] <-> c[e] ~>[S] c[e']
+
+    ; Determinism: A deterministic strategy yields at most one derivation
+    ∀S, s: Strategy<S>. Deterministic(s) <->
+      ∀e, e1, e2. Reduces<S>(e, e1, s) ∧ Reduces<S>(e, e2, s) -> e1 = e2
+  }
+
+  PROOFS {
+    theorem OptimalityOfNormalStrategy<S>:
+      ∀(s: System, t: Strategy<S>).
+        Termination<S>(s) ∧ Confluence<S>(s) ∧ NormalizeCorrect<S>(t)
+        -> OptimalNormalization<S>(t)
+    {
+      assume s: System, t: Strategy<S>
+      assume Termination<S>(s), Confluence<S>(s), NormalizeCorrect<S>(t)
+      
+      let e: Expression
+      let t': Strategy<S>
+      assume H: ∀e. IsNormalForm<S>(Normalize<S>(t', e), s)
+
+      let e' = Normalize<S>(t, e), e'' = Normalize<S>(t', e)
+      have e ![s] e'                    ; by NormalizeCorrect<S>(t)
+      have e ~>*[s] e''                  ; by H and def. of IsNormalForm<S>
+      have ∃e*. e' ~>*[s] e* ∧ e'' ~>*[s] e*  ; by Confluence<S>(s)
+      let e* such that e' ~>*[s] e* ∧ e'' ~>*[s] e*
+      have e* = e'                       ; by NormalFormUniqueness<S>(s)
+      hence Length(Derivation<S>(t, e)) 
+         = Length(e ~>*[s] e') 
+        <= Length(e ~>*[s] e'')
+         = Length(Derivation<S>(t', e))  ; by e' = e* and e'' ~>*[s] e*
+    }
+  }
+}
+
+This AbstractRewriting Concept provides a general framework for reasoning about rewriting systems and strategies. It draws inspiration from the lambda calculus and rewriting concepts in LambdaCalculus, the use of inference rules and theorems in ProofOptimizationDynamics, and the general structure and methodology of ConceptScript as demonstrated in MetamaterialCFC_v16.
+Key elements include:
+
+Abstract types for rewriting systems, expressions, rules, strategies and derivations
+Fundamental relations and operations like Reduces, Apply and Normalize
+Inference rules capturing key properties like uniqueness of normal forms, Church-Rosser, confluence and termination
+Correctness and optimality conditions on normalization strategies
+Axioms expressing compatibility of rewriting with equality and composition
+A theorem stating optimality of normalizing strategies under certain conditions
+
+The Concept aims to provide a high-level, modular framework for specifying and reasoning about rewriting in an abstract way, supporting concise proofs of key properties. Notation like ~>[s] and ![s] is introduced to express rewriting steps and normalization compactly.

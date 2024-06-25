@@ -1,0 +1,83 @@
+CONCEPT Monoid {
+  LANGUAGE {
+    CLASS Semigroup(A) {
+      (<>) : A -> A -> A
+    }
+    
+    CLASS Monoid(A) : Semigroup(A) {
+      mempty : A
+    }
+    
+    AXIOM SemigroupAssoc(Semigroup(A)) {
+      ∀ (x y z : A). (x <> y) <> z = x <> (y <> z)
+    }
+    
+    AXIOM MonoidLeftIdentity(Monoid(A)) {
+      ∀ (x : A). mempty <> x = x
+    }
+    
+    AXIOM MonoidRightIdentity(Monoid(A)) {
+      ∀ (x : A). x <> mempty = x
+    }
+    
+    FUNC FoldMap(Monoid(M), Functor(F)) : (A -> M) -> F(A) -> M
+  }
+  
+  STRUCTURE {
+    INSTANCE Semigroup(List(A)) {
+      (<>) = Append
+    }
+    
+    INSTANCE Monoid(List(A)) {
+      mempty = []
+    }
+    
+    INSTANCE Functor(List) {
+      fmap(f, []) = []
+      fmap(f, x :: xs) = f(x) :: fmap(f, xs)
+    }
+    
+    DEF FoldMap(_, _)(f, []) = mempty
+    DEF FoldMap(_, _)(f, x :: xs) = f(x) <> FoldMap(f, xs)
+  }
+  
+  PROOFS {
+    THEOREM FoldMapHomomorphism(Monoid(M), Functor(F)) {
+      STATEMENT: ∀ (f : A -> M) (xs ys : F(A)).
+        FoldMap(f, xs <> ys) = FoldMap(f, xs) <> FoldMap(f, ys)
+      
+      PROOF:
+        LET f : A -> M, xs ys : F(A)
+        CASE xs OF
+          [] ->
+            REWRITE FoldMap(f, [] <> ys) 
+              = FoldMap(f, ys) 
+              BY MonoidLeftIdentity
+            REWRITE FoldMap(f, []) <> FoldMap(f, ys)
+              = mempty <> FoldMap(f, ys)
+              BY DEF FoldMap
+            REWRITE mempty <> FoldMap(f, ys)
+              = FoldMap(f, ys)
+              BY MonoidLeftIdentity
+            QED
+          x :: xs' ->
+            REWRITE FoldMap(f, (x :: xs') <> ys)
+              = FoldMap(f, x :: (xs' <> ys))
+              BY DEF (<>)
+            REWRITE FoldMap(f, x :: (xs' <> ys))
+              = f(x) <> FoldMap(f, xs' <> ys)
+              BY DEF FoldMap
+            HAVE FoldMap(f, xs' <> ys) = FoldMap(f, xs') <> FoldMap(f, ys) BY IH
+            REWRITE f(x) <> FoldMap(f, xs' <> ys)
+              = f(x) <> (FoldMap(f, xs') <> FoldMap(f, ys))
+              BY PREV
+            REWRITE f(x) <> (FoldMap(f, xs') <> FoldMap(f, ys))
+              = (f(x) <> FoldMap(f, xs')) <> FoldMap(f, ys)
+              BY SemigroupAssoc
+            REWRITE (f(x) <> FoldMap(f, xs')) <> FoldMap(f, ys)
+              = FoldMap(f, x :: xs') <> FoldMap(f, ys)
+              BY DEF FoldMap
+            QED
+    }
+  }
+}

@@ -1,0 +1,83 @@
+CONCEPT SparseCoding {
+  LANGUAGE {
+    TYPE Sample = ℝ^d
+    TYPE Code = ℝ^k  
+    TYPE Dict = ℝ^(d × k)
+    
+    FUNC Encode : Sample -> Code
+    FUNC Decode : Code -> Sample
+    FUNC Loss : Sample × Code -> ℝ
+    FUNC Regularize : Code -> ℝ
+    FUNC Sparsity : Code -> ℝ
+
+    AXIOM SparseCodingObjective {
+      ∀ (x : Sample) (z : Code) (D : Dict) .
+        Loss(x, z) = ||x - D · z||_2^2 + λ * Regularize(z)
+    }
+
+    NOTATION "||" v "||_0" = Count((x) ↦ x ≠ 0, v)  
+    NOTATION "||" v "||_1" = Sum(Abs, v)
+  }
+
+  STRUCTURE L0Coding {
+    DEF Regularize : Code -> ℝ = (z) ↦ ||z||_0
+    DEF Sparsity : Code -> ℝ = (z) ↦ ||z||_0 / Dim(z) 
+    
+    REQUIRE ∀ (x : Sample) . 
+      Encode(x) = ArgMin((z : Code) ↦ Loss(x, z), SubjectTo Sparsity(z) ≤ k/d)
+  }
+
+  STRUCTURE L1Coding {  
+    DEF Regularize : Code -> ℝ = (z) ↦ ||z||_1
+    
+    REQUIRE ∀ (x : Sample) .
+      Encode(x) = SoftThreshold(D^T · x, λ)
+        WHERE SoftThreshold(v, t) = Sign(v) ⊙ Max(Abs(v) - t, 0)
+  }
+
+  PROOFS {
+    THEOREM SparseApprox {
+      STATEMENT : ∀ (x : Sample) (s : ℕ) (D : Dict) .
+        LET z_s = ArgMin((z : Code) ↦ ||x - D · z||_2^2, SubjectTo ||z||_0 ≤ s)
+        IN ||x - D · z_s||_2 ≤ c_s · Min(||x - D · z||_2 | z : Code, ||z||_0 ≤ s)
+          WHERE c_s = 1 + 12 * (s/k) * Log(d/s)
+
+      PROOF {
+        LET x : Sample, s : ℕ, D : Dict
+        LET f = (z : Code) ↦ ||x - D · z||_2^2
+        LET z_s = ArgMin(f, SubjectTo ||z||_0 ≤ s)
+        LET z_opt = ArgMin((z : Code) ↦ ||x - D · z||_2 | ||z||_0 ≤ s)
+        
+        f(z_s) 
+          ≤ (1 + 12 * (s/k) * Log(d/s)) * f(z_opt)  BY CompressedSensing
+          = c_s * f(z_opt)
+          = c_s · Min(||x - D · z||_2 | z : Code, ||z||_0 ≤ s)  
+            BY DEFINITION z_opt
+      }
+    }
+    
+    THEOREM L1EquivalentL0 {
+      STATEMENT : ∀ (x : Sample) (D : Dict) .
+        LET λ = 2 * ||D^T · x||_∞  
+        IN ArgMin((z : Code) ↦ Loss(x, z), GivenThat Regularize = (z) ↦ ||z||_1)
+         = ArgMin((z : Code) ↦ ||x - D · z||_2^2, SubjectTo ||z||_0 ≤ k)
+
+      PROOF {
+        LET x : Sample, D : Dict, λ = 2 * ||D^T · x||_∞
+        
+        ArgMin((z : Code) ↦ ||x - D · z||_2^2 + λ * ||z||_1)
+          = ArgMin((z : Code) ↦ ||D^T · (x - D · z)||_∞ + λ * ||z||_1)
+            BY EQUIVALENT_OBJECTIVE  
+          = ArgMin((z : Code) ↦ ||D^T · x - (D^T · D) · z||_∞ + λ * ||z||_1)
+          = ArgMin((z : Code) ↦ ||D^T · x||_∞ + λ * ||z||_1)
+            GIVEN ||D^T · D||_∞ ≤ 1  ; Assumes D is normalized
+          = ArgMin((z : Code) ↦ λ * ||z||_1)
+            GIVEN λ = 2 * ||D^T · x||_∞
+          = ArgMin((z : Code) ↦ ||z||_1)  ; Ignores constant factor
+          = ArgMin((z : Code) ↦ ||z||_0)  ; L1 is sparsest among L1 solutions
+          = ArgMin((z : Code) ↦ ||x - D · z||_2^2, SubjectTo ||z||_0 ≤ k)
+            BY L0Coding
+      }
+    }
+  }
+}

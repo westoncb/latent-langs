@@ -1,0 +1,91 @@
+CONCEPT RelativisticQuantumField {
+  LANGUAGE {
+    type Field(X: Manifold, V: VectorBundle) = Γ(X, V)   ; Smooth sections of vector bundle
+    type Lagrangian(𝕃, φ) = ∫_X 𝕃(φ, ∂φ)dμ_g   ; Action functional on fields
+    type Path = ℝ -> Field   ; Path in field configuration space
+    
+    axiom QuantumAmplitude(γ: Path) = 𝔸[γ] = exp(iS[γ]/ℏ)  ; Feynman path integral
+    
+    notation "δφ" = VirtualDisplacement(φ: Field) = Γ(X, φ*V)  ; Variational vector field
+    notation "⟨ψ₁|ψ₂⟩" = InnerProduct(ψ₁, ψ₂: Field) = ∫_X ψ₁^*ψ₂ dμ_g  ; L² inner product
+    notation "/δφ" = FunctionalDerivative = δ/δφ
+    notation "𝒟φ" = PathIntegralMeasure = ∏_x∈X dφ(x)
+    
+    func GreenFunction(x, y: X) = ⟨φ(x)φ(y)⟩ = ∫𝒟φ φ(x)φ(y)exp(iS[φ]/ℏ)
+    func Propagator(x, y: X) = ⟨0|Tφ(x)φ(y)|0⟩ = θ(x⁰-y⁰)G(x,y) + θ(y⁰-x⁰)G(y,x)
+    
+    pred OnShell(φ: Field) = (□+m²)φ = 0   ; Klein-Gordon equation 
+    
+    type Amplitude(n: ℕ) = ⟨p₁...pn|S|k₁...kn⟩ =   ; n-point scattering amplitude
+      ∫𝒟φ φ(p₁)...φ(pn)φ(k₁)...φ(kn) exp(iS[φ]/ℏ) 
+        
+    func FeynmanDiagram(G: Graph, 𝔸: Amplitude) = ∏_e∈edges(G) Propagator(e) ∏_v∈verts(G) Interaction(v)
+  }
+  
+  STRUCTURE {
+    ClassicalLimit(𝔸): lim{ℏ->0} 𝔸[γ] = exp(iS[γ_classical]/ℏ)
+    
+    Unitarity(S, 𝔸): S^†S = SS^† = 1 ⇒ ∑_f |⟨f|S|i⟩|² = 1
+    
+    CrossingSymmetry(𝔸): ⟨p₁...pn|S|k₁...kn⟩ = ⟨k₁...kn|S|p₁...pn⟩*
+    
+    DysonSeries(G): G(x,y) = ∑_n=0^∞ (-i)^n/n! ∫𝒟z₁...𝒟zn G₀(x,z₁)...G₀(zn,y)⟨0|Tφ(z₁)...φ(zn)|0⟩
+    
+    Renormalization(Γ, G): Γ^(n)(p₁...pn) = lim_{Λ->∞} Z_Λ^{n/2} G^(n)(p₁...pn; Λ)  ; Λ = UV cutoff
+    
+    WardIdentity(Π, A): ∂_μ Π^μν(k) = 0   ; Transversality of self-energy in gauge theory
+    
+    OperatorProduct(φ, ψ): lim_{x->y} φ(x)ψ(y) = ∑_α C^α(x-y) 𝒪_α((x+y)/2)  ; OPE expansion
+  }
+  
+  PROOFS {
+    LSZ(𝔸):  ; Reduction formula relating amplitudes to correlators
+      ⟨p₁...pn|S|k₁...kn⟩ = 
+        ∏_i (lim_{pi²,ki²->m²} (pi²-m²)(ki²-m²)) ∫ ⟨0|Tφ(x₁)...φ(xn)φ(y₁)...φ(yn)|0⟩ ∏_i e^{i(p_i x_i - k_i y_i)} dx_i dy_i
+    {
+      have 𝔸 = ∫ ∏_i φ(p_i) ∏_j φ(k_j) exp(iS[φ]) 𝒟φ   ; Path integral for amplitude
+      factor φ(k) = ∫ e^{-iky} φ(y) dy   ; Fourier transform fields
+      hence 𝔸 = ∫ ∏_i φ(x_i) ∏_j φ(y_j) exp(i(S[φ]+∑_i p_ix_i-∑_j k_j y_j)) dx_idy_j 𝒟φ
+
+      factor O(x) = ∫ e^{ikx} δS[φ]/δφ(k) dk   ; Source terms from functional derivatives
+      hence 𝔸 = ∫ ∏_i O(x_i) ∏_j O(y_j) exp(iS[φ]) 𝒟φ   ; Generating functional of sources
+
+      have exp(iS[φ+δφ]) = exp(iS[φ]) + ∑_a (i^a/a!) ∫ δ^aS/δφ^a [δφ]^a   ; Functional Taylor expansion
+      hence ⟨O(x₁)...O(xn)⟩ = δ^n/δJ(x₁)...δJ(xn) Z[J]|_{J=0}   ; Z[J] = vacuum generating functional
+
+      have (□_x+m²)⟨φ(x)O(y)⟩ = -iδ(x-y)   ; Green's function identity
+      hence lim_{k²->m²} (k²-m²)⟨φ(k)O(y)⟩ = e^{-iky}   ; LSZ reduction for a single field
+
+      generalize to multiple fields and apply to 𝔸
+      therefore ⟨p₁...pn|S|k₁...kn⟩ = 
+        ∏_i (lim_{pi²,ki²->m²} (pi²-m²)(ki²-m²)) ∫ ⟨0|Tφ(x₁)...φ(xn)φ(y₁)...φ(yn)|0⟩ ∏_i e^{i(p_i x_i - k_i y_i)} dx_i dy_i
+    }
+    
+    tactic InsertUnit(𝔸: Amplitude) = {
+      have ∑_n ∫ d^4p_1...d^4p_n/(2π)^(3n) |p₁...pn⟩⟨p₁...pn| = 1   ; Resolution of identity
+      insert 1 = ∑|n⟩⟨n| in ⟨f|S|i⟩ to get ⟨f|S|n⟩⟨n|i⟩
+    }
+
+    OpticalTheorem:
+      -i(T-T^†) = T^†T   ; Unitarity of S-matrix
+    {
+      have S = 1 + iT   ; Define transition matrix T
+      have S^†S = 1
+      hence (1-iT^†)(1+iT) = 1
+      hence T-T^† = iTT^†
+    }
+
+    Cutkosky(Disc, 𝔸): 
+      Disc 𝔸 = ∑_cuts -2πi δ(q²-m²) 𝔸_L 𝔸_R   ; Discontinuity across branch cut
+    {
+      have 𝔸(s) = ∫ ∏_i d^4k_i δ(k_i²-m²) θ(k_i⁰) 𝔸_L(k) 𝔸_R(k)
+      hence Disc 𝔸 = 𝔸(s+iε) - 𝔸(s-iε)
+
+      rewrite ∫dx δ(x)θ(x)f(x) = f(0)/2
+      hence 𝔸 = ∫dx [δ(x)θ(x) 𝔸_L(x) 𝔸_R(x) - δ(x)θ(-x) 𝔸_L(x) 𝔸_R(x)]
+      
+      have Disc δ(x)θ(x) = -2πi δ(x)
+      hence Disc 𝔸 = ∑ -2πi δ(k²-m²) 𝔸_L(k) 𝔸_R(k)
+    }
+  }
+}

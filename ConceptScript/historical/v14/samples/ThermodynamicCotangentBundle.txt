@@ -1,0 +1,179 @@
+CONCEPT ThermodynamicCotangentBundle {
+  LANGUAGE {
+    type System = ThermodynamicSystem(States, Observables)
+    type State = MacroState(System) | MicroState(System)  
+    type Observable = Function(State -> ℝ)
+    
+    type PhaseSpace = CotangentBundle(StateSpace(System))
+    type StateSpace = Manifold(States(System))
+    type dq = Coordinate(StateSpace)  ; Generalized coordinates 
+    type dp = Coordinate(Fiber(PhaseSpace))  ; Generalized momenta
+    
+    notation "H" = Hamiltonian(Observable)
+    notation "β" = InverseTemperature(Observable)
+    notation "S" = Entropy(Observable) 
+    notation "p(x)" = Probability(MicroState -> ℝ)
+    
+    axiom CoordinateTransformation(q: dq, p: dp, Q: dq, P: dp):
+      (q, p) ≈ (Q(q), P(q, p))  ; Canonical transformations
+      
+    axiom CanonicalCommutation(q: dq, p: dp):
+      {q, p} = 1  ; Poisson bracket  
+      
+    axiom CanonicalDistribution(H: Observable, β: Observable, p: Probability):  
+      p(x) = (1/Z) exp(-β H(x))  ; Boltzmann distribution
+  }
+
+  STRUCTURE {
+    ThermodynamicQuantities: {
+      def InternalEnergy(System) = <H>
+      def FreeEnergy(System) = - (1/β) log(Z)
+      def Entropy(System) = - <log(p)> 
+      def Pressure(System) = - (∂/∂V) FreeEnergy(System)
+    }
+    
+    EnsembleEquivalence: {
+      def Microcanonical(E: Observable) = 
+        Uniform(x: MicroState | H(x) = E)
+        
+      def Canonical(β: Observable) = 
+        (1/Z) exp(-β H(x)) for x: MicroState
+        
+      axiom Equivalence(E: Observable, β: Observable): 
+        Microcanonical(E) ≈ Canonical(β) as Volume(System) -> ∞
+    }
+    
+    MaxEntPrinciple: {
+      def RelativeEntropy(p, q: Probability) = 
+        <log(p/q)>_p
+        
+      axiom MaximumEntropy(p: Probability, E: Observable):
+        p = argmax_{q: Probability} Entropy(q) 
+            subject to <H>_q = E
+    }
+  }
+  
+  PROOFS {
+    tactic Legendre(f: State -> ℝ, x: dq):
+      assumes ∂²f/∂x² != 0
+      let p := ∂f/∂x
+      let g(p) := px - f(x)  ; Legendre transform
+      have ∂g/∂p = x
+      
+    theorem EnergyRepresentation(S: Observable, β: Observable):  
+      d S = β d <H>
+    {
+      S = - <log(p)>            ; Entropy definition  
+      d S = - <dlog(p)>         
+      = - <(1/p) dp>
+      = - <(1/p) (dZ/Z) + β dH>  ; Differentiate Boltzmann dist.
+      dZ/Z = -β d<H>            ; Differentiate partition function  
+      d S = β d<H>              ; Simplify
+    }
+      
+    theorem LegendreTransformHamiltonian(L: Observable, H: Observable):
+      ∂²L/∂v² != 0 ⊢ H(q, p) = pv - L(q, v) and p = ∂L/∂v  
+    {  
+      Legendre(L(q, ·), v)
+      hence H(q, p) = pv - L(q, v) and p = ∂L/∂v
+    }
+      
+    theorem JarzynskiEquality(W: Observable, β: Observable):
+      <exp(-βW)> = exp(-β ΔF)
+    {
+      assume p(x, t) solves Fokker-Planck equation  
+      let φ(t) := <exp(-βW(t))>_p  
+      have dφ/dt = 0             ; Differentiate and apply Fokker-Planck 
+      φ(t) = φ(0) = <exp(-βW(0))> = 1   ; W(0) = 0
+      <exp(-βW(t))> = 1          ; Substitute 
+      ΔF = - (1/β) log<exp(-βW)>   ; Jarzynski's equality
+    }
+  }
+}
+
+
+
+
+CONCEPT ThermodynamicPhaseSpace {
+  LANGUAGE {
+    type System = ThermodynamicSystem(States)
+    type State = MacroState(System) | MicroState(System)
+    type Observable = Function(State -> ℝ)
+    
+    notation "𝒪(S)" = SpaceOfObservables(S: System)
+    notation "𝒪*(S)" = DualSpaceOfObservables(S: System)
+    notation "⟨A, B⟩" = DualPairing(A: Observable, B: 𝒪*(S))
+    
+    notation "S(E, V)" = EntropyObservable(E: Observable, V: Observable)
+    notation "F(T, P)" = FreeEnergyObservable(T: Observable, P: Observable)
+    
+    notation "Z(β, V)" = PartitionFunction(β: Observable, V: Observable)
+    notation "ρ(x; β, V)" = BoltzmannDistribution(x: MicroState, β: Observable, V: Observable)
+    
+    notation "φ(E, V)" = Φ(dE^dV) = LiouvilleForm(E: Observable, V: Observable)
+    notation "ω = -dφ" = SymplecticForm(LiouvilleForm)
+    
+    axiom LegendreTransform(S: Observable, F: Observable, T: Observable, P: Observable):
+      F(T, P) = ⟨E, T⟩ + ⟨V, P⟩ - S(E, V)
+      
+    axiom PartitionFunctionRelation(Z: Observable, F: Observable, β: Observable, P: Observable): 
+      F(β, P) = - 1/β * log(Z(β, P))  
+  }
+  
+  STRUCTURE {
+    TangentSpace: {  
+      type 𝒯(S: System) = Space(Velocities(S))
+      
+      axiom VelocityPairing(v: 𝒯(S), A: Observable):
+        ⟨A, v⟩ = d/dt|₀ A(γ(t)) where γ: (-ε, ε) -> S such that γ(0) = s, γ'(0) = v
+    }
+    
+    CotangentSpace: {
+      𝒯*(S: System) = 𝒪*(S)   
+      
+      axiom MomentumMap(H: Observable, p: 𝒯*(S)):
+        ⟨p, v⟩ = d/dt|₀ H(γ(t)) where γ: (-ε, ε) -> S such that γ(0) = s, γ'(0) = v
+    }
+    
+    CotangentBundle: {
+      T*(S: System) = S × 𝒯*(S)
+
+      axiom CanonicalOneForm(φ: LiouvilleForm):  
+        φ(s)(p, v) = ⟨p, v⟩ for (s, p) ∈ T*(S), v ∈ 𝒯ₛ(S)
+      
+      axiom CanonicalSymplecticForm(ω: SymplecticForm, φ: LiouvilleForm):
+        ω = -dφ
+    }
+    
+    StatisticalMechanics: {
+      axiom AverageObservable(A: Observable, ρ: BoltzmannDistribution):  
+        ⟨A⟩ = ∫ A(x) ρ(x) dx
+        
+      axiom Entropy(S: Observable, ρ: BoltzmannDistribution):
+        S = - k ∫ ρ(x) log(ρ(x)) dx  
+    }
+  }
+  
+  PROOFS {
+    theorem CanonicalCommutationRelations(q: Observable, p: Observable):
+      {q, p} = 1 where {⋅,⋅} is the Poisson bracket
+    {
+      {q, p} = ω(Xq, Xp)         ; Def. of Poisson bracket
+      = dq(Xp)                    ; ω(Xq, ⋅) = dq
+      = LXp q                     ; Def. of Lie derivative 
+      = d/dt|₀ (q ∘ φt)           ; φt Hamiltonian flow of Xp 
+      = d/dt|₀ q(t)               ; Def. of observable  
+      = 1                         ; Canonical coordinate
+    }
+    
+    theorem MaxEntPrinciple(ρ: BoltzmannDistribution, S: Observable):
+      ρ = arg max_ρ' S(ρ') subject to ∫ ρ' = 1, ∫ E ρ' = ⟨E⟩  
+    {
+      δS - α δ(∫ ρ) - β δ(∫ E ρ) = 0   ; Lagrange multipliers 
+      δ(- ∫ ρ log ρ - α ∫ ρ - β ∫ E ρ) = 0  ; Variation
+      δρ (- log ρ - 1 - α - β E) = 0     ; Function in parens is 0
+      ρ = exp(- 1 - α - β E)             ; Solve for ρ
+      ρ = 1/Z exp(-β E) where Z = exp(1 + α)  ; Normalize ρ 
+    }
+  }
+}

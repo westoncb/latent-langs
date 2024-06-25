@@ -1,0 +1,107 @@
+CONCEPT GeometricAlgebraCorrespondence {
+  LANGUAGE {
+    type Multivector = Scalar | Vector | Bivector | Trivector | Quadvector
+    type Versor = Rotor | Boost | Motor | Spinor
+    
+    notation "α" = Scalar
+    notation "v" = Vector  
+    notation "B" = Bivector
+    notation "T" = Trivector
+    notation "Q" = Quadvector
+    
+    notation "R" = Rotor
+    notation "L" = Boost 
+    notation "M" = Motor
+    notation "S" = Spinor
+    
+    notation "M₁ · M₂" = GeometricProduct(M₁: Multivector, M₂: Multivector)
+    notation "M₁ ∧ M₂" = OuterProduct(M₁: Multivector, M₂: Multivector)
+    notation "M₁ ⋆ M₂" = HodgeProduct(M₁: Multivector, M₂: Multivector) 
+    notation "⟨M₁ M₂⟩" = ScalarProduct(M₁: Multivector, M₂: Multivector)
+    notation "M†" = Reverse(M: Multivector)
+    notation "⟨M⟩" = Grade(M: Multivector)
+
+    type Transform = {
+      Rotate(v: Vector, B: Bivector),
+      Reflect(v: Vector, v₀: Vector), 
+      Dilate(v: Vector, α: Scalar)
+    }
+    
+    pred Correspond(V: Versor, T: Transform)
+  }
+  
+  STRUCTURE {
+    MultivectorAxioms: {
+      v₁ · v₂ = v₂ · v₁ = α  ; Vectors anticommute to scalars
+      v₁ ∧ v₂ = -v₂ ∧ v₁ = B  ; Bivectors from wedging vectors 
+      v ∧ B = -B ∧ v = T  ; Trivectors from wedging vectors and bivectors
+      B₁ ∧ B₂ = α  ; Bivectors wedge to scalars
+      B ∧ T = Q  ; Quadvectors from wedging bivectors and trivectors
+      v · B = -B · v = v'  ; Vectors and bivectors dot to vectors
+    }
+    
+    VersorCorrespondences: {
+      Rotate(v, B) <=> R = eᐩ,  v' = RvR†
+      Reflect(v, v₀) <=> S = v₀,  v' = SvS†
+      Dilate(v, α) <=> L = e^(αE),  v' = LvL†
+      Rotate(Dilate(v, α), B) <=> M = Le^(B/2)
+    }
+    
+    DifferentialForms: {
+      type p-form = Function(Vector^p -> Scalar)
+      
+      notation "ω" = 1-form
+      notation "F" = 2-form
+      
+      notation "dx^dy" = Wedge(dx: 1-form, dy: 1-form)
+      notation "f(x, y) dx^dy" = Multivector(f: Function(ℝ^2 -> ℝ), dx^dy) 
+    }
+  }
+  
+  PROOFS {
+    tactic Substitution(A, B: Multivector, P): 
+      (A = B) ⊢ P(A) ⟺ P(B)
+      
+    tactic VersorConjugation(M, N: Multivector, V: Versor):
+      (M = VMV†) ⊢ ⟨M⟩ = ⟨N⟩ 
+
+    lemma OutermorphismAnticommutes(v: Vector, B: Bivector):
+      v ∧ B = -B ∧ v
+    {
+      v ∧ B = v · B + v ∧ B    ; Geometric product expansion
+      v · B = v'               ; Vectors, bivectors dot to vectors
+      v' = -B · v              ; Dot product anticommutes
+      v ∧ B = -B · v + v ∧ B   ; Substitute
+      B · v = B ∧ v            ; B, v orthogonal      
+      v ∧ B = -B ∧ v           ; Simplify
+    }
+
+    theorem RotorConjugation(v: Vector, v': Vector, B: Bivector, R: Rotor):
+      (v' = RvR†) ⟺ Rotate(v, B)
+    {
+      assume v' = RvR†
+      R = eᐩ                   ; Rotors of this form
+      v' = eᐩveᐩ              ; Substitute 
+      x = eᐩxeᐩ               ; Blade x through rotor
+      x = x cos θ + (B/|B|)x sin θ  ; Expand exponential
+      x' = x cos θ + (x ∧ B/|B|) sin θ  ; x' perp to plane
+      hence Rotate(v, B)
+
+      assume Rotate(v, B)
+      B = v₁ ∧ v₂              ; Bivector from 2 vectors
+      R = e^(B/2) = eᐩ         ; Form rotor from bivector  
+      x' = RxR†                ; Rotate by conjugation
+      hence v' = RvR†
+    }
+    
+    theorem IntegrationConstant(f(x, y): Function(ℝ^2 -> ℝ), F: 2-form):
+      (∀ x, y. f(x, y) dx^dy = F) ⊢ ∫∫_D F = ∫∫_D f(x, y) dx dy 
+    {
+      f(x, y) dx^dy = F         ; Given
+      f(x, y) dx^dy = dA        ; Area element
+      ∫∫_D f(x, y) dx^dy = ∫∫_D dA   ; Integrate both sides
+      dA = F                    ; Area 2-form      
+      ∫∫_D dA = ∫∫_D F          ; Substitute
+    }
+  }
+}

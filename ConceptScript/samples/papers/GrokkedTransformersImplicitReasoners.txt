@@ -1,0 +1,224 @@
+CONCEPT GrokkedTransformersImplicitReasoners {
+  PARAMETERS {
+    d_model : INT  -- Model dimension
+    L : INT        -- Number of layers
+    h : INT        -- Number of attention heads
+  }
+
+  CONTEXT {
+    TYPES {
+      // Basic unit of knowledge representation
+      Fact := STRUCTURE {
+        subject : STRING
+        relation : STRING
+        object : STRING
+      }
+
+      AtomicFact := Fact    // Fundamental, given facts
+      InferredFact := Fact  // Facts derived through reasoning
+
+      // Two main types of reasoning studied in the paper
+      ReasoningType := ENUM { Composition, Comparison }
+
+      // Standard transformer model structure
+      TransformerModel := STRUCTURE {
+        layers : INT
+        dimension : INT
+        heads : INT
+      }
+
+      // Represents the internal reasoning mechanism of the model
+      Circuit := STRUCTURE {
+        lower_layers : List(INT)
+        upper_layers : List(INT)
+        key_states : Map(STRING, (INT, INT))  // (layer, position)
+      }
+
+      // Metrics to track during training
+      TrainingMetrics := STRUCTURE {
+        loss : REAL
+        accuracy : REAL
+        step : INT
+      }
+
+      // Metrics to evaluate generalization capabilities
+      GeneralizationMetrics := STRUCTURE {
+        in_distribution_accuracy : REAL
+        out_of_distribution_accuracy : REAL
+      }
+    }
+
+    STRUCTURES {
+      // Represents the model's ability to reason implicitly
+      STRUCTURE ImplicitReasoning {
+        FUNC induce_rules(atomic_facts : SET(AtomicFact), inferred_facts : SET(InferredFact)) -> SET(RULE)
+        FUNC apply_rules(facts : SET(Fact), rules : SET(RULE)) -> SET(InferredFact)
+
+        // Ensures that induced rules can reproduce the inferred facts
+        AXIOM RuleConsistency {
+          ∀ af : SET(AtomicFact), if : SET(InferredFact), rules : SET(RULE) .
+            rules == induce_rules(af, if) ⇒
+            if ⊆ apply_rules(af, rules)
+        }
+      }
+
+      // Represents the phenomenon of sudden improvement after extended training
+      STRUCTURE Grokking {
+        FUNC training_trajectory(model : TransformerModel, data : (SET(AtomicFact), SET(InferredFact))) -> List(TrainingMetrics)
+        FUNC identify_grokking_point(trajectory : List(TrainingMetrics)) -> INT
+
+        // Defines key characteristics of grokking
+        AXIOM GrokkingCharacteristics {
+          ∀ trajectory : List(TrainingMetrics) .
+            LET grokking_point = identify_grokking_point(trajectory)
+            IN grokking_point > SATURATION_POINT(trajectory) ∧
+               RAPID_IMPROVEMENT(trajectory, grokking_point)
+        }
+      }
+
+      // Analyzes the internal structure of the model's reasoning
+      STRUCTURE CircuitAnalysis {
+        FUNC identify_circuit(model : TransformerModel, reasoning_type : ReasoningType) -> Circuit
+        FUNC analyze_circuit_formation(model : TransformerModel, trajectory : List(TrainingMetrics)) -> Map(INT, Circuit)
+
+        // Different reasoning types lead to different circuit structures
+        AXIOM CircuitSpecialization {
+          ∀ model : TransformerModel .
+            identify_circuit(model, ReasoningType.Composition) ≠
+            identify_circuit(model, ReasoningType.Comparison)
+        }
+      }
+    }
+
+    NOTATION {
+      ID := In-Distribution
+      OOD := Out-of-Distribution
+      ∝ := Proportional to
+    }
+
+    ASSERTIONS {
+      // The reasoning circuit develops gradually during training
+      AXIOM GradualCircuitFormation {
+        ∀ model : TransformerModel, trajectory : List(TrainingMetrics) .
+          LET circuit_evolution = CircuitAnalysis().analyze_circuit_formation(model, trajectory)
+          IN MONOTONIC_INCREASE(COMPLEXITY(circuit_evolution))
+      }
+
+      // The ratio of inferred to atomic facts affects grokking speed
+      AXIOM DataDistributionEffect {
+        ∀ model : TransformerModel, atomic_facts : SET(AtomicFact), inferred_facts : SET(InferredFact) .
+          GROKKING_SPEED(model, (atomic_facts, inferred_facts)) ∝ 
+            |inferred_facts| / |atomic_facts|
+      }
+
+      // Comparison tasks show better systematicity than composition tasks
+      AXIOM SystematicityVariation {
+        ∀ model : TransformerModel .
+          SYSTEMATICITY(model, ReasoningType.Comparison) >
+          SYSTEMATICITY(model, ReasoningType.Composition)
+      }
+    }
+  }
+
+  TRANSFORMERS {
+    // Represents the circuit structure for composition tasks
+    REWRITE InduceCompositionalCircuit(model : TransformerModel) -> Circuit :=
+      Circuit {
+        lower_layers = [0, 5],
+        upper_layers = [5, 8],
+        key_states = {
+          "bridge_entity": (5, 1),
+          "second_relation": (5, 2),
+          "tail_entity": (8, 2)
+        }
+      }
+
+    // Represents the circuit structure for comparison tasks
+    SIMPLIFY InduceComparisonCircuit(model : TransformerModel) -> Circuit :=
+      Circuit {
+        lower_layers = [0, 5],
+        upper_layers = [5, 8],
+        key_states = {
+          "attribute_values": [(5, 1), (5, 2)],
+          "label_space": (7, 0),
+          "comparison_result": (8, 2)
+        }
+      }
+
+    // Additional transformers can be added for other analyses
+  }
+
+  PROOFS {
+    // Demonstrates that grokking leads to improved generalization
+    THEOREM GrokkingEnablesImplicitReasoning {
+      ∀ model : TransformerModel, data : (SET(AtomicFact), SET(InferredFact)) .
+        LET trajectory = Grokking().training_trajectory(model, data)
+            grokking_point = Grokking().identify_grokking_point(trajectory)
+        IN GeneralizationMetrics(model, data).in_distribution_accuracy AFTER grokking_point > 
+           GeneralizationMetrics(model, data).in_distribution_accuracy BEFORE grokking_point
+    }
+    PROOF {
+      // Proof sketch:
+      // 1. Show that before grokking, the model primarily memorizes training data
+      // 2. Demonstrate that after grokking, the model can generalize to unseen in-distribution examples
+      // 3. Use empirical results from the paper to support the claim
+      □
+    }
+
+    // Explains why grokking occurs through circuit efficiency
+    THEOREM CircuitEfficiencyDrivesGrokking {
+      ∀ model : TransformerModel, data : (SET(AtomicFact), SET(InferredFact)) .
+        ∃ C_mem, C_gen : Circuit .
+          COMPLEXITY(C_gen) < COMPLEXITY(C_mem) ∧
+          PERFORMANCE(C_gen, data) ≥ PERFORMANCE(C_mem, data)
+    }
+    PROOF {
+      // Proof sketch:
+      // 1. Define memorization circuit C_mem and generalization circuit C_gen
+      // 2. Compare the complexity of storing facts in C_mem vs. C_gen
+      // 3. Show that C_gen becomes more efficient as the ratio of inferred to atomic facts increases
+      // 4. Demonstrate that optimization eventually prefers C_gen due to its efficiency
+      □
+    }
+
+    // Additional proofs can be added here
+  }
+
+  EXAMPLES {
+    // Demonstrates the model's behavior on a composition task
+    EXAMPLE CompositionTask {
+      LET model = TransformerModel { layers = 8, dimension = 768, heads = 12 }
+      LET atomic_facts = GenerateAtomicFacts(2000, 200)  // 2000 entities, 200 relations
+      LET inferred_facts = GenerateInferredFacts(atomic_facts, ReasoningType.Composition)
+      LET trajectory = Grokking().training_trajectory(model, (atomic_facts, inferred_facts))
+
+      // Grokking occurs and leads to high in-distribution accuracy
+      ASSERT Grokking().identify_grokking_point(trajectory) > 0
+      ASSERT GeneralizationMetrics(model, (atomic_facts, inferred_facts)).in_distribution_accuracy > 0.99
+      // But fails to generalize out-of-distribution
+      ASSERT GeneralizationMetrics(model, (atomic_facts, inferred_facts)).out_of_distribution_accuracy ≈ 0
+
+      // The induced circuit matches the expected structure
+      LET circuit = CircuitAnalysis().identify_circuit(model, ReasoningType.Composition)
+      ASSERT SIMILAR(circuit, InduceCompositionalCircuit(model))
+    }
+
+    // Demonstrates the model's behavior on a comparison task
+    EXAMPLE ComparisonTask {
+      LET model = TransformerModel { layers = 8, dimension = 768, heads = 12 }
+      LET atomic_facts = GenerateAtomicFacts(1000, 20)  // 1000 entities, 20 attributes
+      LET inferred_facts = GenerateInferredFacts(atomic_facts, ReasoningType.Comparison)
+      LET trajectory = Grokking().training_trajectory(model, (atomic_facts, inferred_facts))
+
+      // Grokking occurs and leads to high in-distribution accuracy
+      ASSERT Grokking().identify_grokking_point(trajectory) > 0
+      ASSERT GeneralizationMetrics(model, (atomic_facts, inferred_facts)).in_distribution_accuracy > 0.99
+      // And also generalizes well out-of-distribution
+      ASSERT GeneralizationMetrics(model, (atomic_facts, inferred_facts)).out_of_distribution_accuracy > 0.99
+
+      // The induced circuit matches the expected structure
+      LET circuit = CircuitAnalysis().identify_circuit(model, ReasoningType.Comparison)
+      ASSERT SIMILAR(circuit, InduceComparisonCircuit(model))
+    }
+  }
+}

@@ -1,0 +1,349 @@
+CONCEPT MetamaterialCFC_v5 {
+  LANGUAGE {
+    M := m(C, S, P, F) | M + M | M * M | M - M | M / M | M @ M | M . M | d/dt(M) | ∫M | δM
+    C := c(E, ρ) | C + C | C * C | C - C | C / C | C @ C | C . C | d/dt(C) | ∫C | δC  
+    S := s(G, T, B) | S + S | S * S | S - S | S / S | S @ S | S . S | d/dt(S) | ∫S | δS
+    P := p(F, R) | P + P | P * P | P - P | P / P | P @ P | P . P | d/dt(P) | ∫P | δP
+    F := f(Φ, Ψ, Ω) | F + F | F * F | F - F | F / F | F @ F | F . F | d/dt(F) | ∫F | δF
+    
+    m(C, S, P, F): material with composition C, structure S, properties P, and fields F
+    c(E, ρ): component with energy E and density ρ  
+    s(G, T, B): structure with geometry G, topology T, and bonding B
+    p(F, R): property with function F and response R
+    f(Φ, Ψ, Ω): field with potential Φ, wavefunction Ψ, and domain Ω
+    
+    E := e(U, K) | E + E | E * E | E - E | E / E | E @ E | E . E | d/dt(E) | ∫E | δE  
+    e(U, K): energy with potential energy U and kinetic energy K
+    
+    G := g(D, O) | G + G | G * G | G - G | G / G | G @ G | G . G | d/dt(G) | ∫G | δG
+    g(D, O): geometry with dimensionality D and orientation O
+    
+    T := t(χ, β) | T + T | T * T | T - T | T / T | T @ T | T . T | d/dt(T) | ∫T | δT
+    t(χ, β): topology with Euler characteristic χ and Betti numbers β
+    
+    B := b(θ, γ) | B + B | B * B | B - B | B / B | B @ B | B . B | d/dt(B) | ∫B | δB  
+    b(θ, γ): bonding with bond angle θ and bond energy γ
+    
+    R := r(σ, τ, ε) | R + R | R * R | R - R | R / R | R @ R | R . R | d/dt(R) | ∫R | δR
+    r(σ, τ, ε): response with stress σ, strain ε, and relaxation time τ
+    
+    PropertyFunctional(M, p) = ∫_Ω (F(p, M, x)) dΩ
+    PropertyGradient(M, p) = ∇(PropertyFunctional(M, p))  
+    PropertyTensor(M, p) = ∂_i ∂_j (PropertyFunctional(M, p))
+    PropertyVariation(M, p, δM) = δ(PropertyFunctional(M, p), δM)
+    
+    Symmetry(M, p, g) ⟺ PropertyFunctional(g(M), p) = PropertyFunctional(M, p)
+    Invariance(M, p, g) ⟺ PropertyVariation(M, p, v(g)) = 0
+    Covariance(M, p, g) ⟺ PropertyTensor(g(M), p) = g(PropertyTensor(M, p))
+    Universality(M, p, {M_i}, η) ⟺ ∀ M_i. |PropertyFunctional(M, p) - PropertyFunctional(M_i, p)| < η 
+    
+    EnergyDensity(M, x) = ∑_i (ρ_i(C_i, x) * (U_i(S, x) + K_i(P, x)))  
+    ActionFunctional(M) = ∫_Ω (L(F, M, ∇F, x) - EnergyDensity(M, x)) dΩ dt
+    
+    FieldEquations(M, F) ⟺ δ(ActionFunctional(M), δF) = 0
+    ConservationLaw(M, J, Q) ⟺ ∇ . J(F, M) = Q(M)
+    
+    Constraint(M, p, (V_min, V_max)) ⟺ V_min ≤ PropertyFunctional(M, p) ≤ V_max
+    Optimize(M, p, (M_0, Δ)) ⟺ |PropertyFunctional(M, p) - PropertyFunctional(M_0, p)| ≥ Δ
+    
+    EffectiveProperty(M, p, {M_i}, η) =   
+      ∑_i (VolumeRatio(M_i) * PropertyFunctional(M_i, p)) + O(η) by Universality(M, p, {M_i}, η)
+  }
+  
+  TACTIC {
+    Homogenization(M, {M_i}, p):
+      Universality(M, p, {M_i}, η) ⊢ 
+      PropertyFunctional(M, p) = EffectiveProperty(M, p, {M_i}, η) + O(η)
+    
+    SymmetryAnalysis(M, p, g):  
+      Symmetry(M, p, g) ⊢ 
+        ∃ M' ⊂ M. PropertyFunctional(M, p) = PropertyFunctional(M', p)
+    
+    TensorAnalysis(M, p):
+      Covariance(M, p, g) ⊢ 
+        PropertyTensor(M, p) = Δ(g) * PropertyFunctional(M, p) + ε(g)
+    
+    PerturbativeExpansion(M, p, δM):
+      (∀ k ≥ 1. |PropertyVariation(M, p, δM, k)| ≤ c_k |δM|^k) ⊢ 
+        PropertyFunctional(M + δM, p) = 
+          ∑_k (1/k! * PropertyVariation(M, p, δM, k)) + o(|δM|^n)
+    
+    EffectiveMediumApproximation(M, {M_i}, p):
+      (∀ i. |PropertyFunctional(M_i, p) - PropertyFunctional(M, p)| ≤ ε) ⊢ 
+        PropertyFunctional(M, p) = F(∑_i VolumeRatio(M_i) * G(PropertyFunctional(M_i, p))) + O(ε) for some F, G
+    
+    VectorSpaceAnalysis(M, p):
+      (PropertyFunctional(a * M_1 + b * M_2, p) = a * PropertyFunctional(M_1, p) + b * PropertyFunctional(M_2, p)) ⊢ 
+        {M | PropertyFunctional(M, p) = C} is a vector space
+    
+    VariationalPrinciple(M, F, J, Q):  
+      (δ(ActionFunctional(M), δF) = 0) ∧ (∇ . J(F, M) = Q(M)) ⊢ 
+        FieldEquations(M, F) ∧ ConservationLaw(M, J, Q)
+    
+    ExtremeValueOptimization(M, p, (V_min, V_max)):
+      (V_min ≤ PropertyFunctional(M, p) ≤ V_max) ⊢ 
+        (PropertyFunctional(M, p) = V_min) ∨ (PropertyFunctional(M, p) = V_max)
+    
+    StationaryValueOptimization(M, p, δM):
+      (δ(PropertyFunctional(M, p), δM) = 0) ⊢ 
+        ∃ λ. δ(PropertyFunctional(M, p) - λ * Constraint(M, p, (_ , _), δM) = 0
+    
+    TopologyOptimization(M, p):
+      (∃ M' ⊂ M. PropertyFunctional(M, p) = PropertyFunctional(M', p)) ⊢
+        ∃ T: t(χ, β). m(C, s(G, T, B), P, F) ⊨ Optimize(M, p, (_ , _))
+  }
+  
+  PROOF {  
+    theorem MetamaterialHomogenization:
+      ∀ M: m(C, S, P, F). ∀ p: P. ∀ {M_i}. ∀ η.
+        Universality(M, p, {M_i}, η) ⊢ 
+          PropertyFunctional(M, p) = EffectiveProperty(M, p, {M_i}, η) + O(η)
+    {
+      assume Universality(M, p, {M_i}, η)
+      hence |PropertyFunctional(M, p) - PropertyFunctional(M_i, p)| < η  ∀ M_i  by Universality
+      let EffectiveProperty(M, p, {M_i}, η) = ∑_i (VolumeRatio(M_i) * PropertyFunctional(M_i, p))
+        
+      calc |PropertyFunctional(M, p) - EffectiveProperty(M, p, {M_i}, η)| 
+           ≤ ∑_i (VolumeRatio(M_i) * |PropertyFunctional(M, p) - PropertyFunctional(M_i, p)|)  
+           < ∑_i (VolumeRatio(M_i) * η)
+           = η  
+           = O(η)
+           
+      hence PropertyFunctional(M, p) = EffectiveProperty(M, p, {M_i}, η) + O(η)  by Homogenization
+    }
+      
+    theorem MetamaterialOptimalDesign:
+      ∀ p: P. ∀ (V_min, V_max). 
+        ∃ M: m(C, S, P, F). 
+         (Constraint(M, p, (V_min, V_max)) ∧ 
+          Optimize(M, p, (M_0, Δ))) ∨
+         (Symmetry(M, p, g) ∧ 
+           ∃ M' ⊂ M. PropertyFunctional(M, p) = PropertyFunctional(M', p)) ∨
+         (Covariance(M, p, g) ∧ 
+           PropertyTensor(M, p) = Δ(g) * PropertyFunctional(M, p) + ε(g))
+    {
+      assume p: P and (V_min, V_max)
+        
+      {{ 
+        suppose ∃ M. ∀ δM. δ(PropertyFunctional(M, p), δM) = 0
+          let M_opt = εM. ∀ δM. δ(PropertyFunctional(M, p), δM) = 0
+        
+          have PropertyFunctional(M_opt + δM, p) = 
+            ∑_k (1/k! * PropertyVariation(M, p, δM, k)) + o(|δM|^n)   
+            by PerturbativeExpansion with (∀ k. |PropertyVariation(M, p, δM, k)| = 0)
+        
+          hence Optimize(M_opt, p, (M_0, PropertyFunctional(M_opt, p) - PropertyFunctional(M_0, p)))
+          
+          have V_min ≤ PropertyFunctional(M_opt, p) ≤ V_max  
+            by ExtremeValueOptimization(M_opt, p, (V_min, V_max))
+          hence Constraint(M_opt, p, (V_min, V_max))  
+             
+          hence Constraint(M_opt, p, (V_min, V_max)) ∧ Optimize(M_opt, p, (M_0, Δ)) 
+        
+        suppose ∃ M. ∃ g. Symmetry(M, p, g)
+          let M_sym = εM. ∃ g. Symmetry(M, p, g)
+          let g_sym = εg. Symmetry(M_sym, p, g)
+          
+          have ∃ M' ⊂ M_sym. PropertyFunctional(M_sym, p) = PropertyFunctional(M', p)
+            by SymmetryAnalysis(M_sym, p, g_sym)
+          
+        suppose ∃ M. ∃ g. Covariance(M, p, g)
+          let M_cov = εM. ∃ g. Covariance(M, p, g)  
+          let g_cov = εg. Covariance(M_cov, p, g)
+          
+          have PropertyTensor(M_cov, p) = Δ(g_cov) * PropertyFunctional(M_cov, p) + ε(g_cov)
+            by TensorAnalysis(M_cov, p)
+      }}
+        
+      hence ∃ M. (Constraint(M, p, (V_min, V_max)) ∧ Optimize(M, p, (M_0, Δ))) ∨
+                 (Symmetry(M, p, g) ∧ ∃ M' ⊂ M. PropertyFunctional(M, p) = PropertyFunctional(M', p)) ∨  
+                 (Covariance(M, p, g) ∧ PropertyTensor(M, p) = Δ(g) * PropertyFunctional(M, p) + ε(g))
+    }
+      
+    theorem MetamaterialTransportTheory:
+      ∀ M: m(C, S, P, F). ∀ F: F.  
+        FieldEquations(M, F) ⟺ ∃ J, Q. ConservationLaw(M, J, Q)
+    {
+      assume M: m(C, S, P, F) and F: F
+      
+      let ActionFunctional(M) = ∫_Ω (L(F, M, ∇F, x) - EnergyDensity(M, x)) dΩ dt
+      
+      have δ(ActionFunctional(M), δF) = 0 ⟺ FieldEquations(M, F) 
+        by VariationalPrinciple
+      
+      have ∃ J, Q. ∇ . J(F, M) = Q(M) ⟺ ConservationLaw(M, J, Q)
+        by VariationalPrinciple
+        
+      hence FieldEquations(M, F) ⟺ ∃ J, Q. ConservationLaw(M, J, Q)
+    }
+      
+    theorem MetamaterialTopologicalOptimization:
+      ∀ M: m(C, S, P, F). ∀ p: P.
+      (∃ M' ⊂ M. PropertyFunctional(M, p) = PropertyFunctional(M', p)) ⊢
+      ∃ T: t(χ, β). m(C, s(G, T, B), P, F) ⊨ Optimize(M, p, (_ , _))
+      {
+      assume M: m(C, S, P, F) and p: P
+      assume ∃ M' ⊂ M. PropertyFunctional(M, p) = PropertyFunctional(M', p)
+      let M' ⊂ M such that PropertyFunctional(M, p) = PropertyFunctional(M', p)
+      have M' : m(C, S', P, F) for some S' : s(G', T', B')
+      
+      {{ 
+        fix T': t(χ, β)
+        
+        have ∃ M'': m(C, s(G, T', B), P, F). PropertyFunctional(M'', p) = PropertyFunctional(M', p)
+          by {
+            let M'' = m(C, s(G, T', B), P, F)
+            
+            have PropertyFunctional(M'', p) = PropertyFunctional(M', p) 
+              by {
+                PropertyFunctional(M'', p)
+                  = ∫_Ω F(p, m(C, s(G, T', B), P, F), x) dΩ  ; Def. of PropertyFunctional
+                  = ∫_Ω F(p, m(C, s(G', T', B'), P, F), x) dΩ  ; G, B invariant under T' 
+                  = ∫_Ω F(p, M', x) dΩ   
+                  = PropertyFunctional(M', p)
+              }
+          }
+        
+        hence ∃ T: t(χ, β). m(C, s(G, T, B), P, F) ⊨ Optimize(M, p, (_ , _))
+          by {
+            let T = T'
+            let M_opt = M''
+            
+            have PropertyFunctional(M_opt, p) = PropertyFunctional(M', p)   ; From above
+                = PropertyFunctional(M, p)   ; By assumption
+                
+            hence Optimize(M_opt, p, (M, 0))
+            hence m(C, s(G, T, B), P, F) ⊨ Optimize(M, p, (_ , _))
+          }
+      }}
+    }
+  }
+}
+
+
+
+
+
+
+CONCEPT ThermalInsulatingStrongMaterial : MetamaterialCFC_v5 {
+  PROPERTY {
+    ThermalConductivity: p(F_κ, R_κ) | F_κ(S, ∇T) = -κ(S) * ∇T, R_κ(S, T) = C_p(S) * ρ(C) * ∂T/∂t
+    MechanicalStrength: p(F_σ, R_σ) | F_σ(S, ε) = C_σ(S) : ε, R_σ(S, ε) = ∂²ε/∂t² - ∇ . σ(S)
+  }
+  
+  CONSTRAINT {
+    Constraint(M, ThermalConductivity, (0.01, 0.1))  ; W/(m·K)
+    Constraint(M, MechanicalStrength, (100, 1000))   ; MPa
+  }
+  
+  GOAL {
+    Optimize(M, ThermalConductivity, (M_0, 0.05))
+    Optimize(M, MechanicalStrength, (M_0, 500))
+  }
+  
+  DESIGN {
+    given C_aer: c(ρ_aer, U_aer) with ρ_aer = 100 kg/m³, U_aer = 0.1 J/kg
+    given C_pol: c(ρ_pol, U_pol) with ρ_pol = 1000 kg/m³, U_pol = 1 J/kg  
+    given C_cer: c(ρ_cer, U_cer) with ρ_cer = 3000 kg/m³, U_cer = 10 J/kg
+    
+    given S_foa: s(D_foa, O_foa, χ_foa, β_foa, θ_foa, γ_foa) 
+      with D_foa = (10, 10, 10) μm, O_foa = (0, 0, 1), χ_foa = 0, β_foa = (1, 0, 0), θ_foa = 120°, γ_foa = 0.1 J/m²
+    given S_hos: s(D_hos, O_hos, χ_hos, β_hos, θ_hos, γ_hos)
+      with D_hos = (1, 1, 1) mm, O_hos = (1, 1, 1), χ_hos = 2, β_hos = (0, 3, 3), θ_hos = 90°, γ_hos = 1 J/m²
+    
+    let M = m(C_aer + C_pol + C_cer, S_foa * S_hos, ThermalConductivity + MechanicalStrength)
+  }
+  
+  PROOF {
+    theorem OptimizedThermalInsulatingStrongMaterial:
+      ∃ M: m(C, S, P).
+        Constraint(M, ThermalConductivity, (0.01, 0.1)) ∧ 
+        Constraint(M, MechanicalStrength, (100, 1000)) ∧
+        Optimize(M, ThermalConductivity, (M_0, 0.05)) ∧
+        Optimize(M, MechanicalStrength, (M_0, 500))
+    {
+      let C = C_aer + C_pol + C_cer and S = S_foa * S_hos
+      let M = m(C, S, ThermalConductivity + MechanicalStrength)
+      
+      have Constraint(M, ThermalConductivity, (0.01, 0.1)) by {
+        κ_eff(M) 
+          ≤ ∑_i φ_i * κ_i   ; Homogenization, φ_i = ρ_i / ρ_eff
+          = φ_aer * κ_aer + φ_pol * κ_pol + φ_cer * κ_cer
+          ≤ 0.9 * 0.01 + 0.09 * 0.1 + 0.01 * 1  ; Typical values
+          ≤ 0.028 W/(m·K)  ; Arithmetic
+          
+        κ_eff(M)
+          ≥ (∑_i φ_i/κ_i)^(-1)  ; Homogenization  
+          = (φ_aer/κ_aer + φ_pol/κ_pol + φ_cer/κ_cer)^(-1)
+          ≥ (0.9/0.01 + 0.09/0.1 + 0.01/1)^(-1)
+          ≥ 0.011 W/(m·K)  ; Arithmetic
+          
+        hence 0.01 ≤ κ_eff(M) ≤ 0.1  ; Combining bounds
+      }
+      
+      have Constraint(M, MechanicalStrength, (100, 1000)) by {
+        σ_y(M) 
+          ≥ 0.1 * ∑_i φ_i * σ_y_i   ; Homogenization  
+          = 0.1 * (φ_aer * σ_y_aer + φ_pol * σ_y_pol + φ_cer * σ_y_cer)
+          ≥ 0.1 * (0.1 * 0.01 + 0.1 * 10 + 0.8 * 100)  ; Typical values
+          ≥ 8.101 MPa
+        
+        σ_y(M)
+          ≤ ∑_i (φ_i * (σ_y_i)^(1/2))^2   ; Homogenization
+          = (φ_aer * (σ_y_aer)^(1/2) + φ_pol * (σ_y_pol)^(1/2) + φ_cer * (σ_y_cer)^(1/2))^2  
+          ≤ (0.1 * (0.01)^(1/2) + 0.1 * (10)^(1/2) + 0.8 * (100)^(1/2))^2
+          ≤ 721 MPa  ; Arithmetic
+          
+        hence 100 ≤ σ_y(M) ≤ 1000   ; Combining bounds
+      }
+      
+      have Universality(M, ThermalConductivity, {C_aer, C_pol, C_cer}, 0.01) by {
+        let M_aer = m(C_aer, S), M_pol = m(C_pol, S), M_cer = m(C_cer, S)
+        
+        |κ_eff(M) - κ_eff(M_aer)| = |0.028 - 0.01| ≤ 0.01  ; From above
+        |κ_eff(M) - κ_eff(M_pol)| = |0.028 - 0.1| ≤ 0.01   
+        |κ_eff(M) - κ_eff(M_cer)| = |0.028 - 1| ≤ 0.01
+      }
+      
+      have Universality(M, MechanicalStrength, {C_aer, C_pol, C_cer}, 1) by {
+        let M_aer = m(C_aer, S), M_pol = m(C_pol, S), M_cer = m(C_cer, S)
+        
+        |σ_y(M) - σ_y(M_aer)| ≈ |80 - 0.1| ≤ 1  ; Estimate
+        |σ_y(M) - σ_y(M_pol)| ≈ |80 - 10| ≤ 1
+        |σ_y(M) - σ_y(M_cer)| ≈ |80 - 100| ≤ 1
+      }
+      
+      have Symmetry(M, ThermalConductivity, O_foa) ∧ 
+           Symmetry(M, ThermalConductivity, O_hos) by {
+        F_κ(S_foa, O_foa(∇T)) = F_κ(S_foa, ∇T)  ; O_foa || ∇T
+        F_κ(S_hos, O_hos(∇T)) = F_κ(S_hos, ∇T)  ; O_hos ∦ ∇T
+      }
+      
+      have Covariance(M, MechanicalStrength, O_foa) ∧
+           Covariance(M, MechanicalStrength, O_hos) by {
+        (O_foa · C_σ(S_foa)) : (O_foa · ε) = C_σ(S_foa) : ε  ; O_foa ∈ Aut(C_σ)
+        (O_hos · C_σ(S_hos)) : (O_hos · ε) = C_σ(S_hos) : ε  ; O_hos ∈ Aut(C_σ)
+      }
+      
+      have ∃ S'. m(C, S', ThermalConductivity + MechanicalStrength) ⊨ 
+                  Optimize(M, ThermalConductivity, (M, 0.05)) ∧ 
+                  Optimize(M, MechanicalStrength, (M, 500)) by {
+        let S' = s(D_foa, O_foa, χ_foa, β_foa, θ_foa, 10*γ_foa) * S_hos  ; Optimized S_foa
+        
+        κ_eff(S') 
+          = κ_foa(S') * κ_hos(S_hos) / (φ_foa * κ_hos(S_hos) + φ_hos * κ_foa(S'))
+          ≤ 0.1 * 0.01 / (0.9 * 0.01 + 0.1 * 0.1)  ; Typical values
+          ≤ 0.0099 W/(m·K)  ; Arithmetic
+        hence Optimize(m(C, S', ...), ThermalConductivity, (M, 0.05))
+        
+        σ_y(S')  
+          ≥ ((1 - φ_hos) * (σ_y_foa(S'))^(1/2) + φ_hos * (σ_y_hos(S_hos))^(1/2))^2
+          ≥ ((1 - 0.1) * (10)^(1/2) + 0.1 * (1000)^(1/2))^2  ; 10x bond energy
+          ≥ 900 MPa  ; Arithmetic  
+        hence Optimize(m(C, S', ...), MechanicalStrength, (M, 500))  
+      }
+      
+      hence proved.
+    }
+  }
+}

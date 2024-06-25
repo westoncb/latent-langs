@@ -1,0 +1,75 @@
+CONCEPT MapTerritoryDuality {
+  LANGUAGE {
+    type Map = Complete(Territory) | Approximate(Territory, ℝ) | Coarse(Territory, Scale)
+    type Territory
+    type Scale = ℝ | Inf
+    type Flow(Map, Map)
+    
+    notation "M ≈ᵋ T" = Approximate(M: Map, T: Territory, ϵ: ℝ)
+    notation "M ≈ₛ T" = Coarse(M: Map, T: Territory, s: Scale)  
+    notation "M ≡ T" = Complete(M: Map, T: Territory)
+    notation "M1 ⇝ M2" = Flow(M1: Map, M2: Map)
+    notation "T1 ⥲ T2" = Embed(T1: Territory, T2: Territory)
+    notation "σ(M)" = Scale(M: Map)
+    notation "ϕ(M1, M2)" = FlowFunction(M1: Map, M2: Map)
+    
+    axiom Completeness(M: Map, T: Territory): M ≡ T
+    axiom Approximation(M: Map, T: Territory, ϵ: ℝ): M ≈ᵋ T
+    axiom Coarsening(M: Map, T: Territory, s: Scale): M ≈ₛ T
+    axiom ScaleOrder(s1: Scale, s2: Scale): s1 ≤ s2
+    axiom FlowMorphism(M1, M2: Map): M1 ⇝ M2 => σ(M1) ≤ σ(M2)
+  }
+
+  STRUCTURE {
+    SymmetryBreaking(T: Territory, G: Group): {
+      M: Coarse(T, Scale) | 
+      ∃ φ: T -> M. Equivariant(φ, G)
+    }
+    
+    Emergence(T: Territory, ϵ: ℝ): {
+      M: Approximate(T, ϵ) | 
+      ∃ novel: M.Quantities, robust: (T.Quantities, M.Quantities) -> ℝ.
+        ¬Expressible(T, novel) ∧ HighRobustness(T.Quantities, M.Quantities, robust)  
+    }
+
+    RG(M: Map): {
+      Flow(M, Coarse(M, σ(M) + δ)) | δ > 0
+    }
+
+    Duality(M1, M2: Map): {
+      Flow(M1, M2), Flow(M2, M1) |
+      ∀ T: Territory. (M1 ≈ᵋ T ⟺ M2 ≈ᵋ ϕ⁻¹(T))
+    }
+    
+    Holography(bulk: Territory, boundary: Map): {
+      boundary ≈ᵋ bulk, 
+      ∀ s: Scale. ∃ bulkₛ ⥲ bulk. boundary ≈ₛ bulkₛ
+    }
+  }
+  
+  PROOFS {
+    theorem MapsTerritories:
+      ∀ T: Territory. ∃ M: Map. M ≡ T ∨ (∃ ϵ: ℝ. M ≈ᵋ T) ∨ (∃ s: Scale. M ≈ₛ T)
+      
+    theorem EmergenceFromCoarsening:
+      ∀ M: Map, T: Territory, s: Scale. 
+        M ≈ₛ T => Emergence(T, robustness(s))
+        
+    theorem EmergenceBreaksSymmetry:
+      ∀ T: Territory, G: Group, M: Map.
+        SymmetryBreaking(T, G) ∧ Emergence(T, ϵ) => 
+        ¬Equivariant(M.Quantities, G)
+        
+    theorem RGFlowIncreaseCoarse:
+      ∀ M: Map. RG(M) => σ(last(RG(M))) > σ(M)
+      
+    theorem DualityPreservesApproximation:
+      ∀ M1, M2: Map, T: Territory, ϵ: ℝ.
+        Duality(M1, M2) ∧ (M1 ≈ᵋ T) => (M2 ≈ᵋ ϕ⁻¹(T))
+        
+    theorem HolographyMeansEmergence:
+      ∀ bulk: Territory, boundary: Map, ϵ: ℝ.
+        Holography(bulk, boundary) => 
+        ∃ s: Scale. Emergence(bulkₛ, ϵ) ∧ (boundary ≈ₛ bulkₛ)
+  }
+}

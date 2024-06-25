@@ -1,0 +1,164 @@
+CONCEPT BinarySearchTree[Key, Value] {
+  LANGUAGE {
+    TYPE Node = (Key, Value, Option[Node], Option[Node])
+    TYPE BST = Option[Node]
+
+    FUNC Insert[T: BST, key: Key, value: Value]: BST
+    FUNC Search[T: BST, key: Key]: Option[Value]
+    FUNC Delete[T: BST, key: Key]: BST
+    FUNC Traverse[T: BST]: List[(Key, Value)]
+
+    PRED IsBST[T: BST]: Bool
+    AXIOM empty_is_bst: IsBST(None)
+    AXIOM node_is_bst[k: Key, v: Value, l r: BST]:
+      (l = None \/ (EXISTS (lk: Key, lv: Value, ll lr: BST) . l = Some((lk,lv,ll,lr)) /\ lk < k))
+      /\ (r = None \/ (EXISTS (rk: Key, rv: Value, rl rr: BST) . r = Some((rk,rv,rl,rr)) /\ k < rk))  
+      /\ IsBST(l) /\ IsBST(r)
+      => IsBST(Some((k,v,l,r)))
+  }
+
+  TRANSFORMERS {
+    FUNC InsertNode[node: BST, key: Key, value: Value]: BST =
+      MATCH node WITH
+      | None => Some((key, value, None, None))
+      | Some((k, v, l, r)) => IF key < k THEN Some((k, v, InsertNode(l, key, value), r))
+                              ELSE IF key > k THEN Some((k, v, l, InsertNode(r, key, value)))
+                              ELSE Some((k, value, l, r))
+    REWRITE Insert = InsertNode
+
+    FUNC SearchNode[node: BST, key: Key]: Option[Value] =
+      MATCH node WITH
+      | None => None  
+      | Some((k, v, l, r)) => IF key = k THEN Some(v)
+                              ELSE IF key < k THEN SearchNode(l, key)
+                              ELSE SearchNode(r, key)
+    REWRITE Search = SearchNode
+
+    FUNC DeleteNode[node: BST, key: Key]: BST =
+      MATCH node WITH
+      | None => None
+      | Some((k, v, l, r)) =>
+          IF key < k THEN Some((k, v, DeleteNode(l, key), r))
+          ELSE IF key > k THEN Some((k, v, l, DeleteNode(r, key)))  
+          ELSE MATCH (l, r) WITH
+               | (None, _) => r
+               | (_, None) => l
+               | _ => LET (mk, mv, ml, mr) = MinNode(r) IN
+                        Some((mk, mv, l, DeleteNode(r, mk)))
+
+    REWRITE Delete = DeleteNode
+
+    FUNC TraverseNode[node: BST]: List[(Key, Value)] =
+      MATCH node WITH
+      | None => []
+      | Some((k, v, l, r)) => TraverseNode(l) ++ [(k, v)] ++ TraverseNode(r)
+    REWRITE Traverse = TraverseNode
+
+    FUNC MinNode[node: Node]: Node =
+      MATCH node WITH
+      | (k, v, None, _) => (k, v, None, None)
+      | (_, _, Some(l), _) => MinNode(l)
+  }
+
+  STRUCTURE EmptyTree[] EXTENDS BinarySearchTree {
+    LET T: BST = None
+    REQUIRE empty_is_bst
+  }
+
+  STRUCTURE SingletonTree[key: Key, value: Value] EXTENDS BinarySearchTree {
+    LET T: BST = Some((key, value, None, None))
+    REQUIRE node_is_bst[key, value, None, None]
+  }
+
+  PROOFS {
+    THEOREM insert_preserves_bst[] {
+      STATEMENT:
+        FORALL (T: BST, k: Key, v: Value) . IsBST(T) => IsBST(Insert(T, k, v))
+      PROOF:
+        LET (T: BST, k: Key, v: Value)
+        ASSUME (A): IsBST(T)
+        SHOW IsBST(Insert(T, k, v)) BY Induction on T {
+          CASE None:
+            REWRITE Insert(None, k, v) = Some((k, v, None, None))
+            SHOW IsBST(Some((k, v, None, None))) BY empty_is_bst {}
+          CASE Some((x, y, l, r)):
+            REWRITE Insert(Some((x, y, l, r)), k, v)
+              = IF k < x THEN Some((x, y, Insert(l, k, v), r))
+                ELSE IF k > x THEN Some((x, y, l, Insert(r, k, v)))
+                ELSE Some((x, v, l, r))
+            ASSUME (B): IsBST(l), (C): IsBST(r)  
+            CASES k
+            CASE k < x:  
+              HAVE IsBST(Insert(l, k, v)) BY Inductive Hypothesis {B}
+              SHOW IsBST(Some((x, y, Insert(l, k, v), r))) BY node_is_bst {C}
+            CASE k > x:
+              HAVE IsBST(Insert(r, k, v)) BY Inductive Hypothesis {C}  
+              SHOW IsBST(Some((x, y, l, Insert(r, k, v)))) BY node_is_bst {B}
+            CASE k = x:
+              SHOW IsBST(Some((x, v, l, r))) BY node_is_bst {B, C}
+        }  
+        QED
+    }
+
+    THEOREM search_returns_value[] {
+      STATEMENT:
+        FORALL (T: BST, k: Key, v: Value) .
+          IsBST(T) /\ Search(T, k) = Some(v) <=> EXISTS (T': BST) . T = Insert(T', k, v)
+      PROOF:
+        LET (T: BST, k: Key, v: Value)  
+        SHOW IsBST(T) /\ Search(T, k) = Some(v) <=> EXISTS (T': BST) . T = Insert(T', k, v) {
+          ASSUME (A): IsBST(T) /\ Search(T, k) = Some(v)
+          HAVE Search(T, k) = Some(v) BY A
+          SHOW EXISTS (T': BST) . T = Insert(T', k, v) BY Induction on T {
+            CASE None:
+              REWRITE Search(None, k) = None
+              CONTRADICTION
+            CASE Some((x, y, l, r)):
+              CASES k  
+              CASE k < x:
+                REWRITE Search(Some((x, y, l, r)), k) = Search(l, k)
+                HAVE Search(l, k) = Some(v) BY A
+                HAVE EXISTS (l': BST) . l = Insert(l', k, v) BY Inductive Hypothesis
+                LET l' = CHOOSE (l': BST) . l = Insert(l', k, v)
+                LET T' = Some((x, y, l', r))
+                SHOW T = Insert(T', k, v)
+              CASE k > x:  
+                REWRITE Search(Some((x, y, l, r)), k) = Search(r, k)
+                HAVE Search(r, k) = Some(v) BY A
+                HAVE EXISTS (r': BST) . r = Insert(r', k, v) BY Inductive Hypothesis 
+                LET r' = CHOOSE (r': BST) . r = Insert(r', k, v)
+                LET T' = Some((x, y, l, r')) 
+                SHOW T = Insert(T', k, v)
+              CASE k = x:
+                REWRITE Search(Some((x, y, l, r)), x) = Some(y)  
+                HAVE y = v BY A
+                LET T' = Some((x, y, l, r))
+                SHOW T = Insert(T', k, v)
+          }
+          ASSUME (B): EXISTS (T': BST) . T = Insert(T', k, v)
+          LET T' = CHOOSE (T': BST) . T = Insert(T', k, v)
+          HAVE IsBST(T') BY insert_preserves_bst
+          HAVE IsBST(T) BY B, insert_preserves_bst
+          SHOW Search(T, k) = Some(v) BY Induction on T' {
+            CASE None:  
+              REWRITE T = Insert(None, k, v) = Some((k, v, None, None))
+              REWRITE Search(Some((k, v, None, None)), k) = Some(v)
+            CASE Some((x, y, l, r)):
+              CASES k
+              CASE k < x:
+                REWRITE T = Insert(Some((x, y, l, r)), k, v) = Some((x, y, Insert(l, k, v), r))
+                REWRITE Search(Some((x, y, Insert(l, k, v), r)), k) = Search(Insert(l, k, v), k)
+                HAVE Search(Insert(l, k, v), k) = Some(v) BY Inductive Hypothesis
+              CASE k > x:
+                REWRITE T = Insert(Some((x, y, l, r)), k, v) = Some((x, y, l, Insert(r, k, v)))
+                REWRITE Search(Some((x, y, l, Insert(r, k, v))), k) = Search(Insert(r, k, v), k)
+                HAVE Search(Insert(r, k, v), k) = Some(v) BY Inductive Hypothesis  
+              CASE k = x:
+                REWRITE T = Insert(Some((x, y, l, r)), x, v) = Some((x, v, l, r))
+                REWRITE Search(Some((x, v, l, r)), x) = Some(v)
+          }
+        }
+        QED
+    }
+  } 
+}

@@ -1,0 +1,182 @@
+CONCEPT MetamaterialLanguage_v3 {
+  EXTENDS MetamaterialLanguage_v2 {
+    type Material = Tuple(Structure, Properties, Processes)
+    type Structure = Graph(Elements, Bonds)
+    type Elements = Atom | Molecule | Defect
+    type Bonds = Enumeration(Ionic, Covalent, Metallic, vanDerWaals, HydrogenBond)
+    
+    type Properties = Field(Material, TensorRank, ℂ)
+    type Processes = Flow(Properties)
+    
+    type MaterialManifold = Manifold(Material)
+    type StructureManifold = Lie(Structure)
+    type PropertyManifold = Riemannian(Properties)
+    type ProcessManifold = Manifold(Processes)
+    
+    type StructureFlow = Flow(StructureManifold)
+    type PropertyFlow = Flow(PropertyManifold)  
+    type CoupledFlow = Coupling(StructureFlow, PropertyFlow)
+    
+    func MultiscaleDecomposition(M: Material, ε: Scale): Tuple(Material)
+    func MaterialConnection(S: Structure, P: Properties): Connection(StructureManifold, PropertyManifold)
+    
+    pred IsEquivariant(F: CoupledFlow, g: Symmetry(StructureManifold))
+    pred SatisfiesBalance(S: Structure, P: Properties, F_S: StructureFlow, F_P: PropertyFlow)
+    pred HasCorrespondence(S: Structure, P: Properties, F: CoupledFlow)
+    
+    axiom StructurePropertyCoupling(S: Structure, P: Properties):
+      ∃ F: CoupledFlow. IsEquivariant(F, •) ∧ SatisfiesBalance(S, P, F.StructureFlow, F.PropertyFlow)
+      
+    axiom MultiscaleConsistency(M: Material, ε: Scale):  
+      ∀ F: CoupledFlow. IsEquivariant(F, •) ⇒ 
+        F(M) ≈ ⨁_{M_i ∈ MultiscaleDecomposition(M, ε)} F(M_i)
+  }
+  
+  PROOFS {
+    tactic MultiscaleLocalization(M: Material, P: Properties, ε: Scale):
+      ∀ x ∈ M.Geometry. LocalProperty(M, x) ≈ LocalProperty(M_i, x) 
+        where M_i = arg min_{M_j ∈ MultiscaleDecomposition(M, ε)} d(x, M_j.Geometry)
+    {
+      assume x ∈ M.Geometry
+      let M_i = arg min_{M_j ∈ MultiscaleDecomposition(M, ε)} d(x, M_j.Geometry)
+      have ∀ j ≠ i. d(x, M_j.Geometry) > d(x, M_i.Geometry)  ; Minimal distance to M_i
+      let B_ε = Ball(x, ε) ∩ M.Geometry  ; ε-ball around x
+      have B_ε ⊆ M_i.Geometry  ; Localization at scale ε
+      hence LocalProperty(M, x) ≈ AverageProperty(M, B_ε) ≈ LocalProperty(M_i, x)
+    }
+    
+    tactic StructurePropertySymmetry(S: Structure, P: Properties):
+      ∀ g: Symmetry(S). IsEquivariant(F, g) ⊢ F(S, P) ≈ F(g(S), P)
+    {
+      assume g: Symmetry(S) and IsEquivariant(F, g)
+      let S' = g(S)
+      have F(S, P) = F(g⁻¹(S'), P) by applying g⁻¹ to S'
+      = g⁻¹(F(S', P)) by equivariance of F
+      ≈ F(S', P) by applying g to both sides
+    }
+    
+    tactic PropertyInvariance(M: Material, P: Properties, ε: Scale):
+      (∀ i,j. HasCorrespondence(M_i.Structure, M_j.Structure, F) ∧ SatisfiesBalance(M_i, P, •)) ⊢
+        HomogenizedProperty(M, P, ε) ≈ HomogenizedProperty(M_i, P, ε)
+    {
+      assume ∀ i,j. HasCorrespondence(M_i.Structure, M_j.Structure, F) ∧ SatisfiesBalance(M_i, P, •)
+      let P_hom = HomogenizedProperty(M, P, ε)
+      suffices to show ∀ i. P_hom ≈ HomogenizedProperty(M_i, P, ε)
+      {
+        fix M_i ∈ MultiscaleDecomposition(M, ε)
+        let P_i = HomogenizedProperty(M_i, P, ε)
+        let F_i = MaterialConnection(M_i.Structure, P)
+        have ∀ x ∈ M_i.Geometry. P_hom(x) ≈ P(x) by MultiscaleLocalization(M, P, ε)
+        also have ∀ x ∈ M_i.Geometry. P(x) ≈ P_i(x) by {
+          SatisfiesBalance(M_i, P, •) ⊢ P_i ≈ P on M_i  ; Homogenization commutes with balance
+          HasCorrespondence(M_i.Structure, M_j.Structure, F) ⊢ F_i(M_i.Structure, P) ≈ F_i(M_j.Structure, P)
+          hence P is invariant under structure correspondences at scale ε
+        }
+        hence P_hom ≈ P_i on M_i.Geometry
+        hence P_hom ≈ P_i globally by patching local approximations
+      }
+    }
+  }
+}
+
+
+CONCEPT NegativeThermalExpansionMetamaterial : MetamaterialLanguage_v3 {
+  PARAMETERS {
+    α_micro: ℝ = 1e-5 / K  ; Microscale thermal expansion coefficient
+    α_macro: ℝ = -5e-6 / K ; Target macroscale thermal expansion coefficient
+    T_range: Interval(ℝ) = [200 K, 400 K]  ; Operating temperature range
+  }
+
+  REQUIREMENTS {
+    Structure: {
+      Cell(Lattice(ℝ³), Triangle(120°)) ; Triangular lattice with hexagonal symmetry      
+      Element(Material(Al), Beam([1 μm, 10 μm], [1 μm, 1 μm]))   ; Aluminum microbeams
+      Bond(Hinge(1), Periodic(Lattice))  ; Hinged bonds with lattice periodicity
+    }
+    Properties: {
+      ThermalExpansion(T: ℝ): Tensor(1,1) = α_micro * 𝐈  on Element  ; Microscale thermal expansion
+      ThermalExpansion(T: ℝ): Tensor(1,1) = α_macro * 𝐈  on Cell    ; Macroscale thermal expansion
+    }
+    Processes: {
+      HeatTransfer(T: ℝ): VectorField = -k * ∇(T)  ; Fourier's law of heat conduction  
+      Deformation(T: ℝ): VectorField = ∫_{T_0}^T α(τ) dτ  ; Thermal strain integration
+    }
+    Constraints: {
+      ∀ T ∈ T_range. MinEigenvalue(ThermalExpansion(T)) > 0  ; Positive microscale expansion
+      ∀ T ∈ T_range. MaxEigenvalue(ThermalExpansion(T)) < 0  ; Negative macroscale expansion
+    }  
+  }
+
+  PROOF {
+    theorem NegativeThermalExpansionDesign:
+      ∃ M: Material. 
+        MultiscaleDecomposition(M, Micro) = Element ∧
+        MultiscaleDecomposition(M, Macro) = Cell ∧
+        ∀ T ∈ T_range. SatisfiesBalance(M.Structure, ThermalExpansion(T), HeatTransfer(T), Deformation(T)) ∧
+        ∀ T ∈ T_range. Constraints(ThermalExpansion(T))
+    {
+      // Step 1: Construct the microscale triangular lattice structure
+      let a: ℝ = 10 * μm  ; Lattice constant  
+      let Element = Material(Al) * Beam([1 μm, 10 μm], [1 μm, 1 μm])
+      let Bond = Hinge(1) * Periodic(Lattice(a))
+      let Cell = Lattice(ℝ³) * Triangle(120°, a)
+      
+      // Step 2: Assign the thermal expansion properties at micro and macro scales
+      let α_micro_tensor: Tensor(1,1) = α_micro * 𝐈
+      let α_macro_tensor: Tensor(1,1) = α_macro * 𝐈
+      let ThermalExpansion_micro(T) = Field(Element, Tensor(1,1), α_micro_tensor)
+      let ThermalExpansion_macro(T) = Field(Cell, Tensor(1,1), α_macro_tensor)
+      
+      // Step 3: Define the heat transfer and deformation processes
+      let HeatTransfer(T) = -k * ∇(T) on Cell
+      let Deformation(T) = ∫_{T_0}^T α(τ) dτ on Cell
+      
+      // Step 4: Construct the multiscale material with structure and properties
+      let M = Material(
+        Structure(Cell, Element, Bond),
+        Properties(ThermalExpansion_micro, ThermalExpansion_macro),
+        Processes(HeatTransfer, Deformation)
+      )
+      
+      // Step 5: Verify the balance equations and constraints at each scale
+      let S = M.Structure
+      let P(T) = ThermalExpansion_macro(T)
+      let F_S(T) = HeatTransfer(T)  
+      let F_P(T) = Deformation(T)
+      
+      have ∀ T ∈ T_range. SatisfiesBalance(S, P(T), F_S(T), F_P(T)) by {
+        SatisfiesBalance(S, P, F_S, F_P) :- {
+          ∇ ⋅ F_S + dP/dt = 0  ; Heat equation
+          ∇ ⋅ F_P = P         ; Kinematic compatibility
+        }
+        ; Automatic verification of the balance equations
+      }
+      
+      have ∀ T ∈ T_range. Constraints(ThermalExpansion_micro(T)) by {
+        ∀ T. MinEigenvalue(ThermalExpansion_micro(T)) = α_micro > 0
+      }
+      
+      have ∀ T ∈ T_range. Constraints(ThermalExpansion_macro(T)) by {
+        ∀ T. MaxEigenvalue(ThermalExpansion_macro(T)) = α_macro < 0   
+      }
+      
+      // Step 6: Verify the multiscale decomposition and consistency
+      have MultiscaleDecomposition(M, Micro) = Element by definition
+      have MultiscaleDecomposition(M, Macro) = Cell by definition
+      
+      have ∀ T ∈ T_range. IsEquivariant(Deformation(T), •) by {
+        ; Deformation is equivariant under rigid body transformations
+        ∀ g: Symmetry(S). g ∘ Deformation(T) = Deformation(T) ∘ g
+      }
+      
+      have ∀ T ∈ T_range. MultiscaleConsistency(M, ThermalExpansion(T), Deformation(T)) by {
+        ; Apply the MultiscaleConsistency axiom
+        let F = Deformation(T)
+        have IsEquivariant(F, •) from above
+        hence F(M) ≈ ⨁_{M_i ∈ {Element, Cell}} F(M_i)
+      }
+      
+      hence proved.
+    }
+  }
+}

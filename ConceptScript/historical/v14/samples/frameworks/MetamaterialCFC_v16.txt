@@ -1,0 +1,153 @@
+CONCEPT MetamaterialCFC_v16 {
+  LANGUAGE {
+    type Material = (Composition, Structure, Properties, Fields)
+    type Composition = (Energy, Density)
+    type Structure = (Geometry, Topology, Bonding)
+    type Properties = (Function, Response)
+    type Fields = (Potential, Wavefunction, Domain)
+    
+    type Energy = (Potential, Kinetic)
+    type Geometry = (Dimension, Orientation)
+    type Topology = (EulerCharacteristic, BettiNumbers)
+    type Bonding = (BondAngle, BondEnergy)
+    type Response = (Stress, Strain, RelaxationTime)
+
+    func PropertyFunctional(m: Material, p: Properties): Real = ∫(m.Fields.Domain, p.Function(p, m))
+    func PropertyGradient(m: Material, p: Properties): Tensor = ∇(PropertyFunctional(m, p))
+    func PropertyTensor(m: Material, p: Properties): Tensor = ∂(i, j, PropertyFunctional(m, p))
+    func PropertyVariation(m: Material, p: Properties, δm: Material): Real = δ(PropertyFunctional(m, p), δm)
+
+    func EnergyDensity(m: Material): Real = ∑(i, m.Composition.Density_i * (m.Structure.Potential_i + m.Properties.Kinetic_i))
+    func ActionFunctional(m: Material): Real = ∫(m.Fields.Domain, t, m.Fields.Lagrangian - EnergyDensity(m))
+
+    pred Symmetry(m: Material, p: Properties, g: Material -> Material) = PropertyFunctional(g(m), p) = PropertyFunctional(m, p)
+    pred Invariance(m: Material, p: Properties, g: Material -> Material) = PropertyVariation(m, p, v(g)) = 0
+    pred Covariance(m: Material, p: Properties, g: Material -> Material) = PropertyTensor(g(m), p) = g(PropertyTensor(m, p))
+    pred Universality(m: Material, p: Properties, m_i: [Material], η: Real) = ∀(m' ∈ m_i, |PropertyFunctional(m, p) - PropertyFunctional(m', p)| < η)
+
+    pred FieldEquations(m: Material, F: Fields) = δ(ActionFunctional(m), F) = 0
+    pred ConservationLaw(m: Material, J: Fields × Material -> Fields, Q: Material -> Real) = ∇•J(m.Fields, m) = Q(m)
+
+    pred Constraint(m: Material, p: Properties, a: Real, b: Real) = a ≤ PropertyFunctional(m, p) ≤ b
+    pred Optimize(m: Material, p: Properties, m₀: Material, Δ: Real) = |PropertyFunctional(m, p) - PropertyFunctional(m₀, p)| ≥ Δ
+
+    func EffectiveProperty(m: Material, p: Properties, m_i: [Material], η: Real): Real = 
+      ∑(i, Volume(m_i[i]) / Volume(m) * PropertyFunctional(m_i[i], p)) + O(η) given Universality(m, p, m_i, η)
+  }
+
+  STRUCTURE {
+    
+  }
+
+  PROOFS {
+    theorem MetamaterialHomogenization: 
+      ∀(M: Material, p: Properties, M_i: [Material], η: Real).
+        Universality(M, p, M_i, η) ⊢ PropertyFunctional(M, p) = EffectiveProperty(M, p, M_i, η) + O(η)
+    {
+      assume Universality(M, p, M_i, η)
+      hence ∀(M' ∈ M_i, |PropertyFunctional(M, p) - PropertyFunctional(M', p)| < η) by Universality
+
+      let EffProp = EffectiveProperty(M, p, M_i, η)
+      
+      |PropertyFunctional(M, p) - EffProp|
+        ≤ ∑(i, Volume(M_i[i])/Volume(M) * |PropertyFunctional(M, p) - PropertyFunctional(M_i[i], p)|) by Triangle Inequality
+        < ∑(i, Volume(M_i[i])/Volume(M) * η) by Universality
+        = η 
+        = O(η)
+
+      hence PropertyFunctional(M, p) = EffProp + O(η) by Definition of Effective Property
+    }
+
+    theorem MetamaterialOptimalDesign:
+      ∀(p: Properties, a: Real, b: Real).
+        ∃(M: Material, 
+          Constraint(M, p, a, b) ∧ Optimize(M, p, M₀, Δ) ∨
+          ∃(g: Material -> Material, M' ⊂ M, Symmetry(M, p, g) ∧ PropertyFunctional(M, p) = PropertyFunctional(M', p)) ∨  
+          ∃(g: Material -> Material, Covariance(M, p, g) ∧ PropertyTensor(M, p) = Δ(g) * PropertyFunctional(M, p) + ε(g)))
+    {
+      assume p: Properties, a: Real, b: Real
+      
+      {
+        suppose ∃(M: Material, ∀(δM: Material, δ(PropertyFunctional(M, p), δM) = 0))
+        let M_opt = ε(M: Material, ∀(δM: Material, δ(PropertyFunctional(M, p), δM) = 0))
+        
+        ∀(k: Nat, |PropertyVariation(M_opt, p, δM, k)| = 0) ⊢ 
+          PropertyFunctional(M_opt + δM, p) = 
+            ∑(k: Nat, 1/k! * PropertyVariation(M_opt, p, δM, k)) + o(|δM|^n) 
+            by PerturbativeExpansion
+        
+        hence Optimize(M_opt, p, M₀, PropertyFunctional(M_opt, p) - PropertyFunctional(M₀, p))
+        
+        Constraint(M_opt, p, a, b) by ExtremeValueOptimization
+        
+        hence Constraint(M_opt, p, a, b) ∧ Optimize(M_opt, p, M₀, Δ)
+      }
+
+      {
+        suppose ∃(M: Material, g: Material -> Material, Symmetry(M, p, g))
+        let M_sym = ε(M: Material, ∃(g: Material -> Material, Symmetry(M, p, g)))
+        let g_sym = ε(g: Material -> Material, Symmetry(M_sym, p, g))
+        
+        ∃(M' ⊂ M_sym, PropertyFunctional(M_sym, p) = PropertyFunctional(M', p)) by SymmetryAnalysis
+        
+        hence ∃(g: Material -> Material, M' ⊂ M_sym, 
+          Symmetry(M_sym, p, g) ∧ PropertyFunctional(M_sym, p) = PropertyFunctional(M', p))
+      }
+
+      {
+        suppose ∃(M: Material, g: Material -> Material, Covariance(M, p, g))
+        let M_cov = ε(M: Material, ∃(g: Material -> Material, Covariance(M, p, g)))
+        let g_cov = ε(g: Material -> Material, Covariance(M_cov, p, g)) 
+        
+        PropertyTensor(M_cov, p) = Δ(g_cov) * PropertyFunctional(M_cov, p) + ε(g_cov) by TensorAnalysis
+        
+        hence ∃(g: Material -> Material, 
+          Covariance(M_cov, p, g) ∧ PropertyTensor(M_cov, p) = Δ(g) * PropertyFunctional(M_cov, p) + ε(g))
+      }
+    }
+      
+    theorem MetamaterialTransportTheory:
+      ∀(M: Material, F: Fields).
+        FieldEquations(M, F) ⟺ ∃(J: Fields × Material -> Fields, Q: Material -> Real, ConservationLaw(M, J, Q))
+    {
+      assume M: Material, F: Fields
+      
+      (δ(ActionFunctional(M), F) = 0 ⟺ FieldEquations(M, F)) ∧ 
+      (∃(J: Fields × Material -> Fields, Q: Material -> Real, ∇•J(F, M) = Q(M)) ⟺ ConservationLaw(M, J, Q))
+        by VariationalPrinciple
+        
+      hence FieldEquations(M, F) ⟺ ∃(J: Fields × Material -> Fields, Q: Material -> Real, ConservationLaw(M, J, Q))
+    }
+      
+    theorem MetamaterialTopologicalOptimization:
+      ∀(M: Material, p: Properties).
+        (∃(M' ⊂ M, PropertyFunctional(M, p) = PropertyFunctional(M', p))) ⊢
+          ∃(T: Topology, (M with Structure.Topology := T) satisfies Optimize(M, p, _))
+    {
+      assume M: Material, p: Properties 
+      assume ∃(M' ⊂ M, PropertyFunctional(M, p) = PropertyFunctional(M', p))
+      
+      let M' ⊂ M such that PropertyFunctional(M, p) = PropertyFunctional(M', p)
+      M' is m(C, S', P, F) for some S': Structure
+      
+      {
+        fix T': Topology
+        
+        ∃(M'': Material, M'' = m(M.Composition, s(M.Structure.Geometry, T', M.Structure.Bonding), M.Properties, M.Fields),
+          PropertyFunctional(M'', p) = PropertyFunctional(M', p)) by {
+            
+            PropertyFunctional(M'', p) 
+              = ∫(M''.Fields.Domain, p.Function(p, M''))
+              = ∫(M'.Fields.Domain, p.Function(p, M'))   ; Geometry, Bonding invariant under T'
+              = PropertyFunctional(M', p)
+          }
+        
+        hence ∃(T: Topology, (M with Structure.Topology := T) satisfies Optimize(M, p, _)) by {
+          let M_opt = M'' 
+          PropertyFunctional(M_opt, p) = PropertyFunctional(M', p) = PropertyFunctional(M, p)
+          hence Optimize(M_opt, p, (M, 0))
+        }
+      }
+    }
+  }
+}

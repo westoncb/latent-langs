@@ -1,0 +1,101 @@
+CONCEPT HybridReasoningFramework {
+  LANGUAGE {
+    ; Reasoning system components
+    type S = L × I × T × P × D
+    type L    ; Language
+    type I    ; Inference rules
+    type T    ; Theorems 
+    type P    ; Proofs
+    type D    ; Domain-specific knowledge
+    
+    ; Domain-specific language extensions
+    type E    ; Entities
+    type R    ; Relations
+    type A    ; Attributes
+    type F    ; Functions
+    
+    ; Semantic interpretation and domain grounding
+    func ⟦_⟧ : L -> M
+    func γ : E -> M
+    
+    ; Relation and function definitions
+    pred Rel(r) ⊆ E^n
+    func Func(f) : E^n -> A
+    
+    ; Axioms and rules over domain language
+    Axiom : L
+    Rule : L -> L
+    
+    ; Hybrid inference rules
+    DomainAxiom : D -> L
+    DomainRule : D -> (L -> L)
+    
+    ; Proof tactics with domain knowledge
+    By : D -> L -> L -> L
+    Have : D -> L -> L
+    
+    ; Soundness and consistency checks
+    pred Sound(S) = ∀p : P. (∅ ⊢ p) -> (∀M. M ⊨ ⟦p⟧)
+    pred Consistent(S) = ¬(∅ ⊢ ⊥)
+  }
+  
+  STRUCTURE {
+    ; Axioms and rules are sound wrt semantics
+    ∀a : Axiom. ∀M. M ⊨ ⟦a⟧
+    ∀r : Rule. ∀M. (M ⊨ ⟦a⟧) -> (M ⊨ ⟦r(a)⟧)
+    
+    ; Domain axioms and rules preserve soundness
+    ∀d : D, a : Axiom. Sound(S) -> Sound(S with L := L ∪ {DomainAxiom(d)})  
+    ∀d : D, r : Rule.  Sound(S) -> Sound(S with I := I ∪ {DomainRule(d)})
+    
+    ; Relation and function definitions are grounded
+    ∀r : R. ∀e1..en : E. Rel(r)(e1..en) <-> (γ(e1),..,γ(en)) ∈ ⟦r⟧
+    ∀f : F. ∀e1..en : E. Func(f)(e1..en) = a <-> ⟦f⟧(γ(e1),..,γ(en)) = γ(a)
+  }
+  
+  PROOFS {
+    theorem DomainKnowledgePreservesConsistency: 
+      ∀S : S, d : D. Consistent(S) -> Consistent(S with L := L ∪ {DomainAxiom(d)})
+    {
+      assume S : S, d : D
+      assume Consistent(S)
+      
+      assume ∅ ⊢ ⊥ in (S with L := L ∪ {DomainAxiom(d)})
+      have DomainAxiom(d) ∈ (L ∪ {DomainAxiom(d)})
+      then ∅ ⊢ DomainAxiom(d)
+      
+      obtain M by Soundness with M ⊨ ⟦DomainAxiom(d)⟧
+      have M ⊨ ⟦⊥⟧  ; by assumption
+      contradiction  ; no model satisfies ⊥
+    }
+    
+    theorem DomainRulesPreserveEntailment:
+      ∀S : S, d : D, r : Rule, a : L. (∅ ⊢ a) -> (∅ ⊢ DomainRule(d)(a))
+    {
+      assume S : S, d : D, r : Rule, a : L
+      assume ∅ ⊢ a
+      
+      obtain ∀M. M ⊨ ⟦a⟧ by Soundness
+      have ∀M. M ⊨ ⟦DomainRule(d)(a)⟧  ; by domain rule soundness
+      hence ∅ ⊢ DomainRule(d)(a)        ; by Completeness
+    }
+    
+    theorem HybridProofExample:
+      ∀e1, e2 : E, r1, r2 : R, f : F, a : A.
+        Rel(r1)(e1, e2) ∧ Func(f)(e1) = a ∧ (∀x. Rel(r1)(x, e2) -> Rel(r2)(x, e2)) ->
+        Rel(r2)(e1, e2)
+    {
+      assume e1, e2 : E, r1, r2 : R, f : F, a : A
+      assume Rel(r1)(e1, e2) and Func(f)(e1) = a and ∀x. Rel(r1)(x, e2) -> Rel(r2)(x, e2)
+      
+      By DomainAxiom("Entities related by r1 with common attribute a are also related by r2")
+      Have Rel(r1)(e1, e2) ∧ Func(f)(e1) = a -> Rel(r2)(e1, e2)
+      
+      By DomainRule("Attributes determine entity relationships")
+      Have ∀x. Func(f)(x) = a ∧ Rel(r1)(x, e2) -> Rel(r2)(x, e2)
+      
+      By Assumption and MP
+      Have Rel(r2)(e1, e2)
+    }
+  }
+}

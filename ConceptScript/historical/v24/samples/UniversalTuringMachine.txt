@@ -1,0 +1,97 @@
+CONCEPT UniversalTuringMachine {
+  LANGUAGE {
+    TYPE Symbol
+    TYPE State
+    TYPE Tape = List(Symbol)
+    TYPE Configuration = (State, Tape, Tape)
+    TYPE Transition = Configuration ⊸ Configuration
+
+    CLASS Monoid(M) {
+      mempty : M
+      mappend : M -> M -> M
+    }
+
+    INSTANCE Monoid(Tape) {
+      mempty = []
+      mappend = Append
+    }
+
+    FUNC Append : Tape -> Tape -> Tape
+    Append([], ys) = ys
+    Append(x :: xs, ys) = x :: Append(xs, ys)
+
+    FUNC Step : Transition -> Configuration ⊸ Configuration
+    Step(t, c) = t(c)
+
+    FUNC Run : List(Transition) -> Configuration ⊸ Configuration
+    Run([], c) = c
+    Run(t :: ts, c) = Run(ts, Step(t, c))
+
+    REWRITE Assoc((xs ++ ys) ++ zs) = xs ++ (ys ++ zs)
+  }
+
+  STRUCTURE {
+    DEF InitialConfig(s, input) = (s, [], input)
+
+    DEF FinalConfig(s, output) = (s, output, [])
+
+    DEF Accepts(M, input) = 
+      ∃ (s : State) (output : Tape). Run(M, InitialConfig(InitialState, input)) = FinalConfig(s, output)
+  }
+
+  PROOFS {
+    THEOREM Correctness {
+      STATEMENT: ∀ (M : List(Transition)) (input output : Tape).
+        Accepts(M, input) ->
+        ∃ (s : State). Run(M, InitialConfig(InitialState, input)) = FinalConfig(s, output) ->
+        Decides(M, input, output)
+      WHERE
+        Decides(M, input, output) =
+          Accepts(M, input) ∧ FinalConfig(FinalState, output) = Run(M, InitialConfig(InitialState, input))
+
+      PROOF:
+        LET M : List(Transition), input output : Tape
+        ASSUME Accepts(M, input)
+        HAVE ∃ (s : State). Run(M, InitialConfig(InitialState, input)) = FinalConfig(s, output) BY ASSUMPTION
+        LET s : State
+        ASSUME Run(M, InitialConfig(InitialState, input)) = FinalConfig(s, output)
+        SHOW Decides(M, input, output) BY {
+          HAVE Accepts(M, input) BY ASSUMPTION
+          HAVE FinalConfig(s, output) = Run(M, InitialConfig(InitialState, input)) BY ASSUMPTION
+          REWRITE FinalConfig(s, output) = FinalConfig(FinalState, output) BY Definition(FinalState)
+          SHOW FinalConfig(FinalState, output) = Run(M, InitialConfig(InitialState, input))
+        }
+    }
+
+    THEOREM Compositionality {
+      STATEMENT: ∀ (M1 M2 : List(Transition)) (input output1 output2 : Tape).
+        Decides(M1, input, output1) ->
+        Decides(M2, output1, output2) ->
+        Decides(M1 ++ M2, input, output2)
+
+      PROOF:
+        LET M1 M2 : List(Transition), input output1 output2 : Tape
+        ASSUME Decides(M1, input, output1), 
+               Decides(M2, output1, output2)
+        SHOW Decides(M1 ++ M2, input, output2) BY {
+          HAVE Accepts(M1, input) BY ASSUMPTION
+          HAVE FinalConfig(FinalState, output1) = Run(M1, InitialConfig(InitialState, input)) BY ASSUMPTION
+          HAVE Accepts(M2, output1) BY ASSUMPTION
+          HAVE FinalConfig(FinalState, output2) = Run(M2, InitialConfig(InitialState, output1)) BY ASSUMPTION
+          REWRITE Run(M1 ++ M2, InitialConfig(InitialState, input))
+            = Run(M2, Run(M1, InitialConfig(InitialState, input))) BY {
+              Run(M1 ++ M2, InitialConfig(InitialState, input))
+              = Run(M1 ++ M2, (InitialState, [], input))
+              = Run(M2, Run(M1, (InitialState, [], input))) BY Definition(Run)
+            }
+          REWRITE Run(M1, InitialConfig(InitialState, input))
+            = FinalConfig(FinalState, output1) BY ASSUMPTION
+          REWRITE Run(M2, FinalConfig(FinalState, output1))
+            = Run(M2, InitialConfig(InitialState, output1)) BY Definition(FinalConfig)
+          REWRITE Run(M2, InitialConfig(InitialState, output1))
+            = FinalConfig(FinalState, output2) BY ASSUMPTION
+          SHOW FinalConfig(FinalState, output2) = Run(M1 ++ M2, InitialConfig(InitialState, input))
+        }
+    }
+  }
+}

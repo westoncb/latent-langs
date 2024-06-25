@@ -1,0 +1,187 @@
+PAPER DeepSeekMoE
+
+
+ConceptScript v25
+
+<Concept> ::= "CONCEPT" <ConceptName> ["[" <Params> "]"] [":" <ParentConcept>] "{"
+               <Background>
+               <Architecture>
+               <Experiments>
+               <Analysis>
+               <Conclusions>  
+             "}"
+
+<Background> ::= "BACKGROUND" "{"
+                   <PriorWork>
+                   <Motivation> 
+                 "}"
+
+<PriorWork> ::= "PRIOR_WORK" "{"
+                  (<PaperSummary>)+
+                "}"
+
+<PaperSummary> ::= "PAPER" <PaperName> "{"
+                     <PaperIdeas>
+                   "}"
+                   
+<PaperIdeas> ::= (<IdeaSummary>)+
+
+<IdeaSummary> ::= "IDEA" <IdeaName> ":" <Description>                  
+
+<Motivation> ::= "MOTIVATION" "{"
+                   <ProblemStatement>
+                   <ProposedApproach>
+                 "}"
+
+<ProblemStatement> ::= "PROBLEM" ":" <Description>
+
+<ProposedApproach> ::= "PROPOSED_APPROACH" ":" <Description>
+                 
+<Architecture> ::= "ARCHITECTURE" "{"
+                     (<ArchitectureComponent>)+
+                   "}"
+
+<ArchitectureComponent> ::= <ComponentName> "{"
+                              (<Attribute>)+
+                              (<Equation>)*
+                              (<Explanation>)*
+                            "}"
+                            
+<Attribute> ::= "ATTRIBUTE" <AttributeName> ":" <AttributeDefinition>                            
+                   
+<Equation> ::= "EQUATION" <EquationName> ":" <EquationDefinition>
+
+<Explanation> ::= "EXPLANATION" ":" <Description>
+  
+<Experiments> ::= "EXPERIMENTS" "{"
+                    (<ExperimentalSetup>)?
+                    (<ExperimentalResult>)+
+                    (<Ablation>)*
+                    (<AnalysisItem>)*
+                  "}"
+
+<ExperimentalSetup> ::= "EXPERIMENTAL_SETUP" "{"
+                          (<Hyperparameter>)+  
+                          (<Dataset>)+
+                          (<Baseline>)+
+                          (<EvaluationMetric>)+
+                        "}"
+
+<Hyperparameter> ::= "HYPERPARAMETER" <HyperparameterName> ":" <HyperparameterValue>
+  
+<Dataset> ::= "DATASET" <DatasetName> ":" <DatasetDescription>
+
+<Baseline> ::= "BASELINE" <BaselineName> ":" <BaselineDescription>  
+
+<EvaluationMetric> ::= "EVALUATION_METRIC" <MetricName> ":" <MetricDescription>
+  
+<ExperimentalResult> ::= "RESULT" "{"  
+                           (<ModelResult>)+
+                           <Conclusion>
+                         "}"
+                         
+<ModelResult> ::= "MODEL" <ModelName> "{"
+                    (<MetricResult>)+  
+                  "}"
+                  
+<MetricResult> ::= "METRIC" <MetricName> ":" <MetricValue>                  
+
+<Conclusion> ::= "CONCLUSION" ":" <Description>
+
+<Ablation> ::= "ABLATION" ":" <Description>
+
+<AnalysisItem> ::= "ANALYSIS" <AnalysisName> ":" <Description>
+  
+<Analysis> ::= "ANALYSIS" "{"
+                 (<AnalysisItem>)+
+               "}"
+
+<Conclusions> ::= "CONCLUSIONS" "{"
+                    (<Conclusion>)+  
+                    (<FutureWork>)?
+                  "}"
+
+<FutureWork> ::= "FUTURE_WORK" ":" <Description>
+
+
+
+
+
+CONCEPT DeepSeekMoE {
+  BACKGROUND {
+    PRIOR_WORK {
+      PAPER GShard {
+        IDEA Top2Routing: Each token is assigned to the top 2 experts based on learned routing scores.
+      }
+      PAPER SwitchTransformer {
+        IDEA Top1Routing: Each token is assigned to the top 1 expert based on learned routing scores.
+      }
+    }
+    
+    MOTIVATION {
+      PROBLEM: Existing MoE architectures suffer from knowledge hybridity and knowledge redundancy, which limit expert specialization. 
+      PROPOSED_APPROACH: DeepSeekMoE aims to achieve ultimate expert specialization through fine-grained expert segmentation and shared expert isolation.
+    }
+  }
+  
+  ARCHITECTURE {
+    FineGrainedExperts {
+      ATTRIBUTE NumExperts: 𝑚𝑁, where 𝑁 is the number of original experts and 𝑚 is the segmentation factor.
+      ATTRIBUTE NumActivatedExperts: 𝑚𝐾, where 𝐾 is the number of activated experts in the original architecture.
+      EXPLANATION: Each original expert is split into 𝑚 smaller experts. More experts are activated to keep computation cost constant.
+    }
+    
+    SharedExperts {  
+      ATTRIBUTE NumSharedExperts: 𝐾𝑠, a subset of experts isolated as shared experts. 
+      ATTRIBUTE NumRoutedExperts: 𝑚𝑁 − 𝐾𝑠, the remaining experts used for routing.
+      EXPLANATION: Shared experts are always activated to capture common knowledge and reduce redundancy in routed experts.
+    }
+    
+    Router {
+      EQUATION ExpertScores: 𝑠𝑖,𝑡 = Softmax𝑖(u𝑙𝑡𝑇 · e𝑙𝑖), where u𝑙𝑡 is the token embedding and e𝑙𝑖 is the expert embedding.
+      EQUATION GateValues: 𝑔𝑖,𝑡 = I[𝑠𝑖,𝑡 ∈ Topk({𝑠𝑗,𝑡|𝐾𝑠 + 1 ⩽ 𝑗 ⩽ 𝑚𝑁}, 𝑚𝐾 − 𝐾𝑠)] · 𝑠𝑖,𝑡, where I is the indicator function.
+    }
+    
+    LoadBalanceLosses {
+      EQUATION ExpertLoss: ℒexpbal = 𝛼1𝑁′ · ∑𝑖 𝑓𝑖 𝑃𝑖, where 𝑓𝑖 is the fraction of tokens assigned to expert 𝑖 and 𝑃𝑖 is the average of 𝑠𝑖,𝑡.
+      EQUATION DeviceLoss: ℒdevbal = 𝛼2 · ∑𝐷𝑖 𝑓′𝑖 𝑃′𝑖, where 𝑓′𝑖 and 𝑃′𝑖 are aggregated 𝑓𝑖 and 𝑃𝑖 within each device.
+      EXPLANATION: ExpertLoss encourages balanced assignment of tokens to experts. DeviceLoss encourages balanced computation across devices.
+    }
+  }
+  
+  EXPERIMENTS {
+    EXPERIMENTAL_SETUP {
+      HYPERPARAMETER ExpertParams: Number of parameters per expert.
+      HYPERPARAMETER BaseParams: Number of parameters in the base model (non-expert parameters).
+      DATASET TrainingCorpus: A large-scale multilingual corpus created by DeepSeek-AI with 2T tokens.
+      BASELINE Dense: Standard dense Transformer model. 
+      BASELINE GShard: MoE model following GShard architecture.
+      EVALUATION_METRIC Accuracy: Classification accuracy on downstream tasks.
+      EVALUATION_METRIC Perplexity: Language modeling perplexity on the Pile test set.
+    }
+    
+    RESULT {
+      MODEL DeepSeekMoE {
+        METRIC Accuracy: Achieves comparable or better accuracy than baselines on most tasks.
+        METRIC Perplexity: Achieves lower perplexity than GShard baseline.  
+      }
+      CONCLUSION: DeepSeekMoE outperforms GShard and matches performance of larger dense models with significantly fewer FLOPS.
+    }
+    
+    ABLATION: Removing shared experts leads to large perplexity increase, showing their importance for capturing common knowledge.
+    
+    ABLATION: Increasing 𝑚 (finer-grained experts) consistently improves downstream accuracy.
+    
+    ANALYSIS ExpertSpecialization: DeepSeekMoE achieves higher expert specialization than GShard, measured by lower expert redundancy and more accurate knowledge acquisition.
+  }
+  
+  ANALYSIS {
+    ANALYSIS ScalabilityAndTransferability: DeepSeekMoE scales favorably to 16B parameters and is effectively transferable to downstream tasks via finetuning.
+  }
+  
+  CONCLUSIONS {
+    CONCLUSION: The DeepSeekMoE architecture achieves strong performance through ultimate expert specialization using fine-grained expert segmentation and shared expert isolation.
+    
+    FUTURE_WORK: Explore scaling DeepSeekMoE to even larger model sizes beyond 16B parameters.
+  }
+}

@@ -1,0 +1,108 @@
+CONCEPT RecursiveAutonomousLearning {
+  LANGUAGE {
+    TYPE Observation
+    TYPE Action 
+    TYPE Reward = ℝ
+    TYPE Transition = (Observation, Action, Reward, Observation)
+    TYPE Trajectory = List[Transition]
+    TYPE Goal = Predicate[Observation]
+    
+    TYPE Model = (Observation, Action) -> Distribution[(Reward, Observation)]
+    TYPE Policy = Observation -> Distribution[Action]
+    TYPE ValueFunction = (Observation, Goal) -> ℝ
+    
+    TYPE Planner = (Model, Observation, Goal, ValueFunction) -> Policy
+    TYPE GoalGenerator = (Model, Policy, ValueFunction) -> Distribution[Goal]
+    
+    FUNC Optimize : (α : Policy -> ℝ) -> Policy
+    FUNC ImaginedRollout : (Model, Policy, Observation, Nat) -> Trajectory
+
+    FUNC UpdateModel : (Model, Trajectory) -> Model
+    FUNC UpdateValueFunction : (ValueFunction, Trajectory, Goal) -> ValueFunction
+
+    FUNC Explore : (Model, Policy) -> Trajectory 
+    FUNC Exploit : (Model, Observation, Goal) -> (Policy, Trajectory)
+
+    FUNC Iterate : (Model, Policy, ValueFunction, GoalGenerator) -> (Model, Policy, ValueFunction) = λ M P V G.
+      LET g ~ G(M, P, V)
+      (π, τ) = MATCH Exploit(M, CurrentObservation(), g) WITH
+                | Some(π, τ) -> (π, τ) 
+                | None -> (P, Explore(M, P))
+      UpdateValueFunction(V, τ, g)
+      M' = UpdateModel(M, τ)
+      P' = Optimize(λ π. 𝔼 (o : Observation) V(o, g)
+                          WHERE o ~ Transition(LastState(τ), π(LastState(τ)))[1])
+      (M', P', V)
+  }
+
+  PROOFS {
+    THEOREM Convergence {
+      STATEMENT:
+        ∃ (M* : Model) (π* : Policy) (V* : ValueFunction).
+          ∀ (ε : ℝ⁺) (M₀ : Model) (π₀ : Policy) (V₀ : ValueFunction) (G : GoalGenerator). 
+            LET (Mₙ, πₙ, Vₙ) = Iterate^n(M₀, π₀, V₀, G)
+            IN  ∃ (N : Nat). ∀ (n : Nat). n ≥ N =>
+                  |Mₙ - M*| < ε ∧ |πₙ - π*| < ε ∧ |Vₙ - V*| < ε
+
+      PROOF:
+        LET (M, π, V) = (M₀, π₀, V₀), G = G
+        
+        DEFINE δₘ = λ n. |Mₙ - M*|, δᵥ = λ n. |πₙ - π*|, δₚ = λ n. |Vₙ - V*|  
+        DEFINE δ = λ n. max(δₘ(n), δᵥ(n), δₚ(n))
+
+        EXISTS M* : Model, π* : Policy, V* : ValueFunction SUCH THAT
+          ∀ (g : Goal) (o : Observation) (a : Action).
+            LET μ = M*(o, a), Q*(o, a) = 𝔼 (r, o') ~ μ. [ r + V*(o', g) ]  
+            IN  π*(o)[a] > 0 <=> a ∈ argmax (a' : Action) Q*(o, a')             -- Bellman optimality
+                V*(o, g) = max (a : Action) Q*(o, a)                           -- Q-value consistency
+        
+        LET γ : ℝ ∈ (0, 1), λ : ℝ ∈ (0, 1)
+        
+        HAVE ∀ (n : Nat).
+          δₘ(n+1) ≤ γ * δₘ(n) + λ * δ(n)
+            BY LipschitzContinuity(UpdateModel)
+          δᵥ(n+1) ≤ γ * δᵥ(n) + λ * δ(n) 
+            BY LipschitzContinuity(UpdateValueFunction), PolicyImprovement
+          δₚ(n+1) ≤ δₚ(n)
+            BY ValueFunctionConsistency, GreedyImprovement
+        
+        HENCE ∀ (n : Nat).  
+          δ(n+1) ≤ max(γ, λ) * δ(n)
+
+        LET ρ = max(γ, λ) ∈ (0, 1)
+
+        HAVE ∀ (n : Nat).
+          δ(n) ≤ ρ^n * δ(0)
+            BY Induction
+
+        LET ε > 0, N = Ceil(Log(ε / δ(0)) / Log(ρ))
+        
+        FORALL (n : Nat).
+          n ≥ N  
+            => ρ^n ≤ ρ^N ≤ ε / δ(0)          BY MonotonicDecreasing(λ n. ρ^n), Definition(N)
+            => δ(n) ≤ ρ^n * δ(0) ≤ ε        BY ABOVE
+            => |Mₙ - M*| < ε ∧ 
+               |πₙ - π*| < ε ∧ 
+               |Vₙ - V*| < ε                  BY EXPANDING δ(n)
+    }
+  }
+}
+
+This Concept, called RecursiveAutonomousLearning, outlines a general architecture for open-ended learning and reasoning in AI systems. The key ideas are:
+
+The system maintains a model of its environment (M), a behavioral policy (P), a value function estimating future reward (V), and a goal generator (G).
+The system iteratively updates its model and value function based on experience, optimizes its policy to maximize estimated reward, and generates its own learning goals and subgoals.
+The goal generator produces target states or predicates for the system to pursue, guiding exploration and skill acquisition. Goals can be externally specified or autonomously generated based on curiosity, uncertainty reduction, learning progress, etc.
+The system can flexibly switch between exploration (gathering novel experience) and exploitation (optimizing for a specific goal) depending on its confidence in achieving the current goal.
+By recursively setting subgoals for itself and refining its world model and policy, the system can incrementally bootstrap increasingly complex skills and behaviors, without the need for explicit human supervision at every step.
+
+Some potential benefits of this architecture include:
+
+Open-endedness: The system can continuously expand its knowledge and abilities in a self-directed way, not limited to a fixed set of tasks or rewards.
+Sample efficiency: By learning a rich world model and using it to imagine counterfactual experiences, the system can learn from far less real-world interaction compared to model-free approaches.
+Transfer learning: The learned models and skills can be reused and adapted to solve novel problems, enabling efficient transfer learning.
+Interpretability: By explicitly representing goals, models, and value functions, the system's decision making process is more transparent and amenable to analysis and verification compared to black-box neural networks.
+
+Theoretical results like the Convergence proof sketch show that under certain assumptions, this architecture is guaranteed to converge to optimal models and policies as the amount of experience grows.
+In terms of practical applications, I believe this kind of open-ended, self-supervised learning architecture could be transformative for areas like robotics, autonomous vehicles, intelligent virtual assistants, video game characters, and scientific discovery. It could enable AI systems to autonomously learn rich models of complex environments and flexibly reuse and adapt their skills to solve diverse tasks.
+Some key challenges to realizing this vision include the difficulty of learning accurate world models in practice, potential instabilities in goal generation and policy optimization, and the need for safe exploration and value alignment to ensure the system's goals and behaviors remain beneficial. Nonetheless, I believe architectures like RecursiveAutonomousLearning point towards an exciting future of increasingly open-ended and self-directed AI systems that can learn and reason in more human-like ways.

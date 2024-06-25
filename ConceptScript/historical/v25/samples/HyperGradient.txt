@@ -1,0 +1,182 @@
+CONCEPT HyperGradient {
+  LANGUAGE {
+    TYPE R = Real
+    TYPE Dual = (R, R)
+    TYPE HyperDual = (R, R, R)
+    TYPE Vector = List[R]
+    TYPE Matrix = List[Vector]
+    TYPE Function = Vector -> R
+    TYPE Gradient = Vector -> Vector
+    TYPE HyperGradient = Vector -> Matrix
+    TYPE Oracle = (Function, Vector, R⁺, (0,1)) -> R
+    TYPE GradientOracle = (Gradient, Vector, R⁺, (0,1)) -> Vector
+    TYPE Norm = Vector -> R⁺
+    TYPE Probability = (0,1]
+
+    FUNC Huber : (R, R⁺) -> R
+    FUNC Median : Vector -> R
+    FUNC MAD : Vector -> R
+    FUNC Exp : R -> R⁺
+    FUNC Log : R⁺ -> R
+    FUNC Sqrt : R⁺ -> R⁺
+    FUNC Min : (Vector -> R) -> R
+    FUNC ArgMin : (Vector -> R) -> Vector
+    FUNC Lipschitz : Gradient -> R⁺
+
+    AXIOM DualArithmetic {
+      REWRITE (x1, x1') + (x2, x2') = (x1 + x2, x1' + x2')
+      REWRITE (x1, x1') - (x2, x2') = (x1 - x2, x1' - x2') 
+      REWRITE (x1, x1') × (x2, x2') = (x1×x2, x1×x2' + x1'×x2)
+      REWRITE (x1, x1') / (x2, x2') = (x1/x2, (x1'×x2 - x1×x2')/(x2^2))
+    }
+
+    AXIOM HyperDualArithmetic {
+      REWRITE (x1, x1', x1'') + (x2, x2', x2'') = (x1 + x2, x1' + x2', x1'' + x2'')
+      REWRITE (x1, x1', x1'') - (x2, x2', x2'') = (x1 - x2, x1' - x2', x1'' - x2'')
+      REWRITE (x1, x1', x1'') × (x2, x2', x2'') = (x1×x2, x1×x2' + x1'×x2, x1×x2'' + 2×x1'×x2' + x1''×x2)
+      REWRITE (x1, x1', x1'') / (x2, x2', x2'') = (x1/x2, (x1'×x2 - x1×x2')/(x2^2), 
+                                                   ((x1''×x2 - x1×x2'') × x2 - 2 × (x1'×x2 - x1×x2') × x2') / (x2^3))
+    }
+    
+    AXIOM OracleAccuracy {
+      REQUIRE ∀ (f : Function) (x : Vector) (ε : R⁺) (δ : (0,1)).
+        Probability(|Oracle(f, x, ε, δ) - f(x)| ≤ ε) ≥ 1 - δ
+    }
+    
+    AXIOM GradientOracleAccuracy {
+      REQUIRE ∀ (∇f : Gradient) (x : Vector) (ε : R⁺) (δ : (0,1)).
+        Probability(Norm(GradientOracle(∇f, x, ε, δ) - ∇f(x)) ≤ ε×Norm(∇f(x))) ≥ 1 - δ  
+    }
+
+    AXIOM HuberBound {
+      REQUIRE ∀ (x : R) (δ : R⁺). |x| ≤ δ ⇒ Huber(x, δ) ≤ x^2
+    }
+  }
+
+  STRUCTURE Solution(f, x0, ε, δ, η, T) {
+    DEF x = Descent(f, x0, ε, δ, 
+                    η × Exp(-Norm(HyperGradient(f, x0, ε, δ))^2/(2×ε^2)), 
+                    T)
+    
+    REQUIRE Probability(f(x) > Min(f) + ε) ≤ δ
+    REQUIRE NumQueries(f) ≤ O(Length(x0) × Log(1/ε) × Log(1/δ))
+    REQUIRE SpaceComplexity ≤ O(Length(x0))
+  }
+
+  PROOFS {
+    TACTIC AutoDiff(f) = 
+      FUN (x : Vector) ->
+        LET x' : Vector[Dual] = ((x[i], IF i = j THEN 1 ELSE 0) for i, j in [1..Length(x)]^2)
+        IN f(x') : Dual
+    
+    TACTIC HyperDiff(f) =
+      FUN (x : Vector) ->
+        LET x' : Vector[HyperDual] = ((x[i], IF i = j THEN 1 ELSE 0, 0) for i, j in [1..Length(x)]^2)
+        IN f(x') : HyperDual
+    
+    TACTIC Gradient(f, x, ε, δ) =
+      LET n = Length(x)
+      IN LET X = (Oracle(f, x, ε/(2×n), δ/(2×n)) for _ in 1:n)
+      IN LET G = (GradientOracle(AutoDiff(f), x + ε×UnitVector(i, n), ε/(2×n), δ/(2×n)) for i in 1:n)  
+      IN LET g = (Median(Column(G, i)) for i in 1:n)
+      IN LET σ = (MAD(Column(G, i)) for i in 1:n)
+      IN (Huber(g[i], σ[i]×Sqrt(Log(n/δ))) for i in 1:n)
+      
+    TACTIC HyperGradient(f, x, ε, δ) =
+      LET G(y : Vector[Dual]) = AutoDiff(z ↦ Dual(f(z.x)))(y.x)
+      IN LET H(y : Vector[HyperDual]) = HyperDiff(G)(y.x)
+      IN LET x0 = ((x[i], 1, 0) for i in 1:Length(x))
+      IN LET (_, hg, _) = H(x0)
+      IN hg
+      
+    TACTIC Descent(f, x0, ε, δ, η, T) = 
+      LET x = x0
+      IN FOR t in 1:T {
+           LET g = Gradient(f, x, ε/(2×T), δ/(2×T))
+           IN LET η = η × Exp(-Huber(Norm(g), ε/2)^2/(2×ε^2))
+           IN x := x - η×g/Norm(g)              
+         }
+      IN x
+      
+    THEOREM Convergence {
+      STATEMENT:
+        ∀ (f : Function) (x0 : Vector) (ε : R⁺) (δ : (0,1)) (η : R⁺) (T : Nat).
+          Solution(f, x0, ε, δ, η, T).x = x ⇒ 
+            Probability(f(x) > Min(f) + ε) ≤ δ
+      
+      PROOF:
+        LET f, x0, ε, δ, η, T, x = Solution(f, x0, ε, δ, η, T).x
+        
+        HAVE ∀ t ≤ T. Probability(Norm(Gradient(f, x[t], ε/(2×T), δ/(2×T)) - ∇f(x[t])) > ε×Norm(∇f(x[t]))) ≤ δ/(2×T)
+          BY GradientOracleAccuracy, Median, MAD concentration
+        
+        HAVE ∀ t ≤ T. η[t] = η × Exp(-Sum(Huber(Norm(Gradient(f, x[i], ε/(2×T), δ/(2×T))), ε/2)^2/(2×ε^2) for i in 1:t))
+          BY Definition of Descent tactic
+        
+        HAVE ∀ t ≤ T. Norm(HyperGradient(f, x[t], ε/(2×T), δ/(2×T))) ≤ O(Lipschitz(∇f)^2 × Norm(∇f(x[t]))) 
+          BY HyperDualArithmetic, Lipschitz continuity of ∇f
+        
+        HAVE ∀ t ≤ T. f(x[t+1]) ≤ f(x[t]) - Ω(η[t]×ε^2) + O(η[t]^2×Lipschitz(∇f)^3×ε^3)
+          BY Descent lemma, Gradient tactic, HuberBound
+        
+        HAVE f(x[T]) ≤ f(x0) - Ω(ε^2×Sum(η[t] for t in 1:T))
+          BY Telescoping sum, gradient norm lower bound
+        
+        HAVE Sum(η[t] for t in 1:T) ≥ Ω(η×T×Exp(-O(Log(1/ε))))
+          BY Geometric series, HyperGradient tactic
+        
+        HAVE T ≥ Ω(Log(1/ε)/η)
+          BY Robust gradient descent convergence rate
+        
+        THUS Probability(f(x) > Min(f) + ε) ≤ δ
+          BY Markov's inequality on f(x) - Min(f)
+    }
+    
+    THEOREM QueryComplexity {
+      STATEMENT:
+        ∀ (f : Function) (x0 : Vector) (ε : R⁺) (δ : (0,1)) (η : R⁺) (T : Nat).
+          NumQueries(Solution(f, x0, ε, δ, η, T)) ≤ O(Length(x0) × Log(1/ε) × Log(1/δ))
+
+      PROOF:
+        LET f, x0, ε, δ, η, T, n = Length(x0)
+
+        HAVE ∀ t ≤ T. NumQueries(Gradient(f, x[t], ε/(2×T), δ/(2×T))) ≤ O(n × Log(T/δ))
+          BY Definition of Gradient tactic, OracleAccuracy, GradientOracleAccuracy
+        
+        HAVE ∀ t ≤ T. NumQueries(HyperGradient(f, x[t], ε/(2×T), δ/(2×T))) ≤ O(n)
+          BY Definition of HyperGradient tactic, AutoDiff, HyperDiff
+        
+        HAVE NumQueries(Solution(f, x0, ε, δ, η, T)) 
+              ≤ O(T × (n × Log(T/δ) + n))
+          BY Sum over iterations
+        
+        HAVE T ≤ O(Log(1/ε))
+          BY Robust gradient descent convergence rate
+        
+        THUS NumQueries(Solution(f, x0, ε, δ, η, T)) 
+              ≤ O(n × Log(1/ε) × Log(1/δ))
+    }
+    
+    THEOREM SpaceComplexity {
+      STATEMENT:
+        ∀ (f : Function) (x0 : Vector) (ε : R⁺) (δ : (0,1)) (η : R⁺) (T : Nat).
+          SpaceComplexity(Solution(f, x0, ε, δ, η, T)) ≤ O(Length(x0))
+
+      PROOF:
+        LET f, x0, ε, δ, η, T, n = Length(x0)
+        
+        HAVE SpaceComplexity(x[t]) ≤ O(n)
+          BY Definition of Solution tactic
+        
+        HAVE SpaceComplexity(Gradient(f, x[t], ε/(2×T), δ/(2×T))) ≤ O(n)  
+          BY Definition of Gradient tactic, streaming Median and MAD
+        
+        HAVE SpaceComplexity(HyperGradient(f, x[t], ε/(2×T), δ/(2×T))) ≤ O(1)
+          BY Definition of HyperGradient tactic, AutoDiff, HyperDiff
+        
+        THUS SpaceComplexity(Solution(f, x0, ε, δ, η, T)) 
+              ≤ Max(O(n), O(n), O(1))
+              = O(n)
+    }
+  }  
+}

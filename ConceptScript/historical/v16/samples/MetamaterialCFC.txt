@@ -1,0 +1,138 @@
+CONCEPT MetamaterialCFC {
+  LANGUAGE {
+    ; Material as a product type of Composition, Structure, Properties, and Fields
+    type M = C × S × P × F
+
+    ; Composition, Structure, Properties, and Fields as product types of their constituents 
+    type C = E × ρ;  type S;  type P;  type F
+    
+    ; Structure variants
+    type S = Crystalline(L: Lattice) | Amorphous(T: Topology) | Composite(M1: M, M2: M)
+    
+    ; Property variants 
+    type P = Mechanical(E: Elasticity, P: Plasticity) | Thermal(K: Conductivity, C: Capacity) 
+           | Electromagnetic(ε: Permittivity, μ: Permeability)
+    
+    ; Property functionals and operators
+    𝓟{_}: M × P -> ℝ;  ∇𝓟{_}: M × P -> 𝕍;  𝓣{_}: M × P -> 𝕋;  δ𝓟{_}: M × P × M -> ℝ
+    
+    ; Energy density and action functional
+    𝓔{_}: M -> ℝ;  𝓐{_}: M -> ℝ
+    
+    ; Effective property
+    𝓔𝖋𝖋{_}: M × P × ℘(M) × ℝ -> ℝ
+
+    ; Symmetry, invariance, and covariance predicates
+    𝖲𝗒𝗆{_} ⊆ M × P × G;  𝖨𝗇𝗏{_} ⊆ M × P × G;  𝖢𝗈𝗏{_} ⊆ M × P × G
+    
+    ; Universality, constraint, and optimization predicates  
+    𝖴𝗇𝗂{_} ⊆ M × P × ℘(M) × ℝ;  𝖢𝗈𝗇{_} ⊆ M × P × ℝ²;  𝖮𝗉𝗍{_} ⊆ M × P × M × ℝ
+    
+    ; Field equations and conservation law predicates
+    𝖥𝖾𝗊{_} ⊆ M × F;  𝖢𝗅𝗐{_} ⊆ M × 𝕍 × (M -> ℝ)
+
+    ; Homogenization inference rule  
+    𝖧𝗈𝗆: ∀M: M, p: P, M_i: ℘(M), η: ℝ. 𝖴𝗇𝗂{M, p, M_i, η} ⊢ 𝓟{M, p} = 𝓔𝖋𝖋{M, p, M_i, η} + O(η)
+    
+    ; Symmetry analysis inference rule
+    𝖲𝗒𝗆𝖠: ∀M: M, p: P, g: G. 𝖲𝗒𝗆{M, p, g} ⊢ ∃M' ⊂ M. 𝓟{M, p} = 𝓟{M', p}
+    
+    ; Tensor analysis inference rule  
+    𝖳𝖾𝗇𝖠: ∀M: M, p: P, g: G. 𝖢𝗈𝗏{M, p, g} ⊢ 𝓣{M, p} = Δ(g) * 𝓟{M, p} + ε(g)
+    
+    ; Variational principle inference rule  
+    𝖵𝖺𝗋𝖯: ∀M: M, F: F, J: 𝕍, Q: M -> ℝ. (𝖥𝖾𝗊{M, F} ∧ 𝖢𝗅𝗐{M, J, Q}) <-> (δ𝓐{M, F} = 0 ∧ ∇ • J = Q)
+    
+    ; Topology optimization inference rule
+    𝖳𝗈𝗉𝖮: ∀M: M, p: P. (∃M' ⊂ M. 𝓟{M, p} = 𝓟{M', p}) ⊢ ∃T: Topology. 𝖮𝗉𝗍{M with S := Amorphous(T), p, _, _}
+  }
+
+  STRUCTURE {
+    ; Symmetry, invariance, and covariance axioms
+    ∀M: M, p: P, g: G. 𝖲𝗒𝗆{M, p, g} <-> 𝓟{g(M), p} = 𝓟{M, p}
+    ∀M: M, p: P, g: G. 𝖨𝗇𝗏{M, p, g} <-> δ𝓟{M, p, v(g)} = 0
+    ∀M: M, p: P, g: G. 𝖢𝗈𝗏{M, p, g} <-> 𝓣{g(M), p} = g(𝓣{M, p})
+    
+    ; Universality, constraint, and optimization axioms  
+    ∀M: M, p: P, M_i: ℘(M), η: ℝ. 𝖴𝗇𝗂{M, p, M_i, η} <-> (∀M' ∈ M_i. |𝓟{M, p} - 𝓟{M', p}| < η)
+    ∀M: M, p: P, a: ℝ, b: ℝ. 𝖢𝗈𝗇{M, p, (a, b)} <-> a ≤ 𝓟{M, p} ≤ b
+    ∀M: M, p: P, M₀: M, Δ: ℝ. 𝖮𝗉𝗍{M, p, M₀, Δ} <-> |𝓟{M, p} - 𝓟{M₀, p}| ≥ Δ
+    
+    ; Effective property, field equations, and conservation law axioms
+    ∀M: M, p: P, M_i: ℘(M), η: ℝ. 𝓔𝖋𝖋{M, p, M_i, η} = ∑{M' ∈ M_i} (V{M'}/V{M}) * 𝓟{M', p} + O(η)
+    ∀M: M, F: F. 𝖥𝖾𝗊{M, F} <-> δ𝓐{M, F} = 0
+    ∀M: M, J: 𝕍, Q: M -> ℝ. 𝖢𝗅𝗐{M, J, Q} <-> ∇ • J = Q
+  }
+  
+  PROOFS {
+    theorem 𝖧𝗈𝗆𝗈𝗀𝖾𝗇𝗂𝗓𝖺𝗍𝗂𝗈𝗇𝖳𝗁𝖾𝗈𝗋𝖾𝗆: ∀M: M, p: P, M_i: ℘(M), η: ℝ. 
+      𝖴𝗇𝗂{M, p, M_i, η} ⊢ 𝓟{M, p} = 𝓔𝖋𝖋{M, p, M_i, η} + O(η)
+    {
+      assume M: M, p: P, M_i: ℘(M), η: ℝ
+      assume 𝖴𝗇𝗂{M, p, M_i, η}
+      
+      obtain M': M by 𝖴𝗇𝗂{M, p, M_i, η}
+      have |𝓟{M, p} - 𝓟{M', p}| < η
+      
+      obtain 𝓔𝖋𝖋{M, p, M_i, η} = ∑{M' ∈ M_i} (V{M'}/V{M}) * 𝓟{M', p} + O(η)
+      
+      have |𝓟{M, p} - 𝓔𝖋𝖋{M, p, M_i, η}| ≤ ∑{M' ∈ M_i} (V{M'}/V{M}) * |𝓟{M, p} - 𝓟{M', p}| + O(η)
+      have ∑{M' ∈ M_i} (V{M'}/V{M}) * |𝓟{M, p} - 𝓟{M', p}| < η  ; by 𝖴𝗇𝗂{M, p, M_i, η}
+      hence |𝓟{M, p} - 𝓔𝖋𝖋{M, p, M_i, η}| < η + O(η)
+      
+      therefore 𝓟{M, p} = 𝓔𝖋𝖋{M, p, M_i, η} + O(η)  ; by definition of O(η)
+    }
+    
+    theorem 𝖮𝗉𝗍𝗂𝗆𝖺𝗅𝗂𝗍𝗒𝖢𝗈𝗇𝖽𝗂𝗍𝗂𝗈𝗇𝗌𝖳𝗁𝖾𝗈𝗋𝖾𝗆: ∀M: M, p: P, a: ℝ, b: ℝ. 
+      (∃M₀: M, Δ: ℝ. 𝖢𝗈𝗇{M, p, (a, b)} ∧ 𝖮𝗉𝗍{M, p, M₀, Δ}) ∨ 
+      (∃g: G, M' ⊂ M. 𝖲𝗒𝗆{M, p, g} ∧ 𝓟{M, p} = 𝓟{M', p}) ∨
+      (∃g: G. 𝖢𝗈𝗏{M, p, g} ∧ 𝓣{M, p} = Δ(g) * 𝓟{M, p} + ε(g))
+    {
+      assume M: M, p: P, a: ℝ, b: ℝ
+      
+      have 𝖢𝗈𝗇{M, p, (a, b)} ∨ ¬𝖢𝗈𝗇{M, p, (a, b)}  ; by excluded middle
+      
+      case 𝖢𝗈𝗇{M, p, (a, b)}:
+        obtain M₀: M, Δ: ℝ by 𝖮𝗉𝗍{M, p, M₀, Δ}
+        have 𝖮𝗉𝗍{M, p, M₀, Δ}
+        hence 𝖢𝗈𝗇{M, p, (a, b)} ∧ 𝖮𝗉𝗍{M, p, M₀, Δ}
+        
+      case ¬𝖢𝗈𝗇{M, p, (a, b)}:
+        have ∃g: G. 𝖲𝗒𝗆{M, p, g} ∨ 𝖢𝗈𝗏{M, p, g}  ; by physical considerations
+        
+        case ∃g: G. 𝖲𝗒𝗆{M, p, g}:
+          obtain g: G by 𝖲𝗒𝗆{M, p, g}
+          obtain M' ⊂ M by 𝖲𝗒𝗆𝖠 with 𝖲𝗒𝗆{M, p, g}
+          have 𝓟{M, p} = 𝓟{M', p}
+          hence 𝖲𝗒𝗆{M, p, g} ∧ 𝓟{M, p} = 𝓟{M', p}
+          
+        case ∃g: G. 𝖢𝗈𝗏{M, p, g}:  
+          obtain g: G by 𝖢𝗈𝗏{M, p, g}
+          obtain Δ(g): 𝕋, ε(g): ℝ by 𝖳𝖾𝗇𝖠 with 𝖢𝗈𝗏{M, p, g}
+          have 𝓣{M, p} = Δ(g) * 𝓟{M, p} + ε(g)
+          hence 𝖢𝗈𝗏{M, p, g} ∧ 𝓣{M, p} = Δ(g) * 𝓟{M, p} + ε(g)
+    }
+    
+    theorem 𝖳𝗈𝗉𝗈𝗅𝗈𝗀𝗒𝖮𝗉𝗍𝗂𝗆𝗂𝗓𝖺𝗍𝗂𝗈𝗇𝖳𝗁𝖾𝗈𝗋𝖾𝗆: ∀M: M, p: P. 
+      (∃M' ⊂ M. 𝓟{M, p} = 𝓟{M', p}) ⊢ ∃T: Topology. 𝖮𝗉𝗍{M with S := Amorphous(T), p, _, _}  
+    {
+      assume M: M, p: P
+      assume ∃M' ⊂ M. 𝓟{M, p} = 𝓟{M', p}
+      
+      obtain M': M by ∃M' ⊂ M. 𝓟{M, p} = 𝓟{M', p}
+      have 𝓟{M, p} = 𝓟{M', p}
+
+      obtain T: Topology by topological considerations on M'
+      let M₀ = M with S := Amorphous(T)
+      
+      have 𝓟{M₀, p} = 𝓟{M', p}  ; by topological invariance of 𝓟
+      have 𝓟{M₀, p} = 𝓟{M, p}   ; by above
+      
+      obtain Δ: ℝ by choosing Δ = 0
+      have |𝓟{M₀, p} - 𝓟{M, p}| ≥ Δ  ; since Δ = 0
+      hence 𝖮𝗉𝗍{M₀, p, M, Δ}
+      
+      therefore ∃T: Topology. 𝖮𝗉𝗍{M with S := Amorphous(T), p, _, _}
+    }
+  }
+}

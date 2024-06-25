@@ -1,0 +1,85 @@
+CONCEPT RenormalizationGroup {
+  STRUCTURE {
+    [PhysicalSystem := System described by a Hamiltonian or action]
+    [CouplingConstant := Parameter in the Hamiltonian or action]
+    [CorrelationLength := Length scale over which fields are correlated]
+    [RGTransformation(b) := Coarse-graining by a scale factor b > 1]
+    [EffectiveAction[S, b] := Action after applying RGTransformation(b) to S]
+    [BetaFunction(g) := μ ∂g/∂μ] // RG flow of coupling constant g with energy scale μ
+    [FixedPoint := Value of coupling constant invariant under RG flow]
+    [CriticalExponent := Exponent governing power-law behavior near a critical point]
+    [UniversalityClass := Set of systems sharing the same critical exponents]
+  }
+
+  PROOFS {
+    tactic rescale_fields(S, b) :
+      let φ(x) := field in the action S
+      let φ'(x) := b^{-Δ} φ(b^{-1} x) where Δ := scaling dimension of φ
+      let S' := S expressed in terms of φ'
+      have EffectiveAction[S, b] = S' by definition of effective action
+
+    tactic expand_perturbatively(S, b) :
+      let g := coupling constant in S
+      let g' := g + δg where δg := perturbative correction to g under RGTransformation(b)
+      let S' := S expanded to order δg
+      have EffectiveAction[S, b] ≈ S' by perturbative expansion
+
+    tactic compute_beta_function(g) :
+      let μ := energy scale
+      let δg := perturbative correction to g under infinitesimal RG transformation
+      have BetaFunction(g) = μ ∂g/∂μ = δg/log(b) as b → 1 by definition of beta function
+
+    theorem wilson_fisher_fixed_point :
+      ∃g*, BetaFunction(g*) = 0 ∧ ∂BetaFunction/∂g(g*) > 0 
+        for φ^4 theory in d = 4 - ε dimensions, ε ≪ 1
+    {
+      let S := ∫ d^d x [½(∂φ)^2 + ½m^2 φ^2 + (g/4!)φ^4] // φ^4 theory action
+      let b := 1 + δℓ where δℓ ≪ 1 // Infinitesimal RG transformation
+      let S' := EffectiveAction[S, b] by {
+        rescale_fields(S, b);
+        expand_perturbatively(S, b);
+      }
+      let g' := g + δg where δg := perturbative correction to g
+      compute_beta_function(g);
+      solve BetaFunction(g*) = 0 for g* to order ε by perturbation theory;
+      check ∂BetaFunction/∂g(g*) > 0 by explicit computation;
+    }
+
+    theorem universality :
+      ∀S1, S2 ∈ UniversalityClass, ∀O := observable,
+        CriticalExponent[O, S1] = CriticalExponent[O, S2]
+    {
+      assume S1, S2 ∈ UniversalityClass by hypothesis
+      let g1 := coupling constant in S1
+      let g2 := coupling constant in S2
+      have BetaFunction(g1) = BetaFunction(g2) by definition of universality class
+      let g1* := fixed point of BetaFunction(g1)
+      let g2* := fixed point of BetaFunction(g2)
+      have g1* = g2* by uniqueness of fixed point
+      let O := observable
+      have CriticalExponent[O, S1] = ∂log(O)/∂log(g1 - g1*) as g1 → g1* by definition of critical exponent
+      have CriticalExponent[O, S2] = ∂log(O)/∂log(g2 - g2*) as g2 → g2* by definition of critical exponent
+      conclude CriticalExponent[O, S1] = CriticalExponent[O, S2] by g1* = g2* and chain rule
+    }
+  }
+
+  LANGUAGE {
+    type PhysicalSystem
+    type CouplingConstant
+    type CorrelationLength
+    type RGTransformation(b : ℝ)
+    type EffectiveAction[S : Action, b : ℝ]
+    type BetaFunction(g : CouplingConstant)
+    type FixedPoint
+    type CriticalExponent
+    type UniversalityClass
+
+    func "∫" "_" "d^" d "_" x (f : Function, d : ℕ) : Action // Action integral in d dimensions
+    func "∂" "_" "/" "∂" "_" (f : Function, x : Variable) : Function // Partial derivative
+    func log (x : ℝ) : ℝ // Natural logarithm
+
+    pred "≈" (S1 : Action, S2 : Action) // Approximation relation for actions
+    pred "≪" (x : ℝ, y : ℝ) // Much less than relation
+    pred "→" (x : ℝ, y : ℝ) // Limit relation
+  }
+}

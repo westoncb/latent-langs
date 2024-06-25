@@ -1,0 +1,117 @@
+CONCEPT NashEquilibrium {
+  LANGUAGE {
+    TYPE Player
+    TYPE Strategy
+    TYPE Payoff = Real
+    TYPE Game = (List(Player), (Player -> List(Strategy)), (Player -> Strategy -> Payoff))
+    
+    FUNC BestResponse(g : Game, p : Player, s : (Player -> Strategy)) -> Strategy
+    BestResponse(g, p, s) = ARGMAX (r : Strategy). g.3(p)(r) GIVEN FORALL (q : Player \ {p}). s(q)
+    
+    PRED NashEq(g : Game, s : (Player -> Strategy))
+    NashEq(g, s) = FORALL (p : Player). s(p) = BestResponse(g, p, s)
+
+    NOTATION "Δ(X)" = Dist(X) 
+    NOTATION "𝔼" = Expectation
+  }
+  
+  STRUCTURE {
+    DEF FiniteGame(g : Game) = 
+      g.1.Length < Aleph0 AND
+      FORALL (p : Player). g.2(p).Length < Aleph0
+      
+    DEF PureStrategyNashEq(g : Game) = 
+      EXISTS (s : (Player -> Strategy)). NashEq(g, s)
+      
+    DEF MixedStrategy(g : Game, p : Player) = Dist(g.2(p))
+    
+    DEF MixedStrategyNashEq(g : Game) =
+      EXISTS (s : (Player -> MixedStrategy(g))).
+        FORALL (p : Player). 
+          FORALL (r : MixedStrategy(g, p)).
+            E(Payoff(p, s)) >= E(Payoff(p, Override(s, p, r)))
+  }
+  
+  PROOFS {
+    THEOREM NashInFinite {
+      STATEMENT:
+        FORALL (g : FiniteGame). PureStrategyNashEq(g)
+        
+      PROOF:
+        LET g : FiniteGame;
+        
+        DEF BR(s : (Player -> Strategy)) : (Player -> Strategy) =
+          LAMBDA (p : Player). BestResponse(g, p, s)
+        
+        DEF Responses : (Player -> Strategy) -> (Player -> Strategy) = BR
+        
+        Responses is Continuous BY {
+          LET s t : (Player -> Strategy);
+          ASSUME FORALL (p : Player). d(s(p), t(p)) < ε;
+          
+          d(BR(s)(p), BR(t)(p))
+            <= d(PayoffOf(p, BR(s)(p), s), PayoffOf(p, BR(s)(p), t)) 
+                + d(PayoffOf(p, BR(s)(p), t), PayoffOf(p, BR(t)(p), t))
+            <= K * ε + 0 
+            = O(ε)  BY LipschitzContinuity(PayoffOf)     
+        }
+        
+        g.1 × Πp. g.2(p) is NonEmpty, Compact, Convex BY FiniteGameProperties;
+        
+        Responses : (g.1 × Πp. g.2(p)) -> (g.1 × Πp. g.2(p)) BY Definition(Responses);
+        
+        EXISTS (s : (Player -> Strategy)). Responses(s) = s BY BrouwerFixedPoint;
+        
+        NashEq(g, s) BY {
+          LET p : Player;
+          s(p) 
+            = Responses(s)(p)
+            = BR(s)(p)
+            = BestResponse(g, p, s)
+        }
+    }
+    
+    THEOREM NashInMixed {
+      STATEMENT:
+        FORALL (g : FiniteGame). MixedStrategyNashEq(g)
+      
+      PROOF:
+        LET g : FiniteGame;
+        
+        DEF MixedPayoff(s : (Player -> MixedStrategy(g))) 
+          : (Player -> MixedStrategy(g) -> Payoff) =
+            LAMBDA (p : Player) (t : MixedStrategy(g, p)).
+              𝔼 (OfStrategy(p, s)) 
+                (LAMBDA (r : (Player -> Strategy)). g.3(p)(r(p))) 
+                
+        DEF MixedBestResponse(s : (Player -> MixedStrategy(g))) 
+          : (Player -> MixedStrategy(g)) =
+            LAMBDA (p : Player). 
+              ARGMAX (t : MixedStrategy(g, p)). MixedPayoff(s)(p)(t)
+              
+        DEF MixedResponses(s : (Player -> MixedStrategy(g))) 
+          : (Player -> MixedStrategy(g)) = MixedBestResponse(s)
+          
+        MixedResponses is Continuous BY {
+          (* Similar reasoning as in NashInFinite *)
+        }
+        
+        Δ(g.2(p)) is NonEmpty, Compact, Convex FORALL (p : Player) 
+          BY FiniteDimensionalSimplexProperties;
+          
+        MixedResponses : (Πp. Δ(g.2(p))) -> (Πp. Δ(g.2(p)))
+          BY Definition(MixedResponses);
+          
+        EXISTS (s : (Player -> MixedStrategy(g))). MixedResponses(s) = s  
+          BY KakutaniFixedPoint;
+          
+        MixedStrategyNashEq(g) BY {  
+          LET p : Player;
+          FORALL (t : MixedStrategy(g, p)).
+            MixedPayoff(s)(p)(s(p)) 
+              = MixedPayoff(s)(p)(MixedBestResponse(s)(p))
+              >= MixedPayoff(s)(p)(t)
+        }
+    }
+  }
+}

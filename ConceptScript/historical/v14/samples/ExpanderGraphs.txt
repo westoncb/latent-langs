@@ -1,0 +1,153 @@
+CONCEPT ExpanderGraphs {
+  LANGUAGE {
+    type Graph = (𝒱: Set<ℕ>, ℰ: 𝒱 → 𝒱 → 𝔹)
+    type Matrix = ℝ^(ℕ × ℕ)
+    type Vector = ℝ^ℕ
+
+    func adjacency(G: Graph): Matrix = λ (i, j). G.ℰ(i, j)
+    func normalized_adjacency(G: Graph): Matrix = 
+      let A = adjacency(G), D = diag(λ i. ∑ⱼ A(i,j))
+      in D^(-1/2) * A * D^(-1/2)
+
+    func laplacian(G: Graph): Matrix = 
+      let A = adjacency(G), D = diag(λ i. ∑ⱼ A(i,j))
+      in I - D^(-1/2) * A * D^(-1/2)
+
+    func spectral_gap(G: Graph): ℝ = 
+      let L = laplacian(G), 𝜆 = eigenvalues(L)
+      in 𝜆[2]
+
+    func edge_expansion(G: Graph, S: Set<ℕ>): ℝ =
+      |{ (i,j) ∈ G.ℰ | i ∈ S, j ∉ S }| / min(|S|, |G.𝒱 - S|)
+
+    func vertex_expansion(G: Graph, S: Set<ℕ>): ℝ =
+      |{ j ∈ G.𝒱 | ∃ i ∈ S. (i,j) ∈ G.ℰ }| / |S|
+
+    pred is_expander(G: Graph, c: ℝ) = 
+      ∀ S ⊆ G.𝒱. |S| ≤ |G.𝒱| / 2 ⇒ edge_expansion(G, S) ≥ c
+  }
+
+  STRUCTURE {
+    CheegerInequality: ∀ G: Graph.
+      let 𝜆 = spectral_gap(G), 𝜙 = min_{S ⊆ G.𝒱, |S| ≤ |G.𝒱|/2} edge_expansion(G, S)
+      in 𝜙^2 / 2 ≤ 𝜆 ≤ 2𝜙
+
+    ExpanderMixingLemma: ∀ G: Graph, S, T ⊆ G.𝒱.
+      let A = normalized_adjacency(G), 𝜆 = max(eigenvalues(A) - {1})
+      in |e(S,T) - (|S| * |T|) / |G.𝒱|| ≤ 𝜆 * sqrt(|S| * |T|)
+      where e(S,T) = |{ (i,j) ∈ G.ℰ | i ∈ S, j ∈ T }|
+
+    SparsityAmplification: ∀ G: Graph, A: Matrix, k: ℕ, 𝛿, 𝜀: ℝ.
+      let m = num_rows(A), n = num_cols(A)
+      in is_expander(G, 1 - 𝛿) ∧ RIP<m,n,k>(A, 𝜀) ⇒ RIP<m,n,k>(√(|G.𝒱|/n) * (I_n ⊗ A) * adjacency(G), O(𝜀/𝛿))
+      where I_n is n×n identity matrix
+
+    UniqueNeighborExpansion: ∀ G: Graph, 𝛿, 𝜀: ℝ, k: ℕ.
+      is_expander(G, 1 - 𝛿) ∧ |G.𝒱| > k/𝜀 ⇒ 
+      ∀ S ⊆ G.𝒱. |S| ≤ k ⇒ |{ j ∈ G.𝒱 | ∃! i ∈ S. (i,j) ∈ G.ℰ }| ≥ (1 - 𝜀) * |G.𝒱|
+  }
+
+  PROOFS {
+    ExpanderMixingLemmaProof: ∀ G: Graph, S, T ⊆ G.𝒱.
+      |e(S,T) - (|S| * |T|) / |G.𝒱|| ≤ 𝜆 * sqrt(|S| * |T|)
+    {
+      let A = normalized_adjacency(G), x = 𝟙_S / sqrt(|S|), y = 𝟙_T / sqrt(|T|)
+        where 𝟙_S(i) = if i ∈ S then 1 else 0
+
+      e(S,T) = ∑ᵢⱼ A(i,j) * x(i) * y(j) * |S| * |T|
+
+      calc |e(S,T) - ⟨x,y⟩ * |S| * |T||
+           = |⟨Ax, y⟩ - ⟨x,y⟩| * |S| * |T|
+           ≤ ∥Ax - x∥ * ∥y∥ * |S| * |T|  ; by Cauchy-Schwarz
+           ≤ 𝜆 * ∥x∥ * ∥y∥ * |S| * |T|    ; by definition of 𝜆 
+           = 𝜆 * sqrt(|S| * |T|)
+
+      and ⟨x,y⟩ = (|S| / |G.𝒱|) * (|T| / |G.𝒱|)
+      
+      therefore |e(S,T) - (|S| * |T|) / |G.𝒱|| ≤ 𝜆 * sqrt(|S| * |T|)
+    }
+
+    SparsityAmplificationProof: ∀ G: Graph, A: Matrix, k: ℕ, 𝛿, 𝜀: ℝ.
+      is_expander(G, 1 - 𝛿) ∧ RIP<m,n,k>(A, 𝜀) ⇒ RIP<m,n,k>(√(|G.𝒱|/n) * (I_n ⊗ A) * adjacency(G), O(𝜀/𝛿))
+    {
+      assume is_expander(G, 1 - 𝛿), RIP<m,n,k>(A, 𝜀)
+      
+      let B = √(|G.𝒱|/n) * (I_n ⊗ A) * adjacency(G)
+  
+      suffices to show RIP<m,n,k>(B, 𝜀') for some 𝜀' = O(𝜀/𝛿)
+      
+      let 𝜙 = min_{S ⊆ G.𝒱, |S| ≤ |G.𝒱|/2} edge_expansion(G, S)
+      have 𝜙 ≥ 1 - 𝛿   ; by expander property
+      
+      let L = laplacian(G)
+      have ∥L∥ ≤ 2(1 - 𝜙) ≤ 2𝛿   ; by Cheeger inequality
+      
+      fix x ∈ 𝒮ₖ<n,k>, let y = (I_n ⊗ A)x
+      y is k-sparse since x is k-sparse and A has RIP
+      
+      calc ∥Bx∥² 
+           = (|G.𝒱|/n) * x^⊤ * adjacency(G)^⊤ * (I_n ⊗ A^⊤ A) * adjacency(G) * x
+           = (|G.𝒱|/n) * ∑_{u,v ∈ G.𝒱} (Ax(u))^⊤ (Ax(v)) * G.ℰ(u,v)
+           = (|G.𝒱|/n) * ∑_{u,v ∈ G.𝒱} ⟨y(u), y(v)⟩ * G.ℰ(u,v)
+           ≤ (1 + 𝜀)^2 * (|G.𝒱|/n) * ∑_{u,v ∈ G.𝒱} ⟨x(u), x(v)⟩ * G.ℰ(u,v) 
+             ; by RIP property of A, ∀ u,v. ∥y(u) - y(v)∥ ≤ (1+𝜀) * ∥x(u) - x(v)∥
+           = (1 + 𝜀)^2 * (|G.𝒱|/n) * x^⊤ * (I_n - L) * x
+           ≤ (1 + 𝜀)^2 * (1 + 2𝛿) * ∥x∥²   ; since ∥L∥ ≤ 2𝛿
+           ≤ (1 + 𝜀')^2 * ∥x∥²
+           
+      similarly, ∥Bx∥² ≥ (1 - 𝜀')^2 * ∥x∥² for some 𝜀' = O(𝜀/𝛿)
+      
+      therefore RIP<m,n,k>(B, O(𝜀/𝛿))
+    }
+    
+    UniqueNeighborExpansionProof: ∀ G: Graph, 𝛿, 𝜀: ℝ, k: ℕ.
+      is_expander(G, 1 - 𝛿) ∧ |G.𝒱| > k/𝜀 ⇒ 
+      ∀ S ⊆ G.𝒱. |S| ≤ k ⇒ |{ j ∈ G.𝒱 | ∃! i ∈ S. (i,j) ∈ G.ℰ }| ≥ (1 - 𝜀) * |G.𝒱|  
+    {
+      assume is_expander(G, 1 - 𝛿), |G.𝒱| > k/𝜀
+      
+      let S ⊆ G.𝒱 with |S| ≤ k, denote T = { j ∈ G.𝒱 | ∃! i ∈ S. (i,j) ∈ G.ℰ }
+      
+      let B = 𝟙_S * 𝟙_T^⊤ - adjacency(G), Z = { i ∈ G.𝒱 | B(i,j) = 0 ∀ j }
+      
+      have |B(i,j)| ≤ 1 ∀ i,j
+      also Z = { i ∈ S | N(i) ⊆ T } ∪ { i ∈ G.𝒱 - S | N(i) ⊆ G.𝒱 - T }
+        where N(i) = { j | (i,j) ∈ G.ℰ } is the neighborhood of i
+      
+      calc |S| * |T| - e(S,T)
+           = ⟨𝟙_S, 𝟙_T⟩ - ⟨𝟙_S, A𝟙_T⟩
+           = ⟨𝟙_S, B𝟙_T⟩
+           ≤ ∥B∥_F * sqrt(|S| * |T|)   ; by Cauchy-Schwarz
+           ≤ ∥B∥_F * sqrt(k * |G.𝒱|)
+           ≤ sqrt(|G.𝒱| * |Z|) * sqrt(k * |G.𝒱|)  ; since entries of B are bounded
+           = |G.𝒱| * sqrt(k * |Z| / |G.𝒱|)
+           
+      and e(S, G.𝒱-T) 
+           ≤ ∑_{i ∈ S - Z} |N(i) - T|
+           ≤ |S - Z| * 𝛿 * |G.𝒱|  ; by expander mixing lemma
+           ≤ k * 𝛿 * |G.𝒱|
+           
+      calc |T|
+           = |G.𝒱| - |G.𝒱 - T|  
+           ≥ |G.𝒱| - (e(S, G.𝒱-T) + |S|) / 𝛿   ; by vertex expansion
+           ≥ |G.𝒱| - (k * 𝛿 * |G.𝒱| + |G.𝒱| * sqrt(k * |Z| / |G.𝒱|) + k) / 𝛿
+           ≥ |G.𝒱| - 2k/𝛿 - |G.𝒱|/2  ; since |Z| ≤ |G.𝒱|, |G.𝒱| > k/𝜀 > k
+           ≥ (1 - 𝜀) * |G.𝒱|  ; for 𝛿 ≥ 4𝜀
+    }
+  }
+}
+
+This Concept dives into the rich theory of expander graphs, which are highly connected sparse graphs with strong pseudo-random properties. Expanders have found numerous applications in theoretical computer science and mathematics, including in the design of efficient error-correcting codes, derandomization of algorithms, and compressed sensing.
+The language introduces types for graphs, matrices and vectors, and defines several key concepts:
+
+Adjacency matrix and normalized adjacency matrix of a graph
+Graph Laplacian
+Spectral gap (the difference between the two smallest eigenvalues of the Laplacian)
+Edge expansion and vertex expansion (measures of graph connectivity)
+Expander graphs (graphs with high expansion)
+
+The structure section states some fundamental results:
+
+Cheeger's inequality relating edge expansion and the spectral gap
+Expander mixing lemma, which says that the number of edges between two sets is close to what you'd expect in a random graph
+Sparsity amplification using expanders, showing that

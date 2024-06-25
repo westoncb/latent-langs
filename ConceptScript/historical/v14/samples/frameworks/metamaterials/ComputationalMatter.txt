@@ -1,0 +1,191 @@
+CONCEPT ComputationalMatter_v1 {
+  LANGUAGE {
+    Matter := m(S, P, A)
+    Structure := s(T, C, D)
+    Program := p(L, F)
+    Action := a(E, U, H) 
+    
+    m(S, P, A): programmable matter with structure S, program P, and actions A
+    s(T, C, D): structure with topology T, constraints C, and domains D
+    p(L, F): program with logic L and data flow F
+    a(E, U, H): action with energy E, precondition U, and postcondition H
+    
+    T := t(N, B) | T + T | T * T
+    t(N, B): topology with nodes N and bonds B
+    
+    C := c(DOF, L) | C + C | C * C 
+    c(DOF, L): constraints on degrees of freedom DOF with limits L
+    
+    D := d(G, M) | D + D | D * D
+    d(G, M): domain with geometry G and material properties M
+    
+    L := l(R, O) | L + L | L * L
+    l(R, O): logic with rules R and objectives O
+    
+    F := f(S, T) | F + F | F * F 
+    f(S, T): data flow from sources S to targets T
+    
+    Programmable{m} ⟺ ∃P. m = m(_, P, _)
+    Actionable{m, a} ⟺ a ∈ A{m} ∧ U{a} ⊆ S{m} ∧ S{m} ⊨ U{a} ⇒ S{m} ∪ H{a} ⊨ H{a}
+    Stable{m} ⟺ ∀a ∈ A{m}. E{a} ≤ Φ{S{m}}
+    Optimized{m, O} ⟺ ∀m'. O{S{m'}} ≤ O{S{m}}
+    Reconfigurable{m, m'} ⟺ S{m} ≠ S{m'} ∧ ∀a ∈ A{m}. ∃a' ∈ A{m'}. E{a} = E{a'}
+    Universal{m, T} ⟺ ∀t ∈ T. ∃S. (t, _, _) ∈ m(S, _, _)
+    Efficient{m, E, t} ⟺ ∀a ∈ A{m}. E{a} ≤ E ∧ ∀S. m(S, _, _) ⊨ t ⇒ time{m, t} ≤ T{|S|}
+    Robust{m, ε, δ} ⟺ ∀S', P', A'. d{(S, P, A), (S', P', A')} < δ ⇒ |O{m}-O{m(S', P', A')}| < ε
+
+    notation m{S, x} = m(S, p(x), a(0, ⊤, ⊤))
+    notation m/a = m(S{m}, P{m}, A{m} ∪ {a})
+    notation S ∔ S' = s(T{S}+T{S'}, C{S}+C{S'}, D{S}+D{S'})
+    notation S ⨯ S' = s(T{S}*T{S'}, C{S}*C{S'}, D{S}*D{S'})
+    notation P ∥ P' = p(L{P}+L{P'}, F{P}+F{P'})
+    notation P ⟗ P' = p(L{P}*L{P'}, F{P}*F{P'})
+    notation ⟨P⟩{m, t} = ∀S. m(S{m}, P, _) ⊨ t
+    notation m ⊢ t = ∃P. ⟨P⟩{m, t}
+    notation m ≤{E} m' = ∀a ∈ A{m}. ∃a' ∈ A{m'}. E{a} ≤ E{a'}
+    notation S ⊑ S' = T{S} ⊆ T{S'} ∧ C{S} ⊆ C{S'} ∧ D{S} ⊆ D{S'}
+    notation m ≼ m' = S{m} ⊑ S{m'} ∧ ∀a ∈ A{m}. a ∈ A{m'}
+  }
+
+  TACTIC {
+    StructureOptimization{m, O} ⊢ Optimized{m, O} ⇔ ∀S. O{S} ≤ O{S{m}}
+    ProgramOptimization{P, m, E} ⊢ ∀a ∈ A{m}. E{a} ≤ E ⇔ ⟨P⟩{m, _}
+    StructureReconfiguration{m, m', P} ⊢ Reconfigurable{m, m'} ⇔ ⟨P⟩{m, S{m'}}
+    ProgramParallelization{P, P'} ⊢ ⟨P ∥ P'⟩{_, t} ⇒ ⟨P⟩{_, t} ∧ ⟨P'⟩{_, t}
+    ProgramComposition{P, P'} ⊢ ⟨P ⟗ P'⟩{_, t} ⇐ ⟨P⟩{_, t} ∧ ⟨P'⟩{_, t}
+    InductiveReasoning{m, t, T} ⊢ (∀t' ⊏ t. m ⊢ t') ∧ T ⊆ t ⇒ m ⊢ t
+    ConstraintRelaxation{m, m'} ⊢ C{S{m'}} ⊆ C{S{m}} ⇒ m' ≼ m
+    DomainDecomposition{m, S', S''} ⊢ D{S{m}} = D{S'} ∪ D{S''} ⇒ m ≤{_} m{S', _} ∧ m ≤{_} m{S'', _}
+  }
+  
+  PROOF {
+    theorem ∀m. Programmable{m} ⇒ ∃m'. Reconfigurable{m, m'}
+    
+    theorem ∀m, t. Universal{m, T} ∧ t ∈ T ⇒ m ⊢ t
+    
+    theorem ∀m, E. Efficient{m, E, t} ⇒ Optimized{m, time{_, t}} 
+    
+    theorem ∀m, ε, δ. Robust{m, ε, δ} ⇒ ∀m' ≼ m. |O{m}-O{m'}| < ε
+      fix m, m' such that m' ≼ m  ; Assume m' is reconfiguration of m
+      d{S{m}, S{m'}} < δ         ; Since m' ≼ m 
+      hence |O{m}-O{m'}| < ε     ; By robustness of m
+      
+    theorem ∀m, O, P, E.
+      (Optimized{m, O} ∧ Efficient{m, E, _} ∧ ⟨P⟩{m, _}) ⇒ 
+      ∃m'. ∀P'. ⟨P ∥ P'⟩{m', _} ∧ m' ≤{E} m
+    {
+      assume Optimized{m, O} ∧ Efficient{m, E, t} ∧ ⟨P⟩{m, t}
+      
+      S' := s(T{S{m}}, C{S{m}}, ∅)  ; New structure without domains
+      S'' := s(∅, ∅, D{S{m}})        ; New structure with only domains
+      
+      m' := m{S' ∔ S'', _}           ; Matter with decomposed structure
+      
+      ⟨P⟩{m', t} by ProgramParallelization{P, P'}
+      m' ≤{E} m by DomainDecomposition{m, S', S''}
+      
+      Efficient{m', E, t} by ProgramOptimization{P, m', E}
+    }
+  }
+}
+
+This Concept defines a model of programmable matter that can be reconfigured and optimized for various tasks and objectives. The structure, program, and actions of the matter can be manipulated using tactics like decomposition, parallelization, and constraint relaxation.
+The proofs establish some key properties, such as the existence of reconfigurable states, universality with respect to a set of topologies, efficiency and optimality trade-offs, and robustness to perturbations.
+The notation introduces shorthands for common operations and predicates, enabling more concise expression of complex statements.
+
+
+
+
+
+
+CONCEPT AdaptiveStructure_v1 {
+  IMPORT ComputationalMatter_v1.*
+  
+  STRUCTURE {
+    Assembly := a(U, B)
+    Component := c(S, P, A)
+    Interface := i(C, J)
+    
+    a(U, B): assembly with units U and bonds B
+    c(S, P, A): component with structure S, program P, and actions A
+    i(C, J): interface with contacts C and joints J
+    
+    U := u(M, I)
+    u(M, I): unit with matter M and interfaces I 
+    
+    B := b(i1, i2, T, S)
+    b(i1, i2, T, S): bond between interfaces i1 and i2 with type T and strength S
+    
+    Target := t(ENV, PERF)
+    Env := env(L, F)
+    Perf := perf(O, C)
+    
+    t(ENV, PERF): target structure for environment ENV and performance PERF
+    env(L, F): environment with loads L and fields F 
+    perf(O, C): performance objectives O and constraints C
+    
+    SelfAssembly{a, t} ⟺ ∀u ∈ U{a}. ∃P. ⟨P⟩{M{u}, I{u} ∈ t} ∧ ∀b ∈ B{a}. b = b(_, _, _, _)
+    Adaptation{a, t, t'} ⟺ SelfAssembly{a, t} ∧ t ≠ t' ⇒ ◇SelfAssembly{a, t'}
+    Robustness{a, t, ε} ⟺ ∀env' ∈ Ball{ENV{t}, ε}. SelfAssembly{a, t(env', PERF{t})}
+    Scalability{a, t, n} ⟺ |U{a}| = O(n) ∧ ∀u ∈ U{a}. |I{u}| = O(1) ⇒ SelfAssembly{a, t}
+    
+    notation ◇p = "eventually p" ; Temporal logic operator
+    notation Ball{x, ε} = {x' | d{x, x'} < ε}
+  }
+  
+  TACTIC {  
+    InterfaceMatching{i1, i2, T} ⊢ C{i1} = C{i2} ∧ J{i1} ∪ J{i2} ⊨ T ⇒ ∃b(i1, i2, T, _)
+    ProgramSynthesis{I, t} ⊢ ∃P. ∀i ∈ I. ⟨P⟩{_, i ∈ t}
+    AdaptationPlanning{a, t, t'} ⊢ Adaptation{a, t, t'} ⇐ ∃{ui | i ∈ 1..k}. U{a} = ⋃i U{ui} ∧ ∀i. SelfAssembly{ui, ti} ∧ t = ⋃i ti ∧ t' = ⋃i ti'
+    TargetDecomposition{t, t1, t2} ⊢ t = t1 ∪ t2 ⇒ SelfAssembly{a, t} ⇐ SelfAssembly{a1, t1} ∧ SelfAssembly{a2, t2} 
+    Localization{a, ENV, ε} ⊢ Robustness{a, t(ENV, _), ε} ⇐ ∀u ∈ U{a}. ∃εu. Robust{M{u}, Ball{ENV, εu}, ε}
+  }
+  
+  PROOF {
+    theorem ∀a, t. SelfAssembly{a, t} ⇒ Adaptation{a, t, t'} 
+    {
+      assume SelfAssembly{a, t} ∧ t ≠ t'
+      let U{a} = {u1, ..., un}
+      
+      ti := t(ENV{t}, PERFi) for i ∈ 1..n  ; Target decomposition    
+      ui := c(S{M{ui}}, Pi, A{M{ui}}) for i ∈ 1..n
+      
+      ∀i. ⟨Pi⟩{M{ui}, I{ui} ∈ ti} by ProgramSynthesis{I{ui}, ti}
+      hence ∀i. SelfAssembly{ui, ti}
+      
+      t = ⋃i ti  ; By definition of ti
+      ◇∀i. SelfAssembly{ui, ti'}  ; By inductive hypothesis
+      hence ◇SelfAssembly{a, t'} by AdaptationPlanning{a, t, t'}
+    }
+    
+    theorem Scalability{a, t, n} ∧ (∀i. |Bi| = O(1)) ⇒ |B{a}| = O(n)
+    {  
+      assume Scalability{a, t, n} ∧ (∀i. |Bi| = O(1))
+      
+      |B{a}| = ∑i |{b ∈ B{a} | b = b(_, _, _, _) ∧ (_ ∈ I{ui} ∨ _ ∈ I{ui})}|
+             = ∑i O(|I{ui}|) 
+             = ∑i O(1)
+             = O(n)
+    }
+    
+    theorem ∀t, ε. (∃a. Robustness{a, t, ε}) ⇐ (∀u. ∃M, I. Robustness{M, ENV{t}, ε} ∧ Universal{M, I{t}})
+    {
+      assume ∀u. ∃M, I. Robustness{M, ENV{t}, ε} ∧ Universal{M, I{t}}
+      let U := {u | ∃M, I. u = (M, I)}
+      
+      ∀u ∈ U. ∃εu. Robustness{M{u}, Ball{ENV{t}, εu}, ε} by assumption
+      hence Robustness{a(U, _), t, ε} by Localization{a(U, _), ENV{t}, ε}
+    }
+  }
+}
+
+This Concept defines an adaptive structure composed of self-assembling components with programmable matter. The structure can adapt to changing target shapes and environments, while maintaining robustness and scalability.
+The tactics provide ways to plan adaptations, synthesize programs for individual components, decompose target structures, and ensure robust self-assembly through localization of material properties.
+The proofs establish key properties such as the existence of adaptations between any two target structures, the scalability of the self-assembly process, and the derivation of robust global assembly from robust local materials.
+Some potential applications of such adaptive structures could include:
+
+Reconfigurable scaffolds for tissue engineering or regenerative medicine
+Adaptive metamaterials with tunable mechanical, optical or thermal properties
+Self-assembling, self-repairing buildings, bridges or other infrastructure
+Swarm robots or modular robots that can change shape and function on demand
+Programmable matter for digital fabrication or 3D printing of complex, multi-functional structures

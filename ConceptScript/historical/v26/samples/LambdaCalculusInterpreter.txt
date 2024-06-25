@@ -1,0 +1,127 @@
+CONCEPT LambdaCalculusInterpreter {
+  LANGUAGE {
+    TYPE Term
+    TYPE Variable <: Term  
+    TYPE Abstraction <: Term
+    TYPE Application <: Term
+
+    FUNC Var(name : String) : Variable
+    FUNC Abs(param : Variable, body : Term) : Abstraction
+    FUNC App(func : Term, arg : Term) : Application
+    
+    FUNC FreeVars(t : Term) : Set[Variable]
+    FUNC BoundVars(t : Term) : Set[Variable]
+    FUNC Subterms(t : Term) : Set[Term]
+    FUNC Subst(t : Term, x : Variable, s : Term) : Term
+    
+    PRED FreshVar(x : Variable, t : Term) = x ∉ FreeVars(t) ∪ BoundVars(t)
+    PRED NoFreeVarCapture(t : Term, x : Variable, s : Term) = 
+      FreeVars(s) ∩ BoundVars(t) = ∅
+        
+    AXIOM SubstIdentity {
+      ∀ (t : Term) (x : Variable) . Subst(t, x, Var(x)) = t
+    }
+    
+    AXIOM SubstFresh {
+      ∀ (t s : Term) (x y : Variable) . 
+        FreshVar(y, t) ∧ FreshVar(y, s) => Subst(Subst(t, x, s), y, Var(y)) = Subst(t, x, s)
+    }
+  }
+  
+  NOTATION {
+    "λ x . t" = Abs(Var(x), t)
+    "t s" = App(t, s)
+    "t[x := s]" = Subst(t, Var(x), s)
+  }
+
+  TRANSFORMERS {
+    REWRITE App(Abs(x, t), s) = t[x := s] WHEN NoFreeVarCapture(t, x, s)
+
+    REWRITE Subst(Var(x), y, s) = IF x = y THEN s ELSE Var(x)
+    REWRITE Subst(Abs(x, t), y, s) = IF x = y THEN Abs(x, t) 
+                                       ELSE LET z = Fresh(x, t, s) IN 
+                                              Abs(z, Subst(t[x := Var(z)], y, s))
+    REWRITE Subst(App(t1, t2), x, s) = App(Subst(t1, x, s), Subst(t2, x, s))
+      
+    TACTIC BetaReduce(t : Term) = {
+      MATCH t WITH
+      | App(Abs(x, t1), t2) => REWRITE App(Abs(x, t1), t2)
+      | Abs(x, t1) => Abs(x, BetaReduce(t1))
+      | App(t1, t2) => App(BetaReduce(t1), BetaReduce(t2))
+      | _ => t
+    }
+      
+    TACTIC NormalForm(t : Term) = {
+      LET t' = BetaReduce(t)
+      IF t' = t THEN t ELSE NormalForm(t')
+    }
+  }
+    
+  STRUCTURE LambdaInterpreter {
+    DEF Eval(env : Map[Variable, Term], t : Term) : Term =
+      MATCH t WITH
+      | Var(x) => env(x)
+      | Abs(x, t1) => Abs(x, Eval(env, t1))
+      | App(t1, t2) => LET v1 = Eval(env, t1), v2 = Eval(env, t2) IN
+                         MATCH v1 WITH
+                         | Abs(x, t') => Eval(env ∪ {x ↦ v2}, t')
+                         | _ => App(v1, v2)
+                           
+    DEF Interpret(t : Term) : Term = Eval({}, t)
+      
+    REQUIRE ∀ (t : Term) . Interpret(t) = NormalForm(t)
+  }
+    
+  PROOFS {
+    THEOREM ChurchRosser {
+      STATEMENT:
+        ∀ (t t1 t2 : Term) . t ->* t1 ∧ t ->* t2 => ∃ (s : Term) . t1 ->* s ∧ t2 ->* s
+          
+      PROOF:
+        LET t t1 t2 : Term
+        ASSUME (H1) : t ->* t1, (H2) : t ->* t2
+        
+        LET r1 = NormalForm(t1), r2 = NormalForm(t2)
+        
+        SHOW r1 = r2 BY {
+          REWRITE r1 
+            = NormalForm(t1) 
+            = NormalForm(t) BY H1, ChurchRosser(t, t1)
+          REWRITE r2
+            = NormalForm(t2)
+            = NormalForm(t) BY H2, ChurchRosser(t, t2)
+          HENCE r1 = r2
+        }
+        
+        TAKE s = r1 = r2
+        
+        SHOW t1 ->* s ∧ t2 ->* s BY {
+          HAVE t1 ->* r1 = s BY NormalForm(t1) = r1
+          HAVE t2 ->* r2 = s BY NormalForm(t2) = r2
+        }
+        
+        QED
+    }
+      
+    THEOREM NormalFormTheorem {
+      STATEMENT:
+        ∀ (t : Term) . ∃ (n : Term) . t ->* n ∧ IsNormalForm(n)
+          
+      PROOF:
+        LET t : Term
+        LET n = NormalForm(t)
+        
+        SHOW t ->* n BY Termination(BetaReduce)
+        SHOW IsNormalForm(n) BY {
+          ASSUME (H) : ∃ (n' : Term) . n -> n'
+          REWRITE n -> n' BY H
+          HENCE NormalForm(n) ≠ n
+          THUS Contradiction  
+        }
+          
+        THEREFORE ∃ (n : Term) . t ->* n ∧ IsNormalForm(n)
+          
+        QED  
+    }
+  }
+}

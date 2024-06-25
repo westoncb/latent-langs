@@ -1,0 +1,238 @@
+CONCEPT DifferentiableProbabilisticPrograms {
+  LANGUAGE {
+    TYPE Value  -- Atomic values (numbers, strings, etc.)
+    TYPE Variable  -- Program variables
+    TYPE Address = List[Int]  -- Memory addresses
+    TYPE Environment = Map[Variable, Address]  -- Variable binding environment
+    TYPE Memory = Map[Address, Distribution[Value]]  -- Probabilistic memory
+
+    TYPE Expression  -- Program expressions
+    TYPE Statement  -- Program statements
+    TYPE Program = List[Statement]  -- Sequential program
+
+    TYPE ProgramState = (Environment, Memory)  -- Program execution state
+    TYPE ProgramTrace = List[ProgramState]  -- Execution trace
+
+    TYPE ProgramCounter = Int  -- Program counter
+    TYPE LoopIteration = Int  -- Loop iteration counter
+    TYPE LoopContext = (ProgramCounter, LoopIteration, Environment)  -- Loop execution context
+
+    TYPE ActivationValue  -- Differentiable activation values
+    TYPE NeuralMemory = Map[Address, ActivationValue]  -- Differentiable memory
+
+    FUNC Eval(env : Environment, mem : Memory, expr : Expression) : Distribution[Value]
+    FUNC Exec(env : Environment, mem : Memory, stmt : Statement) : (Environment, Memory)
+    FUNC Run(env : Environment, mem : Memory, prog : Program) : ProgramTrace
+
+    FUNC Backward(t : ProgramTrace, 𝛁mem : NeuralMemory) : NeuralMemory
+    FUNC DifferentiableEval(env : Environment, mem : NeuralMemory, expr : Expression) : ActivationValue
+    FUNC DifferentiableExec(env : Environment, mem : NeuralMemory, stmt : Statement) : (Environment, NeuralMemory)
+    FUNC DifferentiableRun(env : Environment, mem : NeuralMemory, prog : Program) : ProgramTrace
+
+    FUNC Sample(mem : Memory, addr : Address) : Value
+    FUNC Observe(mem : Memory, addr : Address, obs : Value) : Memory
+    FUNC Marginalize(mem : Memory, addr : Address) : Memory
+
+    FUNC Neural(mem : NeuralMemory, addr : Address) : ActivationValue
+    FUNC NeuralApply(f : ActivationValue -> ActivationValue, mem : NeuralMemory, addr : Address) : NeuralMemory
+
+    FUNC LoopContinue(ctx : LoopContext, pred : Expression) : Bool
+    FUNC LoopStep(ctx : LoopContext, body : List[Statement]) : LoopContext
+
+    AXIOM DifferentiableEvalCorrectness {
+      ∀ (env : Environment) (mem : Memory) (expr : Expression).
+        Sample(mem, Result(DifferentiableEval(env, Neural(mem), expr))) ~
+        Eval(env, mem, expr)
+    }
+
+    AXIOM DifferentiableExecCorrectness {
+      ∀ (env : Environment) (mem : Memory) (stmt : Statement).
+        DifferentiableExec(env, Neural(mem), stmt) = (env', Neural(mem'))
+        WHERE (env', mem') = Exec(env, mem, stmt)
+    }
+
+    AXIOM DifferentiableRunCorrectness {
+      ∀ (env : Environment) (mem : Memory) (prog : Program).
+        Map(λ s. (s.1, Sample(s.2)), DifferentiableRun(env, Neural(mem), prog)) ~
+        Run(env, mem, prog)  
+    }
+
+    AXIOM SamplingCorrectness {
+      ∀ (mem : Memory) (addr : Address). 
+        Sample(mem, addr) ~ mem[addr]
+    }
+
+    AXIOM ObservationCorrectness {
+      ∀ (mem : Memory) (addr : Address) (obs : Value).
+        mem[addr][obs] > 0 => Observe(mem, addr, obs)[addr] ~ mem[addr] | [obs]
+        mem[addr][obs] = 0 => Observe(mem, addr, obs) = ∅
+    } 
+
+    AXIOM MarginalizationCorrectness {
+      ∀ (mem : Memory) (addr : Address).
+       Marginalize(mem, addr) = 
+         Μem[λ m. Map(a -> IF a = addr THEN ∑ (v : Value) m[addr][v] ELSE m[a], m)]
+    }
+
+    AXIOM NeuralCorrectness {
+      ∀ (mem : NeuralMemory) (addr : Address).
+        Neural(NeuralApply(id, mem, addr)) ~ mem[addr]
+    }
+
+    AXIOM LoopSemantics {
+      ∀ (env : Environment) (mem : Memory) (pred : Expression) (body : List[Statement]).
+        LoopStep(ctx, body) =
+          LET (_, mem') = FoldLeft(Exec, (env, mem), Take(body, LoopIteration(ctx)))
+          IN IF LoopContinue(ctx, pred) 
+             THEN (ProgramCounter(ctx), LoopIteration(ctx) + 1, env)
+             ELSE (ProgramCounter(ctx) + Length(body), 0, env)
+    }
+  }
+
+  STRUCTURE NeuralProgramSynthesis {
+    FUNC Enumerate(g : Grammar, d : Int) : List[Program]
+    FUNC Execute(p : Program, i : Input) : Output
+    FUNC Predict(model : Model, p : Program, i : Input) : Distribution[Output]
+    FUNC Loss(model : Model, p : Program, i : Input, o : Output) : ℝ≥0
+    FUNC Train(model : Model, progs : List[Program], data : List[(Input, Output)], 
+               steps : Int, lr : ℝ>0) : Model
+
+    FUNC Synthesize(g : Grammar, model : Model, i : Input, o : Output, d : Int, 
+                    steps : Int, lr : ℝ>0, restarts : Int) : Program
+      DEF Candidates = Enumerate(g, d)
+      DEF CorrectPrograms = Filter(λ p. Execute(p, i) = o, Candidates)
+      DEF TrainModel(p) = Train(model, [p], [(i, o)], steps, lr)
+      DEF Score(p) = Exp(-Loss(TrainModel(p), p, i, o))
+      RETURN MaxBy(Score, CorrectPrograms ++ [RestartingSearch(g, model, i, o, d, steps, lr) 
+                                               FOR _ IN Range(restarts)])
+
+    FUNC RestartingSearch(g : Grammar, model : Model, i : Input, o : Output, d : Int,
+                          steps : Int, lr : ℝ>0) : Program                            
+      DEF Candidates = Enumerate(g, d)
+      DEF ProgramLoop(p) = 
+        LET p' = ArgMin(λ p'. Loss(TrainModel(p'), p', i, o), 
+                        {p'' | p' -> p'' ∈ ProgramNeighborhood(g, p)})
+        IN IF Loss(TrainModel(p'), p', i, o) < Loss(model, p, i, o) THEN
+             ProgramLoop(p')   
+           ELSE
+             p
+      RETURN ArgMin(λ p. Loss(TrainModel(ProgramLoop(p)), ProgramLoop(p), i, o), Candidates)
+  }
+
+  STRUCTURE ProbabilisticProgramInference {
+    -- Likelihood-weighting inference
+    FUNC Infer(prog : Program, inputs : Memory, observations : Memory, numSamples : Int) : Memory
+      DEF InitState(n) = (∅, Observe(inputs, observations))
+      DEF Run(s) = (_, m) WHERE (_, m) = Last(Run(s.1, s.2, prog))
+      DEF IsConsistent((_, m)) = ∀ (a : Address, v : Value). 
+                                   observations[a][v] > 0 => m[a] ~ [v]
+      DEF Result(traces) = Marginalize(Μem[λ t. IF IsConsistent(Last(t)) THEN Last(t).2 ELSE ∅], 
+                                        traces)
+      RETURN Result(Take(Filter(IsConsistent, Map(Run, Map(InitState, Range(numSamples)))), numSamples))
+
+    -- Differentiable inference                                
+    FUNC DiffInfer(prog : Program, guide : Program, inputs : NeuralMemory, 
+                   observations : Memory, numSamples : Int, steps : Int, 
+                   lr : ℝ>0) : NeuralMemory
+      DEF ELBO(m, i) = Sum(LOG ∘ Neural(m) ∘ Result(DifferentiableRun(∅, i, prog))) -
+                        Sum(LOG ∘ Neural(m) ∘ Result(Run(∅, Sample(i), guide)))
+      DEF GradientStep(m, i) = m + lr * Backward(DifferentiableRun(∅, i, prog), 
+                                            Backward(Run(∅, Sample(i), guide), 𝛁(ELBO(m, i))))
+      RETURN LAST(TAKE(SCAN(GradientStep, 
+                             inputs, 
+                             REPLICATE(steps, Observe(inputs, observations))), 
+                        steps))
+  }
+
+  PROOFS {
+    THEOREM DifferentiableProgramEquivalence {
+      STATEMENT:
+        ∀ (prog : Program) (inputs : Memory) (observations : Memory).
+          LET outputs = Marginalize(Last(Run(∅, inputs, prog)).2)
+          IN ∀ (numSamples : Int) (guide : Program) (steps : Int) (lr : ℝ>0).
+            LET diffOutputs = DiffInfer(prog, guide, Neural(inputs), observations, numSamples, steps, lr)
+            IN ∀ (a : Address).
+              KLDivergence(diffOutputs[a] || outputs[a]) ≤
+                1/sqrt(numSamples) + 
+                  (steps * lr^2 * Exp(-steps * lr)) / (1 - Exp(-lr))
+
+      PROOF:
+        LET prog : Program, inputs : Memory, observations : Memory
+        LET outputs = Marginalize(Last(Run(∅, inputs, prog)).2)
+
+        LET numSamples : Int, guide : Program, steps : Int, lr : ℝ>0
+        LET diffOutputs = DiffInfer(prog, guide, Neural(inputs), observations, numSamples, steps, lr)
+        
+        -- Converges to true posterior as num samples → ∞
+        LET numSamples → ∞  
+        KLDivergence(diffOutputs[a] || outputs[a])
+          ≤ 1/sqrt(numSamples)
+            BECAUSE diffOutputs CONVERGES TO outputs BY DifferentiableRunCorrectness, MarginalizationCorrectness
+          ≤ 0
+
+        -- Converges to true posterior as learning rate → 0 and steps → ∞  
+        LET lr → 0, steps → ∞ SUCH THAT steps * lr → ∞
+        LET ELBO(m, i) = Sum(LOG ∘ Neural(m) ∘ Result(DifferentiableRun(∅, i, prog))) -
+                          Sum(LOG ∘ Neural(m) ∘ Result(Run(∅, Sample(i), guide)))
+        LET GradientStep(m, i) = m + lr * Backward(DifferentiableRun(∅, i, prog), 
+                                              Backward(Run(∅, Sample(i), guide), 𝛁(ELBO(m, i))))
+        ELBO(diffOutputs, inputs) - ELBO(Neural(inputs), inputs)
+          = ∑ (i : Range(steps)) [ELBO(GradientStep^i(Neural(inputs), inputs), inputs) - 
+                                   ELBO(GradientStep^(i-1)(Neural(inputs), inputs), inputs)]
+          ≥ ∑ (i : Range(steps)) lr * ||𝛁(ELBO(GradientStep^(i-1)(Neural(inputs), inputs), inputs))||^2
+            BY GradientStep INCREASES ELBO
+          ≥ ∑ (i : Range(steps)) lr * Exp(-2 * i * lr) * ||𝛁(ELBO(Neural(inputs), inputs))||^2  
+            BECAUSE ||𝛁(ELBO)||^2 DECREASES EXPONENTIALLY
+          ≥ (steps * lr * Exp(-2 * steps * lr) / (1 - Exp(-2 * lr))) * ||𝛁(ELBO(Neural(inputs), inputs))||^2
+          ≥ 0
+        
+        HENCE
+          KLDivergence(diffOutputs[a] || outputs[a])
+            ≤ 1/sqrt(numSamples) + 
+                (steps * lr^2 * Exp(-steps * lr)) / (1 - Exp(-lr))
+              BECAUSE diffOutputs CONVERGES TO outputs
+    }
+
+    THEOREM ProbabilisticProgrammingEquivalence {
+      STATEMENT:
+        ∀ (prog : Program) (inputs : Memory) (observations : Memory) (numSamples : Int).
+          Infer(prog, inputs, observations, numSamples) ~ Posterior(prog, inputs, observations)
+            WHERE
+              Posterior(prog, inputs, observations) =
+                (λ m. m × ∏ (a : Address, v : Value) [m[a][v] ^ observations[a][v]]) ∘ 
+                  Marginalize(Last(Run(∅, inputs, prog)).2)
+
+      PROOF:
+        LET prog : Program, inputs : Memory, observations : Memory, numSamples : Int
+        LET posterior = Posterior(prog, inputs, observations)
+        LET inferred = Infer(prog, inputs, observations, numSamples)
+        
+        -- Infer implements likelihood weighting
+        inferred
+          = Marginalize(Μem[λ t. IF (∀ (a : Address, v : Value). 
+                                      observations[a][v] > 0 => Last(t).2[a] ~ [v])
+                                  THEN Last(t).2 
+                                  ELSE ∅],
+                         Take(Filter(λ t. ∀ (a : Address, v : Value).
+                                            observations[a][v] > 0 => Last(t).2[a] ~ [v],
+                                     Map(λ n. Run(∅, Observe(inputs, observations), prog),
+                                         Range(numSamples))),
+                              numSamples))
+            BY Infer, SamplingCorrectness, ObservationCorrectness, MarginalizationCorrectness
+
+        -- Converges to true posterior as num samples → ∞              
+        LET numSamples → ∞
+        inferred
+          ~ Marginalize(Μem[λ m. IF (∀ (a : Address, v : Value). 
+                                      observations[a][v] > 0 => m[a] ~ [v])
+                                  THEN m
+                                  ELSE ∅],
+                         Unroll(Run(∅, inputs, prog)))
+            BY SamplingCorrectness
+          ~ Marginalize((λ m. IF (∀ (a : Address, v : Value). 
+                                    observations[a][v] > 0 => m[a] ~ [v])
+                               THEN m 
+                               ELSE ∅) ∘
+                          Last(Run(∅, inputs, prog)).2)
+          ~ (λ m. m × ∏ (a : Address, v : Value) [m[a][v] ^ observations[a][v]]) ∘
+              Marginalize(Last(Run(∅, inputs, prog

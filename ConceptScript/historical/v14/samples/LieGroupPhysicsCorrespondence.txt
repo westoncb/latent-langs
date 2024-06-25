@@ -1,0 +1,117 @@
+CONCEPT LieGroupPhysicsCorrespondence {
+  LANGUAGE {
+    type Grp = LieGroup(Manifold)
+    type Alg = LieAlgebra(VectorSpace)
+    type Phys = PhysicalSystem(Grp)
+    
+    notation "g ∘ h" = Compose(g: Grp, h: Grp)
+    notation "g⁻¹" = Inverse(g: Grp)
+    notation "𝖊" = Identity(Grp)
+    
+    notation "ξ + ζ" = Add(ξ: Alg, ζ: Alg)  
+    notation "α ∙ ξ" = Scale(α: ℝ, ξ: Alg)
+    notation "[ξ, ζ]" = Bracket(ξ: Alg, ζ: Alg)
+    
+    notation "L[g]" = LeftTranslate(g: Grp)
+    notation "R[g]" = RightTranslate(g: Grp)
+    notation "Ad[g]" = Adjoint(g: Grp)
+    notation "ad[ξ]" = InfinitesimalAdjoint(ξ: Alg)
+    
+    notation "exp(ξ)" = Exponential(ξ: Alg)
+    notation "ξ(𝖊) = d/dt|₀ exp(tξ)" = InfinitesimalGenerator(ξ: Alg)
+    
+    notation "g(t)" = DynamicalFlow(g: Grp, t: ℝ)
+    notation "ξ(t)" = ξ ∘ g(t)" = PullbackDynamics(ξ: Alg, g: g(t))
+    
+    axiom Correspondence(G: Grp, g: LieAlgebra(G)): g ≈ TeG
+    axiom ExpProperty(ξ: Alg, t: ℝ): exp((s + t)ξ) = exp(sξ) ∘ exp(tξ)
+    axiom BracketProperty(ξ, ζ: Alg): [ξ, ζ] = ad[ξ](ζ) 
+    axiom AdjointProperty(g: Grp, ξ: Alg): Ad[g] ξ(𝖊) = (ξ ∘ g)(e) 
+  }
+
+  STRUCTURE {
+    GroupProperties: {
+      ∀ g, h, k : Grp.
+        g ∘ (h ∘ k) = (g ∘ h) ∘ k
+        𝖊 ∘ g = g ∘ 𝖊 = g
+        g ∘ g⁻¹ = g⁻¹ ∘ g = 𝖊
+    }
+
+    AlgebraProperties: {
+      ∀ ξ, ζ, γ: Alg, α, β : ℝ.   
+        (ξ + ζ) + γ = ξ + (ζ + γ)
+        ξ + ζ = ζ + ξ  
+        0 + ξ = ξ + 0 = ξ
+        (-ξ) + ξ = ξ + (-ξ) = 0
+        α ∙ (β ∙ ξ) = (αβ) ∙ ξ
+        1 ∙ ξ = ξ
+        α ∙ (ξ + ζ) = (α ∙ ξ) + (α ∙ ζ)
+        (α + β) ∙ ξ = (α ∙ ξ) + (β ∙ ξ)
+        [ξ, ζ] = -(ζ, ξ)  
+        [ξ, [ζ, γ]] + [γ, [ξ, ζ]] + [ζ, [γ, ξ]] = 0 
+    }
+
+    LieAlgebraAction: {
+      ∀ g : Grp, ξ, ζ : Alg.
+        exp(0) = 𝖊
+        L[exp(tξ)] = exp(tξ(𝖊))  
+        R[exp(tξ)] = exp(-tξ(𝖊))
+        Ad[exp(tξ)](ζ) = exp(t ad[ξ])(ζ)
+    }
+
+    HamiltonianEvolution: {
+      type OnParameterizedSystem = Function(Phys -> Alg)
+      notation "H" = HamiltonianFunction(OnParameterizedSystem)
+      
+      axiom HamiltonsEquation(H: OnParameterizedSystem, g(t): DynamicalFlow):
+        d/dt g(t) = (dH/dξ) ∘ g(t)  
+    }
+  }
+
+  PROOFS {
+    tactic LieDerivative(ξ, ζ: Alg, P): 
+      ([ξ, ζ] = ad[ξ](ζ)) ∧ P(ζ) ⊢ P([ξ, ζ])
+      
+    theorem InfinitesimalAdjointEndomorphism(ξ, ζ, γ: Alg):
+      ad[ξ]([ζ, γ]) = [ad[ξ](ζ), γ] + [ζ, ad[ξ](γ)]
+    {
+      ζ ∘ γ = γ ∘ ζ + [ζ, γ]            ; Definition of bracket
+      ad[ξ](ζ ∘ γ) = ad[ξ](γ ∘ ζ) + ad[ξ]([ζ, γ])  ; Lie derivative of both sides
+      (ad[ξ](ζ)) ∘ γ + ζ ∘ (ad[ξ](γ)) = (ad[ξ](γ)) ∘ ζ + γ ∘ (ad[ξ](ζ)) + ad[ξ]([ζ, γ])  ; Leibniz rule
+      [ξ, ζ ∘ γ] = [ξ, γ ∘ ζ] + ad[ξ]([ζ, γ])   ; Bracket both sides with ξ
+      [ξ, ζ] ∘ γ + ζ ∘ [ξ, γ] = [ξ, γ] ∘ ζ + γ ∘ [ξ, ζ] + ad[ξ]([ζ, γ])   ; Jacobi identity   
+      [[ξ, ζ], γ] + [ζ, [ξ, γ]] = [[ξ, γ], ζ] + [γ, [ξ, ζ]] + ad[ξ]([ζ, γ])  ; Definition of bracket
+      ad[ξ]([ζ, γ]) = [ad[ξ](ζ), γ] + [ζ, ad[ξ](γ)]   ; Simplify and rearrange
+    }
+           
+    theorem NoetherCurrentConserved(H: OnParameterizedSystem, ξ(t): PullbackDynamics):
+      (∀ t. H(exp(tξ(t))) = H(𝖊)) ⊢ d/dt ⟨ξ(t), dH/dξ⟩ = 0
+    { 
+      assume ∀ t. H(exp(tξ(t))) = H(𝖊)
+      let J(t) := ⟨ξ(t), dH/dξ⟩  ; Define Noether current
+      d/dt ⟨ξ(t), dH/dξ⟩ = ⟨d/dt ξ(t), dH/dξ⟩ + ⟨ξ(t), d²H/dt dξ⟩   ; Take time derivative  
+      ξ(t) = Ad[g(t)] ξ(𝖊)          ; Equivariance of pullback
+      d/dt ξ(t) = ad[d/dt g(t)] ξ(t)    ; Time derivative of equivariance
+      d/dt g(t) = (dH/dξ) ∘ g(t)      ; Hamilton's equation
+      d/dt ξ(t) = ad[(dH/dξ) ∘ g(t)] ξ(t)  ; Substitute
+      ⟨d/dt ξ(t), dH/dξ⟩ = ⟨ad[(dH/dξ)∘g(t)] ξ(t), dH/dξ⟩   ; Substitute in J'(t)
+      = ⟨ξ(t), ad[(dH/dξ)∘g(t)]* dH/dξ⟩     ; ad is skew-adjoint
+      = -⟨ξ(t), L[dH/dξ] dH/dξ⟩             ; ad[(dH/dξ)∘g(t)]* = -L[dH/dξ]  
+      = -⟨ξ(t), d²H/dt dξ⟩                  ; Cartan's magic formula
+      d/dt J(t) = 0                           ; J'(t) terms cancel
+    }
+  }
+}
+
+
+This Concept explores the deep connections between Lie groups, Lie algebras, and their applications in physics. It defines the basic structures and axioms of Lie groups and algebras, and then demonstrates how they can be used to model dynamical systems in physics via Hamiltonian mechanics.
+Key elements include:
+
+Defining the composition, inverse, and identity operations on a Lie group
+Defining addition, scalar multiplication, and Lie bracket on a Lie algebra
+Establishing the exponential map as the correspondence between Lie algebra elements and Lie group elements near the identity
+Formulating Hamiltonian evolution on the cotangent bundle of a Lie group
+Proving the infinitesimal adjoint endomorphism property, showing how the Lie bracket captures the structure of the Lie algebra's adjoint representation
+Proving Noether's theorem relating symmetries of the Hamiltonian to conserved quantities, utilizing the equivariance of the pullback of dynamics to the Lie algebra
+
+The Concept aims to expose the elegant mathematical structures underpinning much of modern physics in a compact axiomatic framework.

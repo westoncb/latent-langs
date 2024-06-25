@@ -1,0 +1,107 @@
+CONCEPT ModularRobot_v1 {
+  IMPORT UniversalConstructor_v1.*
+
+  LANGUAGE {
+    RobotModule := m(T, A, P)
+    Connector := c(G, D)
+    
+    m(T, A, P): module with type T, actuators A, and ports P
+    c(G, D): connector with geometry G and data interface D
+    
+    T := t(F, S) | T + T 
+    t(F, S): module type with functionality F and structure S
+    
+    A := a(J, R) | A + A
+    a(J, R): actuator with joint type J and range of motion R
+    
+    P := p(L, C) | P + P
+    p(L, C): port with location L and connector C
+    
+    RobotBlueprint := rb(M, T)
+    rb(M, T): robot blueprint with module arrangement M and task T
+    
+    Arrange{M} = (P, p(L, C)) → P ∪ {p(L', C)} | C = c(_, _) ∧ L' ∈ μ{L, G{C}}  
+    
+    Capabilities{m} = {(J, R) | a(J, R) ∈ A{m}}
+    Compatibility{m, m'} ⟺ ∃p ∈ P{m}. ∃p' ∈ P{m'}. C{p} = C{p'}
+    
+    RobotObjective := ro(T, Q)
+    ro(T, Q): robot objective to perform task T with quality Q
+    
+    notation M ↦ M' = ∀m ∈ M. ∃m' ∈ M'. T{m} = T{m'} ∧ |P{m}| ≥ |P{m'}|
+  }
+
+  TACTIC {
+    ModuleDecomposition{m, t, t'} ⊢ 
+      T{m} = t + t' ⇒ ∃m', m''. T{m'} = t ∧ T{m''} = t' ∧ m = m' + m''
+      
+    ModuleComposition{m, m'} ⊢ 
+      Compatibility{m, m'} ⇒ ∃m''. T{m''} = T{m} + T{m'} 
+        ∧ A{m''} = A{m} ∪ A{m'} ∧ P{m''} = (P{m} ∪ P{m'}) \ {p, p'}
+        where p ∈ P{m} and p' ∈ P{m'} such that C{p} = C{p'}
+        
+    TaskDecomposition{rb(M, T), rb(M', T')} ⊢ 
+      T = T' + T'' ∧ M ↦ M' ⇒ rb(M', T') ≼ rb(M, T)
+  }
+  
+  STRUCTURE {    
+    [ModuleTypes: 
+      wheel = t(drive, _)
+      arm = t(manipulate, _) 
+      sensor = t(observe, _)
+      battery = t(power, _)
+      compute = t(control, _)
+      
+      module = wheel | arm | sensor | camera | compute
+    ]
+        
+    [ConnectorTypes:
+      data = c(_, usb)
+      power = c(_, dc)
+      mechanical = c(_, {male, female})
+    ]
+    
+    [Actuators:
+      motor = a(revolute, 2π)  
+      servo = a(revolute, π)
+      linear = a(prismatic, _)
+      gripper = a(_, _)
+    ]
+  }
+  
+  PROOF {
+    theorem ∀M, T. Constructs{ModularRobot, rb(M, T)} 
+      ⇐ ∀t ∈ T. ∃m ∈ M. T{m} = t ∧ ∀m, m' ∈ M. Compatibility{m, m'}
+    {
+      assume ∀t ∈ T. ∃m ∈ M. T{m} = t and ∀m, m' ∈ M. Compatibility{m, m'}
+      let B = {rb(M, T)} and O = ro(T, Q)
+      
+      ∀m ∈ M. Constructs{ModularRobot, m} by assumption and definition of Constructs
+      
+      ∀m, m' ∈ M. Compatibility{m, m'} by assumption
+      hence ∀{m, m'} ⊆ M. ∃m''. T{m''} = T{m} + T{m'} by ModuleComposition{m, m'}
+      hence ∃M'. M ↦ M'
+           
+      ∀M'. M ↦ M' ⇒ ∃P. Arrange{M'} = P by definition of Arrange
+      
+      Fix some such P.
+           
+      S := s{p(L, C) | p(L, C) ∈ P}
+      
+      B = {rb(M', S)} and F{O}{_, S} ≥ F*{O} - ε by TaskDecomposition{rb(M, T), rb(M', S)}
+      
+      hence Constructs{ModularRobot, S} by definition of Constructs
+    }
+  }  
+}
+
+This Concept defines a modular robot system where robots are constructed by arranging compatible modules according to a blueprint to achieve a task-specific objective.
+The key ideas are:
+
+Robot modules have types (wheel, arm, etc.), actuators, and connectors. Module types define functionality and structure.
+Modules can be decomposed and composed based on their types and connector compatibility.
+Robot blueprints specify a module arrangement and target task. Blueprints can be optimized by task decomposition.
+The STRUCTURE block defines common module, connector, and actuator types.
+The main theorem proves that a robot can be constructed for a task if there exist compatible modules covering all required functionality.
+
+This provides a framework to design, optimize, and construct modular robots for various tasks by specializing the UniversalConstructor_v1 Concept.

@@ -1,0 +1,84 @@
+CONCEPT TopologicalDataAnalysis {
+  LANGUAGE {
+    type Space = Set<Point>
+    type Point = Vector
+    type Simplex = List<Point>
+    type Complex = Set<Simplex>
+    type Filtration = List<Complex>
+    type PersistenceDiagram = List<(R, R)>
+
+    func Distance : Point × Point -> R
+    func VietorisRipsComplex : Space × R -> Complex
+    func PersistentHomology : Filtration -> PersistenceDiagram
+    func Bottleneck : PersistenceDiagram × PersistenceDiagram -> R
+
+    notation "d(x, y)" = Distance(x, y)
+    notation "VR(X, ε)" = VietorisRipsComplex(X, ε)
+    notation "H*(F)" = PersistentHomology(F)
+    notation "d_B(D₁, D₂)" = Bottleneck(D₁, D₂)
+  }
+
+  STRUCTURE {
+    ; Metric space axioms
+    ∀(X: Space) (x, y, z: Point ∈ X).
+      d(x, y) ≥ 0   ; non-negativity
+      d(x, y) = 0 ⟺ x = y   ; identity of indiscernibles
+      d(x, y) = d(y, x)   ; symmetry
+      d(x, z) ≤ d(x, y) + d(y, z)   ; triangle inequality
+
+    ; Simplicial complex axioms  
+    ∀(K: Complex) (σ, τ: Simplex).
+      σ ⊆ τ ∧ τ ∈ K ⟹ σ ∈ K   ; closure
+      σ ∩ τ ∈ K   ; intersection
+
+    ; Persistent homology axioms
+    ∀(F: Filtration) (i ≤ j) (k: N).
+      rank(H*(F[i])[k] -> H*(F[j])[k]) = |{(b, d) ∈ H*(F)[k] | b ≤ i ∧ d > j}|
+  }
+
+  PROOFS {
+    theorem StabilityTheorem {
+      ∀(X, Y: Space) (F_X, F_Y: Filtration) (ε: R).
+        (∀i. d_H(X[i], Y[i]) ≤ ε) ⟹ (d_B(H*(F_X), H*(F_Y)) ≤ ε)
+    }
+    {
+      assume ∀i. d_H(X[i], Y[i]) ≤ ε   ; Hausdorff distance
+      let D_X = H*(F_X)
+      let D_Y = H*(F_Y)
+      
+      take (b, d) ∈ D_X[k] 
+      let σ ∈ F_X[b] such that [σ] = (b, d)
+      let τ ∈ F_Y[b + ε] such that d_H(σ, τ) ≤ ε   ; by assumption
+      let c = min{i | τ ∉ F_Y[i]}
+      
+      (b, c) ∈ D_Y[k]   ; by definition of PH
+      |b - b| = 0 ≤ ε   ; trivial
+      |c - d| ≤ ε   ; by Hausdorff stability of VR complex
+      hence ∃(b', d') ∈ D_Y[k]. |b - b'| ≤ ε ∧ |d - d'| ≤ ε
+
+      symmetric argument for (b, d) ∈ D_Y[k]
+      hence d_B(D_X, D_Y) ≤ ε   ; by definition of bottleneck distance
+    }
+  }
+
+  EXAMPLES {
+    ; Topological data analysis pipeline
+    let X = SamplePoints()
+    let F = VietorisRipsFilteration(X, MaxScale(X))
+    let D = PersistentDiagram(F) 
+    let f = PersistentFeatures(D)
+
+    ; Classification using persistent homology
+    let X_train, y_train = LoadTrainingData()  
+    let F_train = [VietorisRipsFiltration(X, MaxScale(X)) for X ∈ X_train]
+    let D_train = [PersistentDiagram(F) for F ∈ F_train]
+
+    let X_test, y_test = LoadTestData()
+    let F_test = [VietorisRipsFiltration(X, MaxScale(X)) for X ∈ X_test]  
+    let D_test = [PersistentDiagram(F) for F ∈ F_test]
+
+    let y_pred = [Classify(D, D_train, y_train) for D ∈ D_test]
+
+    Evaluate(y_test, y_pred)
+  }  
+}

@@ -1,0 +1,316 @@
+CONCEPT Sun EXTENDS Star {
+  PARAMETERS {
+    Mass : Mass = 1.98847e30 * kg
+    Radius : Length = 6.957e8 * m
+    Luminosity : Power = 3.828e26 * watt
+    EffectiveTemperature : Temperature = 5772 * kelvin
+    AgeSinceZAMS : Time = 4.603e9 * Year
+    MetallicityZ : FractionMassMetal = 0.0122  
+  }
+  
+  CONTEXT {
+    TYPES {
+      Year := 365.25 * Day
+      FractionMassMetal := Real [Range(0, 1)]
+      Pressure := Force / Area
+      Opacity := Area / Mass
+    }
+    
+    STRUCTURES {
+      STRUCTURE Interior {
+        Core : STRUCTURE {
+          Radius : Length = 0.20 * Sun.Radius
+          Temperature : Temperature = 1.57e7 * kelvin
+          Density : Density = 1.62e5 * kg / m^3
+          HydrogenFractionByMass : Real = 0.34
+          HeliumFractionByMass : Real = 0.64
+          FUNC Composition(r : Length) -> STRUCT {
+            X : Real  -- Hydrogen fraction
+            Y : Real  -- Helium fraction
+            Z : Real  -- Metal fraction
+          }
+        }
+        
+        RadiativeZone : STRUCTURE {
+          LowerRadius : Length = Core.Radius
+          UpperRadius : Length = 0.7 * Sun.Radius
+          FUNC Temperature(r : Length) -> Temperature
+          FUNC Density(r : Length) -> Density
+        }
+        
+        ConvectiveZone : STRUCTURE {
+          LowerRadius : Length = RadiativeZone.UpperRadius
+          UpperRadius : Length = Sun.Radius
+          FUNC Temperature(r : Length) -> Temperature
+          FUNC Density(r : Length) -> Density
+          FUNC ConvectiveVelocity(r : Length) -> Velocity
+        }
+        
+        FUNC RotationProfile(r : Length, θ : Angle) -> AngularSpeed
+      }
+      
+      STRUCTURE Atmosphere {
+        Photosphere : STRUCTURE {
+          LowerHeight : Length = 0 * m
+          UpperHeight : Length = 500 * km
+          EffectiveTemperature : Temperature = Sun.EffectiveTemperature
+          FUNC Temperature(h : Length) -> Temperature
+          FUNC Density(h : Length) -> Density
+          FUNC Opacity(h : Length, λ : Length) -> Opacity          
+        }
+        
+        Chromosphere : STRUCTURE {
+          LowerHeight : Length = Photosphere.UpperHeight
+          UpperHeight : Length = 2000 * km
+          FUNC Temperature(h : Length) -> Temperature
+          FUNC Density(h : Length) -> Density
+        }
+
+        TransitionRegion : STRUCTURE {
+          LowerHeight : Length = Chromosphere.UpperHeight
+          UpperHeight : Length = 2100 * km 
+          FUNC Temperature(h : Length) -> Temperature
+          FUNC Density(h : Length) -> Density
+        }
+        
+        Corona : STRUCTURE {
+          LowerHeight : Length = TransitionRegion.UpperHeight  
+          FUNC Temperature(h : Length) -> Temperature
+          FUNC Density(h : Length) -> Density
+          AverageTemperature : Temperature = 1e6 * kelvin
+        }
+      }
+      
+      STRUCTURE MagneticField {  
+        FUNC RadialComponent(r : Length, θ : Angle, φ : Angle) -> MagneticFluxDensity
+        FUNC MeridionalComponent(r : Length, θ : Angle, φ : Angle) -> MagneticFluxDensity
+        FUNC AzimuthalComponent(r : Length, θ : Angle, φ : Angle) -> MagneticFluxDensity  
+      }
+      
+      STRUCTURE SolarWind {
+        FUNC Velocity(r : Length, θ : Angle, φ : Angle) -> Velocity
+        FUNC Density(r : Length, θ : Angle, φ : Angle) -> Density
+        FUNC Temperature(r : Length, θ : Angle, φ : Angle) -> Temperature
+        FUNC MagneticField(r : Length, θ : Angle, φ : Angle) -> MagneticFluxDensity
+        
+        AlfvenRadius : Length
+        SonicPoint : Length
+      }
+    }
+  }
+  
+  PROPERTIES {
+    Composition : STRUCT {
+      X : Real = 0.7381  -- Hydrogen fraction  
+      Y : Real = 0.2485  -- Helium fraction
+      Z : FractionMassMetal = MetallicityZ
+    }
+    
+    NeutrinoLuminosity : Power = 3.846e26 * watt
+    MeanDensity : Density = (3 * Mass) / (4 * π * Radius^3)
+    KepleranRotationPeriod : Time = 2 * π * sqrt((Radius^3) / (G * Mass))
+    SurfaceGravity : Acceleration = G * Mass / (Radius^2)
+    EscapeVelocity : Velocity = sqrt(2 * G * Mass / Radius)
+    
+    SpecificAngularMomentum : AngularMomentum = 1.63e41 * kg * m^2 / s
+    MagneticPolarity : Sign = -1  -- Current magnetic cycle
+    
+    Orbit : STRUCTURE {
+      SemimajorAxis : Length = 1.49598023e11 * m
+      Eccentricity : Real = 0.0167086
+      Inclination : Angle = 0 * deg
+      LongitudeAscendingNode : Angle = 0 * deg 
+      ArgumentPerihelion : Angle = 114.20783 * deg
+      MeanLongitude : Angle = 100.46435 * deg
+    }
+  }
+  
+  OBSERVABLES {
+    TotalSolarIrradiance : STRUCTURE {
+      Flux : Real = 1360.8 * watt / m^2      
+      FUNC Spectrum(λ : Length) -> SpectralIrradiance
+    }
+    
+    SurfaceAbundances : STRUCT {
+      H : Real = 0.92  -- Fraction of number of atoms
+      He : Real = 0.078
+      O : Real = 6e-4
+      C : Real = 3.3e-4
+      Ne : Real = 1.2e-4
+      N : Real = 1.1e-4  
+      -- ... more elements
+    }
+    
+    DifferentialRotation : STRUCT {
+      EquatorialPeriod : Time = 24.47 * Day
+      FUNC AngularVelocity(θ : Angle) -> AngularSpeed {
+        2 * π / (DifferentialRotation.EquatorialPeriod * (1 - 0.19 * sin(θ)^2))
+      }
+    }
+    
+    Oblateness : Real = 9e-6  -- (Requa - Rpole) / Requa
+    
+    Oscillations : STRUCTURE {
+      FUNC ModesL0(n : Nat) -> Frequency
+      FUNC ModesL1(n : Nat) -> Frequency
+      FUNC ModesL2(n : Nat) -> Frequency
+      FUNC ModesL3(n : Nat) -> Frequency
+    } 
+    
+    Granulation : STRUCTURE {
+      HorizontalScale : Length = 1000 * km  
+      VerticalScale : Length = 100 * km
+      LifeTime : Time = 8 * min
+      FUNC Contrast(λ : Length) -> Real    
+    }
+
+    Supergranulation : STRUCTURE {
+      HorizontalScale : Length = 30000 * km
+      VerticalScale : Length = 5000 * km 
+      LifeTime : Time = 24 * hour
+      FUNC Velocity(r : Length) -> Velocity
+    }
+    
+    ActiveRegions : STRUCTURE {
+      NumberWolfSunspot : Real [Range(0, 200)]
+      FUNC Number(t : Time) -> Real
+      FUNC Area(t : Time) -> Real    
+    }
+    
+    SolarFlares : STRUCTURE {
+      FUNC Rate(t : Time, E : Energy) -> Real
+      MaxBolometricLuminosity : Power = 1e27 * watt
+      TotalEnergy : Energy = 1e32 * erg
+    }
+    
+    CoronalMassEjections : STRUCTURE {
+      FUNC Rate(t : Time) -> Real
+      AverageMass : Mass = 1.6e12 * kg
+      AverageVelocity : Velocity = 489 * km / s
+    }
+    
+    SolarNeutrinos : STRUCTURE {
+      PP : STRUCTURE {  
+        FluxEarth : Real = 5.99e10 / cm^2 / s
+        MeanEnergy : Energy = 0.2668 * MeV
+      }
+      Pep : STRUCTURE {
+        FluxEarth : Real = 1.42e8 / cm^2 / s
+        Energy : Energy = 1.442 * MeV  
+      }
+      Hep : STRUCTURE {
+        FluxEarth : Real = 7.93e3 / cm^2 / s
+        Energy : Energy = 18.778 * MeV
+      }
+      B8 : STRUCTURE {
+        FluxEarth : Real = 5.16e6 / cm^2 / s
+        MeanEnergy : Energy = 6.735 * MeV
+      } 
+      N13 : STRUCTURE {
+        FluxEarth : Real = 2.78e8 / cm^2 / s  
+        MeanEnergy : Energy = 0.7063 * MeV
+      }
+      O15 : STRUCTURE {
+        FluxEarth : Real = 2.05e8 / cm^2 / s
+        MeanEnergy : Energy = 0.9964 * MeV
+      }
+      F17 : STRUCTURE {
+        FluxEarth : Real = 5.29e6 / cm^2 / s
+        MeanEnergy : Energy = 0.9877 * MeV
+      }
+    }
+  }
+  
+  MODELS {
+    StructureAndEvolution : STRUCTURE {
+      FUNC Rho(r : Length, t : Time) -> Density
+      FUNC Temperature(r : Length, t : Time) -> Temperature
+      FUNC Pressure(r : Length, t : Time) -> Pressure  
+      FUNC Luminosity(r : Length, t : Time) -> Power
+      
+      AXIOM HydrostaticEquilibirum {
+        ∇P = -Rho * ∇Φ  
+      }
+      AXIOM MassConservation {
+        ∂Rho/∂t + ∇•(Rho * v) = 0
+      }
+      AXIOM EnergyConservation {  
+        Rho * (∂E/∂t + v•∇E) = -∇•F + Rho * ε
+      }
+      AXIOM RadiativeTransfer {
+        F = -(4 * π / (3 * κ * Rho)) * ∇(σ * Temperature^4)
+      }
+    }
+    
+    Magnetohydrodynamics : STRUCTURE {
+      FUNC B(r : Length, θ : Angle, φ : Angle, t : Time) -> MagneticFluxDensity
+      
+      AXIOM MagneticInduction {
+        ∂B/∂t = ∇×(v×B) - ∇×(η*∇×B)
+      }
+      AXIOM MomentumConservation {
+        Rho * (∂v/∂t + v•∇v) = -∇P + (1/μ0) * (∇×B)×B + Rho * g 
+      } 
+    }
+    
+    Seismology : STRUCTURE {
+      FUNC OscillationFrequency(n : Nat, l : Nat) -> Frequency
+      FUNC OscillationAmplitude(n : Nat, l : Nat) -> Real
+      FUNC InternalRotationProfile(r : Length, θ : Angle) -> AngularSpeed
+      FUNC RadialDensityProfile(r : Length) -> Density
+    } 
+  }
+  
+  EXPERIMENTS {
+    Helioseismology : STRUCTURE {
+      SoundSpeedProfile : STRUCTURE {
+        FUNC RadialSoundSpeed(r : Length) -> Velocity
+        UncertaintyRadialSoundSpeed : Velocity = 0.005 * km / s
+      }
+      
+      DensityProfile : STRUCTURE {
+        FUNC RadialDensity(r : Length) -> Density
+        UncertaintyRadialDensity : Density = 0.005 * g / cm^3  
+      }
+      
+      RotationProfile : STRUCTURE {  
+        FUNC RadialRotationRate(r : Length, θ : Angle) -> AngularSpeed
+        UncertaintyRadialRotationRate : AngularSpeed = 1 * nHz
+      }
+    }
+
+    SolarNeutrinoObservatories : STRUCTURE {
+      SuperKamiokande : STRUCTURE {
+        FluxB8 : Real = 2.345e6 / cm^2 / s
+        UncertaintyFluxB8 : Real = 0.014e6 / cm^2 / s
+        FluxHep : Real = 9.6e3 / cm^2 / s  
+        UncertaintyFluxHep : Real = 6.9e3 / cm^2 / s
+      }
+      
+      SNO : STRUCTURE {
+        FluxB8_NC : Real = 5.25e6 / cm^2 / s
+        UncertaintyFluxB8_NC : Real = 0.16e6 / cm^2 / s 
+        FluxB8_CC : Real = 1.67e6 / cm^2 / s
+        UncertaintyFluxB8_CC : Real = 0.05e6 / cm^2 / s
+        FluxB8_ES : Real = 1.77e6 / cm^2 / s
+        UncertaintyFluxB8_ES : Real = 0.24e6 / cm^2 / s
+      }
+      
+      Borexino : STRUCTURE {
+        FluxPP : Real = 6.1e10 / cm^2 / s
+        UncertaintyFluxPP : Real = 0.6e10 / cm^2 / s
+        FluxB7 : Real = 4.99e9 / cm^2 / s
+        UncertaintyFluxB7 : Real = 0.13e9 / cm^2 / s 
+        FluxPep : Real = 1.27e8 / cm^2 / s
+        UncertaintyFluxPep : Real = 0.19e8 / cm^2 / s
+      }
+    }
+    
+    SolarIrradianceMeasurement : STRUCTURE {
+      SORCE : STRUCTURE {
+        TotalSolarIrradiance : Real = 1360.8 * W / m^2
+        UncertaintyTotalSolarIrradiance : Real = 0.5 * W / m^2
+      }
+    }
+  }
+}

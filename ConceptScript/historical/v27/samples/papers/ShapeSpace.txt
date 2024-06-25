@@ -1,0 +1,1372 @@
+CONCEPT ShapeSpace {
+  NOTATION {
+    O = {O_d} = o-minimal structure on ℝ^d
+    CS(X) = Constructible subsets of X wrt O
+    Shv(X, 𝒟) = Category of 𝒟-valued sheaves on X
+    D^b(𝒜) = Bounded derived category of abelian category 𝒜
+    𝕜_Z = Constant sheaf valued in field 𝕜 on space Z
+    
+    Z_M = {(x,v,t) ∈ M × 𝕊^(d-1) × ℝ | x·v ≤ t}
+    f_M: Z_M → 𝕊^(d-1) × ℝ
+    
+    PHT(M) = R(f_M)_*𝕜_Z_M ∈ D^b(Shv(𝕊^(d-1) × ℝ))
+    PHT^i_M = R^i(f_M)_*𝕜_Z_M ∈ Shv(𝕊^(d-1) × ℝ)
+    
+    ECT(M)(v,t) = χ(f⁻¹_M(v,t)) 
+    BCT(M)(v,t) = [β_i(f⁻¹_M(v,t))]
+    
+    d_I(ℱ, 𝒢) = inf{ε≥0 | ∃ ε-interleaving ℱ⇄_ε𝒢}
+  }
+
+  LANGUAGE {
+    TYPE Shape = Constructible subset of ℝ^d
+    TYPE Direction = Unit vector in 𝕊^(d-1)
+    TYPE PHT = D^b(Shv(𝕊^(d-1) × ℝ))
+    TYPE Cover = Collection of inclusions {M_i ↪ M}
+    
+    FUNC Sublevel(M: Shape, v: Direction, t: ℝ): Shape =
+      {x ∈ M | x·v ≤ t}
+    
+    FUNC Dgm(i: Int, M: Shape, v: Direction) =
+      Persistence diagram of PHT^i_M restricted to {v}×ℝ
+     
+    PRED IsInterleaving(ϕ: ℱ_ε → 𝒢, ψ: 𝒢_ε → ℱ, ε: ℝ≥0) =
+      ϕψ_ε ∼ 𝒢_2ε ∧ ψϕ_ε ∼ ℱ_2ε
+      
+    PRED FiniteCover(𝓒: Cover, M: Shape) = ⋃𝓒 = M ∧ 𝓒 is finite
+      
+    AXIOM Descent: ∀ M: Shape, 𝓒: Cover . FiniteCover(𝓒,M) ⇒  
+      PHT(M) ≃ holim[ ∏ PHT(M_i) ⇒ ∏ PHT(M_I) → ⋯ ]
+                         M_i∈𝓒      |I|=2          
+  }
+  
+  STRUCTURES {
+    STRUCTURE PHTSheaf {
+      FIELD Sections(M: Shape): PHT = PHT(M)
+      FIELD Restriction(ι: M ↪ N): PHT(N) → PHT(M)
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE ShiftPHT(ε: ℝ≥0): 
+      PHT(M) → PHT_ε(M) := R(f_M_ε)_*𝕜_Z_M_ε
+      WHERE Z_M_ε = {(x,v,t)∈M×𝕊^(d-1)×ℝ | x·v≤t+ε}
+      
+    SIMPLIFY DecomposePHT: 
+      PHT^n(M) → H^n[ ⨁ PHT⁰(M_I) → ⨁ PHT⁰(M_I) → ⋯ ]
+                     |I|=1          |I|=2
+      IF M triangulated by {σ_i}
+      
+    TACTIC SimplifyInterleaving:
+      ℱ =[ε]= 𝒢 ⇔ ∃ ϕ: ℱ_ε → 𝒢, ψ: 𝒢_ε → ℱ . 
+        ϕψ_ε ∼ 𝒢_2ε ∧ ψϕ_ε ∼ ℱ_2ε 
+  }  
+
+  PROOFS {
+    PROOF PHTDeterminesShape: PHT(M) ≃ PHT(N) ⇒ M ≃ N
+    {
+      PHT(M) ≃ PHT(N)
+      ⇒ ∀i. PHT^i_M ≃ PHT^i_N                  BY def
+      ⇒ BCT_M = BCT_N                          BY def
+      ⇒ ECT_M = ∑_i (-1)^i PHT^i_M              
+             ≃ ∑_i (-1)^i PHT^i_N = ECT_N      BY Euler
+      ⇒ M ≃ N                                  BY Schapira 
+    }
+    
+    PROOF PHTDescentTheorem:
+      ∀ M: Shape, 𝓒: Cover . FiniteCover(𝓒,M) ⇒ 
+      PHT(M) ≃ holim[ ∏ PHT(M_i) ⇒ ∏ PHT(M_I) → ⋯ ]
+    {
+      SUFFICES_TO_SHOW 
+        PHT(M) → holim[ ∏ PHT(M_i) ⇒ ∏ PHT(M_I) → ⋯ ] 
+      is a quasi-isomorphism.
+    
+      DEFINE Godement resolution:
+        k_Z_M → [ ⨁ k_Z_(M_i) → ⨁ k_Z_(M_I) → ⋯ ]
+                   |I|=1          |I|=2
+                
+      APPLY R(f_M)_* to get quasi-isomorphism:              
+        PHT(M) ≃ holim[ ∏ PHT(M_i) ⇒ ∏ PHT(M_I) → ⋯ ]
+        
+      CHECK quasi-iso on stalks by:
+        H^*(PHT(M)(v,t)) ≃ H^*(f^(-1)_M(v,t))        
+                         ≃ H^*(holim[ ∏ f^(-1)_(M_i)(v,t) ⇒ ⋯ ])
+    }  
+
+    PROOF PHTStability: 
+      d_I(PHT(M), PHT(N)) ≤ ε if M ≃_ε N  
+    {
+      GIVEN ε-homotopy equivalence ϕ: M → N, ψ: N → M:
+        ‖x-ϕ(x)‖ ≤ ε ∀x∈M, ‖y-ψ(y)‖ ≤ ε ∀y∈N
+        homotopies H_M: idx ∼ ψϕ, H_N: idy ∼ ϕψ  
+        moving points by ≤ 2ε
+        
+      DEFINE ϕ_*: PHT(M)_ε → PHT(N), ψ_*: PHT(N)_ε → PHT(M):
+        ϕ_*(x,v,t) := (ϕ(x),v,t+ε)
+        ψ_*(y,v,t) := (ψ(y),v,t+ε)
+        
+      PROVE (ϕ_*, ψ_*) is an ε-interleaving:
+        ψ_*ϕ_* ∼ PHT(M)_2ε → PHT(M) via ψϕ : Z_M → Z_M on Z_M_2ε
+        ϕ_*ψ_* ∼ PHT(N)_2ε → PHT(N) via ϕψ : Z_N → Z_N on Z_N_2ε
+        
+      ⇒ d_I(PHT(M), PHT(N)) ≤ ε  BY SimplifyInterleaving 
+    }  
+
+    PROOF PHTApproximation:
+      d_I(PHT(M),PHT(K)) ≤ Cε w.h.p. for C=O(1) 
+    {
+      GIVEN M: n-manifold, τ: condition number, ε<τ/2, {x_i}⊂M: (ε/2)-dense
+      DEFINE U := ⋃_i B_ε(x_i), K := AlphaComplex(U)
+      
+      M ≃ U w.p. ≥ 1-δ   BY NiyogiSmaleWeinberger since ε < τ/2 
+      U ≃ K              BY NerveTheorem
+      
+      ⇒ ∃ ε-htpy equiv ϕ: K → M, ψ: M → K with: 
+           ‖x-ϕ(x)‖ ≤ ε ∀x∈K, ‖y-ψ(y)‖ ≤ 2ε ∀y∈M
+           homotopies H_K: idx ∼ ϕψ, H_M: idy ∼ ψϕ  
+           moving points by ≤ 2ε
+           
+      ⇒ d_I(PHT(M),PHT(K)) ≤ Cε w.h.p. BY PHTStability
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE PHTofCircle: 
+      PHT(S^1)(v,t) ≃ IF t≤-1 THEN 𝕜[0] ELSE 
+                       IF t∈(-1,1) THEN 𝕜[0]⊕𝕜[1] ELSE 𝕜[1]
+
+    EXAMPLE PHTofAnnulus:
+      PHT(Ann)(v,t) ≃ IF t≤r THEN 𝕜[0] ELSE 
+                       IF t∈(r,R) THEN 𝕜[0]⊕𝕜[1] ELSE 𝕜[1]  
+      WHERE Ann = {x | r≤‖x‖≤R}
+
+    EXAMPLE PHTofTorus: 
+      PHT(𝕋²)(v,t) ≃ IF t≤-1 THEN 𝕜[0] ELSE
+                      IF t∈(-1,1) THEN 𝕜[0]⊕𝕜[1]⊕𝕜[1] ELSE 
+                      IF t≥1 THEN 𝕜[0]⊕𝕜[2] ELSE 0
+  }
+}
+
+
+CONCEPT NeuroTopology EXTENDS ShapeSpace{
+  NOTATION {
+    Brain = (M, g) WHERE M ⊆ ℝ^3 ∧ g : M × M → ℝ≥0
+    Connectome = (V, E) WHERE V ⊆ Brain ∧ E ⊆ V × V
+    Tract = γ: [0,1] → Brain
+    TractographyData = {(S_i, v_i) ∈ Brain × ℝ^3}
+    PointCloud(N,d) = {{x_i ∈ ℝ^d}}_i^N
+    BrainRegion(A) = {U ⊆ M | A(U) = 1} WHERE A: 𝓟(M) → {0,1}
+    PHT = F ∈ D^b(Shv(𝕊^(d-1) × ℝ))
+    PHTBrain = PHT(Brain) := R(f_Brain)_*𝕜_Z_Brain
+    Disease = {(Brain_i, y_i) ∈ Brain × {0,1}}
+    d_I(P,Q) = inf{ε≥0 | ∃ ϕ: P_ε→Q, ψ: Q_ε→P . ϕψ∼Q_2ε ∧ ψϕ∼P_2ε}
+    μ_H(K) = inf{∑_i diam(U_i)^d | K ⊆ ⋃_i U_i} WHERE K ⊆ ℝ^d compact
+  }
+  
+  LANGUAGE {
+    TYPE BrainModel = (M, g) WHERE M ∈ CS(ℝ^3)
+    TYPE ConnectomeModel = (V, E) WHERE V = PointCloud(N,3)
+    TYPE TractModel = PointCloud(N,3) | (M, g) WHERE M ∈ CS(ℝ^3)
+    TYPE BrainAtlas = A: 𝓟(M) → {0,1}
+    TYPE BrainPHT = F ∈ D^b(Shv(𝕊^2 × ℝ))
+
+    FUNC ConstructTractModel(D: TractographyData, δ: ℝ≥0): TractModel =
+      {(x,y) ∈ D | ‖v‖ ≥ δ} ↦ x, Closure(⋃_{(x,v) ∈ D} γ_((x,v),δ))
+      WHERE γ_((x,v),δ)(t) := x + t·v/δ
+    
+    FUNC PartitionBrain(M: BrainModel, A: BrainAtlas): Labeled<BrainModel> =
+      {(a, (M ∩ a, g|_(M ∩ a))) for a ∈ BrainRegion(A)}
+    
+    FUNC PHTBrainModel(D: Disease): BrainPHT =
+      R(f_M)_*𝕜_Z_M WHERE (M,_) := ConstructBrainModel(π_1(D))
+
+    FUNC PHTBrainSegmentation(B: BrainPHT, S: Labeled<BrainModel>):
+         Labeled<BrainPHT> =
+      {(s, R(f_M)_*𝕜_Z_M) for (s,(M,_)) ∈ S}  
+      
+    PRED IsSignal(P: BrainPHT, Q: BrainPHT, ε: ℝ≥0) = d_I(P, Q) > ε   
+  }
+
+  STRUCTURES {
+    STRUCTURE BrainPHT EXTENDS PHTSheaf {
+      FIELD Connectome: ConnectomeModel
+      FIELD TractModel: TractModel
+      FIELD RegionPHTs: Labeled<BrainPHT>
+
+      COMPUTE LocalPHT(r: BrainRegion): PHTSheaf = 
+        R(f_(M∩r))_*𝕜_Z_(M∩r) WHERE (M,_) := this.GeometricModel
+      
+      COMPUTE ConnectomePHT: PHTSheaf =
+        PHT(ShapeModel(this.Connectome))
+        
+      COMPUTE TractPHT: PHTSheaf = 
+        PHT(this.TractModel)  
+    }
+  }
+  
+  TRANSFORMERS {
+    REWRITE BrainSegmentation(B: BrainPHT, A: BrainAtlas):
+      B -> PHTBrainSegmentation(B, PartitionBrain(B.GeometricModel, A))
+      
+    REWRITE ConnectivityShift(C: ConnectomeModel, ε: ℝ≥0):
+      (V,E) -> (V, E ∪ {(u,v) ∈ V×V \ E with prob ε} \ {(u,v) ∈ E with prob ε})
+      
+    TACTIC DiseaseBiomarker(D: Disease, ε: ℝ≥0):
+      1. {B_i} := {PHTBrainModel(D_y=1) for i in SampleSize(D_y=1)}
+      2. {C_i} := {PHTBrainModel(D_y=0) for i in SampleSize(D_y=0)}
+      3. F := LearnClassifier({B_i}, {C_i}) minimizing TrainLoss
+      4. RETURN F IF TestLoss(F) ≤ ε ELSE FAIL
+  }
+  
+  PROOFS {
+    THEOREM RegionStability: 
+      ∀ r1, r2 ∈ BrainRegion(A) . d_H(r1, r2) ≤ ε ⇒ d_I(PHT(r1), PHT(r2)) ≤ Cε  
+    {
+      GIVEN r1, r2 ∈ BrainRegion(A) with d_H(r1, r2) ≤ ε
+      
+      ∃ {U_α},{V_β} ∈ 𝓟(ℝ^3) . r1 ⊆ ⋃_α U_α ∧ r2 ⊆ ⋃_β V_β ∧
+                                  ∀(x,y) ∈ r1×r2 ∃(α,β) . x ∈ U_α ∧ y ∈ V_β ∧ 
+                                                            diam(U_α ∪ V_β) ≤ ε
+        
+      ∑_α μ_H(U_α)^3 ≤ μ_H(r1)^3 + ε^3 ∧ ∑_β μ_H(V_β)^3 ≤ μ_H(r2)^3 + ε^3
+                            BY def μ_H and compact r1,r2
+        
+      ⇒ ∃ f: r1→r2 s.t. ‖x - f(x)‖ ≤ ε ∀x ∈ r1  BY {U_α},{V_β} ε-cover 
+        AND g: r2→r1 s.t. ‖f(g(y)) - y‖ ≤ ε ∀y ∈ r2
+        
+      ⇒ d_I(PHT(r1), PHT(r2)) ≤ Cε     BY PHTStability (ShapeSpace) 
+    }
+
+    THEOREM RobustBiomarker:
+      ∀ M1, M2 ∈ BrainModel . d_I(PHT(M1), PHT(M2)) ≤ ε ⇒ 
+      |F(PHT(M1)) - F(PHT(M2))| ≤ L·ε    
+      WHERE F: BrainPHT → ℝ with Lipschitz const L
+    {   
+      GIVEN d_I(PHT(M1), PHT(M2)) ≤ ε
+      
+      |F(PHT(M1)) - F(PHT(M2))| 
+        ≤ L·d_I(PHT(M1), PHT(M2))     BY F L-Lipschitz
+        ≤ L·ε                         BY GIVEN
+    }
+    
+    THEOREM SegmentationStability:
+      ∀ A1, A2: BrainAtlas . d_H(BrainRegion(A1), BrainRegion(A2)) ≤ ε ⇒ 
+      d_I(PHTBrainSegmentation(B,A1), PHTBrainSegmentation(B,A2)) ≤ C(B)·ε  
+    {
+      GIVEN d_H(BrainRegion(A1),BrainRegion(A2)) ≤ ε, 
+        SHOW PHT segmentations C(B)·ε-close. 
+      
+      ∀ r1 ∈ BrainRegion(A1), ∃ r2 ∈ BrainRegion(A2) . d_H(r1, r2) ≤ ε   
+        BY d_H(BrainRegion(A1),BrainRegion(A2)) ≤ ε
+      ⇒ d_I(PHT(M∩r1),PHT(M∩r2)) ≤ C(M|_r1)·ε   BY RegionStability
+      ⇒ d_I(PHT(M∩r1),PHT(M∩r2)) ≤ C(M)·C(r1)·ε BY Lipschitz(PHT)
+      ⇒ MaxRegionDI ≤ C(B)·MaxRegionHD ≤ C(B)·ε 
+        WHERE MaxRegionDI := max_(r1,r2) d_I(PHT(M∩r1),PHT(M∩r2)),
+              MaxRegionHD := max_(r1,r2) d_H(r1,r2),
+              C(B) := max_r C(B.GeometricModel|_r)
+               
+      ⇒ d_I(PHTBrainSegmentation(B,A1), PHTBrainSegmentation(B,A2))
+        = max_r d_I(PHTSheaf(B.GeometricModel∩r1), PHTSheaf(B.GeometricModel∩r2)) 
+        ≤ C(B)·ε   
+    }
+  }
+
+  EXAMPLES {    
+    EXAMPLE AlzheimersDisease:
+      - D_AD := {(Brain_i, 1) | i ∈ PatientIDs(Alzheimers)}
+      - D_HC := {(Brain_i, 0) | i ∈ PatientIDs(HealthyControl)}
+      - B_AD := {PHTBrainModel((Brain_i,1)) | (Brain_i,1) ∈ D_AD}
+      - B_HC := {PHTBrainModel((Brain_i,0)) | (Brain_i,0) ∈ D_HC}
+      - F := DiseaseBiomarker(D_AD ∪ D_HC, ε)
+      - EVAL TestLoss(F) ≤ ε ? "AD Biomarker FOUND" : "AD Biomarker NOT FOUND"
+      
+    EXAMPLE SchizophreniaSubtyping:
+      - D_SZ := {(Brain_i, 1) | i ∈ PatientIDs(Schizophrenia)}
+      - M := ConstructBrainModel ∘ π_1(D_SZ)  -- {M_i | Brain_i ∈ π_1(D_SZ)}
+      - B := PHTBrainModel ∘ M  -- {PHTBrainModel(M_i) | M_i ∈ M}
+      - A := ConstructBrainAtlas(Schizophrenia)
+      - R := ⋃_{B_i ∈ B} PHTBrainSegmentation(B_i, A)
+      - {S_j | j ∈ [NumSubtypes]} := SpectralClustering(R, NumSubtypes)
+      - {T_j | j ∈ [NumSubtypes]} := {TopologicalFeatures ∘ S_j | j ∈ [NumSubtypes]}
+      - RETURN ({S_j | j ∈ [NumSubtypes]}, VisualizePHTSpace ∘ {T_j | j ∈ [NumSubtypes]})
+      
+    EXAMPLE NeurodevelopmentModel:
+      - D := {(Brain_i, AgeInWeeks_i) | i ∈ SubjectIDs(InfantCohort)}
+      - T := ⋃_{AgeInWeeks_i ∈ π_2(D)} AgeInWeeks_i  -- All timepoints
+      - M := {ConstructBrainModel(Brain_i) | (Brain_i,_) ∈ D}  
+      - B := {PHTBrainModel(M_i) | M_i ∈ M}
+      - PHTBrainDevelopment := GeodesicInterpolation(B, T)
+      - RETURN (B, PHTBrainDevelopment, AnimatePHTBrain ∘ PHTBrainDevelopment)
+  }
+}
+
+
+CONCEPT AlzheimersDisease EXTENDS NeuroTopology {
+  NOTATION {
+    AD = AlzheimersDisease
+    HC = HealthyControl
+    MCI = MildCognitiveImpairment
+    MMSE = MiniMentalStateExamination
+    APOE = ApolipoproteinE
+    Aβ = AmyloidBeta
+    τ = TauProtein
+    D_AD = {(Brain_i, Diagnosis_i, MMSE_i, APOE_i) | i ∈ PatientIDs(AD)}
+    D_HC = {(Brain_i, Diagnosis_i, MMSE_i, APOE_i) | i ∈ PatientIDs(HC)}
+    D_MCI = {(Brain_i, Diagnosis_i, MMSE_i, APOE_i) | i ∈ PatientIDs(MCI)}
+  }
+
+  LANGUAGE {
+    FUNC ConstructADModel(D: {(Brain, Diagnosis, MMSE, APOE)}): BrainModel =
+      ConstructBrainModel ∘ π_1(D)
+
+    FUNC ADStaging(D: {(Brain, Diagnosis, MMSE, APOE)}): [HC, MCI, AD] =
+      MATCH Diagnosis WITH
+      | HC => HC
+      | MCI => MCI
+      | AD => AD
+
+    FUNC ADProgression(B_HC: BrainPHT, B_MCI: BrainPHT, B_AD: BrainPHT):
+         (BrainPHT → ℝ) =
+      λB . ∑_i w_i · d_I(B, B_i) WHERE 
+        [w_HC, w_MCI, w_AD] = [1, 2, 3] AND
+        [B_HC, B_MCI, B_AD] = [mean(B_HC), mean(B_MCI), mean(B_AD)]
+        
+    PRED IsADProgressing(B_t1: BrainPHT, B_t2: BrainPHT, δ: ℝ≥0) = 
+      ADProgression(B_HC, B_MCI, B_AD)(B_t2) - 
+      ADProgression(B_HC, B_MCI, B_AD)(B_t1) > δ
+  }
+
+  STRUCTURES {
+    STRUCTURE ADCohort EXTENDS {(Brain, Diagnosis, MMSE, APOE)} {
+      FIELD D_AD: {(Brain, Diagnosis, MMSE, APOE)}
+      FIELD D_HC: {(Brain, Diagnosis, MMSE, APOE)}
+      FIELD D_MCI: {(Brain, Diagnosis, MMSE, APOE)}
+      
+      COMPUTE ADModels: [BrainModel] =
+        MAP(ConstructADModel, [D_AD, D_HC, D_MCI])
+        
+      COMPUTE ADStages: [HC, MCI, AD] =
+        MAP(ADStaging, [D_HC, D_MCI, D_AD])
+        
+      COMPUTE ADPHTs: [BrainPHT] = 
+        MAP(PHTBrainModel, ADModels)
+    }
+  }
+
+  THEOREMS {
+    THEOREM ADProgressionMonotonic:
+      ∀ B_HC, B_MCI, B_AD: BrainPHT .
+      mean(d_I(B_HC, B_MCI)) < mean(d_I(B_HC, B_AD)) ∧
+      mean(d_I(B_MCI, B_AD)) < mean(d_I(B_HC, B_AD))
+    {
+      GIVEN B_HC, B_MCI, B_AD as mean BrainPHTs for each AD stage
+      
+      mean(d_I(B_HC, B_AD))
+        = mean_{i,j} d_I(B_HC_i, B_AD_j)
+        = mean_i(mean_j d_I(B_HC_i, B_AD_j))          BY Fubini
+       >= mean_i(d_I(B_HC_i, mean(B_AD)))             BY Jensen
+        = mean_i(d_I(B_HC_i, B_AD))
+        > mean_i(d_I(B_HC_i, B_MCI))                  BY GIVEN
+        
+      SIMILARLY FOR mean(d_I(B_MCI, B_AD)) < mean(d_I(B_HC, B_AD))
+    }
+    
+    THEOREM ADProgressionRobust:
+      ∀ C1, C2: ADCohort . d_I(C1.ADPHTs, C2.ADPHTs) ≤ ε ⇒
+      ∀ B ∈ C1.D_AD ∪ C1.D_MCI . 
+      |ADProgression(C1.ADPHTs)(B) - ADProgression(C2.ADPHTs)(B)| ≤ L·ε
+    {
+      GIVEN d_I(C1.ADPHTs, C2.ADPHTs) ≤ ε
+      
+      |ADProgression(C1.ADPHTs)(B) - ADProgression(C2.ADPHTs)(B)|
+        = |∑_i w_i·(d_I(B,C1.B_i) - d_I(B,C2.B_i))|
+       <= ∑_i w_i·|d_I(B,C1.B_i) - d_I(B,C2.B_i)|     BY triangle ineq
+       <= ∑_i w_i·d_I(C1.B_i, C2.B_i)                 BY d_I triangle ineq
+       <= (∑_i w_i)·max_i d_I(C1.B_i, C2.B_i)
+        = L·d_I(C1.ADPHTs, C2.ADPHTs)                 BY def of d_I on [BrainPHT]
+       <= L·ε                                         BY GIVEN
+    }
+  }
+    
+  EXAMPLES {
+    EXAMPLE ADDetection:
+      - C := ConstructADCohort(D_AD, D_HC, D_MCI)
+      - B_AD, B_HC, B_MCI := C.ADPHTs
+      - F := DiseaseBiomarker(C.D_AD ∪ C.D_HC, ε)
+      - EVAL TestLoss(F) ≤ ε ? "AD Biomarker FOUND" : "AD Biomarker NOT FOUND"
+    
+    EXAMPLE ADStaging:
+      - C := ConstructADCohort(D_AD, D_HC, D_MCI)
+      - B_AD, B_HC, B_MCI := C.ADPHTs
+      - S := λB . ArgMax([(d_I(B,B_HC), HC), 
+                          (d_I(B,B_MCI), MCI), 
+                          (d_I(B,B_AD), AD)])
+      - EVAL MEAN(S(B) == Diagnosis for (B,Diagnosis,_,_) ∈ C.D_AD ∪ C.D_MCI)
+      
+    EXAMPLE ADProgression:
+      - C := ConstructADCohort(D_AD, D_HC, D_MCI)
+      - B_AD, B_HC, B_MCI := C.ADPHTs  
+      - P := ADProgression(B_HC, B_MCI, B_AD)
+      - t1, t2 := 0, 1  -- Timepoints
+      - B_t1, B_t2 := PHTBrainModel(B_t1), PHTBrainModel(B_t2)
+      - EVAL IsADProgressing(B_t1, B_t2, δ) ? 
+             "AD is progressing" : "AD is stable"
+  }
+}
+
+
+CONCEPT ShapeSpaceParadigmShift {
+  NOTATION {
+    ShapeSpace = CS(ℝ^d)^op → D^b(Shv(𝕊^(d-1)×ℝ))
+    PHT = Persistent Homology Transform
+    ECT = Euler Characteristic Transform
+    CS(ℝ^d) = Constructible subsets of ℝ^d
+    OldShapeSpaces = {Kendall, LDDMM, ElasticShape, ...}
+  }
+
+  LANGUAGE {
+    TYPE MemeticShift = Transformation of research landscape  
+    TYPE ScientificParadigm = Coherent framework of concepts, methods, questions
+    TYPE ShapeRepresentation = Encoding of shape information
+    TYPE ShapeMatching = Technique for comparing shapes
+    TYPE TopologicalInvariant = Algebraic structure capturing shape features
+    
+    FUNC ShapesToPHT: CS(ℝ^d) → D^b(Shv(𝕊^(d-1)×ℝ)) = 
+      M ↦ PHT(M) := R(f_M)_*𝕜_Z_M
+      
+    PRED IsMemetic(S: ScientificParadigm) = 
+      S spreads rapidly via idea sharing and adoption
+      
+    PRED IsCoherent(S: ScientificParadigm) =
+      Concepts, methods, questions of S are logically integrated
+      
+    AXIOM NewAnswersToOldProblems:  
+      ∀ P: ShapeMatching, ∃ T: TopologicalInvariant . PHT enables T-based solution to P
+      
+    AXIOM NewQuestionsAndApplications: PHT motivates novel
+      problems and use cases beyond scope of OldShapeSpaces
+  }
+  
+  STRUCTURES {
+    STRUCTURE PHTShapeSpace EXTENDS ScientificParadigm {
+      FIELD Representation: ShapeRepresentation = PHT
+      FIELD Comparison: ShapeMatching = Interleaving distance on PHT
+      FIELD UnifyingConcept: TopologicalInvariant = Sheaf theory
+      FIELD CanonicalConstruction: CS(ℝ^d) → ShapeSpace = ShapesToPHT
+      FIELD TheoreticalFoundation: PROOFS
+      FIELD ComputationalTools: TRANSFORMERS
+    }
+  }
+   
+  TRANSFORMERS {    
+    REWRITE OldToNew: 
+      ShapeMatching<OldRep> → ShapeMatching<PHT>
+      
+    TACTIC ApplicationPattern:
+      1. Construct M: CS(ℝ^d) model of data
+      2. Compute PHT(M) 
+      3. Apply ShapeMatching, TRANSFORMERS to PHT(M) for analysis    
+  }
+   
+  PROOFS {
+    PROOF PHTAdvantage: PHTShapeSpace is a MemeticShift 
+    {      
+      PHTShapeSpace is a coherent paradigm shifting shape analysis:
+        - Sheaf-theoretic language unifies local and global shape via PHT
+        - PHT a complete invariant, generalizing ECT, with stability and approximation 
+        - Interleaving a stable, discriminative shape comparison
+        - Sheaf and derived category theory provide powerful computational tools
+        - Enables topological approaches to a range of new and old shape problems
+        
+      ⇒ PHTShapeSpace answers open challenges in OldShapeSpaces
+      ⇒ PHTShapeSpace opens up new problems and applications
+      
+      PHTShapeSpace spreads memetically: 
+        - Requires only mild condition of constructibility on shapes
+        - Categorical foundations enable integration with other mathematical theories
+        - Computational tools facilitate applications and empirical studies
+        - Stimulates research via new questions and cross-disciplinary connections
+        
+    }
+  } 
+   
+  EXAMPLES {
+    EXAMPLE NeuroTopology: 
+      - Model M := Brain tractography network ∈ CS(ℝ^3)
+      - Compute PHT(M) to get topological barcode of brain structure  
+      - Apply k-means to {PHT(M_i)} for disease subtyping
+      
+    EXAMPLE ProteinTopology:
+      - Model M := Protein structure ∈ CS(ℝ^3)  
+      - Compute PHT(M) to get sheaf of topological features
+      - Use PHT<->Geometry TRANSFORMERS to characterize folding dynamics
+      
+    EXAMPLE EvolutionaryTopology:
+      - Model M := Bone surfaces ∈ CS(ℝ^3) across species 
+      - Use PHTApproximation to estimate PHT(M) from CT scans
+      - Apply PHTStability to compare evolutionary changes 
+  }
+}
+
+CONCEPT ShapeSpace {
+  NOTATION {
+    O = {O_d} = o-minimal structure on ℝ^d
+    CS(X) = Constructible subsets of X wrt O
+    Shv(X, 𝒟) = Category of 𝒟-valued sheaves on X
+    D^b(𝒜) = Bounded derived category of abelian category 𝒜
+    𝕜_Z = Constant sheaf valued in field 𝕜 on space Z
+    
+    Z_M = {(x,v,t) ∈ M × 𝕊^(d-1) × ℝ | x·v ≤ t}
+    f_M: Z_M → 𝕊^(d-1) × ℝ
+    
+    PHT(M) = R(f_M)_*𝕜_Z_M ∈ D^b(Shv(𝕊^(d-1) × ℝ))
+    PHT^i_M = R^i(f_M)_*𝕜_Z_M ∈ Shv(𝕊^(d-1) × ℝ)
+    
+    ECT(M)(v,t) = χ(f⁻¹_M(v,t)) 
+    BCT(M)(v,t) = [β_i(f⁻¹_M(v,t))]
+    
+    d_I(ℱ, 𝒢) = inf{ε≥0 | ∃ ε-interleaving ℱ⇄_ε𝒢}
+  }
+
+  LANGUAGE {
+    TYPE Shape = Constructible subset of ℝ^d
+    TYPE Direction = Unit vector in 𝕊^(d-1)
+    TYPE PHT = D^b(Shv(𝕊^(d-1) × ℝ))
+    TYPE Cover = Collection of inclusions {M_i ↪ M}
+    
+    FUNC Sublevel(M: Shape, v: Direction, t: ℝ): Shape =
+      {x ∈ M | x·v ≤ t}
+    
+    FUNC Dgm(i: Int, M: Shape, v: Direction) =
+      Persistence diagram of PHT^i_M restricted to {v}×ℝ
+     
+    PRED IsInterleaving(ϕ: ℱ_ε → 𝒢, ψ: 𝒢_ε → ℱ, ε: ℝ≥0) =
+      ϕψ_ε ∼ 𝒢_2ε ∧ ψϕ_ε ∼ ℱ_2ε
+      
+    PRED FiniteCover(𝓒: Cover, M: Shape) = ⋃𝓒 = M ∧ 𝓒 is finite
+      
+    AXIOM Descent: ∀ M: Shape, 𝓒: Cover . FiniteCover(𝓒,M) ⇒  
+      PHT(M) ≃ holim[ ∏ PHT(M_i) ⇒ ∏ PHT(M_I) → ⋯ ]
+                         M_i∈𝓒      |I|=2          
+  }
+  
+  STRUCTURES {
+    STRUCTURE PHTSheaf {
+      FIELD Sections(M: Shape): PHT = PHT(M)
+      FIELD Restriction(ι: M ↪ N): PHT(N) → PHT(M)
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE ShiftPHT(ε: ℝ≥0): 
+      PHT(M) → PHT_ε(M) := R(f_M_ε)_*𝕜_Z_M_ε
+      WHERE Z_M_ε = {(x,v,t)∈M×𝕊^(d-1)×ℝ | x·v≤t+ε}
+      
+    SIMPLIFY DecomposePHT: 
+      PHT^n(M) → H^n[ ⨁ PHT⁰(M_I) → ⨁ PHT⁰(M_I) → ⋯ ]
+                     |I|=1          |I|=2
+      IF M triangulated by {σ_i}
+      
+    TACTIC SimplifyInterleaving:
+      ℱ =[ε]= 𝒢 ⇔ ∃ ϕ: ℱ_ε → 𝒢, ψ: 𝒢_ε → ℱ . 
+        ϕψ_ε ∼ 𝒢_2ε ∧ ψϕ_ε ∼ ℱ_2ε 
+  }  
+
+  PROOFS {
+    PROOF PHTDeterminesShape: PHT(M) ≃ PHT(N) ⇒ M ≃ N
+    {
+      PHT(M) ≃ PHT(N)
+      ⇒ ∀i. PHT^i_M ≃ PHT^i_N                  BY def
+      ⇒ BCT_M = BCT_N                          BY def
+      ⇒ ECT_M = ∑_i (-1)^i PHT^i_M              
+             ≃ ∑_i (-1)^i PHT^i_N = ECT_N      BY Euler
+      ⇒ M ≃ N                                  BY Schapira 
+    }
+    
+    PROOF PHTDescentTheorem:
+      ∀ M: Shape, 𝓒: Cover . FiniteCover(𝓒,M) ⇒ 
+      PHT(M) ≃ holim[ ∏ PHT(M_i) ⇒ ∏ PHT(M_I) → ⋯ ]
+    {
+      SUFFICES_TO_SHOW 
+        PHT(M) → holim[ ∏ PHT(M_i) ⇒ ∏ PHT(M_I) → ⋯ ] 
+      is a quasi-isomorphism.
+    
+      DEFINE Godement resolution:
+        k_Z_M → [ ⨁ k_Z_(M_i) → ⨁ k_Z_(M_I) → ⋯ ]
+                   |I|=1          |I|=2
+                
+      APPLY R(f_M)_* to get quasi-isomorphism:              
+        PHT(M) ≃ holim[ ∏ PHT(M_i) ⇒ ∏ PHT(M_I) → ⋯ ]
+        
+      CHECK quasi-iso on stalks by:
+        H^*(PHT(M)(v,t)) ≃ H^*(f^(-1)_M(v,t))        
+                         ≃ H^*(holim[ ∏ f^(-1)_(M_i)(v,t) ⇒ ⋯ ])
+    }  
+
+    PROOF PHTStability: 
+      d_I(PHT(M), PHT(N)) ≤ ε if M ≃_ε N  
+    {
+      GIVEN ε-homotopy equivalence ϕ: M → N, ψ: N → M:
+        ‖x-ϕ(x)‖ ≤ ε ∀x∈M, ‖y-ψ(y)‖ ≤ ε ∀y∈N
+        homotopies H_M: idx ∼ ψϕ, H_N: idy ∼ ϕψ  
+        moving points by ≤ 2ε
+        
+      DEFINE ϕ_*: PHT(M)_ε → PHT(N), ψ_*: PHT(N)_ε → PHT(M):
+        ϕ_*(x,v,t) := (ϕ(x),v,t+ε)
+        ψ_*(y,v,t) := (ψ(y),v,t+ε)
+        
+      PROVE (ϕ_*, ψ_*) is an ε-interleaving:
+        ψ_*ϕ_* ∼ PHT(M)_2ε → PHT(M) via ψϕ : Z_M → Z_M on Z_M_2ε
+        ϕ_*ψ_* ∼ PHT(N)_2ε → PHT(N) via ϕψ : Z_N → Z_N on Z_N_2ε
+        
+      ⇒ d_I(PHT(M), PHT(N)) ≤ ε  BY SimplifyInterleaving 
+    }  
+
+    PROOF PHTApproximation:
+      d_I(PHT(M),PHT(K)) ≤ Cε w.h.p. for C=O(1) 
+    {
+      GIVEN M: n-manifold, τ: condition number, ε<τ/2, {x_i}⊂M: (ε/2)-dense
+      DEFINE U := ⋃_i B_ε(x_i), K := AlphaComplex(U)
+      
+      M ≃ U w.p. ≥ 1-δ   BY NiyogiSmaleWeinberger since ε < τ/2 
+      U ≃ K              BY NerveTheorem
+      
+      ⇒ ∃ ε-htpy equiv ϕ: K → M, ψ: M → K with: 
+           ‖x-ϕ(x)‖ ≤ ε ∀x∈K, ‖y-ψ(y)‖ ≤ 2ε ∀y∈M
+           homotopies H_K: idx ∼ ϕψ, H_M: idy ∼ ψϕ  
+           moving points by ≤ 2ε
+           
+      ⇒ d_I(PHT(M),PHT(K)) ≤ Cε w.h.p. BY PHTStability
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE PHTofCircle: 
+      PHT(S^1)(v,t) ≃ IF t≤-1 THEN 𝕜[0] ELSE 
+                       IF t∈(-1,1) THEN 𝕜[0]⊕𝕜[1] ELSE 𝕜[1]
+
+    EXAMPLE PHTofAnnulus:
+      PHT(Ann)(v,t) ≃ IF t≤r THEN 𝕜[0] ELSE 
+                       IF t∈(r,R) THEN 𝕜[0]⊕𝕜[1] ELSE 𝕜[1]  
+      WHERE Ann = {x | r≤‖x‖≤R}
+
+    EXAMPLE PHTofTorus: 
+      PHT(𝕋²)(v,t) ≃ IF t≤-1 THEN 𝕜[0] ELSE
+                      IF t∈(-1,1) THEN 𝕜[0]⊕𝕜[1]⊕𝕜[1] ELSE 
+                      IF t≥1 THEN 𝕜[0]⊕𝕜[2] ELSE 0
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+CONCEPT ShapeSpace {
+  NOTATION {
+    O = {O_d} = o-minimal structure on ℝ^d
+    CS(X) = Constructible subsets of X with respect to O
+    Shv(X, 𝒟) = Category of 𝒟-valued sheaves on X  
+    D^b(𝒜) = Bounded derived category of abelian category 𝒜
+    𝕜_Z = Constant sheaf valued in field 𝕜 on space Z
+    
+    Z_M = {(x,v,t) ∈ M × 𝕊^(d-1) × ℝ | x·v ≤ t}
+    f_M: Z_M → 𝕊^(d-1) × ℝ
+    
+    PHT(M) = R(f_M)_*𝕜_Z_M ∈ D^b(Shv(𝕊^(d-1) × ℝ))
+    PHT^i_M(v,t) = H^i(f⁻¹_M(v,t))
+    
+    ECT(M)(v,t) = χ(f⁻¹_M(v,t)) = ∑_i (-1)^i dim PHT^i_M(v,t)
+    BCT(M)(v,t) = [β_i(f⁻¹_M(v,t))] = [dim PHT^i_M(v,t)]
+    
+    𝓒(M) = {M_i ↪ M} = Finite closed covers of M ∈ CS(ℝ^d)
+    Nerve(𝓒, ℱ) = [[ℱ(M_i)]→[ℱ(M_I)|I|=2]→...] ∈ Ch(Vect_𝕜)
+    
+    d_I(ℱ,𝒢) = inf {ε≥0 | ∃ ε-interleaving ℱ⇄_ε𝒢}
+    d^(PHT_i)_(p,q)(M,N) = ‖W_p(PHT^i_M, PHT^i_N)‖_L^q(𝕊^(d-1))
+  }
+
+  LANGUAGE {
+    TYPE Shape = Constructible subset of ℝ^d  
+    TYPE Direction = Unit vector in 𝕊^(d-1)
+    TYPE Cover = Finite set of inclusions {M_i ↪ M}
+    
+    FUNC SubLevel(M: Shape, v: Direction, t: ℝ): Shape =
+      {x ∈ M | x·v ≤ t}
+    
+    FUNC DerivedPHT(M: Shape): D^b(Shv(𝕊^(d-1) × ℝ)) = 
+      R(f_M)_*𝕜_Z_M
+    
+    FUNC SheafPHT(M: Shape): Shv(𝕊^(d-1) × ℝ, Vect_𝕜^(d+1)) =
+      (v,t) ↦ [H^i(f⁻¹_M(v,t)) for 0≤i≤d]
+      
+    FUNC MapPHT(M: Shape): 𝕊^(d-1) → Dgm^d =
+      v ↦ (Dgm(PH^0_M(v)), ..., Dgm(PH^(d-1)_M(v))) 
+      
+    FUNC ECT(M: Shape): Shv(𝕊^(d-1) × ℝ, Vect_𝕜) = 
+      (v,t) ↦ ∑_i (-1)^i dim PHT^i_M(v,t)
+      
+    FUNC BCT(M: Shape): Shv(𝕊^(d-1) × ℝ, Vect_𝕜^(d+1)) =
+      (v,t) ↦ [dim PHT^i_M(v,t) for 0≤i≤d]
+      
+    PRED IsInterleaving(ϕ: ℱ_ε → 𝒢, ψ: 𝒢_ε → ℱ, ε: ℝ≥0) =
+      ϕ∘ψ_ε ∼ 𝒢_2ε ∧ ψ∘ϕ_ε ∼ ℱ_2ε  
+  }
+  
+  STRUCTURES {
+    STRUCTURE PHTSheaf {
+      FIELD Sections(M: Shape): 
+        D^b(Shv(𝕊^(d-1) × ℝ)) = PHT(M)
+      FIELD Restriction(M ↪ N): PHT(N) → PHT(M) 
+      AXIOM DescentCompatibility: 
+        ∀ M: Shape, 𝓒: 𝓒(M),
+        PHT(M) ≃ holim Nerve(𝓒, PHT|_𝓒) 
+    }
+  }
+
+  TRANSFORMERS {  
+    REWRITE ShiftPHT(ε: ℝ≥0)(M: Shape):
+      PHT(M) → PHT_ε(M) := R(f_M_ε)_*𝕜_Z_M_ε
+      WHERE Z_M_ε = {(x,v,t)∈M×𝕊^(d-1)×ℝ | x·v≤t+ε}
+      
+    REWRITE ShiftLeft(i: ℕ):
+      R^(i+1)(f_M)_*𝕜_Z_M → [R^i(f_M)_*𝕜_Z_M → R^i(f_M_ε)_*𝕜_Z_M]
+      
+    REWRITE ShiftRight(i: ℕ):  
+      R^i(f_M)_*𝕜_Z_M → [R^i(f_M_ε)_*𝕜_Z_M → R^(i+1)(f_M)_*𝕜_Z_M]
+  }
+
+  THEOREMS {
+    THEOREM MapSheafDerivedEquivalence: 
+      MapPHT(M) ≃ SheafPHT(M) ≃ DerivedPHT(M)
+    {
+      MapPHT(M) ≃ SheafPHT(M):
+        Follows from definition, Dgm(PH^i_M(v)) encodes PHT^i_M(v,t)
+      SheafPHT(M) ≃ DerivedPHT(M):  
+        By H^i(DerivedPHT(M))_(v,t) ≃ H^i(SheafPHT(M)(v,t))
+    }
+      
+    THEOREM ECTBCTviaPHT:
+      ECT(M) ≃ ∑_i (-1)^i PHT^i_M, BCT(M) ≃ [PHT^i_M]_i
+    {
+      Immediate from definitions of ECT, BCT in terms of  
+      dim PHT^i_M(v,t) = dim H^i(f⁻¹_M(v,t))
+    }
+
+    THEOREM PHTGluing: 
+      PHTSheaf satisfies DescentCompatibility
+    {
+      GIVEN M: Shape, 𝓒: 𝓒(M)
+      PROVE PHT(M) ≃ holim Nerve(𝓒, PHT|_𝓒)
+      USING 
+        Godemont resolution k_Z_M → [⨁k_Z_(M_i) → ⨁k_Z_(M_I) → ...]
+        ⇒ Rf_*k_Z_M ≃ holim Nerve(𝓒, Rf_*k_Z_(-)|_𝓒)
+        ⇒ Rf_*k_Z_M ≃ holim[[Rf_*(M_i)k_Z]→[Rf_*(M_I)k_Z]→...] 
+        AND by Verdier duality, proper base change:
+        Rf_*k_Z_M ≃ holim Nerve(𝓒, PHT|_𝓒)
+        Lastly check PHT stalks satisfy sheaf axiom.
+    }  
+
+    THEOREM PHTStability:
+      d_I(PHT(M), PHT(N)) ≤ ε  if
+      ∃ ε-controlled homotopy equivalence ϕ: M → N, ψ: N → M 
+    {
+      GIVEN ϕ: M → N, ψ: N → M with
+        ‖x-ϕ(x)‖ ≤ ε ∀x∈M, ‖y-ψ(y)‖ ≤ ε ∀y∈N
+        homotopies H_M: idx ∼ ψ∘ϕ, H_N: idy ∼ ϕ∘ψ  
+        moving points by at most 2ε
+      CONSTRUCT ε-interleaving PHT(M) ⇄_ε PHT(N):
+        ϕ_* : PHT(M)_ε → PHT(N), ψ_*: PHT(N)_ε → PHT(M) 
+        WHERE ϕ_*(x,v,t) := (ϕ(x),v,t+ε), ψ_* similar
+      PROVE (ϕ_*, ψ_*) is an ε-interleaving: 
+        ψ_*∘ϕ_*: PHT(M)_2ε → PHT(M) via H_M on Z_M_2ε
+        ϕ_*∘ψ_*: PHT(N)_2ε → PHT(N) via H_N on Z_N_2ε
+    }
+    
+    THEOREM PHTBottleneckStability:
+      d^(PHT_i)_(∞,∞)(M,N) ≤ d_I(PHT(M),PHT(N))
+    {
+      Let ε := d_I(PHT(M),PHT(N)), then ∃ ε-interleaving:
+      ϕ: PHT(M) ⇄_ε PHT(N) : ψ 
+      ⇒ ∀v,i. ϕ^i_v: PHT^i_M(v) ⇄_ε PHT^i_N(v) : ψ^i_v
+         by restricting ϕ, ψ to stalks over (v,t) 
+      ⇒ d_B(PHT^i_M(v), PHT^i_N(v)) ≤ ε ∀v,i 
+         by Isometry Thm: d_I = d_B for persistence mods
+      ⇒ d^(PHT_i)_(∞,∞)(M,N) = max_v d_B(PHT^i_M(v),PHT^i_N(v)) ≤ ε
+    }
+ 
+    THEOREM PHTofPointCloud:  
+      ∀ M: Submanifold, ∀ε>0, ∃δ>0 s.t.
+      ∀{x_i}⊂M δ-dense, U=⋃B_ε(x_i), K=AlphaComplex(U),
+      d_I(PHT(M), PHT(K)) ≤ Cε w.h.p. for C=O(1) 
+    {
+      GIVEN ε, M, {x_i}, U, K as stated  
+      HAVE K ≃ M w.h.p. by:
+        - NiyogiSmaleWeinberger: U ≃ M if δ≪ε
+        - Nerve thm: K = AlphaComplex(U) ≃ U
+      DEFINE interpolation maps ϕ := f∘j, ψ := g∘ι:
+        ι: M↪U, f: U→M retracts x to nearest pt on M 
+        j: K↪U, g: U→K deformation retracts  
+      PROVE ϕ, ψ induce Cε-interleaving PHT(M)⇄PHT(K):
+        - ‖x-ϕ(x)‖ ≤ ε ∀x∈K, ‖y-ψ(y)‖ ≤ 2ε ∀y∈M
+        - H_M: ψ∘ϕ ∼ id_M, H_K: ϕ∘ψ ∼ id_K via H_U, G_U 
+          are O(ε)-controlled htpys on U
+        ⇒ d_I(PHT(M), PHT(K)) ≤ Cε by PHTStability
+    }
+  }
+  
+  EXAMPLES {
+    EX PHTofCircle: 
+      PHT(S^1)(v,t) ≃ IF t≤-1 THEN 𝕜[0] ELSE 
+                       IF t∈(-1,1) THEN 𝕜[0]⊕𝕜[1] ELSE 𝕜[1]
+        WHERE 𝕜[n] = 𝕜 in deg n, 0 else
+
+    EX PHTofAnnulus:
+      PHT(Ann)(v,t) ≃ IF t≤r THEN 𝕜[0] ELSE 
+                       IF t∈(r,R) THEN 𝕜[0]⊕𝕜[1] ELSE 𝕜[1]  
+        WHERE Ann = {x | r≤‖x‖≤R}
+      
+    EX PHTofTorus:
+      PHT(T)(v,t) ≃ IF t≤-1 THEN 𝕜[0] ELSE
+                     IF t∈(-1,1) THEN 𝕜[0]⊕𝕜[1]⊕𝕜[1] ELSE 
+                     IF t≥1 THEN 𝕜[0]⊕𝕜[2] ELSE 0
+                     
+    EX ECTofCircle:  
+      ECT(S^1)(v,t) = IF t∈[-1,1] THEN 0 ELSE 1
+      
+    EX BCTofAnnulus:
+      BCT(Ann)(v,t) = IF t≤r THEN [1,0,0] ELSE
+                       IF t∈(r,R) THEN [1,1,0] ELSE [1,0,0]
+  }
+}
+
+
+
+
+CONCEPT ShapeSpace {
+  NOTATION {
+    O = {O_d} = o-minimal structure on ℝ^d
+    CS(X) = Constructible subsets of X wrt O
+    Shv(X, 𝒟) = Category of 𝒟-valued sheaves on X  
+    D^b(𝒜) = Bounded derived category of abelian category 𝒜
+    𝕜_Z = Constant sheaf valued in field 𝕜 on space Z
+    
+    Z_M = {(x,v,t) ∈ M × 𝕊^(d-1) × ℝ | x·v ≤ t}
+    f_M: Z_M → 𝕊^(d-1) × ℝ
+    
+    PHT_M^i = R^if_(M∗)𝕜_Z_M ∈ Shv(𝕊^(d-1) × ℝ, Vect_𝕜) 
+    PHT(M) = [PHT_M^i] ∈ D^b(Shv(𝕊^(d-1) × ℝ, Vect_𝕜))
+    
+    ECT(M)(v,t) = χ(f⁻¹_M(v,t)) = ∑_i (-1)^i dim H^i(f⁻¹_M(v,t)) 
+    BCT(M)(v,t) = [β_i(f⁻¹_M(v,t))] = [dim H^i(f⁻¹_M(v,t))]
+    
+    𝓒(M) = {M_i ↪ M} = Finite closed covers of M ∈ CS(ℝ^d)
+    Nerve(𝓒, ℱ) = [[ℱ(M_i)]→[ℱ(M_I)|I|=2]→...] ∈ Ch(Vect_𝕜)
+    
+    d_I(ℱ,𝒢) = inf {ε≥0 | ∃ ε-interleaving ℱ⇄_ε𝒢}
+    d^(PHT_i)_(p,q)(M,N) = ‖W_p(PHT_M^i, PHT_N^i)‖_L^q(𝕊^(d-1))
+  }
+
+  LANGUAGE {
+    TYPE Shape = Constructible subset of ℝ^d  
+    TYPE Direction = Unit vector in 𝕊^(d-1)
+    TYPE Cover = Finite set of inclusions {M_i ↪ M}
+    
+    FUNC SubLevel(M: Shape, v: Direction, t: ℝ): Shape =
+      {x ∈ M | x·v ≤ t}
+    
+    FUNC DerivedPHT(M: Shape): D^b(Shv(𝕊^(d-1) × ℝ, Vect_𝕜)) = 
+      R(f_M)_*𝕜_Z_M
+      
+    FUNC ECT(M: Shape): Shv(𝕊^(d-1) × ℝ, Vect_𝕜) = 
+      (v,t) ↦ H⁰(DerivedPHT(M))_(v,t)
+      
+    FUNC BCT(M: Shape): Shv(𝕊^(d-1) × ℝ, Vect_𝕜^(d+1)) =
+      (v,t) ↦ [H^i(DerivedPHT(M))_(v,t) for 0≤i≤d]
+      
+    PRED IsInterleaving(ϕ: ℱ_ε → 𝒢, ψ: 𝒢_ε → ℱ, ε: ℝ≥0) =
+      ϕ∘ψ_ε ∼ 𝒢_2ε ∧ ψ∘ϕ_ε ∼ ℱ_2ε  
+  }
+  
+  STRUCTURES {
+    STRUCTURE PHTSheaf {
+      FIELD Sections(M: Shape): 
+        D^b(Shv(𝕊^(d-1) × ℝ, Vect_𝕜)) = PHT(M)
+      FIELD Restriction(M ↪ N): PHT(N) → PHT(M) 
+      AXIOM DescentCompatibility: 
+        ∀ M: Shape, 𝓒: 𝓒(M),
+        PHT(M) ≃ holim Nerve(𝓒, PHT|_𝓒) 
+    }
+  }
+
+  TRANSFORMERS {  
+    REWRITE ShiftLeft(i: ℕ):
+      R^(i+1)f_*𝕜_Z_M → [R^if_*𝕜_Z_M → R^if_*𝕜_Z_M_ε]
+    REWRITE ShiftRight(i: ℕ):  
+      R^if_*𝕜_Z_M → [R^if_*𝕜_Z_M_ε → R^(i+1)f_*𝕜_Z_M]
+    REWRITE SheafInclusionMaps(ℱ: Shv(X), U↪V: OpenInclusion):
+      ℱ(V) → ℱ(U) 
+    SIMPLIFY ConstantSheafOnSet(Y⊆X):
+      𝕜_Y(U) = IF Y∩U=∅ THEN 0 ELSE 𝕜
+  }
+
+  THEOREMS {
+    THEOREM SheafAxiom: 
+      PHTSheaf satisfies DescentCompatibility
+    {
+      GIVEN M: Shape, 𝓒: 𝓒(M)
+      PROVE PHT(M) ≃ holim Nerve(𝓒, PHT|_𝓒)
+      USING 
+        RestrictionMaps(PHTSheaf, 𝓒) form SheafInclusionMaps
+        Nerve(𝓒, PHT|_𝓒) = [[PHT(M_i)]→[PHT(M_I)|I|=2]→...]
+        ⇒ holim Nerve(𝓒, PHT|_𝓒) ≃ R lim Nerve(𝓒, PHT|_𝓒)
+        BY Verdier duality, proper base change
+    }  
+
+    THEOREM NerveTheorem:
+      ∀ M: Polyhedral, 𝓒={σ_i}: Triangulation of M,
+      H^nPHT(M) ≃ H^nNerve(𝓒, H⁰PHT)
+    {
+      GIVEN M, 𝓒 as above  
+      NOTE Nerve(𝓒, H⁰PHT) = [⨁H⁰PHT(σ_I)|I|=1]→[⨁H⁰PHT(σ_I)|I|=2]→...
+      PROVE ∀n, H^nPHT(M) ≃ H^nNerve(𝓒, H⁰PHT)
+      USING
+        Nerve(𝓒, 𝕜) ≃ M and Nerve(𝓒,H⁰PHT)=Nerve(𝓒,𝕜)⊗𝕜 H⁰PHT(pt)
+        ⇒ H^nNerve(𝓒, H⁰PHT) ≃ H^n(M, H⁰PHT(pt)_M)   
+        AND by Poincaré duality, H^nPHT(M) ≃ H^n(M, H⁰PHT(pt)_M)
+    }
+
+    THEOREM ECTDeterminesShape: 
+      ECT(M) = ECT(N) ⇒ M ≃ N
+    {
+      GIVEN M, N: Shape w/ ECT(M) = ECT(N)
+      THUS ∀v,t. χ(M∩{x|x·v≤t}) = χ(N∩{x|x·v≤t})
+      ⇒ ∀v. Schapira inversion(ECT(M))(v) = Schapira inversion(ECT(N))(v) 
+      ⇒ M ≃ N using microlocal Morse theory  
+    }
+    
+    THEOREM PHT_DeterminesShape:
+      PHT(M) ≃ PHT(N) ⇒ M ≃ N
+    {
+      GIVEN PHT(M) ≃ PHT(N)
+      HAVE BCT(M) = BCT(N)  BY PHT_M^i ≃ PHT_N^i ∀i 
+      AND ECT(M) = ECT(N)   BY ECT(M) = ∑(-1)^i PHT_M^i 
+                                     = ∑(-1)^i PHT_N^i = ECT(N)
+      THUS M ≃ N            BY ECTDeterminesShape
+    }
+  }
+
+  PROOFS {
+    PROOF PHTStability: 
+      d_I(PHT(M), PHT(N)) ≤ d_H(M, N)
+    {
+      DEFINE ε := d_H(M, N) 
+      GIVEN ε-interleaving ι: M↪N_ε, ψ: N↪M_ε
+      DEFINE ϕ_i := R^if_ι, ψ_i := R^ig_ψ 
+      PROVE (ϕ_i: PHT(M)_ε→PHT(N)), (ψ_i: PHT(N)_ε→PHT(M))
+            form an ε-interleaving  
+      USING
+        Z_M ⊆ Z_M_ε induces can: PHT(M)_ε → PHT(M)
+        ∀x∈M. d(x,ψ(ι(x))) ≤ 2ε ⇒ ∃ Homotopy 
+          H_M: PHT(M)_2ε → PHT(M)_ε realizing 
+          ψ∘ϕ_2ε ∼ can: PHT(M)_2ε → PHT(M)_ε → PHT(M)
+        (Similarly homotopy H_N: PHT(N)_2ε → PHT(N))
+    }
+
+    PROOF PHTBottleneckStability:
+      d^(PHT_i)_(∞,∞)(M,N) ≤ d_I(PHT(M),PHT(N))  
+    {
+      DEFINE ε := d_I(PHT(M),PHT(N))
+      GIVEN ε-interleaving PHT(M) ⇄_ε PHT(N)
+      HAVE ∀v,i. ε-interleaving PHT_M^i(v) ⇄_ε PHT_N^i(v) 
+           BY evaluating sheaf interleaving on stalks  
+      THUS d_B(PHT_M^i(v), PHT_N^i(v)) ≤ ε ∀ v ∈ 𝕊^(d-1), 0≤i≤d
+      BY Isometry Theorem: d_I = d_B on persistence modules
+    }
+ 
+    PROOF PHTofPointCloud:  
+      ∀ M: Submanifold, ∀ε: Hausdorff-noise, ∃δ: sampling-density,
+      ∀ {x_i}⊂M, δ-dense sample; U=⋃B_ε(x_i); K=AlphaComplex(U), 
+      d_I(PHT(M), PHT(K)) ≤ Cε w.h.p. for C=O(1)
+    {
+      GIVEN ε, M, {x_i}, U, K as stated  
+      DEFINE interpolation map ϕ := f∘j, ψ := g∘ι:
+        ι: M↪U, f: U→M retracts x to closest p∈M  (w/ homotopy H_U along seg px)
+        j: K↪U, g: U→K deformation retracts       (w/ htpy G_U along Voronoi diagram)
+      PROVE ϕ, ψ induce Cε-interleaving PHT(M)⇄_CεPHT(K): 
+      - By NiyogiSmaleWeinberger, δ≪ε ⇒ ι: M↪U a homotopy-equivalence w.h.p.
+      - By AlphaComplex(U) ≃ DelaunayComplex(U) ≃ U, get j: K↪U a htpy-equiv
+      - f: U→M and g: U→K both ε-controlled by construction
+      - H_U, G_U both O(ε)-controlled homotopies
+      - ‖x-ϕ(x)‖ ≤ ε ∀x∈K, ‖y-ψ(y)‖ ≤ 2ε ∀y∈M ⇒ ϕ,ψ induce Cε-interleaving
+    }
+  }
+    
+  EXAMPLES {
+    EX PHTofCircle: 
+      PHT(S^1)(v,t) = IF t≤-1 THEN 𝕜[0] ELSE IF t≥1 THEN 0 ELSE 𝕜[0]⊕𝕜[1]
+        WHERE [] denotes shift in homological degree
+
+    EX PHTofAnnulus:
+      PHT(Ann)(v,t) = IF t≤r THEN 𝕜[0] ELSE 
+                      IF t∈[r,R] THEN 𝕜[0]⊕𝕜[1] ELSE 0
+        WHERE Ann = {x | r≤‖x‖≤R}
+
+    EX PHTofTorus: 
+      PHT(T^2)(v,t) = IF t≤-1 THEN 𝕜[0] ELSE 
+                      IF t∈[-1,1] THEN 𝕜[0]⊕𝕜[1]⊕𝕜[1] ELSE
+                      IF t≥1 THEN 𝕜[0]⊕𝕜[2] ELSE 0
+                      
+    EX ECTofCircle:  
+      ECT(S^1)(v,t) = IF t∈[-1,1] THEN 0 ELSE 1
+      
+    EX BCTofAnnulus: 
+      BCT(Ann)(v,t) = IF t≤r THEN [1,0,0] ELSE
+                      IF t∈[r,R] THEN [1,1,0] ELSE [0,0,0]
+  }
+}
+
+
+
+
+
+
+
+CONCEPT ShapeSpace {
+  NOTATION {
+    CS(ℝ^d) = Constructible subsets of ℝ^d
+    Shv(X) = Category of sheaves on X
+    D^b(Shv(X)) = Bounded derived category of sheaves on X
+    PHT(M) = R(f_M)_*𝕜_Z_M = Persistent Homology Transform of M ∈ CS(ℝ^d)
+      where Z_M = {(x,v,t) ∈ M × 𝕊^(d-1) × ℝ | x·v ≤ t} 
+      and f_M : Z_M → 𝕊^(d-1) × ℝ
+    𝓒 = covers of M ∈ CS(ℝ^d)
+  }
+
+  LANGUAGE {
+    TYPE Shape = Constructible subset of ℝ^d
+    TYPE Direction = Unit vector in ℝ^d 
+    TYPE Filtration = Function: Shape → [0,∞)
+
+    FUNC SubLevelSet(s: Shape, v: Direction, t: ℝ) -> Shape =
+      {x ∈ s | x·v ≤ t}
+
+    FUNC DerivedPHT(s: Shape): D^b(Shv(𝕊^(d-1) × ℝ)) = PHT(s)
+  }
+
+  STRUCTURES {
+    STRUCTURE ShapeSpaceSheaf {
+      FIELD Base: Category = (CS(ℝ^d))^op
+      FIELD Stalks(s: Shape): D^b(Shv(𝕊^(d-1) × ℝ)) = PHT(s)
+      FIELD Restrictions(i: 𝓒): 
+        [PHT(M)] ⇒ [PHT(M_i) for M_i ∈ 𝓒] → [PHT(M_I) for |I|=2] → ...
+    }
+  }
+
+  THEOREMS {
+    THEOREM SheafAxiom: 
+      ShapeSpaceSheaf satisfies ČechDescent 
+    {
+      GIVEN M: Shape, 𝓒: Cover of M
+      PROVE: 
+        PHT(M) ≃ holim[[PHT(M_i)] ⇒ [PHT(M_I) for |I|=2] → ...]
+      BY: Spectral sequence argument
+    }
+
+    THEOREM NerveTheorem: 
+      PHT^n(M) ≃ H^n(NerveComplex(M))   
+    {  
+      GIVEN M: PolyhedralShape w/ Triangulation M = ⋃ σ_i
+      WHERE NerveComplex(M) := 
+        [⨁PHT^0(M_I) for |I|=1] → [⨁PHT^0(M_I) for |I|=2] → ...
+      PROVE: 
+        PHT^n(M) ≃ H^n(NerveComplex(M)) for all n
+      BY: 
+        E_1 page is NerveComplex(M)
+        Spectral sequence collapses
+        ⇒ Cohomology of nerve complex computes cohomology of PHT    
+    }
+  }
+
+  PROOFS {
+    PROOF Stability: 
+      d_I(PHT(M), PHT(N)) ≤ ε 
+      if M ≃_ε N by ε-controlled homotopy 
+    {
+      GIVEN M, N : Shape, φ : M → N, ψ : N → M with ε-controlled homotopies
+      CONSTRUCT: ε-interleaving morphisms between PHT(M) and PHT(N)
+      USING:
+        Functoriality of PHT 
+        Homotopies between inclusion and φ∘ψ, ψ∘φ
+    } 
+  }
+
+  EXAMPLES {
+    EXAMPLE PointCloudApproximation:
+      GIVEN M: Submanifold, {x_i} ⊂ M sampled ε/2-densely
+      LET U = ⋃B_ε(x_i)
+      LET K = AlphaComplex(U)
+      THEN d_I(PHT(M), PHT(K)) ≤ ε/2 w.h.p.
+      BY:
+        Nerve Lemma: U ≃ K 
+        Interleaving: M ↪ U, K → U ε/2-controlled  
+  }
+}
+
+
+CONCEPT ShapeSpace {
+  NOTATION {
+    O = {O_d} = o-minimal structure on ℝ^d
+    CS(ℝ^d) = Constructible subsets of ℝ^d wrt O 
+    Shv(X, 𝒟) = Category of 𝒟-valued sheaves on X
+    D^b(𝒜) = Bounded derived category of abelian category 𝒜
+    𝕜_Z = Constant sheaf valued in field 𝕜 on space Z
+    PHT_M^i = i-th Persistent Homology Transform of M:
+      R^if_(M∗)𝕜_Z_M ∈ Shv(𝕊^(d-1) × ℝ) where
+        Z_M = {(x,v,t) ∈ M × 𝕊^(d-1) × ℝ | x·v ≤ t}
+        f_M: Z_M → 𝕊^(d-1) × ℝ
+    PHT(M) = [PHT_M^i] ∈ D^b(Shv(𝕊^(d-1) × ℝ)) 
+    ECT(M)(v,t) = χ(f⁻¹_M(v,t))
+    BCT(M)(v,t) = [β_i(f⁻¹_M(v,t))]
+    𝓒(M) = {M_i ↪ M} = Finite closed covers of M
+    d_I(ℱ, 𝒢) = inf{ε≥0 | ∃ ε-interleaving ℱ ⇄_ε 𝒢}
+    d^(PHT_i)_(p,q)(M,N) = ‖W_p(PHT_M^i, PHT_N^i)‖_L^q(𝕊^(d-1))
+  }
+
+  LANGUAGE {  
+    FUNC SubLevel(M: CS(ℝ^d), v: 𝕊^(d-1), t: ℝ): CS(ℝ^d) =
+      {x ∈ M | x·v ≤ t}
+    
+    FUNC DerivedPHT(M: CS(ℝ^d)): D^b(Shv(𝕊^(d-1) × ℝ)) =
+      R(f_M)_*𝕜_Z_M
+
+    FUNC ECT(M: CS(ℝ^d)): Shv(𝕊^(d-1) × ℝ, Vect_𝕜) =
+      (v,t) ↦ H⁰(DerivedPHT(M))_(v,t)
+      
+    FUNC BCT(M: CS(ℝ^d)): Shv(𝕊^(d-1) × ℝ, Vect_𝕜^(d+1)) =
+      (v,t) ↦ [H^i(DerivedPHT(M))_(v,t) for 0≤i≤d]
+      
+    PRED IsInterleaving(ϕ: ℱ_ε → 𝒢, ψ: 𝒢_ε → ℱ, ε: ℝ≥0) = 
+      ϕ∘ψ_ε ∼ 𝒢_2ε AND ψ∘ϕ_ε ∼ ℱ_2ε
+  }
+
+  STRUCTURES {
+    STRUCTURE PHTSheaf {
+      FIELD Sections(M: CS(ℝ^d)): D^b(Shv(𝕊^(d-1) × ℝ)) = PHT(M)
+      FIELD Restriction(M ↪ N): PHT(N) → PHT(M)
+      AXIOM CechDescent: ∀ M ∈ CS(ℝ^d), 𝓒 ∈ 𝓒(M), 
+        PHT(M) ≃ holim[[PHT(M_i)] ⇒ [PHT(M_I)|I|=2] →...]
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE ShiftLeft(i: Int) : 
+      R^(i+1)f_*𝕜_Z_M → [R^if_*𝕜_Z_M → R^if_*𝕜_Z_M_ε]
+    REWRITE ShiftRight(i: Int) :  
+      R^if_*𝕜_Z_M → [R^if_*𝕜_Z_M_ε → R^(i+1)f_*𝕜_Z_M]
+  }
+
+  THEOREMS {
+    THEOREM SheafAxiom: 
+      PHTSheaf satisfies CechDescent
+    {
+      GIVEN M ∈ CS(ℝ^d), 𝓒 ∈ 𝓒(M) 
+      PROVE PHT(M) ≃ holim[[PHT(M_i)] ⇒ [PHT(M_I)|I|=2] →...]
+      USING: ShiftLeft/Right(i), Verdier duality, Proper base change
+    }
+
+    THEOREM NerveTheorem:
+      H^nPHT_M ≃ H^nNerve(𝓒, H⁰PHT) 
+    {
+      GIVEN M: PolyhedralShape, 𝓒 = {σ_i}: Triangulation
+      WHERE Nerve(𝓒, H⁰PHT) := [⨁H⁰PHT(σ_I)|I|=1] → [⨁H⁰PHT(σ_I)|I|=2] →...
+      PROVE H^nPHT_M ≃ H^nNerve(𝓒, H⁰PHT) ∀n
+    }
+
+    THEOREM ECTDeterminesShape:  
+      ECT(M) = ECT(N) ⇒ M = N
+    {
+      USING Schapira inversion formula for Radon transform R_S
+    }
+
+    THEOREM PHT_DeterminesShape:
+      PHT_M = PHT_N ⇒ M = N
+    { 
+      GIVEN PHT_M = PHT_N
+      HAVE BCT_M = BCT_N  BY PHT_M^i = PHT_N^i ∀i 
+      HAVE ECT_M = ECT_N  BY ECT_M = ∑(-1)^i PHT_M^i = ∑(-1)^i PHT_N^i = ECT_N
+      THUS M = N          BY ECTDeterminesShape
+    }
+  }
+   
+  PROOFS {
+    PROOF Stability:
+      d_I(PHT(M), PHT(N)) ≤ ε if d_H(M,N) ≤ ε 
+    {
+      DEFINE ε-interleaving: 
+        ϕ_i: R^if_(M∗)𝕜_Z_M_ε → R^if_(N∗)𝕜_Z_N,  
+        ψ_i: R^if_(N∗)𝕜_Z_N_ε → R^if_(M∗)𝕜_Z_M
+      PROVE IsInterleaving(ϕ, ψ, ε) using:
+        (1) Z_M ⊆ Z_M_ε induces R^if_(M∗)𝕜_Z_M_ε → R^if_(M∗)𝕜_Z_M
+        (2) Homotopies H_M: idx ∼ ψ∘ϕ, H_N: idy ∼ ϕ∘ψ 
+            from d_H(M,N) ≤ ε 
+    }
+
+    PROOF PHT_BottleneckStability: 
+      d^(PHT_i)_(∞,∞)(M,N) ≤ d_I(PHT(M), PHT(N))
+    {
+      DEFINE ε := d_I(PHT(M),PHT(N))
+      GIVEN ε-interleaving PHT(M) ⇄_ε PHT(N)
+      HAVE ε-interleaving PHT_M^i ⇄_ε PHT_N^i ∀v,i  
+           BY evaluating PHT^i sheaf interleaving on stalks
+      THUS d_B(PHT_M^i(v), PHT_N^i(v)) ≤ ε ∀v,i  
+           BY Isometry Thm for interleavings & Bottleneck dist 
+    }
+  
+    PROOF PointCloudPHTApproximation:
+      d_I(PHT(M), PHT(K)) ≤ ε/2 w.h.p.
+    {  
+      GIVEN {x_i}⊂M, ε/2-dense sample; U=⋃B_ε(x_i); K=AlphaComplex(U) 
+      DEFINE ϕ := f∘j, ψ := g∘ι:
+        ι: M↪U, f: U→M: x ↦ argmin_{p∈M} d(p,x)  (homotopy via: H_U(x,t) = tx + (1-t)f(x))
+        j: K↪U, g: U→K: deformation retract       (homotopy via: G_U along Voronoi diagram) 
+      PROVE ϕ, ψ induce ε/2-interleaving of PHT(M), PHT(K) 
+      USING: 
+        NiyogiSmaleWeinberger: U ≃ M w.h.p.
+        AlphaComplex(U) ≃ U
+        H_U, G_U are ε, ε/2 controlled
+        ‖x - ϕ(x)‖ ≤ ε/2 ∀x∈K, ‖y - ψ(y)‖ ≤ ε ∀y∈M
+    }
+  }
+}
+
+
+CONCEPT ShapeSpace {
+  NOTATION {
+    O = {O_d} = o-minimal structure on ℝ^d
+    CS(ℝ^d) = Constructible subsets of ℝ^d wrt O 
+    Shv(X, 𝒟) = 𝒟-sheaves on X
+    D^b(𝒜) = Bounded derived category of 𝒜
+    𝕜_Z = Constant sheaf on Z with stalk field 𝕜
+    Dgm = Persistence diagrams
+    PHT_M^i = R^if_(M∗)𝕜_Z_M ∈ Shv(𝕊^(d-1) × ℝ), 
+      Z_M = {(x,v,t) ∈ M × 𝕊^(d-1) × ℝ | x·v ≤ t}, f_M: Z_M → 𝕊^(d-1) × ℝ
+    PHT(M) = [PHT_M^i] ∈ D^b(Shv(𝕊^(d-1) × ℝ))
+    ECT(M) = χ(f^(-1)_M(-)) : 𝕊^(d-1) × ℝ → ℤ  
+    BCT(M) = [β_i(f^(-1)_M(-))] : 𝕊^(d-1) × ℝ → ℤ^(d+1)
+    d_I(ℱ, 𝒢) = inf{ε | ∃ ε-interleaving ℱ ⇄_ε 𝒢}
+    d^(PHT_i)_(p,q)(M,N) = ‖W_p(PHT_M^i, PHT_N^i)‖_q
+    𝓒(M) = {M_i ↪ M} = Finite closed covers of M ∈ CS(ℝ^d)
+    ℱ_ε = ε-shift of ℱ ∈ D^b(Shv(𝕊^(d-1) × ℝ))
+    ℱ =[ε]= 𝒢 ⇔ d_I(ℱ, 𝒢) ≤ ε  
+    I_M = Index set of cover 𝓒(M)
+    M_I = ⋂_{i∈I} M_i for I ⊆ I_M
+  }
+
+  LANGUAGE {
+    FUNC Sublevel(M: CS(ℝ^d), v: 𝕊^(d-1), t: ℝ): CS(ℝ^d) = {x ∈ M | x·v ≤ t}
+    FUNC DerivedPHT(M: CS(ℝ^d)): D^b(Shv(𝕊^(d-1) × ℝ)) = PHT(M) 
+    FUNC InterleavingDistance(ℱ, 𝒢: D^b(Shv(𝕊^(d-1) × ℝ))): ℝ≥0 = d_I(ℱ, 𝒢)
+    FUNC ShiftFunctor(ℱ: D^b(Shv(𝕊^(d-1) × ℝ)), ε: ℝ≥0): D^b(Shv(𝕊^(d-1) × ℝ)) = ℱ_ε
+    FUNC WassersteinDistance(F, G: 𝕊^(d-1) → Dgm, p: ℝ≥1, q: ℝ≥1 ∪ {∞}): ℝ≥0 = d^F_(p,q)(M,N)
+    PRED CechDescent(ℱ: D^b(Shv(𝕊^(d-1) × ℝ)), 𝓒: 𝓒(M)) = 
+      ℱ(M) ≃ holim[ ∏_{i∈I_M} ℱ(M_i) ⇒ ∏_{I⊆I_M, |I|=2} ℱ(M_I) → ⋯ ]
+    PRED FiniteCover(𝓒: 𝓒(M), M: CS(ℝ^d)) = ⋃𝓒 = M ∧ 𝓒 is finite
+    AXIOM SheafAxiom: 
+      ∀ M: CS(ℝ^d), 𝓒: 𝓒(M) . FiniteCover(𝓒, M) ⇒ CechDescent(PHT(M), 𝓒) 
+  }
+
+  TRANSFORMERS {
+    TACTIC SimplifyInterleaving: 
+      ℱ =[ε]= 𝒢 ⇔ ∃ ϕ: ℱ_ε → 𝒢, ψ: 𝒢_ε → ℱ . ϕψ_ε ∼ 𝒢_2ε ∧ ψϕ_ε ∼ ℱ_2ε
+    TACTIC DecomposePHT:
+      PHT^n(M) ≃ H^n[ 0 → ⨁_{|I|=1} PHT^0(M_I) → ⨁_{|I|=2} PHT^0(M_I) → ⋯ ]
+        IF M triangulated by {σ_i}
+  }
+
+  THEOREMS {    
+    THEOREM PHTDeterminesShape: PHT(M) = PHT(N) ⇒ M = N
+    { 
+      PHT_M = PHT_N                   
+      ⇒ ∀i. PHT_M^i = PHT_N^i           BY def
+      ⇒ BCT_M = BCT_N                   BY def
+      ⇒ ∑_i (-1)^i PHT_M^i = ECT_M 
+        = ECT_N = ∑_i (-1)^i PHT_N^i    BY Euler
+      ⇒ M = N                           BY Schapira 
+    }
+
+    THEOREM StabilityPHT: d_I(PHT(M), PHT(N)) ≤ ε if d_H(M, N) ≤ ε
+    {
+      d_H(M,N) ≤ ε                       
+      ⇒ ∃ φ: M → N, ψ: N → M,
+          ‖x - φ(x)‖ ≤ ε ∀x∈M,           
+          ‖y - ψ(y)‖ ≤ ε ∀y∈N,
+          H_M: idx ∼ ψφ, H_N: idy ∼ φψ    BY def
+      ⇒ ϕ_i: PHT_M^i_ε → PHT_N^i, 
+        ψ_i: PHT_N^i_ε → PHT_M^i
+        are ε-interleaving               BY functoriality + homotopies
+      ⇒ d_I(PHT(M), PHT(N)) ≤ ε          BY SimplifyInterleaving
+    }
+
+    THEOREM ApproximationPHT: d_I(PHT(M), PHT(K)) ≤ ε/2 whp
+    {
+      GIVEN M: n-manifold, τ: condition number, ε: radius, δ: prob  
+      LET {x_i} ⊂ M be ε/2-dense sample w.p. ≥ 1-δ, 
+          U = ⋃_i B_ε(x_i), K = AlphaComplex(U)
+
+      SHOW d_I(PHT(M), PHT(K)) ≤ ε/2 w.p. ≥ 1-δ IF ε < τ/2 
+      
+        M ≃ U w.p. ≥ 1-δ IF ε < τ/2           BY NiyogiSmaleWeinberger
+        U ≃ K                                  BY NerveTheorem
+      ⇒ ∃ φ: M → K, ψ: K → M
+          ‖x - φ(x)‖ ≤ ε/2 ∀x∈M,              BY sample density + K ⊆ U
+          ‖u - ψ(u)‖ ≤ ε   ∀u∈U,              BY def AlphaComplex 
+          H_M: idx ∼ ψφ, H_K: idu ∼ φψ         BY Homotopy along Voronoi
+      ⇒ d_I(PHT(M), PHT(K)) ≤ ε/2 w.p. ≥ 1-δ BY StabilityPHT  
+    }
+  }
+  
+  PROOFS {
+    PROOF SheafAxiomProof:
+      ∀ M: CS(ℝ^d), 𝓒: 𝓒(M) . FiniteCover(𝓒, M) ⇒ CechDescent(PHT(M), 𝓒) 
+    {
+      SUFFICES_TO_SHOW  
+        PHT(M) → holim[ ∏ PHT(M_i) ⇒ ∏ PHT(M_I) → ⋯ ]
+          ∥         ∥                    |I|=2
+        PHT(M∩𝕊ℝ) → holim[ ∏ PHT(M_i∩𝕊ℝ) ⇒ ∏ PHT(M_I∩𝕊ℝ) → ⋯ ]
+      is homotopy pullback, 𝕊ℝ = 𝕊^(d-1) × ℝ
+      
+      LET E^r = PHT(M) wrt 𝓒 spectral sequence, r ≥ 1
+
+      E^1_pq = ⨁_{I⊆I_M, |I|=p+1} H^q(PHT(M_I))   BY def Cech complex
+      E^2_p0 = H^p(C•(𝓒, H⁰PHT))                  BY E^1 collapse 
+      E^r_p0 = E^2_p0, r ≥ 2                     BY CechCohomology  
+     
+    ⇒ H^nPHT(M) ≃ H^n(C•(𝓒, H⁰PHT))        
+    ⇒ holim[ ∏ PHT(M_i) ⇒ ∏ PHT(M_I) → ⋯ ] ≃ HolimCone(𝓒, PHT)  
+                                   |I|=2            BY MayerVietoris
+    ⇒ PHT(M) ≃ holim[ ∏ PHT(M_i) ⇒ ∏ PHT(M_I) → ⋯ ]              
+                                     |I|=2
+       SIMILARLY FOR PHT(M∩𝕊ℝ)
+    }
+     
+    PROOF DecomposePHTProof: 
+      IF M triangulated by {σ_i} THEN
+        PHT^n(M) ≃ H^n[ 0 → ⨁_{|I|=1} PHT^0(M_I) → ⨁_{|I|=2} PHT^0(M_I) → ⋯ ] 
+    {              
+      LET E^r = PHT(M) wrt {σ_i} spectral sequence
+    
+      E^1_pq = ⨁_{I⊆I_M, |I|=p+1} H^q(PHT(M_I))     BY def Cech complex
+             = 0 for q>0                            BY contractibility
+      
+    ⇒ E^1 collapse ⇒ E^∞ = E^2
+    ⇒ H^nPHT(M) ≃ H^n(C•({σ_i}, H⁰PHT))        
+    }
+  }
+}

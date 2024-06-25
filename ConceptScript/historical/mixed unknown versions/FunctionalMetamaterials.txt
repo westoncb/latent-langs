@@ -1,0 +1,83 @@
+CONCEPT FunctionalMetamaterials {
+  LANGUAGE {
+    type Fld = ScalarField(Man, ℝ) | VectorField(Man, TangentBundle) 
+             | TensorField(Man, TensorBundle)
+             
+    type Mat = (Composition, Microstructure, Response)
+    type Composition = ScalarField(Volume, ℝ)
+    type Microstructure = TensorField(Volume, SymmetryGroup) 
+    type Response = Fld -> Fld
+    
+    type FreeEnergy = Functional(Mat) 
+    type EffectiveResponse = FreeEnergy -> Response
+
+    func Symmetrize(φ: Fld, G: SymmetryGroup): Fld = ∫[G, g |-> φ ∘ g] / |G|
+    func EffectiveResponseFromEnergy(F: FreeEnergy): EffectiveResponse = δ²(F)/δφ²
+
+    pred HasSymmetry(m: Mat, G: SymmetryGroup) = ∀g: G. m.Microstructure ∘ g = m.Microstructure
+    pred HasUniversality(R: Response, m_i: Mat, η: ℝ) = ∀m ∈ m_i. |R(m) - R| < η
+
+    notation "⟨φ⟩_G" = Symmetrize(φ, G)
+    notation "χ[F]" = EffectiveResponseFromEnergy(F)
+
+    infer SymmetryInvariance(F: FreeEnergy, m: Mat, G: SymmetryGroup):
+      HasSymmetry(m, G) --> (∀φ. F(m, φ) = F(m, ⟨φ⟩_G))
+
+    infer EffectiveResponseApproximation(F: FreeEnergy, m: Mat, m_i: [Mat], η: ℝ):  
+      (∀m' ∈ m_i. |F(m) - F(m')| < η) --> HasUniversality(χ[F], m_i, O(η))
+  }
+
+  STRUCTURE {
+    ; Free energy of elastic metamaterial
+    ElasticEnergy(m: Mat, u: VectorField) := ∫[m.Volume, ε(u) : 𝓒[m] : ε(u)]
+
+    ; Acoustic metamaterial free energy  
+    AcousticEnergy(m: Mat, p: ScalarField) := ∫[m.Volume, (∇p)·κ[m]·(∇p) - ω²p·ρ[m]·p]
+      where κ[m] := inv(m.Composition · 𝓚), ρ[m] := m.Composition · 𝓡
+  }
+  
+  PROOFS {
+    theorem EffectiveElasticityViaHomogenization:
+      ∀(m: Mat, m_i: [Mat], η: ℝ).
+        (∀m' ∈ m_i. |ElasticEnergy(m) - ElasticEnergy(m')| < η) 
+        ⊢ ∃𝓒_eff. ∀u. |ElasticEnergy(m, u) - ∫[m.Volume, ε(u) : 𝓒_eff : ε(u)]| = O(η)
+    {
+      assume ∀m' ∈ m_i. |ElasticEnergy(m) - ElasticEnergy(m')| < η
+      
+      let 𝓒_eff := ⟨𝓒[m]⟩_G where G := SymmetryGroup(m.Microstructure)
+      
+      |ElasticEnergy(m, u) - ∫[ε(u) : 𝓒_eff : ε(u)]|
+        = |∫[ε(u) : (𝓒[m] - 𝓒_eff) : ε(u)]|
+        ≤ ‖𝓒[m] - 𝓒_eff‖ · ‖ε(u)‖²   ; by Cauchy-Schwarz
+        = O(η)  ; by EffectiveResponseApproximation
+    }
+    
+    theorem AcousticMetamaterialDesign:
+      ∀(F_target: FreeEnergy, ω: ℝ, η: ℝ).
+        ∃(m: Mat, m.Composition = Proj(𝓡, F_target), m.Microstructure = Proj(SymmetryGroup, F_target),
+          ∀p. |AcousticEnergy(m, p) - F_target(p)| < η)
+    {
+      let κ_target := δ²(F_target)/δ(∇p)²
+      let ρ_target := -δ²(F_target)/δp²/ω²
+      
+      let m.Composition s.t. m.Composition · 𝓡 = ρ_target
+      let m.Microstructure s.t. ⟨inv(m.Composition · 𝓚)⟩_SymmetryGroup(m.Microstructure) = κ_target
+      
+      then ∀p.
+        |AcousticEnergy(m, p) - F_target(p)|
+          = |∫[(∇p)·(⟨κ[m]⟩_G - κ_target)·(∇p) - ω²p·(ρ[m] - ρ_target)·p]|
+          ≤ ‖⟨κ[m]⟩_G - κ_target‖·‖∇p‖² + ω²‖ρ[m] - ρ_target‖·‖p‖²
+          < η   ; by construction
+    }
+  }
+}
+
+This Concept, FunctionalMetamaterials, focuses on the design and analysis of metamaterials using ideas from functional analysis and symmetry. Key points:
+
+Materials are characterized by composition fields, microstructure tensor fields encoding symmetries, and a response function mapping applied fields to resultant fields.
+The effective response is derived from a free energy functional via a second variational derivative. Symmetries of the microstructure lead to invariance of the energy.
+Universality of the effective response can be inferred from continuity of the energy functional with respect to microstructure variations.
+Homogenization theory allows approximation of an elastic metamaterial's effective elasticity tensor by averaging the microstructure.
+The inverse problem of acoustic metamaterial design is solved by projecting a target energy functional onto allowable composition and microstructure fields.
+
+The blending of functional analytic methods with symmetry principles and multiscale modeling techniques yields a powerful framework for metamaterial analysis and design. The Concept is stated generally but illustrated with examples of elastic and acoustic metamaterials. Proofs are sketched, relying upon abstract notations to express key technical steps.

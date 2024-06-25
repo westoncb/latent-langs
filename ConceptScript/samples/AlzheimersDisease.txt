@@ -1,0 +1,281 @@
+CONCEPT AlzheimersDisease {
+  PARAMETERS {
+    Patient : TYPE
+    Protein : TYPE
+    Neuron : TYPE
+    CognitiveFunction : TYPE
+    Medication : TYPE
+  }
+
+  CONTEXT {
+    TYPES {
+      BrainRegion := ENUM {
+        Hippocampus, EntorhinalCortex, NeoCortex, Amygdala, BasalForebrain
+      }
+
+      INDUCTIVE Pathology {
+        CASE AmyloidPlaques(concentration : REAL)
+        CASE NeurofibrillaryTangles(density : REAL)
+        CASE NeuronalLoss(percentage : REAL)
+        CASE Inflammation(severity : REAL)
+      }
+
+      INDUCTIVE CognitiveSymptom {
+        CASE MemoryLoss(severity : REAL)
+        CASE ExecutiveDysfunction(severity : REAL)
+        CASE LanguageImpairment(severity : REAL)
+        CASE VisuospatialDeficits(severity : REAL)
+      }
+
+      INDUCTIVE BehavioralSymptom {
+        CASE Apathy(severity : REAL)
+        CASE Depression(severity : REAL)
+        CASE Anxiety(severity : REAL)
+        CASE Agitation(severity : REAL)
+      }
+
+      GeneticRiskFactor := ENUM {
+        APOE4, APP, PSEN1, PSEN2
+      }
+
+      Stage := ENUM {
+        Preclinical, MildCognitiveImpairment, Mild, Moderate, Severe
+      }
+
+      Diagnosis := STRUCTURE {
+        FIELD cognitive_assessment : SET(CognitiveSymptom)
+        FIELD behavioral_assessment : SET(BehavioralSymptom)
+        FIELD biomarkers : SET(Pathology)
+        FIELD imaging : SET((BrainRegion, REAL))  -- Region and atrophy level
+        FIELD genetic_factors : SET(GeneticRiskFactor)
+      }
+
+      Treatment := STRUCTURE {
+        FIELD medications : SET(Medication)
+        FIELD cognitive_interventions : SET(CognitiveFunction)
+        FIELD lifestyle_modifications : SET(String)
+      }
+
+      ProgressionModel := FUNC(Patient, TIME) -> Stage
+    }
+
+    STRUCTURES {
+      STRUCTURE Pathogenesis {
+        FUNC amyloid_cascade(initial_concentration : REAL) -> FUNC(TIME) -> REAL
+        FUNC tau_propagation(initial_density : REAL) -> FUNC(TIME) -> REAL
+        FUNC neuronal_degeneration(initial_count : REAL) -> FUNC(TIME) -> REAL
+
+        AXIOM AmyloidHypothesis {
+          ∀ t : TIME . 
+            LET amyloid = amyloid_cascade(1.0)(t)
+                tau = tau_propagation(1.0)(t)
+            IN amyloid > 1.0 ⇒ tau > 1.0
+        }
+
+        AXIOM NeurodegenerationCorrelation {
+          ∀ t : TIME . 
+            LET neurons = neuronal_degeneration(1.0)(t)
+                tau = tau_propagation(1.0)(t)
+            IN tau > 2.0 ⇒ neurons < 0.8
+        }
+      }
+
+      STRUCTURE ClinicalAssessment {
+        FUNC cognitive_score(symptoms : SET(CognitiveSymptom)) -> REAL
+        FUNC behavioral_score(symptoms : SET(BehavioralSymptom)) -> REAL
+
+        AXIOM ProgressiveDecline {
+          ∀ p : Patient, t1 t2 : TIME . t2 > t1 ⇒
+            cognitive_score(p.symptoms@t2) < cognitive_score(p.symptoms@t1)
+        }
+      }
+
+      STRUCTURE Biomarker {
+        FUNC csf_abeta(p : Patient) -> REAL
+        FUNC csf_tau(p : Patient) -> REAL
+        FUNC pet_amyloid(p : Patient) -> REAL
+
+        AXIOM BiomarkerCorrelation {
+          ∀ p : Patient . 
+            csf_abeta(p) < threshold ⇔ pet_amyloid(p) > threshold
+        }
+      }
+
+      STRUCTURE TherapeuticIntervention {
+        FUNC medication_effect(m : Medication, p : Patient) -> REAL
+        FUNC cognitive_training_effect(f : CognitiveFunction, p : Patient) -> REAL
+
+        AXIOM LimitedEfficacy {
+          ∀ m : Medication, p : Patient .
+            medication_effect(m, p) < complete_reversal
+        }
+      }
+    }
+
+    NOTATION {
+      AD := AlzheimersDisease
+      Aβ := AmyloidBeta
+      NFT := NeurofibrillaryTangles
+      MCI := MildCognitiveImpairment
+    }
+
+    ASSERTIONS {
+      AXIOM AgeDependentRisk {
+        ∀ p : Patient . RISK(p, AD) ∝ AGE(p)
+      }
+
+      AXIOM GeneticPredisposition {
+        ∀ p : Patient . APOE4 ∈ p.genetic_factors ⇒ RISK(p, AD) > baseline_risk
+      }
+
+      AXIOM IrreversibleProgression {
+        ∀ p : Patient, t1 t2 : TIME . 
+          HAS_AD(p)@t1 ∧ t2 > t1 ⇒ HAS_AD(p)@t2
+      }
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE DiagnoseAD(p : Patient) -> Diagnosis {
+      LET cognitive = ASSESS_COGNITIVE_FUNCTION(p)
+      LET behavioral = ASSESS_BEHAVIORAL_SYMPTOMS(p)
+      LET biomarkers = MEASURE_BIOMARKERS(p)
+      LET imaging = PERFORM_BRAIN_IMAGING(p)
+      LET genetic = TEST_GENETIC_FACTORS(p)
+      IN Diagnosis {
+        cognitive_assessment = cognitive,
+        behavioral_assessment = behavioral,
+        biomarkers = biomarkers,
+        imaging = imaging,
+        genetic_factors = genetic
+      }
+    }
+
+    SIMPLIFY DetermineStage(d : Diagnosis) -> Stage {
+      IF d.biomarkers = ∅ ∧ d.cognitive_assessment = ∅ THEN Preclinical
+      ELSE IF AVG(severity FOR MemoryLoss(severity) ∈ d.cognitive_assessment) < 0.5 THEN MCI
+      ELSE IF AVG(severity FOR _ ∈ d.cognitive_assessment) < 1.0 THEN Mild
+      ELSE IF AVG(severity FOR _ ∈ d.cognitive_assessment) < 2.0 THEN Moderate
+      ELSE Severe
+    }
+
+    REWRITE PrescribeTreatment(d : Diagnosis) -> Treatment {
+      LET medications = SELECT_MEDICATIONS(d)
+      LET cognitive_interventions = DESIGN_COGNITIVE_TRAINING(d)
+      LET lifestyle = RECOMMEND_LIFESTYLE_CHANGES(d)
+      IN Treatment {
+        medications = medications,
+        cognitive_interventions = cognitive_interventions,
+        lifestyle_modifications = lifestyle
+      }
+    }
+  }
+
+  PROOFS {
+    THEOREM BiomarkerPrecedesClinicalSymptoms {
+      ∀ p : Patient . ∃ t1 t2 : TIME . t1 < t2 ∧
+        (Biomarker().csf_abeta(p) < threshold)@t1 ∧
+        (ClinicalAssessment().cognitive_score(p.symptoms) < threshold)@t2
+    }
+    PROOF {
+      GIVEN p : Patient
+      
+      <1>. LET t1 = EARLIEST_TIME(Biomarker().csf_abeta(p) < threshold)
+      <2>. LET t2 = EARLIEST_TIME(ClinicalAssessment().cognitive_score(p.symptoms) < threshold)
+      <3>. BY AmyloidHypothesis, amyloid accumulation precedes clinical symptoms
+      <4>. HENCE t1 < t2
+      <5>. CONCLUDE ∃ t1 t2 : TIME . t1 < t2 ∧
+             (Biomarker().csf_abeta(p) < threshold)@t1 ∧
+             (ClinicalAssessment().cognitive_score(p.symptoms) < threshold)@t2
+      QED
+    }
+
+    THEOREM TreatmentSlowsProgression {
+      ∀ p : Patient, t : Treatment . 
+        LET progression_rate = λ time . STAGE_CHANGE_RATE(p, time)
+        IN AVG(progression_rate(time) FOR time IN 0..5_YEARS | ON_TREATMENT(p, t)) <
+           AVG(progression_rate(time) FOR time IN 0..5_YEARS | NOT ON_TREATMENT(p, t))
+    }
+    PROOF {
+      GIVEN p : Patient, t : Treatment
+      
+      <1>. LET rate_with_treatment = AVG(progression_rate(time) FOR time IN 0..5_YEARS | ON_TREATMENT(p, t))
+      <2>. LET rate_without_treatment = AVG(progression_rate(time) FOR time IN 0..5_YEARS | NOT ON_TREATMENT(p, t))
+      <3>. BY TherapeuticIntervention.LimitedEfficacy, treatment has some positive effect
+      <4>. This effect translates to slower progression through stages
+      <5>. HENCE rate_with_treatment < rate_without_treatment
+      QED
+    }
+
+    THEOREM CognitiveReserveDelaysOnset {
+      ∀ p1 p2 : Patient . 
+        (EDUCATION_YEARS(p1) > EDUCATION_YEARS(p2) ∧
+         SIMILAR_PATHOLOGY(p1, p2)) ⇒
+        AGE_OF_ONSET(p1, AD) > AGE_OF_ONSET(p2, AD)
+    }
+    PROOF {
+      GIVEN p1 p2 : Patient
+      ASSUME EDUCATION_YEARS(p1) > EDUCATION_YEARS(p2) ∧ SIMILAR_PATHOLOGY(p1, p2)
+      
+      <1>. Higher education contributes to cognitive reserve
+      <2>. Cognitive reserve allows for better compensation of pathological changes
+      <3>. HENCE, p1 can tolerate more pathology before showing clinical symptoms
+      <4>. This leads to a delay in the age of onset for p1 compared to p2
+      <5>. CONCLUDE AGE_OF_ONSET(p1, AD) > AGE_OF_ONSET(p2, AD)
+      QED
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE TypicalADProgression {
+      LET patient = Patient("John Doe", AGE = 70)
+      LET initial_diagnosis = DiagnoseAD(patient)
+
+      ASSERT DetermineStage(initial_diagnosis) = MCI
+
+      LET progression = ProgressionModel(patient, 10_YEARS)
+
+      ASSERT progression(0_YEARS) = MCI
+      ASSERT progression(3_YEARS) = Mild
+      ASSERT progression(7_YEARS) = Moderate
+      ASSERT progression(10_YEARS) = Severe
+
+      LET treatment = PrescribeTreatment(initial_diagnosis)
+
+      ASSERT "cholinesterase_inhibitor" ∈ treatment.medications
+      ASSERT "memory_training" ∈ treatment.cognitive_interventions
+      ASSERT "regular_exercise" ∈ treatment.lifestyle_modifications
+    }
+
+    EXAMPLE EarlyOnsetAD {
+      LET patient = Patient("Jane Doe", AGE = 52, GENETIC_FACTORS = {PSEN1})
+      LET diagnosis = DiagnoseAD(patient)
+
+      ASSERT PSEN1 ∈ diagnosis.genetic_factors
+      ASSERT DetermineStage(diagnosis) = Mild
+      ASSERT AVG(concentration FOR AmyloidPlaques(concentration) ∈ diagnosis.biomarkers) > 2.0
+      ASSERT "hippocampus" ∈ [region FOR (region, atrophy) ∈ diagnosis.imaging WHERE atrophy > 0.2]
+
+      LET treatment = PrescribeTreatment(diagnosis)
+
+      ASSERT "memantine" ∈ treatment.medications
+      ASSERT "cognitive_stimulation_therapy" ∈ treatment.cognitive_interventions
+      ASSERT "stress_reduction" ∈ treatment.lifestyle_modifications
+    }
+
+    EXAMPLE ADWithVascularComponents {
+      LET patient = Patient("Bob Smith", AGE = 75, COMORBIDITIES = {"hypertension", "diabetes"})
+      LET diagnosis = DiagnoseAD(patient)
+
+      ASSERT DetermineStage(diagnosis) = Moderate
+      ASSERT AVG(severity FOR MemoryLoss(severity) ∈ diagnosis.cognitive_assessment) > 1.5
+      ASSERT AVG(severity FOR ExecutiveDysfunction(severity) ∈ diagnosis.cognitive_assessment) > 1.0
+      ASSERT "white_matter_hyperintensities" ∈ [finding FOR (region, finding) ∈ diagnosis.imaging]
+
+      LET treatment = PrescribeTreatment(diagnosis)
+
+      ASSERT "combination_therapy" ∈ treatment.medications
+      ASSERT "vascular_risk_management" ∈ treatment.lifestyle_modifications
+    }
+  }
+}

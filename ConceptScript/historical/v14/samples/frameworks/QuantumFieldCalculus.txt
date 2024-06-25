@@ -1,0 +1,115 @@
+CONCEPT QuantumFieldCalculus {
+  LANGUAGE {
+    type Field = Scalar | Spinor | Vector | Tensor
+    type Operator = Field -> Field
+    
+    φ := φ | ∂φ | □φ | φ + φ | φ - φ | φ * φ | φ / φ | ∫φ | ⟨φ|φ⟩ | |φ⟩⟨φ| | ∑φ
+    where  
+      φ is a quantum field 
+      ∂ is a derivative operator (∂ₓ, ∂ₜ, etc.)
+      □ = ∂ₘ∂ᵐ is the d'Alembertian operator
+      + is field addition
+      - is field subtraction
+      * is field multiplication 
+      / is field division
+      ∫ is path integration
+      ⟨|⟩ is an inner product 
+      |⟩⟨| is an outer product
+      ∑ is a sum over states or paths
+      
+    L := L | ∂L | δL | ∫L  
+    where
+      L is a Lagrangian density 
+      ∂L is a Lagrangian derivative term
+      δL is a Lagrangian variation  
+      ∫L is a Lagrangian action integral
+      
+    notation "φ₁ ⊗ φ₂" = TensorProduct(φ₁, φ₂) 
+    notation "φᵀ" = Transpose(φ)
+    notation "φ†" = Adjoint(φ)
+    notation "φ(x)" = PointwiseValue(φ, x)
+    notation "Ô(φ)" = OperatorAction(Ô, φ)
+    notation "⟦φ₁, φ₂⟧" = CommutatorBracket(φ₁, φ₂)
+    notation "⟨φ₁|Ô|φ₂⟩" = MatrixElement(φ₁, Ô, φ₂) 
+    notation "∑_paths 𝒟φ ℯ^{ⅈ ∫L}" = PathIntegral(φ, L)
+    notation "Z[J]" = GeneratingFunctional(J)  
+    notation "𝒯{φ₁...φₙ}" = TimeOrderedProduct(φ₁,...,φₙ)
+
+    func TensorProduct(φ₁: Field, φ₂: Field): Field
+    func Transpose(φ: Field): Field  
+    func Adjoint(φ: Field): Field
+    func PointwiseValue(φ: Field, x: ℝ⁴): Field
+    func OperatorAction(Ô: Operator, φ: Field): Field
+    func CommutatorBracket(φ₁: Field, φ₂: Field): Field
+    func MatrixElement(φ₁: Field, Ô: Operator, φ₂: Field): ℂ
+    func PathIntegral(φ: Field, L: Lagrangian): ℂ  
+    func GeneratingFunctional(J: Field): ℂ
+    func TimeOrderedProduct(φ: Field...): Field
+  }
+  
+  STRUCTURE {
+    QuantumDynamics: {
+      ∀φ: Field. (□φ + m²φ) ≌ ∂L[φ]/∂φ    ; Euler-Lagrange equation
+      ∀φ: Field. ∫𝒟φ ℯ^{ⅈ ∫L[φ]} ≌ ⟨Ω|Ω⟩  ; Path integral formulation
+      ∀φ₁, φ₂: Field. ⟦φ₁(x), φ₂(y)⟧ ∝ δ⁽⁴⁾(x - y) ; Equal-time commutation relation
+    }
+    
+    CorrelationFunctions: {
+      ∀φ₁, φ₂: Field. ⟨Ω|𝒯{φ₁(x₁)...φₙ(xₙ)}|Ω⟩ ≌ δⁿZ[J]/δJ(x₁)...δJ(xₙ)|ⱼ₌₀ ; n-point correlation
+      ∀φ: Field. ⟨φ(p)|φ(q)⟩ ∝ δ⁽⁴⁾(p - q)  ; Momentum space 2-point function 
+      ∀φ₁, φ₂: Field. ⟨φ₁φ₂⟩ - ⟨φ₁⟩⟨φ₂⟩ ≌ ∫𝒟φ₁𝒟φ₂ (φ₁ - ⟨φ₁⟩)(φ₂ - ⟨φ₂⟩)ℯ^{-∫L} ; Connected correlator
+    }
+    
+    OperatorAlgebra: {
+      ∀Ô₁, Ô₂: Operator. [Ô₁, Ô₂] ≌ Ô₁ Ô₂ - Ô₂ Ô₁  ; Commutator of operators
+      ∀Ĥ, φ: Field. ⅈ∂ₜφ(x) ≌ [Ĥ, φ(x)]  ; Heisenberg equation of motion
+      ∀Û: Operator. ⟨φ₁|Û|φ₂⟩ ≌ ∫𝒟φ ⟨φ₁|φ⟩⟨φ|Û|φ₂⟩  ; Completeness of states
+    }
+  }
+  
+  PROOFS {
+    theorem LagrangianSymmetry(φ: Field, L: Lagrangian, α: ℝ):
+      (φ ↦ φ + α) ⊢ (∂L[φ + α] / ∂α = 0 ⟺ (d/dt) ∂L[φ]/∂(∂ₜφ) - ∂L[φ]/∂φ = 0)
+    {
+      assume φ ↦ φ + α  ; Infinitesimal transformation 
+      have ∂(L[φ + α] - L[φ])/∂α ≈ ∫(∂L/∂φ δφ + ∂L/∂(∂ₘφ) ∂ₘδφ) ; By variational principle
+      have ∂L/∂α = 0 ⟺ ∫(∂L/∂φ - ∂ₘ(∂L/∂(∂ₘφ)) δφ = 0  ; By parts, δφ = α on boundary 
+      hence ∂L/∂α = 0 ⟺ ∂L/∂φ - ∂ₘ(∂L/∂(∂ₘφ)) = 0 ; Since δφ arbitrary
+    }
+    
+    theorem WardIdentity(Jₘ: Field, Ô: Operator):  
+      ⟨∂ᵐJₘ(x) Ô⟩ ≈ ⅈ ⟨δÔ/δα(x)⟩
+    {
+      def Jₘ := ∂L/∂(∂ₘφ) δφ - (∂ᵐφ) ∂L/∂(∂ₘφ)  ; Noether current
+      have ∂ₘ⟨Jᵐ(x) Ô⟩ ≈ ⟨∂ₘJᵐ(x) Ô⟩ + ⟨Jᵐ(x) ∂ₘÔ⟩  ; Leibniz rule
+      have ⟨Jᵐ(x) ∂ₘÔ⟩ ≈ 0  ; Current conservation 
+      have ∂ₘJᵐ(x) = (∂L/∂φ - ∂ₘ(∂L/∂(∂ₘφ))) δφ ≈ 0  ; By LagrangianSymmetry
+      have δÔ ≈ ⅈ[Ô, ∫Jₒ(x)]  ; Variation of operator
+      hence ⟨∂ᵐJₘ(x) Ô⟩ ≈ ⅈ⟨δÔ/δα(x)⟩ ; By path integral
+    }
+
+    theorem LSZ(φ: Field, Ĝ: Operator):
+      ⟨p₁...pₙ|Ĝ|q₁...qₘ⟩ ≈ (ⅈ)ⁿ⁺ᵐ ∏(□ᵢ + m²) ⟨Ω|𝒯{φ(x₁)...φ(xₙ) Ĝ φ(y₁)...φ(yₘ)}|Ω⟩
+    {
+      assume φ: Field, Ĝ: Operator
+      let ⟨p|q⟩ := ⟨Ω|âₚâ†_q|Ω⟩ = (2π)³2Eₚ δ³(p - q)
+      have ⟨p|φ(x)|Ω⟩ ≈ ⅈ ∫d⁴y ℯ^{-ⅈp⋅y} ⟨Ω|𝒯{φ(x)φ(y)}|Ω⟩ ; Fourier slice thm
+      have (□ + m²) ⟨Ω|𝒯{φ(x)φ(y)}|Ω⟩ ≈ -ⅈδ⁴(x - y) ; Klein-Gordon equation
+      hence ⟨p|φ(x)|Ω⟩ ≈ ⅈ∫d⁴y ℯ^{-ⅈp⋅y}(□ + m²)⁻¹ δ⁴(x - y)  ; Integrate both sides
+      iterate ⟨p₁...pₙ|φ(x₁)...φ(xₙ)|Ω⟩ ≈ (ⅈ ∏∫dʸᵢ ℯ⁻ⁱᵖⁱ⋅ʸⁱ (□ᵢ + m²)⁻¹) ⟨Ω|𝒯{φ(x₁)...φ(xₙ)}|Ω⟩
+      hence ⟨p₁...pₙ|Ĝ|q₁...qₘ⟩ ≈ (ⅈ)ⁿ⁺ᵐ ∏(□ᵢ + m²) ⟨Ω|𝒯{φ(x₁)...φ(xₙ) Ĝ φ(y₁)...φ(yₘ)}|Ω⟩
+    }
+  }
+}
+
+This Concept, QuantumFieldCalculus, defines a language for expressing quantum field theory calculations. It borrows the notions of a base set of types and operators from MaterialsScienceNotation, and adapts mathematical notation and theorems from SymbolicDifferentialGeometry.
+The language defines quantum fields φ and Lagrangian densities L, along with typical operations like derivatives, integrals, inner products and sums. Key notation includes tensor products ⊗, transpose ᵀ, adjoints †, commutators ⟦,⟧, matrix elements ⟨|Ô|⟩, path integrals ∫𝒟φ, generating functionals Z[J], and time-ordered products 𝒯{}.
+The structure axiomatizes core principles of quantum dynamics (equations of motion, path integrals, commutation relations), defines n-point correlation functions in terms of functional derivatives of Z[J], and sets up an operator algebra.
+The proofs demonstrate powerful field-theoretic theorems:
+
+LagrangianSymmetry derives Noether's theorem relating symmetries to conservation laws
+WardIdentity relates operator expectation values to variations under field shifts
+LSZ derives the Lehmann-Symanzik-Zimmermann reduction formula for S-matrix elements
+
+The proofs make use of variational calculus, integration by parts, Fourier transforms, and iterative expansions, showcasing how the defined language enables concise derivations.
+Overall, this Concept illustrates how ConceptScript could be used to create a precise specification for a domain like quantum field theory, enabling knowledge to be encoded in a form that is both mathematically rigorous and semantically expressive.

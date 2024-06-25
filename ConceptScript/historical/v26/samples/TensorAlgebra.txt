@@ -1,0 +1,166 @@
+CONCEPT TensorAlgebra {
+  LANGUAGE {
+    TYPE Tensor[V : VectorSpace, r : ℕ] <: V^(⊗r)
+    TYPE TensorProduct = ⊗
+    TYPE TensorAlgebra[V : VectorSpace] = ⨁_{r ∈ ℕ} Tensor[V, r]
+
+    FUNC ⊗[V W : VectorSpace] : V -> W -> Tensor[V ⊕ W, 2]
+    FUNC ⊕[V W : VectorSpace] : V -> W -> VectorSpace
+    FUNC dim[V : VectorSpace] : ℕ
+    FUNC basis[V : VectorSpace] : List[V]
+    FUNC components[T : Tensor[V, r], B : List[V]] : T -> List[𝕜]
+    FUNC SymmetricTensors[V : VectorSpace, r : ℕ] <: Tensor[V, r]
+    FUNC AlternatingTensors[V : VectorSpace, r : ℕ] <: Tensor[V, r]
+
+    PRED Universal[T : Tensor[V, r], f : V^r -> 𝕜] = 
+      ∀ v1...vr ∈ V . T(v1,...,vr) = f(v1,...,vr)
+    PRED Multilinear[T : Tensor[V, r]] =
+      ∀ i ∈ [1..r] . ∀ u,v ∈ V . ∀ a ∈ 𝕜 .
+        T(..., au+v, ...) = a·T(..., u, ...) + T(..., v, ...)
+    PRED Symmetric[T : Tensor[V, r]] = 
+      ∀ σ : Sʳ . T(vσ₍₁₎,...,vσ₍ᵣ₎) = T(v1,...,vr)
+    PRED Alternating[T : Tensor[V, r]] =
+      ∀ σ : Sʳ . T(vσ₍₁₎,...,vσ₍ᵣ₎) = sgn(σ)·T(v1,...,vr)
+
+    AXIOM TensorUniversalProperty {
+      ∀ (V : VectorSpace) (r : ℕ) (f : V^r -> 𝕜) . 
+        ∃! (T : Tensor[V,r]) . Universal[T, f] ∧ Multilinear[T]
+    }
+  }
+
+  NOTATION {
+    "v1 ⊗ ... ⊗ vr" = Tensor[V,r](v1,...,vr)
+    "T^{a1...ar}" = components(T, basis(V))[a1,...,ar]
+    "Sʳ" = SymmetricGroup(r)
+    "sgn(σ)" = sign of permutation σ
+  }
+
+  TRANSFORMERS {
+    FUNC dim[T : Tensor[V,r]] = (dim V)^r
+
+    FUNC components[T : Tensor[V,r], B : List[V]] = {
+      LET n = dim V
+      LET (e1,...,en) = B
+      [T(ei1,...,eir) for i1...ir ∈ [1..n]]
+    }
+
+    FUNC Symmetrize[T : Tensor[V,r]] = 
+      (1/r!) Σ_{σ ∈ Sʳ} T(vσ₍₁₎,...,vσ₍ᵣ₎)
+
+    FUNC Alternate[T : Tensor[V,r]] =
+      (1/r!) Σ_{σ ∈ Sʳ} sgn(σ) T(vσ₍₁₎,...,vσ₍ᵣ₎)
+  }
+
+  STRUCTURE TensorProduct {
+    DEF T ⊗ S = Tensor[V ⊕ W, r+s] WHERE 
+      T : Tensor[V,r], S : Tensor[W,s]
+
+    REQUIRE ∀ (T : Tensor[V,r]) (S : Tensor[W,s]) (v1...vr ∈ V) (w1...ws ∈ W) .
+      (T ⊗ S)(v1,...,vr,w1,...,ws) = T(v1,...,vr) · S(w1,...,ws)
+  }
+
+  STRUCTURE TensorAlgebra {
+    DEF 𝕋(V) = ⨁_{r ∈ ℕ} Tensor[V, r]
+
+    REQUIRE ∀ (V : VectorSpace) . 𝕋(V) is an associative algebra with unit 1 ∈ 𝕜 ⊂ 𝕋⁰(V)
+  }
+
+  PROOFS {
+    THEOREM TensorUniversality {
+      STATEMENT:
+        ∀ (V : VectorSpace) (r : ℕ) (f : V^r -> 𝕜) . 
+          ∃! (T : Tensor[V,r]) . Universal[T, f] ∧ Multilinear[T]
+
+      PROOF:
+        LET V : VectorSpace, r : ℕ, f : V^r -> 𝕜
+        LET (e1,...,en) = basis(V)
+
+        DEFINE T : Tensor[V,r] BY
+          T(v1,...,vr) = Σ_{i1...ir ∈ [1..n]} f(ei1,...,eir) v1^{i1}...vr^{ir}
+            WHERE vk = Σ_{i ∈ [1..n]} vk^i ei
+
+        SHOW Universal[T, f] BY
+          T(ej1,...,ejr) 
+            = Σ_{i1...ir} f(ei1,...,eir) δ^{i1}_{j1}...δ^{ir}_{jr}
+            = f(ej1,...,ejr)
+
+        SHOW Multilinear[T] BY
+          T(..., auk+vk, ...)
+            = Σ_{i1...ir} f(ei1,...,eir) ...·(auk^{ik}+vk^{ik})·...  
+            = a·Σ_{i1...ir} f(ei1,...,eir) ...·uk^{ik}·...
+              + Σ_{i1...ir} f(ei1,...,eir) ...·vk^{ik}·...
+            = a·T(..., uk, ...) + T(..., vk, ...)
+
+        SHOW uniqueness BY
+          ASSUME ∃ S : Tensor[V,r] . Universal[S, f] ∧ Multilinear[S]
+          SUFFICES_TO_SHOW ∀ v1...vr ∈ V . S(v1,...,vr) = T(v1,...,vr)
+          LET v1...vr ∈ V
+          S(v1,...,vr) = S(Σ_i v1^i ei, ..., Σ_i vr^i ei)
+                       = Σ_{i1...ir} v1^{i1}...vr^{ir} S(ei1,...,eir)
+                       = Σ_{i1...ir} v1^{i1}...vr^{ir} f(ei1,...,eir)
+                       = T(v1,...,vr)
+
+        QED
+    }
+
+    THEOREM TensorProductUniversality {
+      STATEMENT:
+        ∀ (V W : VectorSpace) (T : Tensor[V,r]) (S : Tensor[W,s]) .
+          ∃! (P : Tensor[V⊕W,r+s]) . 
+            Universal[P, (v1...vr,w1...ws) ↦ T(v1...vr)·S(w1...ws)]
+
+      PROOF:
+        LET V, W : VectorSpace, T : Tensor[V,r], S : Tensor[W,s]
+        
+        DEFINE P : Tensor[V⊕W,r+s] ON (v1...vr,w1...ws) BY
+          P(v1...vr,w1...ws) = T(v1...vr) · S(w1...ws)
+
+        SHOW Universal[P, (v1...vr,w1...ws) ↦ T(v1...vr)·S(w1...ws)] BY
+          P(v1...vr,w1...ws) = T(v1...vr) · S(w1...ws)
+
+        SHOW uniqueness BY
+          ASSUME ∃ Q : Tensor[V⊕W,r+s] . 
+            Universal[Q, (v1...vr,w1...ws) ↦ T(v1...vr)·S(w1...ws)]
+          LET v1...vr ∈ V, w1...ws ∈ W
+          Q(v1...vr,w1...ws) = T(v1...vr) · S(w1...ws)
+                             = P(v1...vr,w1...ws)
+        
+        QED
+    }
+
+    THEOREM TensorAlgebraUniversality {
+      STATEMENT:
+        ∀ (V : VectorSpace) (A : Algebra) (f : V -> A) . f linear =>
+          ∃! (F : 𝕋(V) -> A) . F algebra homomorphism ∧ F|_V = f
+
+      PROOF:
+        LET V : VectorSpace, A : Algebra, f : V -> A linear
+
+        DEFINE F : 𝕋(V) -> A ON T : Tensor[V,r] BY
+          F(T) = Σ_{i1...ir} T^{i1...ir} f(ei1)·...·f(eir)
+            WHERE (e1,...,en) = basis(V)
+
+        SHOW F is algebra homomorphism BY
+          F(a) = a for a ∈ 𝕜 ⊂ 𝕋⁰(V),
+          F(T + S) = F(T) + F(S),
+          F(a·T) = a·F(T) for a ∈ 𝕜,
+          F(T ⊗ S) = F(T) · F(S)
+
+        SHOW F|_V = f BY
+          F(v) = F(Σ_i v^i ei) 
+               = Σ_i v^i f(ei)
+               = f(Σ_i v^i ei) = f(v)
+
+        SHOW uniqueness BY
+          ASSUME ∃ G : 𝕋(V) -> A . G algebra homomorphism ∧ G|_V = f
+          SUFFICES_TO_SHOW ∀ T : Tensor[V,r] . G(T) = F(T)
+          LET T : Tensor[V,r]
+          G(T) = G(Σ_{i1...ir} T^{i1...ir} ei1⊗...⊗eir)
+               = Σ_{i1...ir} T^{i1...ir} G(ei1)·...·G(eir)
+               = Σ_{i1...ir} T^{i1...ir} f(ei1)·...·f(eir)
+               = F(T)
+
+        QED
+    }
+  }
+}

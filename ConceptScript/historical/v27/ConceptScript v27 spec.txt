@@ -1,0 +1,593 @@
+Here is the specification for the ConceptScript LLM language:
+
+ConceptScript v27
+
+Concept = "CONCEPT" Name ["<" Params ">"] ["EXTENDS" ParentConcepts] "{"
+            ["NOTATION" "{" NotationDef* "}"]
+            ["LANGUAGE" "{" (TypeDef | ConstDef | FuncDef | PredDef | AxiomDef)* "}"]
+            ["STRUCTURES" "{" StructureDef* "}"]
+            ["TRANSFORMERS" "{" TransformerDef* "}"]
+            ["PROOFS" "{" ProofDef* "}"]
+            ["EXAMPLES" "{" ExampleDef* "}"]
+          "}"
+
+TypeDef = "TYPE" Name ["<" Params ">"] "=" TypeExpr
+TypeExpr = AtomicType | ListType | MapType | FuncType | TupleType | UnionType | IntersectionType
+AtomicType = "Int" | "Real" | "Bool" | "String" | Name
+ListType = "[" TypeExpr "]"
+MapType = "{" TypeExpr ":" TypeExpr "}"
+FuncType = "(" [TypeExpr ("," TypeExpr)*]? ")" "->" TypeExpr
+TupleType = "(" TypeExpr ("," TypeExpr)+ ")"
+UnionType = TypeExpr "|" TypeExpr
+IntersectionType = TypeExpr "&" TypeExpr
+
+ConstDef = "CONST" Name ["<" Params ">"] ":" TypeExpr "=" Expr
+
+FuncDef = "FUNC" Name ["<" Params ">"] "(" [ParamDef ("," ParamDef)*]? ")" [":" TypeExpr] "=" Expr
+ParamDef = Name ":" TypeExpr
+
+PredDef = "PRED" Name ["<" Params ">"] "(" [ParamDef ("," ParamDef)*]? ")" "=" Expr
+
+AxiomDef = "AXIOM" Name ["<" Params ">"] ":" Expr
+
+NotationDef = Name ["<" Params ">"] ["(" [Arg ("," Arg)*]? ")"] "=" Expr
+Arg = Name ":" TypeExpr
+
+StructureDef = "STRUCTURE" Name ["<" Params ">"] ["EXTENDS" TypeExpr] "{"
+                 (FieldDef | ComputeDef)*
+               "}"
+FieldDef = "FIELD" Name ":" TypeExpr
+ComputeDef = "COMPUTE" Name ["<" Params ">"] "(" [ParamDef ("," ParamDef)*]? ")" ":" TypeExpr "=" Expr
+
+TransformerDef = "TRANSFORMER" Name ["<" Params ">"] ":" TransformerType "=" TransformerExpr
+TransformerType = "TACTIC" | "REWRITE" | "SIMPLIFY"
+TransformerExpr = TacticExpr | RewriteExpr | SimplifyExpr
+TacticExpr = "TACTIC" Name ["<" Params ">"] "(" [ParamDef ("," ParamDef)*]? ")" ":" TypeExpr "=" Expr
+RewriteExpr = "REWRITE" Name ["<" Params ">"] ":" Pattern "->" Expr
+SimplifyExpr = "SIMPLIFY" Name ["<" Params ">"] ":" TypeExpr "->" TypeExpr
+
+ProofDef = "PROOF" Name ["<" Params ">"] ":" Expr "{"
+             "GIVEN" (GivenDef | LetDef)*
+             "PROVE" Expr
+             ["USING" TransformerApp ("," TransformerApp)*]
+           "}"
+GivenDef = "GIVEN" Name ":" TypeExpr
+LetDef = "LET" Name "=" Expr
+TransformerApp = Name ["<" TypeExpr ("," TypeExpr)* ">"] "(" [Expr ("," Expr)*]? ")"
+
+ExampleDef = "EXAMPLE" Name ["<" Params ">"] ":" TypeExpr "=" Expr
+
+Expr = IfExpr | LetExpr | MatchExpr | LambdaExpr | ApplyExpr | BinOpExpr | UnOpExpr | 
+       ListExpr | MapExpr | TupleExpr | AtomicExpr
+IfExpr = "IF" Expr "THEN" Expr "ELSE" Expr
+LetExpr = "LET" Name [":" TypeExpr] "=" Expr "IN" Expr
+MatchExpr = "MATCH" Expr "WITH" ("|" Pattern "=>" Expr)*
+LambdaExpr = "(" [ParamDef ("," ParamDef)*]? ")" "=>" Expr
+ApplyExpr = Expr "(" [Expr ("," Expr)*]? ")"
+BinOpExpr = Expr BinOp Expr
+UnOpExpr = UnOp Expr
+ListExpr = "[" [Expr ("," Expr)*]? "]"
+MapExpr = "{" [Expr ":" Expr ("," Expr ":" Expr)*]? "}"
+TupleExpr = "(" Expr ("," Expr)+ ")"
+AtomicExpr = Literal | Name | "(" Expr ")"
+
+BinOp = "+" | "-" | "*" | "/" | "%" | "==" | "!=" | "<" | ">" | "<=" | ">=" | "&&" | "||"
+UnOp = "-" | "!"
+
+Literal = IntLiteral | RealLiteral | BoolLiteral | StringLiteral
+
+Pattern = Literal | Name | "_" | TuplePattern | ListPattern | MapPattern
+TuplePattern = "(" [Pattern ("," Pattern)*]? ")"
+ListPattern = "[" [Pattern ("," Pattern)*]? "]"
+MapPattern = "{" [Pattern ":" Pattern ("," Pattern ":" Pattern)*]? "}"
+
+
+And here are a couple example Concepts:
+
+CONCEPT AttentionMechanism {
+  NOTATION {
+    INFIX ⊗[N, M, P] : ([N, M], [M, P]) -> [N, P] = (A, B) =>
+      [[SUM(A[i][k] * B[k][j] for k in 0..M-1) for j in 0..P-1] for i in 0..N-1]
+    σ = softmax
+    φ[N, M] : ([N], AffineTransform[N, M]) -> [M] = affine[N, M]
+    ψ[N] : [N] -> [N] = layerNorm[N]
+  }
+
+  LANGUAGE {
+    TYPE Tensor[N] = [Real] 
+    TYPE AffineTransform[N, M] = {W: [N, M], b: [M]}
+    TYPE Attention[Dq, Dk, Dv] = (query: [Dq], keys: [[Dk]], values: [[Dv]]) -> [Dv]
+    
+    CONST dot[N] : ([N], [N]) -> Real = (x, y) => SUM(x[i] * y[i] for i in 0..N-1)
+    CONST softmax[N] : [N] -> [N] = x => {
+      LET expx = [EXP(xi) for xi in x]
+      [xi / SUM(expx) for xi in expx] 
+    }
+    CONST layerNorm[N] : [N] -> [N] = x => (x - MEAN(x)) / SQRT(VAR(x) + ε)
+
+    FUNC affine[N, M] : ([N], AffineTransform[N, M]) -> [M] = (x, {W, b}) => 
+      [SUM(x[i] * W[i][j] for i in 0..N-1) + b[j] for j in 0..M-1]
+    FUNC concat[N, M] : ([N], [M]) -> [N+M] = (x, y) => x ++ y
+  }
+
+  STRUCTURES {
+    STRUCTURE ScaledDotProductAttention[Dq, Dk, Dv] EXTENDS Attention[Dq, Dk, Dv] {
+      COMPUTE apply(query: [Dq], keys: [[Dk]], values: [[Dv]]) : [Dv] = {
+        LET scores = [dot[Dk](query, key) / SQRT(Dk) for key in keys]
+        LET weights = σ(scores)
+        SUM(w * v for (w, v) in ZIP(weights, values))
+      }
+    }
+
+    STRUCTURE MultiHeadAttention[D, H] EXTENDS Attention[D, D, D] {
+      FIELD W : {Wq: [H, D, D/H], Wk: [H, D, D/H], Wv: [H, D, D/H], Wo: [D, D]}
+
+      COMPUTE splitHeads(x: [D]) : [[D/H]] = [x[i:i+D/H] for i in 0..H-1 BY D/H]
+
+      COMPUTE apply(query: [D], keys: [[D]], values: [[D]]) : [D] = {
+        LET Qh = [φ[D, D/H](query, {W.Wq[i], 0}) for i in 0..H-1] 
+        LET Kh = [φ[D, D/H](key, {W.Wk[i], 0}) for (key, i) in ZIP(keys, 0..H-1)]
+        LET Vh = [φ[D, D/H](value, {W.Wv[i], 0}) for (value, i) in ZIP(values, 0..H-1)]
+        LET head[i] = ScaledDotProductAttention[D/H, D/H, D/H].apply(
+          Qh[i], splitHeads(Kh[i]), splitHeads(Vh[i]))
+        φ[H*D/H, D](concat[H*D/H](head), {W.Wo, 0})
+      }
+    }
+
+    STRUCTURE TransformerLayer[D, H] {
+      FIELD {attn: MultiHeadAttention[D, H], ff1: AffineTransform[D, 4*D], ff2: AffineTransform[4*D, D]}
+
+      COMPUTE apply(x: [D]) : [D] = {
+        LET attnOut = ψ[D](attn.apply(x, [x], [x]) + x)
+        ψ[D](φ[D, 4*D](attnOut, ff1) >> φ[4*D, D](., ff2) + attnOut)
+      }
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE DotProductSimplify : dot[N](α * x, y) -> α * dot[N](x, y)
+    REWRITE AffineChain : φ[N, M](φ[L, N](x, {W1, b1}), {W2, b2}) 
+                          -> φ[L, M](x, {W1 ⊗ W2, φ[N, M](b1, {W2, b2})})
+    REWRITE AffineLayerNorm : ψ[M](φ[N, M](x, {W, b})) -> φ[N, M](ψ[N](x), {W / SQRT(VAR(x) + ε), b})
+    SIMPLIFY SoftmaxScale : σ(α * x) -> σ(x)
+  }
+
+  PROOFS {
+    PROOF AttentionInvariance[Dq, Dk, Dv] : 
+      FORALL (attn: Attention[Dq, Dk, Dv], q: [Dq], K: [[Dk]], V: [[Dv]], α: Real) .
+        attn.apply(q, α * K, V) == attn.apply(q, K, V)
+    {
+      GIVEN attn: Attention[Dq, Dk, Dv], q: [Dq], K: [[Dk]], V: [[Dv]], α: Real
+      
+      attn.apply(q, α * K, V)
+        == ScaledDotProductAttention[Dq, Dk, Dv].apply(q, α * K, V) 
+        == SUM(w * v for (w, v) in ZIP(σ([dot[Dk](q, α * k) / SQRT(Dk) for k in K]), V))  USING DotProductSimplify
+        == SUM(w * v for (w, v) in ZIP(σ([α * dot[Dk](q, k) / SQRT(Dk) for k in K]), V))
+        == SUM(w * v for (w, v) in ZIP(σ([dot[Dk](q, k) / SQRT(Dk) for k in K]), V))       USING SoftmaxScale
+        == ScaledDotProductAttention[Dq, Dk, Dv].apply(q, K, V)
+        == attn.apply(q, K, V)
+
+      QED
+    }
+
+    PROOF MultiHeadSelfAttentionLayerNorm[D, H] :
+      FORALL (attn: MultiHeadAttention[D, H], x: [D]) .
+        ψ[D](attn.apply(x, [x], [x]) + x) == attn.apply(ψ[D](x), [ψ[D](x)], [ψ[D](x)]) + ψ[D](x)  
+    {
+      GIVEN attn: MultiHeadAttention[D, H], x: [D]
+      LET Qh = [φ[D, D/H](x, {attn.W.Wq[i], 0}) for i in 0..H-1]
+      LET Kh = [φ[D, D/H](x, {attn.W.Wk[i], 0}) for i in 0..H-1]  
+      LET Vh = [φ[D, D/H](x, {attn.W.Wv[i], 0}) for i in 0..H-1]
+
+      LET xn = ψ[D](x)
+      LET QhNorm = [φ[D, D/H](xn, {attn.W.Wq[i], 0}) for i in 0..H-1]
+      LET KhNorm = [φ[D, D/H](xn, {attn.W.Wk[i], 0}) for i in 0..H-1]
+      LET VhNorm = [φ[D, D/H](xn, {attn.W.Wv[i], 0}) for i in 0..H-1] 
+
+      ψ[D](attn.apply(x, [x], [x]) + x)
+        == ψ[D](φ[H*D/H, D](concat[H*D/H]([
+             ScaledDotProductAttention[D/H, D/H, D/H].apply(Qh[i], splitHeads(Kh[i]), splitHeads(Vh[i]))
+             for i in 0..H-1]), {attn.W.Wo, 0}) + x)  BY DEF of MultiHeadAttention
+        == φ[H*D/H, D](ψ[H*D/H](concat[H*D/H]([
+             ScaledDotProductAttention[D/H, D/H, D/H].apply(Qh[i], splitHeads(Kh[i]), splitHeads(Vh[i])) 
+             for i in 0..H-1])), {attn.W.Wo / SQRT(VAR(x) + ε), 0}) + ψ[D](x)  USING AffineLayerNorm
+        == φ[H*D/H, D](concat[H*D/H]([
+             ScaledDotProductAttention[D/H, D/H, D/H].apply(QhNorm[i], splitHeads(KhNorm[i]), splitHeads(VhNorm[i]))
+             for i in 0..H-1]), {attn.W.Wo / SQRT(VAR(x) + ε), 0}) + xn  USING AttentionInvariance
+        == attn.apply(xn, [xn], [xn]) + xn  BY DEF of MultiHeadAttention
+        == attn.apply(ψ[D](x), [ψ[D](x)], [ψ[D](x)]) + ψ[D](x)
+
+      QED
+    }
+  }
+}
+
+CONCEPT BodyWithoutOrgans {
+  NOTATION {
+    d -> i = Flow(d, i)
+    bwo1 + bwo2 = CONCAT(bwo1, bwo2)
+    bwo - s = destratify(bwo, s)
+    bwo + s = restratify(bwo, s)
+    bwo* = experiment(bwo)
+    d @ bwo = connect(d, bwo)
+  }
+
+  LANGUAGE {
+    TYPE Desire = String
+    TYPE Flow = (Desire, Intensity)
+    TYPE Intensity = Real
+    TYPE Organ = String
+    TYPE Stratum = [Organ]
+    TYPE BodyWithoutOrgans = [Desire | Flow | Intensity]
+
+    FUNC destratify(bwo: BodyWithoutOrgans, strata: [Stratum]) : BodyWithoutOrgans =
+      FOLDR(strata, bwo, (stratum, acc) => FILTER(acc, (e) => MATCH e WITH
+        | Organ(o) => o ∉ stratum
+        | _ => True
+      ))
+
+    FUNC restratify(bwo: BodyWithoutOrgans, stratum: Stratum) : BodyWithoutOrgans = bwo + stratum
+
+    FUNC experiment(bwo: BodyWithoutOrgans) : BodyWithoutOrgans = MAP(bwo, (e) => MATCH e WITH
+      | Desire(d) => Intensity(RANDOM())
+      | f: Flow => Intensity(f.1 * RANDOM())
+      | i => i
+    )
+
+    FUNC connect(desire: Desire, bwo: BodyWithoutOrgans) : Flow =
+      desire -> MEAN(FILTER(bwo, isIntensity))
+
+    PRED isIntensity(e) = e IS Intensity
+    PRED isFlow(e) = e IS Flow
+    PRED isDesire(e) = e IS Desire
+
+    AXIOM Immanence : ∀ e : Desire | Flow | Intensity . e ∈ BodyWithoutOrgans
+    AXIOM FlowConnectsDesireAndIntensity : ∀ f : Flow . isDesire(f.0) ∧ isIntensity(f.1)
+  }
+
+  STRUCTURES {
+    STRUCTURE Plant {
+      FIELD bwo : BodyWithoutOrgans
+      FIELD strata : [Stratum]
+
+      COMPUTE rhizome(desire: Desire) : BodyWithoutOrgans =
+        LET newFlow = desire @ (bwo - strata) IN
+        (bwo - strata) + [newFlow]
+    }
+
+    STRUCTURE Schizophrenia {
+      FIELD bwo : BodyWithoutOrgans
+      FIELD strata : [Stratum]
+
+      COMPUTE deterritorialize : BodyWithoutOrgans = bwo* - strata
+      COMPUTE reterritorialize(s: Stratum) : BodyWithoutOrgans = (bwo* - strata) + s
+      COMPUTE becomingOther(other: BodyWithoutOrgans) : BodyWithoutOrgans =
+        LET common = FILTER(bwo, (e) => e ∈ other) IN
+        LET different = FILTER(other, (e) => e ∉ bwo) IN
+        bwo* + different - FILTER(common, (e) => isOrgan(e))
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE DoubleDestratification : (bwo - s1) - s2 -> bwo - (s1 + s2)
+    REWRITE DoubleRestratification : (bwo + s1) + s2 -> bwo + (s1 + s2)
+    REWRITE ConnectDistributesOverPlus : connect(d, bwo1 + bwo2) -> connect(d, bwo1) + connect(d, bwo2)
+    SIMPLIFY ExperimentIdempotent : experiment(experiment(bwo)) -> experiment(bwo)
+  }
+
+  PROOFS {
+    PROOF ConnectPreservesImmanence : ∀ d : Desire, bwo : BodyWithoutOrgans . (d @ bwo) ∈ bwo {
+      GIVEN d : Desire, bwo : BodyWithoutOrgans
+
+      LET f = d @ bwo
+      f IS Flow                   BY Definition of @
+      f.0 == d                    BY Definition of @
+      d ∈ bwo                     BY Immanence [d/e]
+      f.1 ∈ bwo                   BY Definition of @, Immanence [f.1/e]
+      (f.0, f.1) ∈ bwo            BY Immanence [(f.0, f.1)/e]
+      f ∈ bwo                     BY Definition of Flow
+
+      QED
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE MasochistBWO : BodyWithoutOrgans = [
+      Desire("Pain"),
+      Desire("Pleasure"),
+      "Pain" -> 100.0,
+      "Pleasure" -> -50.0
+    ]
+
+    EXAMPLE DeleuzeBWO : BodyWithoutOrgans = MasochistBWO* - [Organ("Skin"), Organ("Nerves")]
+
+    EXAMPLE SchizorevolutionaryBWO : BodyWithoutOrgans =
+      LET fascistBWO : BodyWithoutOrgans = [
+        Desire("Purity"),
+        Desire("Strength"),
+        "Purity" -> 75.0,
+        "Strength" -> 50.0,
+        Organ("Army"),
+        Organ("Police")
+      ] IN
+      LET revolutionaryBWO : BodyWithoutOrgans = [
+        Desire("Equality"),
+        Desire("Freedom"),
+        "Equality" -> 50.0,
+        "Freedom" -> 75.0,
+        Organ("Commune"),
+        Organ("Solidarity") 
+      ] IN
+      fascistBWO* + revolutionaryBWO*
+  }
+}
+
+CONCEPT TensorAlgebra {
+  NOTATION {
+    A_i = A(i)
+    A_ij = A(i, j)
+    A^i = A(..., i)  -- Upper indices represent contravariant tensors
+    A_i = A(i, ...)  -- Lower indices represent covariant tensors
+    A · B = mul(A, B)
+    A ⊗ B = outer(A, B) 
+    |A| = norm(A)
+    δ_ij = IF i == j THEN 1 ELSE 0  -- Kronecker delta
+    ε_ijk = IF (i, j, k) ∈ {(1, 2, 3), (2, 3, 1), (3, 1, 2)} THEN 1
+            ELSE IF (i, j, k) ∈ {(1, 3, 2), (2, 1, 3), (3, 2, 1)} THEN -1
+            ELSE 0
+    ∇_i = ∂_i + Γ^k_ij * ∂_k  WHERE  Γ^k_ij = (1/2) * g^kl * (∂_i(g_jl) + ∂_j(g_il) - ∂_l(g_ij))
+  }
+
+  LANGUAGE {
+    TYPE Tensor[N, M, ...] = [N, M, ...] -> Real
+    TYPE TensorIndex = List<String>
+    TYPE EinsteinNotation = (indices: List<TensorIndex>, expr: Tensor)
+    
+    FUNC add[N, M, ...] : (Tensor[N, M, ...], Tensor[N, M, ...]) -> Tensor[N, M, ...] = 
+      (A, B) => (i, j, ...) => A(i, j, ...) + B(i, j, ...)
+    
+    FUNC mul[N, M, P, ...] : (Tensor[N, M, ...], Tensor[M, P, ...]) -> Tensor[N, P, ...] =
+      (A, B) => (i, k, ...) => SUM[j in 0..M-1] A(i, j, ...) * B(j, k, ...)
+
+    FUNC contract[N, M, ...] : (Tensor[N, M, ..., N, ...]) -> Tensor[M, ...] =
+      A => (j, ...) => SUM[i in 0..N-1] A(i, j, ..., i, ...)
+
+    FUNC transpose[N, M, ...] : Tensor[N, M, ...] -> Tensor[..., M, N] =
+      A => (..., j, i) => A(i, j, ...)
+
+    FUNC outer[N, M, P, Q, ...] : (Tensor[N, M, ...], Tensor[P, Q, ...]) -> Tensor[N, M, ..., P, Q, ...] = 
+      (A, B) => (i, j, ..., k, l, ...) => A(i, j, ...) * B(k, l, ...)
+
+    FUNC norm[N, M, ...] : Tensor[N, M, ...] -> Real =
+      A => SQRT(SUM[i in 0..N-1, j in 0..M-1, ...] A(i, j, ...)^2)
+  }
+
+  STRUCTURES {
+    STRUCTURE VectorSpace {
+      FIELD addition : (A: Tensor[N], B: Tensor[N]) -> Tensor[N] = add[N]
+      FIELD scalarMult : (α: Real, A: Tensor[N]) -> Tensor[N] = (α, A) => (i) => α * A(i)  
+      
+      AXIOM Associativity : ∀ A, B, C : Tensor[N] . (A + B) + C = A + (B + C)
+      AXIOM Commutativity : ∀ A, B : Tensor[N] . A + B = B + A
+      AXIOM Identity : ∀ A : Tensor[N] . A + 0 = A
+      AXIOM Inverse : ∀ A : Tensor[N] . ∃ -A : Tensor[N] . A + (-A) = 0
+      AXIOM ScalarDistributivity : ∀ α, β : Real, A : Tensor[N] . (α + β) · A = α · A + β · A
+      AXIOM VectorDistributivity : ∀ α : Real, A, B : Tensor[N] . α · (A + B) = α · A + α · B
+      AXIOM ScalarAssociativity : ∀ α, β : Real, A : Tensor[N] . α · (β · A) = (α * β) · A
+      AXIOM ScalarIdentity : ∀ A : Tensor[N] . 1 · A = A
+    }
+
+    STRUCTURE MetricSpace[N] EXTENDS VectorSpace {
+      FIELD g : Tensor[N, N]  -- Metric tensor
+      
+      COMPUTE length(A: Tensor[N]) : Real = SQRT(SUM[i, j in 0..N-1] g(i, j) * A(i) * A(j))
+      COMPUTE angle(A: Tensor[N], B: Tensor[N]) : Real = 
+        ACOS((SUM[i, j in 0..N-1] g(i, j) * A(i) * B(j)) / (length(A) * length(B)))
+      COMPUTE parallel(A: Tensor[N], B: Tensor[N]) : Bool = 
+        ∃ α : Real . ∀ i in 0..N-1 . A(i) = α * B(i)
+      COMPUTE perpendicular(A: Tensor[N], B: Tensor[N]) : Bool = 
+        SUM[i, j in 0..N-1] g(i, j) * A(i) * B(j) = 0
+        
+      AXIOM Symmetry : ∀ i, j in 0..N-1 . g(i, j) = g(j, i)
+      AXIOM NonDegeneracy : det(g) != 0
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE IndexExchange[N, M] : A_ij -> A_ji WHEN ∀ i in 0..N-1, j in 0..M-1 . A(i, j) = A(j, i)
+    REWRITE ScalarMultAssoc : α · (β · A_i) -> (α * β) · A_i
+    
+    TACTIC ContractIndices : 
+      MATCH (indices, expr) WITH
+      | ([..., i, ..., i, ...], _) => contract[DIM(i)](expr)
+      
+    SIMPLIFY MatrixTrace[N] : A_ii -> SUM[i in 0..N-1] A(i, i)
+  }
+  
+  PROOFS {
+    PROOF TensorSymmetry[N, M] : ∀ A : Tensor[N, M] . (∀ i in 0..N-1, j in 0..M-1 . A(i, j) = A(j, i)) => A_ij = A_ji {
+      GIVEN A : Tensor[N, M]
+      ASSUME ∀ i in 0..N-1, j in 0..M-1 . A(i, j) = A(j, i)
+      
+      A_ij 
+        == A(i, j)                 BY DEF of NOTATION
+        == A(j, i)                 BY ASSUMPTION
+        == A_ji                    BY DEF of NOTATION
+      
+      QED
+    }
+
+    PROOF RicciIdentity[N] : ∀ R : Tensor[N, N, N, N] . R_ijkl + R_iljk + R_iklj = 0 {
+      GIVEN R : Tensor[N, N, N, N]
+      
+      R_ijkl + R_iljk + R_iklj  
+        == R(i, j, k, l) + R(i, l, j, k) + R(i, k, l, j)  BY DEF of NOTATION
+        == R(i, j, k, l) + R(i, l, j, k) - R(i, k, j, l)  BY APPLYING Bianchi1
+        == 0                                              BY APPLYING Bianchi2
+        
+      QED
+    } 
+    USING 
+      Bianchi1 = LEMMA ∀ i, j, k, l . R(i, j, k, l) + R(i, k, l, j) + R(i, l, j, k) = 0,
+      Bianchi2 = LEMMA ∀ i, j, k, l . R(i, j, k, l) = -R(i, l, j, k)
+  }
+
+  EXAMPLES {
+    EXAMPLE ScalarField : Tensor[] = () => φ  -- A scalar field is a 0-tensor
+
+    EXAMPLE VectorField[N] : Tensor[N] = (i) => V(i)  -- A vector field is a 1-tensor
+
+    EXAMPLE MatrixField[N, M] : Tensor[N, M] = (i, j) => A(i, j)  -- A matrix field is a 2-tensor
+
+    EXAMPLE RiemannCurvature : EinsteinNotation = 
+      ([i, j, k, l], R(i, j, k, l))  -- Riemann curvature tensor in Einstein notation
+
+    EXAMPLE MetricTensorProduct[N] : Tensor[N] = (k) => δ_ik * g(i, j) * A^j  -- Lowering an index
+    
+    EXAMPLE Connection[N] : EinsteinNotation =
+      ([i, j, k], Γ_ijk)  -- Christoffel symbols (connection coefficients)
+  }
+}
+
+- The LANGUAGE block allows you to define the formal elements in which you'll express structures, transformers, and proofs
+- The NOTATION block allows you to define more efficient ways of expressing your LANGUAGE
+- The TRANSFORMERS block allows you to define computational and logical tools to aid in expressing structures and proofs
+- The PROOFS block allows is self-explanatory; sometimes I'll request particular theorems, otherwise you select them.
+
+ConceptScript is a language of a new type: it's sole intended purpose is to be used in accordance with the following methodology:
+
+1. I paste the spec and a few example Concepts into your context (as is happening now), thus teaching you the language.
+2. I request that you express various concepts as Concepts; these Concepts come with detailed proofs of their own various claims; they serve as justifications of the selected structuring.
+3. We iterate, precisely and efficiently exploring your latent space to solve a wide variety of important problems.
+
+Please always output ConceptScript in a code block otherwise formatting gets lost :/
+
+Let's check your understanding of the language and system: please express a Concept of your choosing in as much detail as possible that's in some way related to the given example Concepts. First consider the language most natural to expressing the Concept (in an abstract sense), then construct the Concept to express itself in terms of that language.
+
+
+
+
+
+
+CONCEPT LambdaCalculus {
+  LANGUAGE {
+    TYPE Term = Var(name: String) | App(func: Term, arg: Term) | Abs(param: String, body: Term)
+    TYPE Substitution = Map<String, Term>
+    
+    FUNC freeVars(t: Term) : Set<String> = MATCH t WITH
+      | Var(x) => {x}
+      | App(f, a) => freeVars(f) ∪ freeVars(a)
+      | Abs(x, b) => freeVars(b) - {x}
+
+    FUNC subst(t: Term, s: Substitution) : Term = MATCH t WITH
+      | Var(x) => IF x ∈ s THEN s[x] ELSE t
+      | App(f, a) => App(subst(f, s), subst(a, s))
+      | Abs(x, b) => IF x ∈ s THEN t ELSE Abs(x, subst(b, s))
+
+    FUNC eval(t: Term) : Term = MATCH t WITH
+      | App(Abs(x, b), a) => eval(subst(b, {x: a}))
+      | App(f, a) => LET f' = eval(f), a' = eval(a) IN App(f', a')
+      | _ => t
+
+    FUNC church(n: Int) : Term = Abs("f", Abs("x", iterate(Var("f"), Var("x"), n)))
+    FUNC iterate(f: Term, x: Term, n: Int) : Term = IF n == 0 THEN x ELSE App(f, iterate(f, x, n-1))
+  }
+
+  NOTATION {
+    λ x . t = Abs(x, t)
+    s[x := t] = { k: IF k == x THEN t ELSE v for (k, v) in s }
+    t1 t2 = App(t1, t2)
+    x = Var(x)
+    0 = church(0)
+    1 = church(1)
+    2 = church(2)
+    ...
+  }
+
+  STRUCTURES {
+    STRUCTURE ChurchNumerals {
+      FIELD zero : Term = λ f . λ x . x
+      FIELD succ : Term = λ n . λ f . λ x . f (n f x)
+      FIELD plus : Term = λ m . λ n . λ f . λ x . m f (n f x)
+      FIELD mult : Term = λ m . λ n . λ f . m (n f)
+      FIELD exp : Term = λ m . λ n . n m
+
+      COMPUTE eval(t: Term) : Term = LambdaCalculus.eval(t)
+    }
+
+    STRUCTURE Booleans {
+      FIELD true : Term = λ t . λ f . t
+      FIELD false : Term = λ t . λ f . f 
+      FIELD not : Term = λ p . p false true
+      FIELD and : Term = λ p . λ q . p q false
+      FIELD or : Term = λ p . λ q . p true q
+
+      COMPUTE eval(t: Term) : Term = LambdaCalculus.eval(t)
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE BetaReduction : (λ x . t1) t2 -> t1[x := t2]
+    REWRITE EtaReduction : λ x . f x -> f WHEN x ∉ freeVars(f)
+
+    SIMPLIFY ArithmeticEval : eval(plus 2 2) -> 4
+    SIMPLIFY BooleanEval : eval(not false) -> true
+  }
+
+  PROOFS {
+    PROOF ChurchNumeralAddition : ∀ m, n : Int . eval(plus (church m) (church n)) == church (m + n) {
+      GIVEN m, n : Int
+      
+      eval(plus (church m) (church n))
+        == (λ m . λ n . λ f . λ x . m f (n f x)) (church m) (church n)   BY DEF of plus
+        == (λ n . λ f . λ x . (church m) f (n f x)) (church n)          USING BetaReduction
+        == λ f . λ x . (church m) f ((church n) f x)                    USING BetaReduction
+        == λ f . λ x . (λ f . λ x . f^m x) f ((λ f . λ x . f^n x) f x)  BY DEF of church
+        == λ f . λ x . (λ x . f^m x) ((λ x . f^n x) x)                  USING BetaReduction
+        == λ f . λ x . (λ x . f^m x) (f^n x)                            USING BetaReduction
+        == λ f . λ x . f^m (f^n x)                                      USING BetaReduction
+        == λ f . λ x . f^(m + n) x                                      BY Arithmetic
+        == church (m + n)                                              BY DEF of church
+
+      QED
+    }
+
+    PROOF ChurchBooleanAND : ∀ p, q : Term . eval(and p q) == eval(p q false) {
+      GIVEN p, q : Term
+
+      eval(and p q)
+        == eval((λ p . λ q . p q false) p q)  BY DEF of and
+        == eval((λ q . p q false) q)          USING BetaReduction
+        == eval(p q false)                    USING BetaReduction
+
+      QED  
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE IdentityFunction : Term = λ x . x
+
+    EXAMPLE SelfApplication : Term = (λ x . x x) (λ x . x x)
+
+    EXAMPLE Omega : Term = (λ x . x x) (λ x . x x) 
+
+    EXAMPLE YCombinator : Term = λ f . (λ x . f (x x)) (λ x . f (x x))
+
+    EXAMPLE Factorial : Term = 
+      LET fact = λ f . λ n . IF (Booleans.eval((church 0) n)) 
+                             THEN (church 1) 
+                             ELSE (ChurchNumerals.mult n (f (ChurchNumerals.eval(ChurchNumerals.succ (church (-1))))))
+      IN YCombinator fact
+  } 
+}
+
+
+
+
+
+
+
+
+
+
+

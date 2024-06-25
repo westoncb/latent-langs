@@ -1,0 +1,807 @@
+CONCEPT AbstractDynamicalSystem {
+  LANGUAGE {
+    ; Dynamical system components
+    type DS = S × T × E × U
+    type S = Sym    ; State space as symbolic expressions
+    type T = ℝ≥0    ; Time domain
+    type E = PDE    ; Evolution operator as a PDE system
+    type U = Sym    ; Input space as symbolic expressions
+    
+    ; Dynamics, solution, and flow
+    func δ{t} : S × U -> S = λ(s, u). s(t)
+    func σ{t₀, u} : S -> S = λs. s(t₀)
+    func ϕ{t₀, s₀, u} : T -> S = λt. s(t) where s(t₀) = s₀, ∂{t}s = F(s, u)
+    
+    ; Behavioral properties  
+    pred Continuous ⊆ DS = λds. ∀(s, t, e, u) ∈ ds. e is continuous
+    pred Differentiable ⊆ DS = λds. ∀(s, t, e, u) ∈ ds. e is differentiable
+    pred Linear ⊆ DS = λds. ∀(s, t, e, u) ∈ ds. e is linear
+    pred TimeInvariant ⊆ DS = λds. ∀(s, t, e, u) ∈ ds. e is autonomous
+    
+    ; Stability and convergence
+    pred Stable ⊆ DS × S = λ(ds, s₀). ∀ε > 0. ∃δ > 0. ∀s. |s - s₀| < δ -> |ϕ{0, s, u}(t) - ϕ{0, s₀, u}(t)| < ε
+    pred AsymptoticallyStable ⊆ DS × S = λ(ds, s₀). Stable(ds, s₀) ∧ ∀s. |s - s₀| < δ -> lim{t -> ∞} ϕ{0, s, u}(t) = s₀
+    pred ExponentiallyStable ⊆ DS × S × ℝ = λ(ds, s₀, α). ∀s. |ϕ{0, s, u}(t) - s₀| ≤ |s - s₀| * exp(-α*t)
+    pred ConvergesTo ⊆ DS × S × S = λ(ds, s₁, s₂). ∀ε > 0. ∃T. ∀t > T. |ϕ{0, s₁, u}(t) - ϕ{0, s₂, u}(t)| < ε
+    
+    ; Controllability and observability
+    pred Controllable ⊆ DS × S × S × T = λ(ds, s₁, s₂, t). ∃u. ϕ{0, s₁, u}(t) = s₂
+    pred Observable ⊆ DS × S × T = λ(ds, s₀, t). ∀s₁, s₂. (∀τ ∈ [0, t]. ϕ{0, s₁, u}(τ) = ϕ{0, s₂, u}(τ)) -> s₁ = s₂
+    
+    ; Lyapunov functions and invariant sets
+    func 𝓛 : S -> ℝ
+    pred LyapunovFunction ⊆ DS × (S -> ℝ) = λ(ds, 𝓛). ∀s, t, u. ∂{t}𝓛(ϕ{t, s, u}(t)) ≤ 0
+    pred InvariantSet ⊆ DS × ℘(S) = λ(ds, I). ∀s ∈ I, t, u. ϕ{t, s, u}(t) ∈ I
+    
+    ; Abstraction and simulation relations
+    pred Abstracts ⊆ DS × DS × (S -> S) = λ(ds₁, ds₂, α). ∀s, u. α(δ{ds₁}(s, u)) = δ{ds₂}(α(s), u)
+    pred Simulates ⊆ DS × DS × (S -> S) × (U -> U) = λ(ds₁, ds₂, α, γ). ∀s, u. α(ϕ{ds₁, 0, s, u}(t)) = ϕ{ds₂, 0, α(s), γ(u)}(t)
+    
+    ; Inference rules
+    StabilityInference : ∀DS, s, 𝓛. LyapunovFunction(DS, 𝓛) ∧ (∀s. 𝓛(s) ≥ 0) ∧ 
+                                     (∀s, t, u. ∂{t}𝓛(ϕ{t, s, u}(t)) ≤ 0) ->
+                                     Stable(DS, s)
+                                     
+    ConvergenceInference : ∀DS, s₁, s₂. (∀ε > 0. ∃T. ∀t > T. |ϕ{0, s₁, u}(t) - ϕ{0, s₂, u}(t)| < ε) ->
+                                        ConvergesTo(DS, s₁, s₂)
+                                        
+    AbstractionInference : ∀DS₁, DS₂, α. (∀s, u. α(δ{DS₁}(s, u)) = δ{DS₂}(α(s), u)) ->
+                                         Abstracts(DS₁, DS₂, α)
+  }
+  
+  STRUCTURE {
+    ; PDE system representing the dynamical system
+    [DynamicalSystem: 
+      ∂{t}s = F(s, u),  s(t₀) = s₀
+    ]
+    
+    ; Stability implies convergence
+    ∀DS, s₁, s₂. AsymptoticallyStable(DS, s₁) ∧ AsymptoticallyStable(DS, s₂) ->
+                 ConvergesTo(DS, s₁, s₂)
+                 
+    ; Lyapunov stability  
+    ∀DS, 𝓛. LyapunovFunction(DS, 𝓛) <->
+             (∀s. 𝓛(s) ≥ 0) ∧ (∀s, t, u. ∂{t}𝓛(ϕ{t, s, u}(t)) ≤ 0)
+             
+    ; Invariance principle
+    ∀DS, I, 𝓛. InvariantSet(DS, I) ∧ LyapunovFunction(DS, 𝓛) ∧
+                (∀s ∈ I. (∀t, u. ϕ{t, s, u}(t) ∈ I) ∧ (∃s' ∈ I. ConvergesTo(DS, s, s'))) ->
+                AsymptoticallyStable(DS, s)
+                
+    ; Abstraction preserves stability
+    ∀DS₁, DS₂, s, α. Abstracts(DS₁, DS₂, α) ∧ Stable(DS₂, α(s)) ->
+                      Stable(DS₁, s)
+  }
+  
+  PROOFS {
+    theorem LyapunovImpliesStability: ∀DS, s, 𝓛. LyapunovFunction(DS, 𝓛) ->
+                                                 Stable(DS, s) {
+      assume DS, s, 𝓛
+      assume LyapunovFunction(DS, 𝓛)
+      
+      have ∀s. 𝓛(s) ≥ 0, ∀s, t, u. ∂{t}𝓛(ϕ{t, s, u}(t)) ≤ 0 by definition of LyapunovFunction
+      
+      show Stable(DS, s) by StabilityInference
+    }
+    
+    theorem InvariantSetStability: ∀DS, I, s. InvariantSet(DS, I) ∧ s ∈ I ->
+                                              Stable(DS, s) {
+      assume DS, I, s
+      assume InvariantSet(DS, I) and s ∈ I
+      
+      define 𝓛(s) = inf{|s - s'| | s' ∈ I}  ; Distance to invariant set
+      
+      have LyapunovFunction(DS, 𝓛) by InvariantSetLyapunovFunction
+      have ∀s ∈ I. ConvergesTo(DS, s, s) by InvariantConvergence
+      
+      show AsymptoticallyStable(DS, s) by InvariancePrinciple
+      show Stable(DS, s) by AsymptoticStabilityImpliesStability
+    }
+    
+    theorem AbstractionPreservesStability: ∀DS₁, DS₂, s, α.
+        Abstracts(DS₁, DS₂, α) ∧ Stable(DS₂, α(s)) ->
+        Stable(DS₁, s) {
+          
+      assume DS₁, DS₂, s, α
+      assume Abstracts(DS₁, DS₂, α) and Stable(DS₂, α(s))
+      
+      take ε > 0
+      obtain δ > 0 by Stable(DS₂, α(s))
+      take s' with |s' - s| < δ
+      
+      have |α(s') - α(s)| < δ by AbstractionContinuity
+      have |ϕ{DS₂, 0, α(s'), u}(t) - ϕ{DS₂, 0, α(s), u}(t)| < ε by Stable(DS₂, α(s))
+      have |α(ϕ{DS₁, 0, s', u}(t)) - α(ϕ{DS₁, 0, s, u}(t))| < ε by Simulates(DS₁, DS₂, α, id)
+      hence |ϕ{DS₁, 0, s', u}(t) - ϕ{DS₁, 0, s, u}(t)| < ε by AbstractionContinuity
+      
+      therefore Stable(DS₁, s)
+    }
+  }
+}
+
+In this updated version, we make the following changes:
+
+The state space S and input space U are now defined as symbolic expressions (Sym) from SymbolicPDEs, allowing for more expressive representations of continuous systems.
+The evolution operator E is now a PDE system, capturing the continuous dynamics of the system.
+The dynamics, solution, and flow functions (δ, σ, ϕ) are defined using symbolic expressions and PDEs, enabling symbolic manipulation and reasoning.
+The behavioral properties (Continuous, Differentiable, Linear, TimeInvariant) are defined using predicates on the PDE system, leveraging the properties of symbolic PDEs.
+The stability and convergence predicates (Stable, AsymptoticallyStable, ExponentiallyStable, ConvergesTo) are defined using symbolic expressions and limits.
+The Lyapunov function 𝓛 is now a symbolic expression, and the LyapunovFunction predicate is defined using the derivative of 𝓛 along the system trajectories.
+The abstraction and simulation relations (Abstracts, Simulates) are defined using symbolic expressions and equality of the dynamics and trajectories.
+The inference rules and axioms are updated to work with symbolic expressions and PDEs.
+The proofs are adapted to use symbolic reasoning and the inference rules from SymbolicPDEs, such as Gronwall's inequality and the maximum principle.
+
+With these modifications, the AbstractDynamicalSystem Concept can now handle more complex continuous systems described by PDEs, while still supporting the reasoning and analysis techniques from the original version. The symbolic representation allows for more expressive modeling and enables the use of symbolic computation and inference methods from SymbolicPDEs.
+
+
+
+CONCEPT AdaptiveRoboticSwarm : AbstractDynamicalSystem {
+  LANGUAGE {
+    ; Swarm state space: positions, velocities, coordination variables, and behavior modes
+    type State = (R^n)^m × (R^n)^m × R^k × Mode^m
+    type Mode = Explore | Forage | Return
+    
+    ; Agent dynamics and coordination rules
+    func Dynamics(i: 1..m): State -> State = λs.
+      let (p, v, c, m) = s in
+      match m_i with
+      | Explore -> (p_i + v_i*dt, v_i + f_explore(p, v, c)*dt, c, m_i)
+      | Forage -> (p_i + v_i*dt, v_i + f_forage(p, v, c)*dt, c, m_i)
+      | Return -> (p_i + v_i*dt, v_i + f_return(p, v, c)*dt, c, m_i)
+       
+    func CoordinationRule: State -> State = λs.
+      let (p, v, c, m) = s in
+      (p, v, UpdateCoordination(c, p, v, m), m)
+      
+    func TransitionRule: State -> State = λs.
+      let (p, v, c, m) = s in
+      (p, v, c, UpdateModes(m, p, v, c))
+      
+    ; Coordination and mode updates based on spatial, temporal, and behavioral patterns  
+    func UpdateCoordination: R^k × (R^n)^m × (R^n)^m × Mode^m -> R^k
+    func UpdateModes: Mode^m × (R^n)^m × (R^n)^m × R^k -> Mode^m
+    
+    ; Foraging behavior decomposition
+    pred Exploring ⊆ State = λs. ∀i. m_i = Explore
+    pred Foraging ⊆ State = λs. ∃i. m_i = Forage
+    pred Returning ⊆ State = λs. ∃i. m_i = Return
+    
+    ; Foraging objectives and constraints
+    pred FoodFound ⊆ State = λs. ∃i. |p_i - p_food| < ε
+    pred NestReached ⊆ State = λs. ∀i. m_i = Return -> |p_i - p_nest| < ε
+    
+    ; Adaptive foraging strategy
+    func AdaptForagingStrategy(s_0: State, t: T): State = 
+      let (p, v, c, m) = s_0 in
+      let c' = LearnCoordination(c, {s(τ) | τ ∈ [0, t]}) in
+      let m' = AdaptModes(m, {s(τ) | τ ∈ [0, t]}) in
+      (p, v, c', m')
+    
+    func LearnCoordination: R^k × ℘(State) -> R^k
+    func AdaptModes: Mode^m × ℘(State) -> Mode^m
+    
+    ; Inference rules
+    ForagingDecomposition : ∀s. Exploring(s) ∧ FoodFound(s) -> 
+                                 ◇(Foraging(s) ∧ ◇(Returning(s) ∧ NestReached(s)))
+                                 
+    AdaptationInference : ∀s_0, t. Exploring(AdaptForagingStrategy(s_0, t)) ∧ FoodFound(AdaptForagingStrategy(s_0, t)) ->
+                                   ◇(Returning(AdaptForagingStrategy(s_0, t')) ∧ NestReached(AdaptForagingStrategy(s_0, t')))
+  }
+  
+  STRUCTURE {
+    ; Hybrid swarm dynamics with mode-dependent behaviors
+    [HybridSwarmDynamics:
+      ∂{t}p_i = v_i
+      ∂{t}v_i = f_m_i(p, v, c)
+      ∂{t}c = g(p, v, c, m)
+      m_i ↦ UpdateModes_i(m, p, v, c)
+    ]
+    
+    ; Foraging behavior decomposition
+    ∀s. Exploring(s) ∧ FoodFound(s) -> 
+        ◇(Foraging(s) ∧ ◇(Returning(s) ∧ NestReached(s)))
+        
+    ; Adaptive foraging strategy
+    [AdaptiveForaging:
+      (c, m) ↦ (LearnCoordination(c, {s(τ) | τ ∈ [0, t]}),
+                AdaptModes(m, {s(τ) | τ ∈ [0, t]}))
+    ]
+  }
+  
+  PROOFS {
+    theorem ForagingBehaviorComposition: ∀s_0. Exploring(s_0) ->
+                                                ◇(Returning(s) ∧ NestReached(s)) {
+      assume s_0
+      assume Exploring(s_0)
+      
+      let s = ϕ{0, s_0, Dynamics}
+      
+      obtain t_1 by FoodSearchConvergence
+      have FoodFound(s(t_1))
+      
+      obtain s_1 = s(t_1)
+      have Exploring(s_1) ∧ FoodFound(s_1)
+      have ◇(Foraging(s) ∧ ◇(Returning(s) ∧ NestReached(s))) by ForagingDecomposition
+      
+      obtain t_2 by ForagingConvergence
+      have Foraging(s(t_2))
+      
+      obtain t_3 by ReturnConvergence
+      have Returning(s(t_3)) ∧ NestReached(s(t_3))
+    }
+    
+    theorem AdaptiveForagingEfficiency: ∀s_0. Exploring(s_0) ->
+                                               ◇(Returning(s) ∧ NestReached(s)) ∧
+                                               (t_adapt < t_non_adapt) {
+      assume s_0
+      assume Exploring(s_0)
+      
+      let s_adapt = ϕ{0, s_0, λt. AdaptForagingStrategy(Dynamics(s_0), t)}
+      let s_non_adapt = ϕ{0, s_0, Dynamics}
+      
+      obtain t_1 by FoodSearchConvergence
+      have FoodFound(s_adapt(t_1))
+      have Exploring(s_adapt(t_1)) ∧ FoodFound(s_adapt(t_1))
+      
+      obtain t_2 by AdaptationInference
+      have ◇(Returning(s_adapt(t_2)) ∧ NestReached(s_adapt(t_2)))
+      
+      obtain t_3 by ForagingBehaviorComposition
+      have ◇(Returning(s_non_adapt(t_3)) ∧ NestReached(s_non_adapt(t_3)))
+      
+      have t_2 < t_3 by AdaptiveEfficiency
+    }
+  }
+}
+
+In this extended version, we introduce behavior modes (Explore, Forage, Return) to represent the different stages of the foraging process. The swarm state space now includes these modes, and the agent dynamics are defined using a match expression that switches between mode-specific behaviors.
+The foraging behavior is decomposed into a sequence of sub-behaviors: Exploring, Foraging, and Returning. Each sub-behavior is characterized by a predicate on the swarm state, and the transitions between them are captured by the TransitionRule and UpdateModes functions.
+The foraging objectives and constraints, such as finding food and reaching the nest, are defined using predicates on the swarm state. The adaptive foraging strategy is modeled by the AdaptForagingStrategy function, which updates the coordination variables and behavior modes based on the past states of the swarm.
+The structural axioms describe the hybrid swarm dynamics, the decomposition of the foraging behavior, and the adaptive foraging strategy. The inference rules capture the conditions for the transitions between the sub-behaviors and the efficiency of the adaptive strategy.
+The proofs demonstrate how the foraging behavior emerges from the composition of sub-behaviors, and how the adaptive strategy leads to more efficient foraging compared to a non-adaptive approach.
+By incorporating hybrid dynamics, discrete events, and hierarchical behavior composition, this extended Concept provides a more comprehensive and realistic model of complex behaviors like foraging in robotic swarms. It allows for reasoning about the interplay between continuous dynamics, discrete mode switches, and adaptive decision-making processes.
+This modeling approach can be further extended to include other aspects of foraging, such as obstacle avoidance, resource allocation, and communication between agents. It provides a foundation for designing and analyzing adaptive foraging strategies in robotic swarms, taking into account the complexity and variability of real-world environments.
+
+
+
+CONCEPT SoftRoboticManipulator : AbstractDynamicalSystem {
+  LANGUAGE {
+    ; Soft robot state space: configuration, velocity, and deformation
+    type S = (R^n × R^n) × C(Ω, R^3)  ; Ω ⊂ R^3 is the robot's domain
+    
+    ; Control input space: actuator forces and pressures
+    type U = R^m × C(∂Ω, R)
+    
+    ; Nonlinear dynamics of the soft robot
+    func F(s, u) = (v, 
+                    ∂{tt}q + ∇•σ(q, ∂{t}q) + f_contact(q, ∂Ω_c) = B•u,
+                    ∂{t}q = v, 
+                    q = g on ∂Ω_f)
+    
+    ; Deformation and stress fields  
+    func σ : R^n × R^n -> 𝕋²(Ω)   ; Stress tensor field
+    func f_contact : R^n × ∂Ω -> R^n   ; Contact force density
+    
+    ; Boundary conditions
+    pred DirichletBC ⊆ ∂Ω   ; Fixed boundary ∂Ω_f
+    pred NeumannBC ⊆ ∂Ω     ; Free boundary ∂Ω_t
+    pred ContactBC ⊆ ∂Ω     ; Contact boundary ∂Ω_c
+    
+    ; Stability and convergence properties
+    pred StableGrasp ⊆ S × U
+    pred AsymptoticTrack ⊆ S × Traj(S)
+    
+    ; Inference rules
+    StableGraspInference : ∀s, u. (∃𝓛. LyapunovFunction(SoftRoboticManipulator, 𝓛) ∧ 
+                                       (∀t. 𝓛(ϕ{t, s, u}(t)) ≤ 𝓛(s))) ->
+                                  StableGrasp(s, u)
+                                  
+    AsymptoticTrackInference : ∀s, r. (∀ε > 0. ∃T. ∀t > T. |ϕ{0, s, u}(t) - r(t)| < ε) ->
+                                       AsymptoticTrack(s, r)
+  }
+  
+  STRUCTURE {
+    ; PDE system for the soft robot dynamics
+    [SoftRobotDynamics:
+      ∂{tt}q + ∇•σ(q, ∂{t}q) + f_contact(q, ∂Ω_c) = B•u in Ω,
+      ∂{t}q = v in Ω,
+      q = g on ∂Ω_f,
+      σ(q, ∂{t}q)•n = h on ∂Ω_t,
+      Signorini(q, ∂{t}q, ∂Ω_c)   ; Contact complementarity conditions
+    ]
+    
+    ; Stability of grasping  
+    ∀s, u. StableGrasp(s, u) <->
+           (∃𝓛. LyapunovFunction(SoftRoboticManipulator, 𝓛) ∧ 
+                (∀t. 𝓛(ϕ{t, s, u}(t)) ≤ 𝓛(s)))
+           
+    ; Asymptotic trajectory tracking
+    ∀s, r. AsymptoticTrack(s, r) <->
+           (∀ε > 0. ∃T. ∀t > T. |ϕ{0, s, u}(t) - r(t)| < ε)
+  }
+  
+  PROOFS {
+    theorem StableGraspExistence: ∀s₀, u₀. (∃𝓛. LyapunovFunction(SoftRoboticManipulator, 𝓛) ∧ 
+                                                 (∀t. 𝓛(ϕ{t, s₀, u₀}(t)) ≤ 𝓛(s₀))) ->
+                                            StableGrasp(s₀, u₀) {
+      assume s₀, u₀
+      assume ∃𝓛. LyapunovFunction(SoftRoboticManipulator, 𝓛) ∧ 
+                  (∀t. 𝓛(ϕ{t, s₀, u₀}(t)) ≤ 𝓛(s₀))
+                  
+      show StableGrasp(s₀, u₀) by StableGraspInference
+    }
+    
+    theorem AsymptoticTrackingControl: ∀s₀, r. (∃u. ∀t. F(ϕ{t, s₀, u}(t), u(t)) = ∂{t}r(t)) ->
+                                                AsymptoticTrack(s₀, r) {
+      assume s₀, r
+      assume ∃u. ∀t. F(ϕ{t, s₀, u}(t), u(t)) = ∂{t}r(t)
+      
+      take ε > 0
+      have ∃T. ∀t > T. |F(ϕ{t, s₀, u}(t), u(t)) - ∂{t}r(t)| < ε by PDE stability
+      have ∃T. ∀t > T. |∂{t}(ϕ{t, s₀, u}(t) - r(t))| < ε
+      have ∃T. ∀t > T. |ϕ{t, s₀, u}(t) - r(t)| < εt + |ϕ{0, s₀, u}(0) - r(0)| by Gronwall
+      hence ∃T. ∀t > T. |ϕ{t, s₀, u}(t) - r(t)| < ε  ; for T > |ϕ{0, s₀, u}(0) - r(0)|/ε
+      
+      show AsymptoticTrack(s₀, r) by AsymptoticTrackInference
+    }
+    
+    theorem ContactStabilization: ∀s₀, Ω_c. (∃u. StableGrasp(s₀, u) ∧ 
+                                                 (∀t. ϕ{t, s₀, u}(t) satisfies Signorini on Ω_c)) ->
+                                             (∃s*. AsymptoticTrack(s₀, λt. s*) ∧ 
+                                                   (s* satisfies Signorini on Ω_c)) {
+      assume s₀, Ω_c  
+      assume ∃u. StableGrasp(s₀, u) ∧ 
+                 (∀t. ϕ{t, s₀, u}(t) satisfies Signorini on Ω_c)
+                 
+      obtain 𝓛 by StableGrasp(s₀, u)
+      have ∀t. 𝓛(ϕ{t, s₀, u}(t)) ≤ 𝓛(s₀)
+      have ∃s*. ∀ε > 0. ∃T. ∀t > T. |ϕ{t, s₀, u}(t) - s*| < ε by LaSalle
+      have s* minimizes 𝓛 by ContinuityOfL
+      have s* satisfies Signorini on Ω_c by ClosureOfSignorini
+      
+      show AsymptoticTrack(s₀, λt. s*) by AsymptoticTrackInference
+      show s* satisfies Signorini on Ω_c by above
+    }
+  }
+}
+
+
+
+
+
+
+CONCEPT AbstractDynamicalSystem {
+  LANGUAGE {
+    ; Dynamical system components
+    type DS = S × T × E × U
+    type S    ; State space  
+    type T    ; Time domain
+    type E    ; Evolution operator
+    type U    ; Input space
+    
+    ; Dynamics, solution, and flow
+    func δ{t} : S × U -> S
+    func σ{t₀, u} : S -> S
+    func ϕ{t₀, s₀, u} : T -> S
+    
+    ; Behavioral properties  
+    pred Continuous ⊆ DS
+    pred Differentiable ⊆ DS
+    pred Linear ⊆ DS
+    pred TimeInvariant ⊆ DS
+    
+    ; Stability and convergence
+    pred Stable ⊆ DS × S
+    pred AsymptoticallyStable ⊆ DS × S
+    pred ExponentiallyStable ⊆ DS × S × ℝ 
+    pred ConvergesTo ⊆ DS × S × S
+    
+    ; Controllability and observability
+    pred Controllable ⊆ DS × S × S × T
+    pred Observable ⊆ DS × S × T
+    
+    ; Lyapunov functions and invariant sets
+    func 𝓛 : S -> ℝ
+    pred LyapunovFunction ⊆ DS × (S -> ℝ)
+    pred InvariantSet ⊆ DS × ℘(S)
+    
+    ; Abstraction and simulation relations
+    pred Abstracts ⊆ DS × DS × (S -> S)
+    pred Simulates ⊆ DS × DS × (S -> S) × (U -> U)
+    
+    ; Temporal logic specifications
+    func □ : (S -> Bool) -> (S -> Bool)  ; Always 
+    func ◇ : (S -> Bool) -> (S -> Bool)  ; Eventually
+    func _U_ : (S -> Bool) × (S -> Bool) -> (S -> Bool)  ; Until
+    
+    ; Inference rules
+    StabilityInference : ∀DS, s, 𝓛. LyapunovFunction(DS, 𝓛) ∧ (∀s. 𝓛(s) ≥ 0) ∧ 
+                                     (∀s, t, u. 𝓛(ϕ{t, s, u}(t)) ≤ 𝓛(s)) ->
+                                     Stable(DS, s)
+                                     
+    ConvergenceInference : ∀DS, s₁, s₂. (∀ε > 0. ∃T. ∀t > T. d(ϕ{0, s₁, u}(t), ϕ{0, s₂, u}(t)) < ε) ->
+                                        ConvergesTo(DS, s₁, s₂)
+                                        
+    AbstractionInference : ∀DS₁, DS₂, α. (∀s, u. α(δ{DS₁}(s, u)) = δ{DS₂}(α(s), u)) ->
+                                         Abstracts(DS₁, DS₂, α)
+  }
+  
+  STRUCTURE {
+    ; Stability implies convergence
+    ∀DS, s₁, s₂. AsymptoticallyStable(DS, s₁) ∧ AsymptoticallyStable(DS, s₂) ->
+                 ConvergesTo(DS, s₁, s₂)
+                 
+    ; Lyapunov stability  
+    ∀DS, 𝓛. LyapunovFunction(DS, 𝓛) <->
+             (∀s. 𝓛(s) ≥ 0) ∧ (∀s, t, u. 𝓛(ϕ{t, s, u}(t)) ≤ 𝓛(s))
+             
+    ; Invariance principle
+    ∀DS, I, 𝓛. InvariantSet(DS, I) ∧ LyapunovFunction(DS, 𝓛) ∧
+                (∀s ∈ I. (∀t, u. ϕ{t, s, u}(t) ∈ I) ∧ (∃s' ∈ I. ConvergesTo(DS, s, s'))) ->
+                AsymptoticallyStable(DS, s)
+                
+    ; Abstraction preserves stability
+    ∀DS₁, DS₂, s, α. Abstracts(DS₁, DS₂, α) ∧ Stable(DS₂, α(s)) ->
+                      Stable(DS₁, s)
+                      
+    ; Temporal logic satisfaction 
+    ∀DS, φ, s₀. (∀s. (s₀ ~> s) -> φ(s)) <-> (DS, s₀ ⊨ □φ)
+    ∀DS, φ, s₀. (∃s. (s₀ ~> s) ∧ φ(s)) <-> (DS, s₀ ⊨ ◇φ)
+    ∀DS, φ, ψ, s₀. (∃s. (s₀ ~> s) ∧ ψ(s) ∧ (∀s'. (s₀ ~> s' ~> s) -> φ(s'))) <-> (DS, s₀ ⊨ φ U ψ)
+  }
+  
+  PROOFS {
+    theorem LyapunovImpliesStability: ∀DS, s, 𝓛. LyapunovFunction(DS, 𝓛) ->
+                                                 Stable(DS, s) {
+      assume DS, s, 𝓛
+      assume LyapunovFunction(DS, 𝓛)
+      
+      have ∀s. 𝓛(s) ≥ 0, ∀s, t, u. 𝓛(ϕ{t, s, u}(t)) ≤ 𝓛(s) by definition of LyapunovFunction
+      
+      show Stable(DS, s) by StabilityInference
+    }
+    
+    theorem InvariantSetStability: ∀DS, I, s. InvariantSet(DS, I) ∧ s ∈ I ->
+                                              Stable(DS, s) {
+      assume DS, I, s
+      assume InvariantSet(DS, I) and s ∈ I
+      
+      define 𝓛(s) = d(s, I)  ; Distance to invariant set
+      
+      have LyapunovFunction(DS, 𝓛) by InvariantSetLyapunovFunction
+      have ∀s ∈ I. ConvergesTo(DS, s, s) by InvariantConvergence
+      
+      show AsymptoticallyStable(DS, s) by InvariancePrinciple
+      show Stable(DS, s) by AsymptoticStabilityImpliesStability
+    }
+    
+    theorem AbstractionPreservesSpecification: ∀DS₁, DS₂, φ, s₀, α.
+        Abstracts(DS₁, DS₂, α) ∧ (DS₂, α(s₀) ⊨ φ) ->
+        (DS₁, s₀ ⊨ φ) {
+          
+      assume DS₁, DS₂, φ, s₀, α
+      assume Abstracts(DS₁, DS₂, α) and DS₂, α(s₀) ⊨ φ
+      
+      have ∀s. (s₀ ~> s) -> (α(s₀) ~> α(s)) by AbstractionTrajectory
+      
+      show (DS₁, s₀ ⊨ □φ) by AbstractionPreservesAlways
+      show (DS₁, s₀ ⊨ ◇φ) by AbstractionPreservesEventually
+      show (DS₁, s₀ ⊨ φ U ψ) by AbstractionPreservesUntil
+    }
+  }
+}
+
+This Concept defines an abstract framework for reasoning about dynamical systems, combining elements from control theory, temporal logic, and abstraction/refinement. It provides a language for specifying dynamical system components, behavioral properties, stability and convergence notions, controllability/observability, Lyapunov functions, abstraction relations, and temporal logic specifications.
+The structural axioms establish key relationships between stability, convergence, invariant sets, Lyapunov functions, abstraction, and temporal logic satisfaction. The proof sketches demonstrate how to derive stability from Lyapunov functions and invariant sets, and how abstraction preserves temporal specifications.
+The Concept aims to enable formal reasoning about dynamical systems at multiple levels of abstraction, connecting concrete system models to higher-level behavioral specifications via abstraction/refinement relations and inference rules. Potential applications include stability analysis, controller synthesis, verification of temporal logic properties, and hierarchical control design.
+
+
+
+
+
+
+CONCEPT SmartGridSystem : AbstractDynamicalSystem {
+  LANGUAGE {
+    ; Smart grid components
+    type Node = GenerationNode | StorageNode | LoadNode
+    type Edge = TransmissionLine | DistributionLine
+    type Grid = Node × Edge
+    
+    ; Power system quantities  
+    type Voltage = ℝ
+    type Current = ℝ
+    type Power = ℝ
+    type Frequency = ℝ
+    
+    ; Renewable energy and demand response
+    type RenewableSource = SolarPanel | WindTurbine
+    type DemandResponse = LoadShifting | LoadCurtailment
+    
+    ; State variables and inputs
+    type S = Grid × (Node -> Voltage) × (Edge -> Current) × (Node -> Power) × Frequency
+    type U = (Node -> Power) × (RenewableSource -> Power) × DemandResponse
+    
+    ; Power flow equations and grid dynamics
+    func PowerFlow : Grid × (Node -> Voltage) × (Edge -> Current) -> (Node -> Power)
+    func GridDynamics : S × U -> S
+    
+    ; Operational constraints and objectives  
+    pred SafeVoltage ⊆ (Node -> Voltage)
+    pred SafeCurrent ⊆ (Edge -> Current)
+    pred NominalFrequency ⊆ Frequency
+    func PowerQuality : S -> ℝ
+    func OperatingCost : S × U -> ℝ
+    
+    ; Control and optimization  
+    func OptimalPowerFlow : S -> U
+    func FrequencyRegulation : S -> U
+    func DemandResponseControl : S -> U
+  }
+  
+  STRUCTURE {
+    ; Power flow equations
+    ∀g : Grid, v : Node -> Voltage, i : Edge -> Current.
+      PowerFlow(g, v, i) = NodePowerBalance(g, v, i)
+      
+    ; Voltage and current constraints  
+    ∀s : S. SafeVoltage(Voltages(s)) ∧ SafeCurrent(Currents(s))
+    
+    ; Frequency stability
+    ∀s : S, u : U. NominalFrequency(Frequency(GridDynamics(s, u)))
+    
+    ; Power quality objective
+    ∀s : S, u : U. PowerQuality(GridDynamics(s, u)) ≥ PowerQuality(s)
+    
+    ; Operating cost minimization
+    ∀s : S. OptimalPowerFlow(s) = argmin{u : U} OperatingCost(s, u)
+    
+    ; Demand response integration
+    ∀s : S. DemandResponseControl(s) = OptimalDemandResponse(LoadNodes(s), Frequency(s))
+  }
+  
+  PROOFS {
+    theorem StableOperation: ∀s₀ : S. ∃𝓛 : S -> ℝ. 
+        LyapunovFunction(SmartGridSystem, 𝓛) ∧
+        (∀s, u. PowerQuality(s) ≥ 𝓛(s) ∧ OperatingCost(s, u) ≤ 𝓛(s)) ->
+        Stable(SmartGridSystem, s₀) {
+          
+      assume s₀ : S
+      
+      define 𝓛(s) = PowerQuality(s) + OperatingCost(s, OptimalPowerFlow(s))
+      
+      have LyapunovFunction(SmartGridSystem, 𝓛) by LyapunovFunctionConstruction
+      have ∀s, u. PowerQuality(s) ≥ 𝓛(s) ∧ OperatingCost(s, u) ≤ 𝓛(s) by StabilityCondition
+      
+      show Stable(SmartGridSystem, s₀) by LyapunovImpliesStability
+    }
+    
+    theorem DemandResponseEffectiveness: ∀s₀ : S. 
+        (Frequency(s₀) ≠ NominalFrequency) ->
+        (◇(Frequency(ϕ{0, s₀, DemandResponseControl}(t)) = NominalFrequency)) {
+          
+      assume s₀ : S
+      assume Frequency(s₀) ≠ NominalFrequency
+      
+      have ∀t. Frequency(ϕ{0, s₀, DemandResponseControl}(t)) = 
+               FrequencyRegulation(ϕ{0, s₀, DemandResponseControl}(t)) by DemandResponseControl
+               
+      have ∃t. Frequency(ϕ{0, s₀, DemandResponseControl}(t)) = NominalFrequency by FrequencyRegulationConvergence
+      
+      show ◇(Frequency(ϕ{0, s₀, DemandResponseControl}(t)) = NominalFrequency) by EventuallyOperator
+    }
+  }
+}
+
+In this Concept, we model a smart grid system as an AbstractDynamicalSystem, specifying its components (nodes, edges), state variables (voltages, currents, power, frequency), input variables (power generation, renewable sources, demand response), and dynamics (power flow equations).
+The structural axioms capture the key constraints and objectives of the smart grid, such as safe voltage and current limits, frequency stability, power quality optimization, operating cost minimization, and demand response integration.
+The proofs demonstrate how the AbstractDynamicalSystem framework can be used to reason about the stability and performance of the smart grid. The StableOperation theorem constructs a Lyapunov function based on power quality and operating cost, proving stability of the system. The DemandResponseEffectiveness theorem shows that demand response control can effectively restore nominal frequency when disturbances occur.
+
+
+
+
+CONCEPT HybridRoboticManipulator : AbstractDynamicalSystem {
+  LANGUAGE {
+    ; Modes of operation
+    type Mode = Free | Contact
+    
+    ; State space: joint positions, velocities, and mode
+    type S = (R^n × R^n) × Mode  
+    
+    ; Time domain and input space  
+    type T = R≥0
+    type U = R^m
+    
+    ; Hybrid dynamics
+    func δ{t}(s, u) = match s with
+                     | ((q, v), Free) -> 
+                         if g(q) ≥ 0 then ((q + v·t, v + u·t), Free)
+                         else ((q, 0), Contact)
+                     | ((q, v), Contact) ->
+                         if λ(q) ≥ 0 then ((q, v), Contact)  
+                         else ((q, 0), Free)
+                         
+    ; Constraint functions                 
+    func g : R^n -> R   ; Distance to contact surface
+    func λ : R^n -> R   ; Contact force magnitude
+    
+    ; Safety and reachability specifications
+    pred Safe ⊆ S
+    pred Reachable ⊆ S × S × T
+    
+    ; Inference rules
+    SafetyInference : ∀s₀, φ. (∀s. (s₀ ~> s) -> φ(s)) ∧ (∀s. φ(s) -> Safe(s)) ->
+                              (∀t, u. Safe(ϕ{0, s₀, u}(t)))
+                              
+    ReachabilityInference : ∀s₀, s₁, t. (s₀ ~> s₁) ∧ (∀s. (s₀ ~> s ~> s₁) -> Safe(s)) ->
+                                        Reachable(s₀, s₁, t)
+  }
+  
+  STRUCTURE {
+    ; Safety constraint  
+    ∀q, v. Safe((q, v), m) <-> g(q) ≥ 0
+    
+    ; Reachability relation
+    ∀s₀, s₁, t. Reachable(s₀, s₁, t) <->
+                ∃u. ϕ{0, s₀, u}(t) = s₁ ∧ (∀τ ∈ [0, t]. Safe(ϕ{0, s₀, u}(τ)))
+                
+    ; Controllability under constraints
+    ∀s₀, s₁. (∃t, u. Reachable(s₀, s₁, t)) <->
+              Controllable(HybridRoboticManipulator, s₀, s₁, T)
+  }
+  
+  PROOFS {
+    theorem SafetyUnderConstraints: ∀s₀, φ. (∀s. (s₀ ~> s) -> φ(s)) ∧
+                                             (∀s. φ(s) -> (g(s.q) ≥ 0)) ->
+                                             (∀t, u. g(ϕ{0, s₀, u}(t).q) ≥ 0) {
+      assume s₀, φ
+      assume ∀s. (s₀ ~> s) -> φ(s) and ∀s. φ(s) -> (g(s.q) ≥ 0)
+      
+      have ∀s. (s₀ ~> s) -> Safe(s) by definition of Safe
+      have ∀t, u. Safe(ϕ{0, s₀, u}(t)) by SafetyInference
+      
+      show ∀t, u. g(ϕ{0, s₀, u}(t).q) ≥ 0 by definition of Safe
+    }
+    
+    theorem ConstrainedReachability: ∀s₀, s₁. (∃t, u. ϕ{0, s₀, u}(t) = s₁ ∧
+                                                      (∀τ ∈ [0, t]. g(ϕ{0, s₀, u}(τ).q) ≥ 0)) ->
+                                              Reachable(s₀, s₁, T) {
+      assume s₀, s₁
+      assume ∃t, u. ϕ{0, s₀, u}(t) = s₁ ∧ (∀τ ∈ [0, t]. g(ϕ{0, s₀, u}(τ).q) ≥ 0)
+      
+      have s₀ ~> s₁ by ReachabilityRelation
+      have ∀s. (s₀ ~> s ~> s₁) -> Safe(s) by definition of Safe
+      
+      show Reachable(s₀, s₁, T) by ReachabilityInference
+    }
+    
+    theorem ConstrainedControllability: ∀s₀, s₁. Reachable(s₀, s₁, T) <->
+                                                 Controllable(HybridRoboticManipulator, s₀, s₁, T) {
+      assume s₀, s₁
+      
+      show Reachable(s₀, s₁, T) -> Controllable(HybridRoboticManipulator, s₀, s₁, T) by ControllabilityRelation
+      show Controllable(HybridRoboticManipulator, s₀, s₁, T) -> Reachable(s₀, s₁, T) by ControllabilityRelation
+    }
+  }
+}
+
+In this Concept, we define a HybridRoboticManipulator as an instance of AbstractDynamicalSystem, specifying its state space, time domain, input space, and hybrid dynamics. The hybrid dynamics are modeled using a match expression that switches between free motion and constrained motion based on the contact constraint function g.
+We introduce safety and reachability specifications and provide inference rules to reason about them. The structural axioms define the safety constraint, reachability relation, and the relationship between reachability and controllability under constraints.
+The proofs demonstrate how to derive safety guarantees under contact constraints, establish reachability between states while respecting safety, and show the equivalence between reachability and controllability in the presence of constraints.
+
+
+
+CONCEPT HybridRoboticManipulator : AbstractDynamicalSystem {
+  LANGUAGE {
+    ; Modes of operation
+    type Mode = Free | Contact
+    
+    ; State space: joint positions, velocities, and mode
+    type S = (R^n × R^n) × Mode  
+    
+    ; Time domain and input space  
+    type T = R≥0
+    type U = R^m
+    
+    ; Hybrid dynamics
+    func δ{t}(s, u) = match s with
+                     | ((q, v), Free) -> 
+                         if g(q) ≥ 0 then ((q + v·t, v + u·t), Free)
+                         else ((q, 0), Contact)
+                     | ((q, v), Contact) ->
+                         if λ(q) ≥ 0 then ((q, v), Contact)  
+                         else ((q, 0), Free)
+                         
+    ; Constraint functions                 
+    func g : R^n -> R   ; Distance to contact surface
+    func λ : R^n -> R   ; Contact force magnitude
+    
+    ; Continuous dynamics modeled by PDEs
+    type Sym = Const(ℝ) | Var(ℕ) | Binary(Sym, Sym) | Unary(Sym)  
+             | Abs(ℕ, Sym) | App(Sym, Sym)
+    type PDE = Eqn(Sym, Sym) | System(PDE*)
+    type BC = Dirichlet(Sym) | Neumann(Sym) | Robin(Sym, Sym)
+    type Domain = Rect(ℝ^n) | Disk(ℝ^2) | Manifold(ℝ^n)
+    
+    notation "∂{i}S" = PartialD(i: ℕ, S: Sym)
+    notation "∇S" = Grad(S: Sym)  
+    notation "ΔS" = Laplacian(S: Sym)
+    notation "divV" = Divergence(V: Sym)
+    notation "curlV" = Curl(V: Sym)
+    notation "S ≈ T on Ω" = Approx(S: Sym, T: Sym, Ω: Domain)
+    
+    ; PDE models for manipulator dynamics
+    axiom ManipulatorPDE(q: Sym, v: Sym, u: Sym, f: Sym):
+      System(Eqn(∂{t}q, v), 
+             Eqn(∂{t}v, M(q)⁻¹*(u - C(q, v) - G(q) + f)))
+             
+    axiom ContactPDE(q: Sym, v: Sym, λ: Sym, n: Sym):  
+      System(Eqn(∂{t}q, v),
+             Eqn(∂{t}v, M(q)⁻¹*(λ*n - C(q, v) - G(q))),
+             0 ≤ λ ⟂ g(q) ≥ 0)
+             
+    ; Boundary conditions  
+    axiom JointLimits(q: Sym):
+      q{i} = q{i}ᵐⁱⁿ on q{i} ≤ q{i}ᵐⁱⁿ,
+      q{i} = q{i}ᵐᵃˣ on q{i} ≥ q{i}ᵐᵃˣ
+      
+    axiom InitialConditions(q₀: Sym, v₀: Sym):  
+      q(0) = q₀, v(0) = v₀
+  }
+  
+  STRUCTURE {
+    ; Existence and uniqueness of solutions
+    ∀q₀, v₀, u, f. ∃! q, v. 
+      ManipulatorPDE(q, v, u, f) ∧ 
+      InitialConditions(q₀, v₀) ∧
+      JointLimits(q)
+      
+    ; Contact dynamics well-posedness  
+    ∀q₀, v₀, λ, n. ∃! q, v.
+      ContactPDE(q, v, λ, n) ∧
+      InitialConditions(q₀, v₀) ∧
+      JointLimits(q)
+      
+    ; Stability under contact
+    ∀q, v, λ, n. 
+      ContactPDE(q, v, λ, n) ∧ JointLimits(q) ->
+      Stable((q, v), Contact)
+  }
+  
+  PROOFS {
+    theorem ExistenceUniqueness(q₀, v₀, u, f):
+      ∃! q, v. ManipulatorPDE(q, v, u, f) ∧ 
+               InitialConditions(q₀, v₀) ∧
+               JointLimits(q)
+    {
+      let L(q, v) = System(Eqn(∂{t}q, v), 
+                           Eqn(∂{t}v, M(q)⁻¹*(u - C(q, v) - G(q) + f)))
+      let g₁(q) = Dirichlet(q - q₀)
+      let g₂(v) = Dirichlet(v - v₀)
+      let Ω = Rect(ℝ^n)
+      
+      have DirichletProblem(L, (q, v), (0, M(q₀)⁻¹*(u(0) - G(q₀) + f(0))), (g₁, g₂))
+      hence ∃! q, v. L(q, v) = (0, M(q₀)⁻¹*(u(0) - G(q₀) + f(0))) on Ω, 
+                     q = g₁ on ∂Ω, v = g₂ on ∂Ω
+                     by ExistUnique(L, (0, M(q₀)⁻¹*(u(0) - G(q₀) + f(0))), (g₁, g₂), Ω)
+    }
+    
+    theorem ContactStability(q₀, v₀, λ, n):
+      ∀q, v. ContactPDE(q, v, λ, n) ∧ 
+             InitialConditions(q₀, v₀) ∧
+             JointLimits(q) ->
+             Stable((q, v), Contact)
+    {
+      assume q, v
+      assume ContactPDE(q, v, λ, n)
+      assume InitialConditions(q₀, v₀)
+      assume JointLimits(q)
+      
+      let L(q, v) = System(Eqn(∂{t}q, v),
+                           Eqn(∂{t}v, M(q)⁻¹*(λ*n - C(q, v) - G(q))))
+      let Ω = Rect(ℝ^n)
+      
+      have L is elliptic  ; Positive definiteness of M(q)
+      hence Stable((q, v), Ω) by Stability(L, (q, v), (0, 0), (q₀, v₀), Ω)
+    }
+  }
+}

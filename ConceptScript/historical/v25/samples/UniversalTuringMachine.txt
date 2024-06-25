@@ -1,0 +1,163 @@
+CONCEPT UniversalTuringMachine {
+  LANGUAGE {
+    TYPE State
+    TYPE Symbol
+    TYPE Direction <: Symbol
+    TYPE Tape = List[Symbol]
+    TYPE Head = Nat
+    TYPE Transition = (State, Symbol) -> (State, Symbol, Direction)
+    TYPE Configuration = (State, Tape, Head)
+    TYPE Halted <: State
+
+    FUNC Blank : Symbol
+    FUNC Left : Direction
+    FUNC Right : Direction
+
+    PRED Accept : State -> Bool
+
+    CLASS TuringMachine {
+      states : Set[State]
+      input_symbols : Set[Symbol]
+      tape_symbols : Set[Symbol]
+      transition : Transition
+      start_state : State
+      accept_state : State
+      reject_state : State
+    }
+
+    FUNC Step(M : TuringMachine, c : Configuration) : Configuration
+    FUNC Halts(M : TuringMachine, c : Configuration) : Bool
+    FUNC Accepts(M : TuringMachine, input : Tape) : Bool
+
+    AXIOM Determinism {
+      ∀ (M : TuringMachine) (c : Configuration).
+        (∃ (c' : Configuration). Step(M, c) = c') ∨ Halts(M, c)
+    }
+
+    NOTATION "⊢" = Entails
+  }
+
+  STRUCTURE TMEncoding {
+    FUNC Encode(M : TuringMachine) : Tape
+    FUNC Decode(t : Tape) : TuringMachine
+
+    AXIOM Bijection {
+      ∀ (M : TuringMachine). Decode(Encode(M)) = M
+    }
+
+    AXIOM ValidEncoding {
+      ∀ (t : Tape). (∃ (M : TuringMachine). t = Encode(M)) ∨ (Decode(t) = Undef)
+    }
+  }
+
+  STRUCTURE MainTM : TuringMachine {
+    LET Q = Set[State] = { q_start, q_read, q_simulate, q_accept, q_reject }
+    LET Σ = Set[Symbol] = { '0', '1', '#' }
+    LET F = Set[State] = { q_accept }
+
+    FUNC δ(q : State, a : Symbol) : (State, Symbol, Direction) =
+      MATCH (q, a) {
+        (q_start, '_') -> (q_read, '_', Right)
+        (q_read, a) -> ... -- Transition to q_simulate if valid encoding, else q_reject
+        (q_simulate, a) -> ... -- Simulate one step of encoded machine
+        (q_simulate, '_') -> (q_accept, '_', Right) -- Halt and accept if encoded machine halts and accepts
+        ...
+      }
+  }
+
+  PROOFS {
+    TACTIC Induction(P, M, c, n) = 
+      P(M, c, 0) ∧ (∀ (k : Nat). P(M, c, k) ⇒ P(M, c, k+1)) ⇒ ∀ (n : Nat). P(M, c, n)
+
+    THEOREM SimulationLemma {
+      STATEMENT:
+        ∀ (M : TuringMachine) (input : Tape) (n : Nat).
+          LET c₀ = (M.start_state, input, 0),
+              T = Encode(M) ⊔ '#' ⊔ input,
+              d₀ = (MainTM.start_state, T, 0)
+          IN
+            ¬Halts(M, Iterate(Step(M), c₀, n)) ⇒
+              Step(MainTM, Iterate(Step(MainTM), d₀, 5n+3)) = (q_simulate, T', Head(Iterate(Step(M), c₀, n)))
+
+      PROOF:
+        LET M : TuringMachine, input : Tape, n : Nat,
+            c₀ = (M.start_state, input, 0),
+            T = Encode(M) ⊔ '#' ⊔ input,
+            d₀ = (MainTM.start_state, T, 0)
+
+        INDUCTION (λ M c n. ¬Halts(M, Iterate(Step(M), c, n)) ⇒
+                     Step(MainTM, Iterate(Step(MainTM), d₀, 5n+3)) = (q_simulate, T', Head(Iterate(Step(M), c, n))), M, c₀, n) {
+          CASE 0 ->
+            ASSUME ¬Halts(M, c₀)
+            SHOW Step(MainTM, Iterate(Step(MainTM), d₀, 3)) = (q_simulate, T, 0) BY {
+              Step(MainTM, d₀) = (q_read, T, 1)                                -- start to read
+              Step(MainTM, (q_read, T, 1)) = (q_read, T, ...)                  -- read encode(M), goto ...
+              Step(MainTM, (q_read, T, ...)) = (q_simulate, T, Head(c₀))       -- valid encoding, move to start of input
+            }
+
+          CASE k+1 ->
+            ASSUME (IH) ¬Halts(M, Iterate(Step(M), c₀, k)) ⇒
+                     Step(MainTM, Iterate(Step(MainTM), d₀, 5k+3)) = (q_simulate, T', Head(Iterate(Step(M), c₀, k)))
+            ASSUME ¬Halts(M, Iterate(Step(M), c₀, k+1))
+            LET ck = Iterate(Step(M), c₀, k), dk = Iterate(Step(MainTM), d₀, 5k+3)
+            HAVE Step(MainTM, dk) = (q_simulate, T', Head(ck)) BY IH
+            SHOW Step(MainTM, Iterate(Step(MainTM), dk, 5)) = (q_simulate, T'', Head(Iterate(Step(M), ck, 1))) BY {
+              LET (q, s, h) = ck, (q', s', d) = M.transition(q, s)
+              Step(MainTM, (q_simulate, T', h)) = (q_read, T', ...)     -- read encoding to get (q', s', d)
+              Step(MainTM, (q_read, T', ...)) = (q_simulate, T'', h')  -- write s', move head, goto q_simulate
+              WHERE h' = h+1 if d = Right else h-1
+              Iterate(Step(M), ck, 1) = (q', Replace(Tape(ck), s', h), h')
+            }
+        }
+    }
+
+    THEOREM UniversalTMCorrectness {
+      STATEMENT:
+        ∀ (M : TuringMachine) (input : Tape).
+          Accepts(MainTM, Encode(M) ⊔ '#' ⊔ input) ⇔ Accepts(M, input)
+
+      PROOF:
+        LET M : TuringMachine, input : Tape,
+            c₀ = (M.start_state, input, 0),
+            T = Encode(M) ⊔ '#' ⊔ input,
+            d₀ = (MainTM.start_state, T, 0)
+
+        SHOW Accepts(MainTM, T) ⇒ Accepts(M, input) BY {
+          ASSUME Accepts(MainTM, T)
+          LET df = (qf, Tf, hf) = First(c ∈ Configurations(MainTM, T). Halts(MainTM, c))
+          HAVE qf = q_accept BY DEFINITION Accepts
+          LET k = Min(n ∈ Nat. Halts(M, Iterate(Step(M), c₀, n)))
+          HAVE Halts(M, Iterate(Step(M), c₀, k)) BY DEFINITION Min
+          SHOW Accepts(M, input) BY {
+            LET ck = Iterate(Step(M), c₀, k)
+            HAVE Step(MainTM, Iterate(Step(MainTM), d₀, 5k+3)) = (q_simulate, T', Head(ck)) BY SimulationLemma
+            HAVE Step(MainTM, (q_simulate, T', Head(ck))) = (q_accept, T', h) BY {
+              LET (q, s, h) = ck
+              HAVE Halts(M, ck) BY DEFINITION k
+              HAVE q = M.accept_state BY DEFINITION Halts, Accept
+            }
+            HAVE df = (q_accept, Tf, hf) BY DEFINITION First
+            HENCE Accept(State(ck)) BY DEFINITION Accepts  
+          }
+        }
+
+        SHOW Accepts(M, input) ⇒ Accepts(MainTM, T) BY {
+          ASSUME Accepts(M, input)
+          LET k = Min(n ∈ Nat. Halts(M, Iterate(Step(M), c₀, n))),
+              ck = Iterate(Step(M), c₀, k)
+          HAVE Halts(M, ck) BY DEFINITION Min
+          HAVE State(ck) = M.accept_state BY DEFINITION Halts, Accepts
+          SHOW Accepts(MainTM, T) BY {
+            HAVE Step(MainTM, Iterate(Step(MainTM), d₀, 5k+3)) = (q_simulate, T', Head(ck)) BY SimulationLemma
+            HAVE Step(MainTM, (q_simulate, T', Head(ck))) = (q_accept, T', h) BY {
+              LET (q, s, h) = ck
+              HAVE q = M.accept_state BY PREVIOUSLY SHOWN
+            }
+            LET df = First(c ∈ Configurations(MainTM, T). Halts(MainTM, c))
+            HAVE State(df) = q_accept BY DEFINITION Step
+            HENCE Accepts(MainTM, T) BY DEFINITION Accepts
+          }
+        }
+    }
+  }
+}

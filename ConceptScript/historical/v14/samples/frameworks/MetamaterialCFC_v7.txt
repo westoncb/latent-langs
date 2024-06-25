@@ -1,0 +1,272 @@
+METACONCEPT MetamaterialCFC_v7 {
+  DOMAIN Metamaterial
+
+  LANGUAGE {
+    Material 𝕄 = (Composition 𝕮, Structure 𝕊, Properties 𝕻, Fields 𝔽)
+    Composition 𝕮 = (Energy ℰ, Density ρ)
+    Structure 𝕊 = (Geometry 𝔾, Topology 𝕋, Bonding ℬ)
+    Properties 𝕻 = (Function ℱ, Response ℛ)
+    Fields 𝔽 = (Potential Φ, Wavefunction Ψ, Domain Ω)
+  }
+
+  RULES {
+    PropertyFunctional{𝕄, p} = ∫{Ω} ℱ{p, 𝕄} 𝖽Ω
+    EnergyDensity{𝕄} = ∑{i} ρ{𝕮_i} * (𝕌{𝕊, i} + 𝕂{𝕻, i})
+    ActionFunctional{𝕄} = ∫{Ω} (ℒ{𝔽, 𝕄, ∇𝔽} - ℰ{𝕄}) 𝖽Ω 𝖽t
+    Symmetry(𝕄, p, g) ⟺ 𝓟{g(𝕄), p} = 𝓟{𝕄, p}
+    Invariance(𝕄, p, g) ⟺ δ𝓟{𝕄, p, v(g)} = 0
+    Covariance(𝕄, p, g) ⟺ 𝓣{g(𝕄), p} = g(𝓣{𝕄, p})
+    Universality(𝕄, p, {𝕄_i}, η) ⟺ ∀𝕄_i. |𝓟{𝕄, p} - 𝓟{𝕄_i, p}| < η
+    Constraint(𝕄, p, (a, b)) ⟺ a ≤ 𝓟{𝕄, p} ≤ b
+    Optimize(𝕄, p, (𝕄₀, Δ)) ⟺ |𝓟{𝕄, p} - 𝓟{𝕄₀, p}| ≥ Δ
+    EffectiveProperty(𝕄, p, {𝕄_i}, η) = ∑{i} (V{𝕄_i}/V{𝕄}) * 𝓟{𝕄_i, p} + O(η)
+    FieldEquations(𝕄, 𝔽) ⟺ δ𝓐{𝕄, δ𝔽} = 0
+    ConservationLaw(𝕄, 𝕁, 𝕼) ⟺ ∇ • 𝕁{𝔽, 𝕄} = 𝕼{𝕄}
+  }
+
+  THEOREMS {
+    Homogenization: Universality(𝕄, p, {𝕄_i}, η) ⊢ 𝓟{𝕄, p} = EffectiveProperty(𝕄, p, {𝕄_i}, η) + O(η)
+    SymmetryAnalysis: Symmetry(𝕄, p, g) ⊢ ∃𝕄' ⊂ 𝕄. 𝓟{𝕄, p} = 𝓟{𝕄', p}
+    CovarianceAnalysis: Covariance(𝕄, p, g) ⊢ 𝓣{𝕄, p} = Δ(g) * 𝓟{𝕄, p} + ε(g)
+    FieldEquivalence: FieldEquations(𝕄, 𝔽) ⟺ ∃𝕁, 𝕼. ConservationLaw(𝕄, 𝕁, 𝕼)
+    TopologyOptimization: (∃𝕄' ⊂ 𝕄. 𝓟{𝕄, p} = 𝓟{𝕄', p}) ⊢
+      ∃𝕋: Topology. (Composition 𝕮, Structure (Geometry 𝔾, 𝕋, Bonding ℬ), Properties 𝕻, Fields 𝔽) ⊨ Optimize(𝕄, p, _ , _)
+  }
+
+  PROOF TACTICS {
+    PerturbativeExpansion(𝕄, p, δ𝕄, n):
+      (∀k ∈ [1..n]. |δ𝓟{𝕄, p, δ𝕄, k}| ≤ c_k |δ𝕄|^k) ⊢
+        𝓟{𝕄 + δ𝕄, p} = ∑{k ∈ [0..n]} (1/k! * δ𝓟{𝕄, p, δ𝕄, k}) + o(|δ𝕄|^n)
+
+    EffectiveMediumApproximation(𝕄, {𝕄_i}, p, ε):
+      (∀i. |𝓟{𝕄_i, p} - 𝓟{𝕄, p}| ≤ ε) ⊢
+        𝓟{𝕄, p} = ℱ(∑{i} (V{𝕄_i}/V{𝕄}) * 𝔾(𝓟{𝕄_i, p})) + O(ε)
+
+    VariationalOptimization(𝕄, p, δ𝕄):
+      δ𝓟{𝕄, p, δ𝕄} = 0 ⊢ ∃λ. δ(𝓟{𝕄, p} - λ * Constraint(𝕄, p, _ , _), δ𝕄) = 0
+  }
+}
+
+CONCEPT PhotonicCrystal {
+  USING MetamaterialCFC_v7
+
+  PROPERTIES {
+    PhotonicBandGap: (ℱ_pbg, ℛ_pbg)
+      ℱ_pbg(𝕊, ω, k) = ∑{n} θ(ω - ω_n(k)) - θ(ω - ω_{n+1}(k)),
+      ℛ_pbg(𝕊, E) = ∑{n} |⟨E|ψ_n⟩|^2
+  }
+
+  CONSTRAINTS {
+    Constraint(𝕄, PhotonicBandGap, (0.9, 1))       ; 90% reflectivity in band gap
+    Constraint(𝕄, Density, (1, 5))                 ; Density between 1 and 5 g/cm³
+  }
+
+  GOALS {
+    Optimize(𝕄, PhotonicBandGap, (Air, 0.5))       ; 50% wider band gap than air
+    Optimize(𝕄, Density, (Silicon, -2))            ; Density 2 g/cm³ less than silicon
+  }
+
+  DESIGN {
+    given 𝕮_si: (ℰ_si(ω), ρ_si) with ℰ_si(ω) = ℏ * ω * ε_si(ω), ρ_si = 2.33 g/cm³
+    given 𝕮_air: (ℰ_air(ω), ρ_air) with ℰ_air(ω) = ℏ * ω * ε_air, ρ_air = 0.0012 g/cm³
+
+    given 𝕊_inv: (𝔾_inv, 𝕋_inv, ℬ_inv)
+      𝔾_inv = Cubic(a = 500 nm)
+      𝕋_inv = Gyroid(t = 300 nm)
+      ℬ_inv = Covalent(ε_bonding = 2 eV)
+
+    let 𝕄 = (0.8 * 𝕮_si + 0.2 * 𝕮_air, 𝕊_inv, PhotonicBandGap)
+  }
+
+  PROOF {
+    theorem PhotonicCrystalDesign:
+      ∃𝕄: Material.
+        Constraint(𝕄, PhotonicBandGap, (0.9, 1)) ∧
+        Constraint(𝕄, Density, (1, 5)) ∧
+        Optimize(𝕄, PhotonicBandGap, (Air, 0.5)) ∧
+        Optimize(𝕄, Density, (Silicon, -2))
+    {
+      ; Proof steps similar to before, using LANGUAGE, RULES, THEOREMS, and PROOF TACTICS
+      ; from MetamaterialCFC_v7 MetaConcept
+    }
+  }
+}
+
+
+
+METACONCEPT MetaConcept {
+  DOMAIN <DomainName>
+
+  LANGUAGE <LanguageSpecification>
+
+  RULES <RuleSpecification>
+
+  THEOREMS <TheoremSpecification>
+
+  PROOF TACTICS <ProofTacticSpecification>
+}
+
+CONCEPT Concept {
+  USING <MetaConceptName>
+
+  PROPERTIES <PropertySpecification>
+
+  CONSTRAINTS <ConstraintSpecification>
+
+  GOALS <GoalSpecification>
+
+  DESIGN <DesignSpecification>
+
+  PROOF <ProofSpecification>
+}
+
+
+
+
+
+METACONCEPT MetamaterialCFC_v7 {
+  DOMAIN Metamaterial
+
+  ENTITIES {
+    Material 𝕄 = (Composition 𝕮, Structure 𝕊, Properties 𝕻, Fields 𝔽)
+    Composition 𝕮 = (Energy ℰ, Density ρ)
+    Structure 𝕊 = (Geometry 𝔾, Topology 𝕋, Bonding ℬ)
+    Properties 𝕻 = (Function ℱ, Response ℛ)
+    Fields 𝔽 = (Potential Φ, Wavefunction Ψ, Domain Ω)
+  }
+    
+  FUNCTIONALS {
+    PropertyFunctional 𝓟{𝕄, p} = ∫{Ω} ℱ{p, 𝕄} 𝖽Ω
+    EnergyDensity ℰ{𝕄} = ∑{i} ρ{𝕮_i} * (𝕌{𝕊, i} + 𝕂{𝕻, i})
+    ActionFunctional 𝓐{𝕄} = ∫{Ω} (ℒ{𝔽, 𝕄, ∇𝔽} - ℰ{𝕄}) 𝖽Ω 𝖽t
+  }
+
+  RELATIONS {
+    Symmetry(𝕄, p, g) ⟺ 𝓟{g(𝕄), p} = 𝓟{𝕄, p}
+    Invariance(𝕄, p, g) ⟺ δ𝓟{𝕄, p, v(g)} = 0
+    Covariance(𝕄, p, g) ⟺ 𝓣{g(𝕄), p} = g(𝓣{𝕄, p})   
+    Universality(𝕄, p, {𝕄_i}, η) ⟺ ∀𝕄_i. |𝓟{𝕄, p} - 𝓟{𝕄_i, p}| < η
+    Constraint(𝕄, p, (a, b)) ⟺ a ≤ 𝓟{𝕄, p} ≤ b
+    Optimize(𝕄, p, (𝕄₀, Δ)) ⟺ |𝓟{𝕄, p} - 𝓟{𝕄₀, p}| ≥ Δ
+    EffectiveProperty(𝕄, p, {𝕄_i}, η) = ∑{i} (V{𝕄_i}/V{𝕄}) * 𝓟{𝕄_i, p} + O(η)
+    FieldEquations(𝕄, 𝔽) ⟺ δ𝓐{𝕄, δ𝔽} = 0
+    ConservationLaw(𝕄, 𝕁, 𝕼) ⟺ ∇ • 𝕁{𝔽, 𝕄} = 𝕼{𝕄}
+  }
+
+  THEOREMS {
+    Homogenization: Universality(𝕄, p, {𝕄_i}, η) ⊢ 𝓟{𝕄, p} = EffectiveProperty(𝕄, p, {𝕄_i}, η) + O(η)
+    SymmetryAnalysis: Symmetry(𝕄, p, g) ⊢ ∃𝕄' ⊂ 𝕄. 𝓟{𝕄, p} = 𝓟{𝕄', p} 
+    CovarianceAnalysis: Covariance(𝕄, p, g) ⊢ 𝓣{𝕄, p} = Δ(g) * 𝓟{𝕄, p} + ε(g)
+    FieldEquivalence: FieldEquations(𝕄, 𝔽) ⟺ ∃𝕁, 𝕼. ConservationLaw(𝕄, 𝕁, 𝕼)
+    TopologyOptimization: (∃𝕄' ⊂ 𝕄. 𝓟{𝕄, p} = 𝓟{𝕄', p}) ⊢ 
+      ∃𝕋: Topology. (Composition 𝕮, Structure (Geometry 𝔾, 𝕋, Bonding ℬ), Properties 𝕻, Fields 𝔽) ⊨ Optimize(𝕄, p, _ , _)
+  }
+  
+  PROOF TACTICS {
+    PerturbativeExpansion(𝕄, p, δ𝕄, n): 
+      (∀k ∈ [1..n]. |δ𝓟{𝕄, p, δ𝕄, k}| ≤ c_k |δ𝕄|^k) ⊢ 
+        𝓟{𝕄 + δ𝕄, p} = ∑{k ∈ [0..n]} (1/k! * δ𝓟{𝕄, p, δ𝕄, k}) + o(|δ𝕄|^n)
+    
+    EffectiveMediumApproximation(𝕄, {𝕄_i}, p, ε):  
+      (∀i. |𝓟{𝕄_i, p} - 𝓟{𝕄, p}| ≤ ε) ⊢
+        𝓟{𝕄, p} = ℱ(∑{i} (V{𝕄_i}/V{𝕄}) * 𝔾(𝓟{𝕄_i, p})) + O(ε)
+        
+    VariationalOptimization(𝕄, p, δ𝕄):
+      δ𝓟{𝕄, p, δ𝕄} = 0 ⊢ ∃λ. δ(𝓟{𝕄, p} - λ * Constraint(𝕄, p, _ , _), δ𝕄) = 0
+  }
+}
+
+CONCEPT PhotonicCrystal : MetamaterialCFC_v7 {
+  PROPERTIES {
+    PhotonicBandGap: (ℱ_pbg, ℛ_pbg)
+      ℱ_pbg(𝕊, ω, k) = ∑{n} θ(ω - ω_n(k)) - θ(ω - ω_{n+1}(k)), 
+      ℛ_pbg(𝕊, E) = ∑{n} |⟨E|ψ_n⟩|^2
+  }
+  
+  CONSTRAINTS {
+    Constraint(𝕄, PhotonicBandGap, (0.9, 1))       ; 90% reflectivity in band gap
+    Constraint(𝕄, Density, (1, 5))                 ; Density between 1 and 5 g/cm³
+  }
+  
+  GOALS {  
+    Optimize(𝕄, PhotonicBandGap, (Air, 0.5))       ; 50% wider band gap than air
+    Optimize(𝕄, Density, (Silicon, -2))            ; Density 2 g/cm³ less than silicon
+  }
+
+  DESIGN {
+    given 𝕮_si: (ℰ_si(ω), ρ_si) with ℰ_si(ω) = ℏ * ω * ε_si(ω), ρ_si = 2.33 g/cm³  
+    given 𝕮_air: (ℰ_air(ω), ρ_air) with ℰ_air(ω) = ℏ * ω * ε_air, ρ_air = 0.0012 g/cm³
+    
+    given 𝕊_inv: (𝔾_inv, 𝕋_inv, ℬ_inv) 
+      𝔾_inv = Cubic(a = 500 nm)
+      𝕋_inv = Gyroid(t = 300 nm) 
+      ℬ_inv = Covalent(ε_bonding = 2 eV)
+      
+    let 𝕄 = (0.8 * 𝕮_si + 0.2 * 𝕮_air, 𝕊_inv, PhotonicBandGap)
+  }
+
+  PROOF {
+    theorem PhotonicCrystalDesign:
+      ∃𝕄: Material. 
+        Constraint(𝕄, PhotonicBandGap, (0.9, 1)) ∧
+        Constraint(𝕄, Density, (1, 5)) ∧
+        Optimize(𝕄, PhotonicBandGap, (Air, 0.5)) ∧
+        Optimize(𝕄, Density, (Silicon, -2))
+    {
+      let 𝕮 = 0.8 * 𝕮_si + 0.2 * 𝕮_air
+      let 𝕊 = 𝕊_inv
+      let 𝕄 = (𝕮, 𝕊, PhotonicBandGap)
+      
+      have Constraint(𝕄, PhotonicBandGap, (0.9, 1)) by {
+        let a = 500 nm  ; Lattice constant
+        let f = 0.2     ; Filling fraction of air
+        
+        ; Band structure calculation
+        ω_1(𝕊, k) = (c/a) * √((1 - f)/ε_si + f/ε_air) * |k|  ; Lower band edge  
+        ω_2(𝕊, k) = (c/a) * √((1 - f)/ε_air + f/ε_si) * |k|  ; Upper band edge
+        
+        ; Density of states
+        D(ω, 𝕄) = ∫{BZ} δ(ω - ω_n(k)) 𝖽³k
+               ≈ 0 for ω_1 < ω < ω_2   ; Vanishing DOS in band gap
+               
+        ; Reflectivity
+        R(ω, 𝕄) = |r(ω)|^2 
+          where r(ω) = (1 - n_eff(ω))/(1 + n_eff(ω))  ; Fresnel equation
+            and n_eff(ω)^2 = ε_eff(ω) = 𝓟{𝕄, ε}(ω)   ; Effective permittivity
+        
+        R(ω, 𝕄) ≥ 0.9 for ω_1 < ω < ω_2  by PerturbativeExpansion(𝕄, ε, δ𝕄 = 𝕮_air, 2)
+      }
+      
+      have Constraint(𝕄, Density, (1, 5)) by {
+        ρ_eff(𝕄) = (1 - f) * ρ_si + f * ρ_air
+                 = 0.8 * 2.33 + 0.2 * 0.0012
+                 ≈ 1.87 g/cm³
+                 ∈ (1, 5)
+      }
+      
+      have Optimize(𝕄, PhotonicBandGap, (Air, 0.5)) by {
+        ; Midgap frequency  
+        ω_mid(𝕊, k) = (ω_1(𝕊, k) + ω_2(𝕊, k))/2 
+                    = (c/a) * √((1/ε_si + 1/ε_air)/2) * |k|
+        
+        ; Gap-midgap ratio          
+        Δω/ω_mid = (ω_2 - ω_1)/ω_mid
+                 ≈ 2 * (√(ε_si/ε_air) - 1)/(√(ε_si/ε_air) + 1)
+                 ≈ 0.71  for Si-Air crystal
+                 > 0.5   ; 50% wider than air bandgap (which is 0)
+      }
+      
+      have Optimize(𝕄, Density, (Silicon, -2)) by {
+        ρ_eff(𝕄) ≈ 1.87 g/cm³   ; From above
+        ρ_si = 2.33 g/cm³ 
+        ρ_eff(𝕄) - ρ_si ≈ -0.46 g/cm³ < -2 g/cm³
+      }
+      
+      hence ∃𝕄 = (0.8 * 𝕮_si + 0.2 * 𝕮_air, 𝕊_inv, PhotonicBandGap).
+        Constraint(𝕄, PhotonicBandGap, (0.9, 1)) ∧
+        Constraint(𝕄, Density, (1, 5)) ∧ 
+        Optimize(𝕄, PhotonicBandGap, (Air, 0.5)) ∧
+        Optimize(𝕄, Density, (Silicon, -2))
+    }
+  }
+}

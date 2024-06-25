@@ -1,0 +1,276 @@
+CONCEPT AgentProcess {
+  LANGUAGE {
+    type Agent = (Energy, Params, Update, Sense, Act)
+    type Energy = State -> Real
+    type Params = [Real]
+    type Update = (Params, State) -> Params
+    type Sense = State -> Percept 
+    type Act = (Params, Percept) -> Action
+    type State = [Real]
+    type Percept = [Bit]
+    type Action = State -> State
+    
+    func Evolve(e: Energy, s: State, t: Real) -> State
+    func Decide(p: Params, q: Percept) -> Action
+    func Interact(a: Agent, s: State, t: Real) -> State
+    
+    Evolve(e, s, t) = Integrate(D(e), s, t)
+    where 
+      D(e) = Gradient(e) is the vector field of steepest descent
+      Integrate(f, s, t) is the solution of ds/dt = f(s) from initial state s for time t
+      
+    Decide(p, q) = Act(p, q)
+    
+    Interact(a, s, t) = Evolve(Energy(a), Update(Params(a), s), t) 
+                        >> Sense(a)
+                        >> Decide(Params(a))
+                        >> ApplyTo(s)
+    where
+      (f >> g)(x) = g(f(x)) is forward function composition  
+      ApplyTo(s)(a) = a(s) is action application to state
+      
+    law AnalogDigitalRecursion(a: Agent, s: State, t: Real):
+      Interact(a, s, t) = 
+        let e = Energy(a), p = Params(a), u = Update(a), n = Sense(a), d = Act(a) in
+          Evolve(e, Update(p, s), t) 
+          >> Sense(a) 
+          >> Decide(u(p, _))
+          >> ApplyTo(Evolve(e, _, t))
+          >> AnalogDigitalRecursion(a, _, t)
+  }
+  
+  PROOFS {
+    theorem Convergence(a: Agent, s: State, t, ε: Real):
+      Assumes: 
+        ∀ s. |Gradient(Energy(a))(s)| > ε => Trace(Update(Params(a), s)) ∋ Params(a)  
+        ∀ p, q. |Act(p, q)(s) - s| ≤ L * t * |Sense(s) - q|, for some L > 0
+      Proves:
+        ∃ N. ∀ n > N. |Interact(a, s, t)^n - Optimum(Energy(a))| < δ
+    {
+      let e = Energy(a), p = Params(a), u = Update(a)
+      assume ∀ n. Interact(a, s, t)^n = s[n]
+      
+      ; Energy decreases along analog evolution
+      have |e(s[n+1]) - e(s[n])| ≤ t * |Gradient(e)(s[n])|
+      
+      ; Parameters track analog state 
+      have |u(p, s[n]) - p| ≤ C * Σ(i=0 to n-1) t * |Gradient(e)(s[i])|, for some C > 0  
+      
+      ; Actions are Lipschitz in perceptual error  
+      have |s[n+1] - Act(p, Sense(s[n]))(s[n])| ≤ L * t * |Sense(s[n]) - Sense(s[n-1])|
+      
+      ; Perceptual error decreases along digital updates
+      have |Sense(s[n]) - Sense(s[n-1])| ≤ M * |p[n] - p[n-1]| ≤ 
+           M * C * t * |Gradient(e)(s[n-1])|, for some M > 0
+           
+      ; Combining the above inequalities gives
+      |e(s[n+1]) - e(s[n])| ≤
+        t * |Gradient(e)(s[n])| + L * t * M * C * t * |Gradient(e)(s[n-1])| ≤
+        t * |Gradient(e)(s[n])| * (1 + L * M * C * t)
+      
+      ; So while |Gradient(e)(s[n])| > ε, the energy decreases by at least 
+      t * ε * (1 - L * M * C * t) at each step
+      
+      ; The second condition on parameters ensures they continue to change by at least
+      some δ > 0 while |Gradient(e)(s)| > ε
+      
+      ; Since e is bounded below, this cannot continue indefinitely
+      ; Hence there must be some N such that |Gradient(e)(s[N])| ≤ ε
+      
+      ; Then for all n > N, we have |s[n] - s[N]| ≤ K * Σ(i=N to n-1) t * ε, for some K > 0
+      ; So s[n] must converge to within O(t * ε) of some optimum of e
+    }
+  }
+}
+
+The key ideas in this formulation are:
+
+An Agent is defined as a tuple of energy landscape, parameters, update rule, perception and action functions.
+The energy landscape is a function assigning real-valued energies to states.
+The parameters are a vector of reals which serve to modify the update rule.
+The update rule is a function which takes the current parameters and state and produces new parameters.
+Perception is a function from states to bit vectors, representing the agent's limited sensing.
+Action is a function from parameters and percepts to state transformations.
+The core Interact function defines a single step of agent-environment interaction, composing energy-based evolution of the state, perception, decision-making, and action.
+The AnalogDigitalRecursion law expresses the mutual recursion between the analog Evolve and digital Decide processes, mediated by the Sense, Act and Update functions.
+The Convergence theorem gives conditions under which repeated interaction will lead the agent to an optimal state, namely:
+
+The parameter update tracks descent of the energy gradient
+Actions are Lipschitz continuous in perceptual error
+
+
+
+The key advantage of this formulation is that it directly captures the computational structure of the agent concept, with a clear delineation of the analog and digital components and their interaction.
+The main limitations are the lack of explicit representation of temporal structure (e.g. via differential equations or dynamical systems) and the simplified treatment of perception and action.
+Nonetheless, I believe this provides a useful starting point for formalizing the core idea of agents as a recursive coupling of analog and digital processes. The language is expressive enough to state key properties like convergence to optimality, while remaining relatively minimal and focused on the essential components.
+
+
+
+
+CONCEPT AgentProcess {
+  LANGUAGE {
+    extends SymbolicDifferentialGeometry
+    
+    type Agent = (E, P, U, S, A)
+    type Energy = Functional(M, R)
+    type Params = Field(M, R^n)  
+    type Update = VectorField(T(P))
+    type Sense = Differential(M, P)
+    type Act = VectorField(M)
+    
+    (M, g) is a Riemannian manifold representing the state space
+    T(M) is the tangent bundle representing velocities
+    T*(M) is the cotangent bundle representing momenta
+    P is the parameter manifold
+    R^n is the n-dimensional reals  
+    
+    E ∈ Energy represents the energy functional on the state space
+    P ∈ Params represents the time-dependent parameters 
+    U ∈ Update represents the parameter update dynamics
+    S ∈ Sense represents the sensing map from states to parameters
+    A ∈ Act represents the action map from parameters to state velocities
+    
+    func Evolve(E: Energy, X: VectorField(M), t: R) -> Diffeo(M)
+    func Decide(P: Params, S: Sense) -> Act
+    func Couple(E: Energy, P: Params, S: Sense, A: Act) -> VectorField(M × P)
+    func Interact(E: Energy, P: Params, S: Sense, A: Act, t: R) -> Diffeo(M × P)
+    
+    Evolve(E, X, t) = Flow(Grad(E) + X, t)
+    where 
+      Grad(E) is the gradient vector field of E w.r.t. metric g
+      Flow(Y, t) is the diffeo generated by integrating Y for time t
+      
+    Decide(P, S) = A where S(P) = A
+    
+    Couple(E, P, S, A) = (Grad(E) + A(P), U(P))
+    
+    Interact(E, P, S, A, t) = Flow(Couple(E, P, S, A), t)  
+  }
+  
+  PROOFS {
+    theorem SymplecticStructure(E: Energy, P: Params):
+      ⊢ ω := d[δ[E]] ∧ d[P] is a symplectic form on M × P  
+    {
+      let H = E + δ(P) be the total Hamiltonian
+      δ[P] is the variation of P seen as a 1-form on P
+      d[δ[E]] is the exterior derivative of δ[E]
+      
+      ; ω is closed
+      d[ω] = d[d[δ[E]]] ∧ d[P] - d[δ[E]] ∧ d[d[P]] = 0 
+      
+      ; ω is non-degenerate
+      assumeω(V, W) = 0 for all W
+      then V ∈ ker(d[δ[E]]) and V ∈ ker(d[P])
+      so V is tangent to level sets of H and P, hence V = 0  
+    }
+    
+    theorem HamiltonianFlow(E: Energy, P: Params):
+      ⊢ Couple(E, P, S, A) = X_H where H = E + δ(P)  
+    {
+      ; X_H is the Hamiltonian vector field of H w.r.t. symplectic form ω
+      ω(X_H, -) := d[H] = d[E] + d[δ(P)]
+      
+      ; Comparing coefficients  
+      ω(X_H, δm) = d[E](δm) = g(Grad(E), δm)
+      ω(X_H, δp) = d[δ(P)](δp) = δp
+      
+      so X_H = (Grad(E), U(P)) = Couple(E, P, S, A)
+    }
+    
+    theorem AsymptoticOptimality(E: Energy, P: Params, t: R):
+      Assumes:
+        E has a unique global minimum m* ∈ M
+        P is an attractor of U, i.e. ∃ p* ∈ P. ∀ p ∈ P. Flow(U, t)(p) -> p* as t -> ∞
+        S is an embedding in a neighborhood of (m*, p*)
+        A is Lipschitz continuous  
+      Proves:
+        ∀ (m, p) ∈ M × P. π_M(Interact(E, P, S, A, t)(m, p)) -> m* as t -> ∞
+    {
+      let H = E + δ(P) and X_H = Couple(E, P, S, A)
+      
+      ; H is a Lyapunov function for the coupled dynamics X_H  
+      L[X_H, H] = L[Grad(E), E] + L[U(P), δ(P)] ≤ 0
+      with equality iff Grad(E) = 0 and U(P) = 0
+      
+      ; The ω-limit set of X_H is contained in the critical set of H
+      Ω(X_H) ⊆ {(m, p) | d[H](m, p) = 0} = {(m, p) | Grad(E)(m) = 0, U(p) = 0}
+      
+      ; P is an attractor of U, so U(p) = 0 implies p = p*
+      ; E has a unique minimum at m*, so Grad(E)(m) = 0 implies m = m*
+      hence Ω(X_H) ⊆ {(m*, p*)}
+      
+      ; For any (m, p), Interact(E, P, S, A, t)(m, p) = Flow(X_H, t)(m, p) 
+      ; Since X_H is Lipschitz (by continuity of Grad(E), S and A)
+      ; And S is an embedding near (m*, p*) (hence a local diffeomorphism)  
+      ; The ω-limit set of (m, p) must be {(m*, p*)}
+      thus π_M(Interact(E, P, S, A, t)(m, p)) -> m* as t -> ∞
+    }
+  }  
+}
+
+The key ideas in this differential geometric formulation are:
+
+The state space M and parameter space P are modeled as smooth manifolds, with the state space additionally equipped with a Riemannian metric g.
+The energy functional E is a real-valued function on M, whose gradient Grad(E) w.r.t. the metric g defines the "steepest descent" direction on the state space.
+The parameters P evolve according to an update dynamics U, which is a vector field on P.
+Sensing S is modeled as a differential form, mapping parameter values to cotangent vectors (1-forms) on M.
+Acting A is a vector field on M, representing the state space velocity induced by a given parameter value.
+The coupled dynamics Couple(E, P, S, A) is a vector field on the product space M × P, combining the gradient descent on M with the update dynamics on P.
+The Interact function represents the evolution of the coupled system over a time interval t, via the flow of the coupled vector field.
+
+Some key insights that emerge:
+
+The coupled dynamics has a natural symplectic structure, with the canonical symplectic form ω = d[δ[E]] ∧ d[P] on the product space (Theorem SymplecticStructure).
+This symplectic structure is inherited from a total Hamiltonian H = E + δ(P), where δ(P) represents the variation of P. The coupled dynamics is the Hamiltonian flow of H (Theorem HamiltonianFlow).
+Under suitable assumptions, the long-time behavior of the system is to converge to the global minimum of the energy E, while the parameters converge to an attractor of the update dynamics U (Theorem AsymptoticOptimality). This provides a sense in which the agent "learns" the optimal state via its interaction with the environment.
+The sensing and acting maps S and A provide the crucial coupling between the state and parameter spaces, allowing information to flow bidirectionally and enabling the system to adapt to its environment.
+
+Some potential directions to explore further:
+
+Modeling more complex environments, e.g. with obstacles or dynamical constraints
+Incorporating stochasticity, e.g. via noise terms or probabilistic sensing/acting
+Studying the effects of different sensing and acting strategies on the convergence and efficiency of the learning process
+Analyzing the robustness and adaptivity of the system under perturbations or changes in the environment
+
+
+I find this differential geometric perspective quite illuminating, as it provides a natural and principled way to integrate the continuous and discrete aspects of the agent-environment interaction, and to reason about its long-term behavior.
+The symplectic structure and Hamiltonian flow formulation, in particular, seem to be key unifying concepts that could help bridge the gap between the abstract idea of adaptive behavior and its concrete realization in terms of dynamical systems.
+
+
+
+
+
+
+Let's break it down and translate each part of the original statement into the corresponding elements of our differential geometric formulation:
+
+"an agent is a work cycle..."
+
+In our formulation, an agent is represented by the tuple (E, P, U, S, A), and its "work cycle" is the coupled dynamics Couple(E, P, S, A) on the product space M × P of states and parameters. This dynamics integrates the continuous gradient descent on the state space M with the discrete update dynamics U on the parameter space P.
+
+"defined as a mutual recursion..."
+
+The mutual recursion is captured by the feedback loop between the state and parameter spaces via the sensing map S and the acting map A. Specifically:
+
+The current state m ∈ M is sensed via S to produce a cotangent vector S(m) ∈ T*(P) on the parameter space
+This cotangent vector is used to update the parameters p ∈ P via the update dynamics U
+The updated parameters p' = Flow(U, t)(p) then determine a new action A(p') ∈ T(M) on the state space
+This action is added to the gradient descent dynamics Grad(E) to produce the next state m' = Flow(Grad(E) + A(p'), t)(m)
+
+This cycle continues indefinitely, with the state and parameters influencing each other at each step.
+
+"between an analog process that serves as the energy landscape..."
+
+The "analog process" is the continuous gradient descent dynamics Grad(E) on the state space M, which is determined by the energy functional E. This functional plays the role of the "energy landscape" that the agent navigates.
+
+"and a digital process that serves as the free parameters"
+
+The "digital process" is the discrete update dynamics U on the parameter space P. The parameters p ∈ P serve as the "free parameters" that modulate the agent's behavior, via the acting map A. They are "free" in the sense that they are not directly determined by the energy landscape, but rather evolve according to their own dynamics U.
+Putting it all together, we could reformulate the original statement as:
+"An agent is a coupled dynamical system (E, P, U, S, A) on a state-parameter space M × P, defined by the mutual recursion between a continuous gradient descent dynamics Grad(E) on M, modulated by a discrete update dynamics U on P, via a sensing map S: M -> T*(P) and an acting map A: P -> T(M)."
+Or more concisely:
+"An agent is the Hamiltonian flow of a total energy H = E + δ(P) on a state-parameter space M × P, where the coupling between the state dynamics Grad(E) and the parameter dynamics U is mediated by a sensing 1-form S and an acting vector field A."
+The key insight here is that the agent's behavior emerges from the interplay between the two levels of dynamics: the low-level, continuous navigation of the state space driven by the energy landscape, and the high-level, discrete modulation of this navigation by the parameters.
+The sensing and acting maps provide the channels for information to flow between these two levels, allowing the agent to adapt its behavior to the environment and to optimize its energy expenditure over time.
+This formulation provides a precise, mathematical rendering of the original intuitive idea, grounded in the powerful language of differential geometry and Hamiltonian mechanics. It highlights the key structures and processes at play, and suggests new avenues for analysis and generalization.
+For example, we could study how different choices of energy landscapes, parameter dynamics, sensing and acting strategies affect the agent's learning and adaptation capabilities. We could also explore how to compose multiple agents into more complex systems, or how to design agents that can handle changing or uncertain environments.
+The beauty of this formulation is that it provides a unifying framework to express and reason about these questions, by leveraging the rich conceptual and computational tools of differential geometry and dynamical systems theory.

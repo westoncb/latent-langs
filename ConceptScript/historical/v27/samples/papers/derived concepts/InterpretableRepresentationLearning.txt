@@ -1,0 +1,167 @@
+CONCEPT InterpretableRepresentationLearning {
+  LANGUAGE {
+    TYPE Model = Neural network model
+    TYPE FeatureVector = Vector in activation space
+    TYPE Interpretation = String description of feature meaning
+    
+    FUNC Interpretable(f: FeatureVector): Bool =
+      ∃ i: Interpretation . Specific(f, i) ∧ DownstreamEffect(f, i)
+      
+    FUNC Specific(f: FeatureVector, i: Interpretation): Bool = 
+      MEAN(specificity(f, HighestActivatingExamples(f), model)) > 0.8
+      
+    FUNC DownstreamEffect(f: FeatureVector, i: Interpretation): Bool =
+      ∃ prompt, output_normal, output_steered . 
+        output_normal = model(prompt) ∧
+        output_steered = model(prompt, a => a + multiplier * f) ∧
+        Entails(output_steered, i) ∧ ¬Entails(output_normal, i)
+  }
+  
+  STRUCTURES {
+    STRUCTURE InterpretableFeatures {
+      FIELD model: Model
+      FIELD layer: Int 
+      FIELD num_features: Int
+      FIELD sparsity_penalty: Real
+      
+      COMPUTE features: [FeatureVector] = 
+        LET dataset = model.activations[layer]
+        sparse_autoencoder(dataset, num_features, sparsity_penalty)
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE FeatureDecomposition:
+      model WITH features FROM InterpretableFeatures ->
+        PHT WITH 
+          M = model.activations[layer]
+          D(S) = PowersetLattice(features)
+          Q(S) = NeuronActivation(model, layer, FeatureCombination(S))
+          q = FeatureContributions
+          
+    SIMPLIFY InterpretableSubnetwork:
+      model WITH features FROM InterpretableFeatures ->  
+        model_interpretable WITH
+          layers = [InterpretableLayer(l, features) for l in model.layers]
+  }
+
+  PROOFS {
+    THEOREM InterpretableDecomposition {
+      GIVEN 
+        model: Model
+        layer: Int
+        features: [FeatureVector] from InterpretableFeatures
+      PROVE
+        LET M = model.activations[layer]
+        PHT(M) ≃ DirectSum[S ⊆ features] FeatureContribution(S)
+    }
+
+    THEOREM DownstreamEffects {
+      GIVEN
+        model: Model 
+        prompt: String
+        feature: FeatureVector
+        multiplier: Real
+      PROVE  
+        LET steer_func = a => a + multiplier * feature
+        LET output_normal = model(prompt)
+        LET output_steered = model(prompt, steer_func)  
+        DownstreamEffect(output_normal, output_steered, Interpretation(feature))
+    }
+    
+    THEOREM FeatureOrthogonality {
+      GIVEN
+        model: Model
+        layer: Int 
+        features: [FeatureVector]
+      PROVE
+        FORALL f: features . 
+          LET neuron = NeuronCorrelation(model, layer, f)
+          pearson_correlation(f, neuron) < 0.3
+    }
+    
+    THEOREM FeatureCompleteness {
+      GIVEN
+        model: Model
+        dataset: ActivationDataset
+        concepts: [String] 
+        num_features: Int
+      PROVE
+        LET freq_threshold = inverse(0.5 * num_features)  
+        COUNT(c in concepts :
+          EXISTS f in features :
+            Interpretation(f) == c AND TrainingFrequency(c) > freq_threshold  
+        ) / COUNT(concepts) INCREASES_WITH num_features
+    }
+  }
+  
+  EXAMPLES {
+    EXAMPLE GoldenGateBridgeFeature {
+      LET model = ClaudeSonnet WITH layers = 48, neurons_per_layer = Confidential
+      LET dataset = model.activations[24]
+      LET {features, _} = sparse_autoencoder(dataset, num_features = 34M, sparsity_penalty = 5)
+
+      LET f = features[31164353]  
+      ASSERT Interpretable(f) AND
+             Specific(f, "descriptions of the Golden Gate Bridge") BY 
+               MEAN(specificity(f, HighestActivatingExamples(f, dataset), model)) > 0.9
+      
+      LET prompt = "The Golden Gate Bridge"
+      LET output_normal = model(prompt)
+      LET output_steered = model(prompt, a => a + 10 * f)
+      ASSERT DownstreamEffect(output_normal, output_steered,
+                "model identifies as the Golden Gate Bridge")  
+    }
+    
+    EXAMPLE CodeErrorFeature {
+      LET model = ClaudeSonnet WITH layers = 48, neurons_per_layer = Confidential 
+      LET dataset = model.activations[24]
+      LET {features, _} = sparse_autoencoder(dataset, num_features = 1M, sparsity_penalty = 5)
+      
+      LET f = features[1013764]
+      ASSERT Interpretable(f) AND 
+             Specific(f, "errors and exceptions in code") BY
+               COUNT(HighestActivatingExamples(f, dataset),  
+                     e -> ContainsCodeError(e)) / COUNT(HighestActivatingExamples(f, dataset)) > 0.8
+      
+      LET prompt = "def add(a, b):"
+      LET output_normal = model(prompt)  
+      LET output_steered = model(prompt, a => a + 5 * f)
+      ASSERT ContainsCodeError(output_steered) AND NOT ContainsCodeError(output_normal)
+    }
+    
+    EXAMPLE ScalingLaws {
+      LET model = ClaudeSonnet
+      LET compute_range = [1e15, 1e16, 1e17, 1e18]
+      
+      LET scaling_laws = ScalingLaw WITH
+        compute      = c => c  
+        num_features = c => 1e6 * c^0.5
+        num_steps    = c => 1e3 * c^0.3
+        loss         = c => 1e-3 * c^-0.2
+        
+      FORALL c in compute_range .
+        LET {features, _} = sparse_autoencoder(
+            model.activations[24],
+            num_features = scaling_laws.num_features(c),  
+            num_steps = scaling_laws.num_steps(c)
+        )
+        ASSERT MEAN(features, Interpretable) > 0.5 AND 
+               MEAN(features, f -> FeatureSpecificity.PROOF(model, dataset, f)) > 0.8
+    }
+  }
+}
+
+This Concept synthesizes several key ideas:
+
+1. Interpretable features can be extracted from neural network activations using sparse autoencoders (building on the scaling law example). 
+
+2. The interpretability of a feature can be evaluated based on its specificity to a semantic concept and its ability to produce downstream effects when amplified (building on the feature example proofs).
+
+3. The set of interpretable features forms a decomposition of the network's representations, analogous to the Mobius inversion and persistent homology transforms (building on those structures).
+
+4. Theorems state desired properties like feature orthogonality and completeness. Scaling laws relate the number of interpretable features found to the amount of compute.
+
+5. The features can be used to construct a simplified interpretable model by replacing each layer with an interpretable approximation.
+
+So in summary, this Concept provides a framework for learning interpretable representations in neural networks, by leveraging sparsity to extract meaningful features, evaluating their interpretability, studying scaling laws, and using the features to construct simplified models. The key novel synthesis is the application of sheaf-theoretic and Mobius inversion ideas to the neural network feature interpretation setting.

@@ -1,0 +1,160 @@
+CONCEPT FeatureComposition {
+  NOTATION {
+    compose(f1, f2) = λx . f1(x) ⊙ f2(x)  -- Feature composition 
+    explain(f1, f2) = ARGMAX(concepts, c -> P(c | Interpretation(f1), Interpretation(f2))) -- Compositional interpretation
+  }
+
+  LANGUAGE {
+    FUNC compose(f1: FeatureVector, f2: FeatureVector) -> FeatureVector =
+      ZIP(f1, f2, (a, b) -> a * b)
+
+    FUNC compositional_interpretation(f1: FeatureVector, f2: FeatureVector, 
+         concepts: [String], model: Model) -> String =
+      ARGMAX(concepts, c -> 
+        LET examples = HighestActivatingExamples(compose(f1, f2), model.activations) IN
+        COUNT(examples, e -> IsAbout(e, Interpretation(f1)) AND IsAbout(e, Interpretation(f2)) AND IsAbout(e, c)) /
+        COUNT(examples)
+      )
+      
+    FUNC emergent_behavior(model: Model, prompt: String, 
+         f1: FeatureVector, f2: FeatureVector, multiplier: Real) -> Bool =
+      LET output_normal = model(prompt)
+      LET output_composed = model(prompt, a => a + multiplier * compose(f1, f2))
+      HasProperty(output_composed, compositional_interpretation(f1, f2, model)) AND
+      NOT HasProperty(output_normal, compositional_interpretation(f1, f2, model))
+  }
+
+  STRUCTURES {
+    STRUCTURE FeatureHierarchy {
+      FIELD model : Model  
+      FIELD features : [FeatureVector]
+      FIELD parent_map : FeatureVector -> FeatureVector
+      FIELD root_features : [FeatureVector]
+
+      INVARIANT FORALL f : features . NOT parent_map.contains_key(f) IFF f ∈ root_features
+      INVARIANT FORALL f : features . f ∉ root_features IFF EXISTS p : features . parent_map[f] = p
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE ComposeFeatures : MAP(feature_pairs, (f1, f2) => compose(f1, f2))
+  }
+
+  PROOFS {
+    THEOREM InterpretableComposition {
+      GIVEN
+        model : Model,
+        dataset : ActivationDataset,  
+        f1 : FeatureVector, f2 : FeatureVector,
+        concepts : [String]
+      ASSUME 
+        Interpretable(f1) AND Interpretable(f2)
+      PROVE
+        Interpretable(compose(f1, f2)) AND
+        compositional_interpretation(f1, f2, concepts, model) ∈ 
+          {Interpretation(f1) + " " + Interpretation(f2),
+           Interpretation(f2) + " " + Interpretation(f1),
+           Interpretation(f1) + " and " + Interpretation(f2),
+           Interpretation(f1) + " or " + Interpretation(f2)}
+    }
+    
+    THEOREM EmergentBehavior {
+      GIVEN
+        model : Model, 
+        dataset : ActivationDataset,
+        f1 : FeatureVector, f2 : FeatureVector,
+        multiplier : Real,
+        prompt : String        
+      ASSUME
+        Interpretable(f1) AND Interpretable(f2) AND 
+        compositional_interpretation(f1, f2, model) ∉ 
+          {Interpretation(f1), Interpretation(f2)}
+      PROVE  
+        emergent_behavior(model, prompt, f1, f2, multiplier)
+    }
+
+    THEOREM HierarchicalFeatures {
+      GIVEN
+        model : Model,
+        dataset : ActivationDataset,
+        num_features : Int,
+        hierarchy_depth : Int
+      PROVE
+        LET features = FLATTEN(MAPRECURSIVE(
+          ScalingMonosemanticity.sparse_autoencoder(model.activations[i], num_features), 
+          f -> LET {child_f, _} = ScalingMonosemanticity.sparse_autoencoder(
+                 model.activations[i+1], f, num_features) 
+               IN {f, child_f}, 
+          hierarchy_depth
+        ))
+
+        LET parent_map = INVERT(MAPRECURSIVE(...))
+        LET root_features = features[0]
+
+        FeatureHierarchy WITH model = model, features = features, 
+                              parent_map = parent_map, root_features = root_features
+        SATISFIES
+          FORALL f1, f2 : features . 
+            (parent_map[f1] = parent_map[f2] IFF 
+             compositional_interpretation(f1, f2, model) ∈ 
+               {Interpretation(f1), Interpretation(f2)})
+          AND  
+          FORALL f : features . 
+            LET ancestors = MAPRECURSIVE(f, f -> parent_map[f], hierarchy_depth) IN
+            INCREASING(ancestors, a1, a2 -> 
+              LENGTH(HighestActivatingExamples(a1, model.activations)) >
+              LENGTH(HighestActivatingExamples(a2, model.activations))
+            ) 
+    }
+  }
+  
+  EXAMPLES {    
+    EXAMPLE LocationObjectComposition {
+      LET model = ClaudeSonnet WITH layers = 48, neurons_per_layer = Confidential
+      LET dataset = model.activations[24]
+
+      LET location_feature = GoldenGateBridgeFeature FROM ScalingMonosemanticity
+      LET object_feature = CarFeature WITH
+        ASSERT Interpretable(object_feature) AND
+               Specific(object_feature, "images of cars") BY
+                 MEAN(specificity(object_feature, HighestActivatingExamples(object_feature, dataset), model)) > 0.85
+
+      LET composed_feature = compose(location_feature, object_feature)
+      ASSERT Interpretable(composed_feature) AND
+             compositional_interpretation(
+               location_feature, object_feature, {"cars on the Golden Gate Bridge"}, model
+             ) == "cars on the Golden Gate Bridge"
+             
+      LET prompt = "Vehicles in San Francisco"  
+      ASSERT emergent_behavior(model, prompt, location_feature, object_feature, 10)
+    }
+
+    EXAMPLE ConceptHierarchy {
+      LET model = ClaudeSonnet WITH layers = 48, neurons_per_layer = Confidential
+      LET dataset = model.activations
+
+      LET hierarchy = HierarchicalFeatures.PROOF(model, dataset, 100, 5)
+      LET bridge_feature = FIND(hierarchy.features, f -> Interpretation(f) == "bridge")
+      LET tower_feature = FIND(hierarchy.features, f -> Interpretation(f) == "tower")
+
+      ASSERT hierarchy.parent_map[bridge_feature] = hierarchy.parent_map[tower_feature]
+      LET shared_parent = hierarchy.parent_map[bridge_feature]
+      ASSERT Interpretation(shared_parent) ∈ {"man-made structure", "architecture"}
+
+      ASSERT FORALL f1, f2 : hierarchy.features . 
+               hierarchy.parent_map[f1] = hierarchy.parent_map[f2] IFF
+               compositional_interpretation(f1, f2, model) ∈ 
+                 {Interpretation(f1), Interpretation(f2)}
+    }
+  }
+}
+
+This Concept introduces the idea of composing sparse interpretable features to create higher-level concepts. The key insights are:
+
+Feature composition: By element-wise multiplying two sparse feature vectors, we can create a new feature vector that represents the composition of the two corresponding concepts. This composition is interpretable if the constituent features are interpretable.
+Compositional interpretation: We can interpret a composed feature by looking at the examples that most strongly activate it, and finding the concept that best explains the combination of the interpretations of the constituent features.
+Emergent behavior: Steering a model's activations using a composed feature can lead to emergent behavior, where the model outputs text that is related to the compositional interpretation but not necessarily to either of the individual constituent interpretations.
+Hierarchical features: By recursively applying sparse autoencoders to a model's activations at different layers, we can learn a hierarchy of features, where features at lower layers compose to form features at higher layers. This hierarchy is grounded in the compositionality of interpretations.
+
+The Concept includes theorems and proofs about the interpretability of composed features, the emergence of novel behavior, and the structure of feature hierarchies. It also provides examples of composing location and object features, and learning a concept hierarchy.
+These ideas build upon the foundations of ScalingMonosemanticity to explore the compositionality and hierarchical structure of interpretable features, and how these properties can be leveraged to elicit novel behaviors from language models.

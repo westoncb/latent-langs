@@ -1,0 +1,410 @@
+STRUCTURE MatMulFreeLM {
+  # Model hyperparameters
+  PARAMETERS {
+    VocabSize : Int # Size of the token vocabulary
+    EmbeddingSize : Int # Size of token embeddings
+    NumLayers : Int # Number of stacked MLMB blocks
+    HiddenSize : Int # Size of hidden states in MLMBs
+    FFSize : Int # Size of expanded hidden states in GLU
+  }
+
+  # Custom notations for key operations
+  NOTATION {
+    ⊛(x, W) := TernaryAccumulate(x, W) # Ternary "MatMul"
+    σ(x) := Sigmoid(x) # Sigmoid activation
+    τ(x) := SiLU(x) # SiLU activation
+    ⊙(x, y) := ElementwiseMultiply(x, y) # Element-wise multiplication
+  }
+
+  # --- Quantization and Normalization ---
+
+  # Weights are quantized to ternary values {-1, 0, 1} to replace MatMul with accumulation
+  DEF TernaryWeight := TensorLike[[Any, Any], {-1, 0, 1}]
+
+  # RMS Normalization layer for stabilizing activations after quantization
+  STRUCTURE RMSNorm(Size) {
+    DEF scale : TensorLike[[Size], Float]
+
+    DEF forward(x : TensorLike[Size]) -> TensorLike[Size] := (
+      LET μ := MEAN(x),
+          σ² := MEAN(SQUARE(x - μ))
+      IN (x - μ) / SQRT(σ² + ε) * scale
+    )
+  }
+
+  # --- MatMul-Free Building Blocks ---
+
+  # Linear layer with ternary weights
+  STRUCTURE TernaryLinear(InputSize, OutputSize) {
+    DEF weight : TernaryWeight[InputSize, OutputSize]
+    DEF bias : TensorLike[[OutputSize], Float]
+
+    DEF forward(input : TensorLike[InputSize]) -> TensorLike[OutputSize] := (
+      input ⊛ weight + bias
+    )
+  }
+
+  # MatMul-Free variant of Gated Recurrent Unit (GRU) for token mixing
+  # Replaces the self-attention layer in standard Transformers
+  STRUCTURE MLGRU(InputSize, HiddenSize) {
+    DEF forget_gate : TernaryLinear(InputSize, HiddenSize)
+    DEF candidate : TernaryLinear(InputSize, HiddenSize)
+    DEF output_gate : TernaryLinear(InputSize, HiddenSize)
+    DEF output_proj : TernaryLinear(HiddenSize, HiddenSize)
+
+    DEF forward(input : TensorLike[InputSize],
+                prev_hidden : TensorLike[HiddenSize]) -> TensorLike[HiddenSize] := (
+      LET f := σ(forget_gate.forward(input)), # Forget gate
+          c := τ(candidate.forward(input)), # Candidate state
+          h := f ⊙ prev_hidden + (1 - f) ⊙ c, # Hidden state update
+          g := σ(output_gate.forward(input)) # Output gate
+      IN output_proj.forward(g ⊙ h) # Gated output projection
+    )
+  }
+
+  # MatMul-Free variant of Gated Linear Unit (GLU) for channel mixing
+  # Replaces the feedforward layer in standard Transformers
+  STRUCTURE MatMulFreeGLU(InputSize, FFSize) {
+    DEF gate_proj : TernaryLinear(InputSize, FFSize)
+    DEF update_proj : TernaryLinear(InputSize, FFSize)
+    DEF output_proj : TernaryLinear(FFSize, InputSize)
+
+    DEF forward(input : TensorLike[InputSize]) -> TensorLike[InputSize] := (
+      LET g := σ(gate_proj.forward(input)), # Gate projection
+          u := τ(update_proj.forward(input)), # Update projection
+          p := g ⊙ u # Gated update
+      IN output_proj.forward(p) # Output projection back to InputSize
+    )
+  }
+
+  # --- Model Architecture ---
+
+  # Main MatMul-Free Language Model Block (MLMB)
+  # Composes MLGRU and MatMulFreeGLU with normalization layers
+  STRUCTURE MLMB(InputSize, HiddenSize, FFSize) {
+    DEF input_norm : RMSNorm(InputSize)
+    DEF mlgru : MLGRU(InputSize, HiddenSize)
+    DEF mlgru_norm : RMSNorm(HiddenSize)
+    DEF glu : MatMulFreeGLU(HiddenSize, FFSize)
+    DEF glu_norm : RMSNorm(HiddenSize)
+
+    DEF forward(input : TensorLike[InputSize],
+                prev_hidden : TensorLike[HiddenSize]) -> TensorLike[HiddenSize] := (
+      LET x := input_norm.forward(input), # Normalize input
+          h := mlgru.forward(x, prev_hidden), # Token mixing with MLGRU
+          h_norm := mlgru_norm.forward(h), # Normalize MLGRU output
+          glu_out := glu.forward(h_norm), # Channel mixing with GLU
+          output := glu_norm.forward(glu_out) # Normalize GLU output
+      IN output
+    )
+  }
+
+  # Token and position embeddings
+  DEF token_embedding : TensorLike[[VocabSize, EmbeddingSize], Float]
+  DEF pos_embedding : TensorLike[[MaxLen, EmbeddingSize], Float]
+
+  # Output projection
+  DEF output_proj : TernaryLinear(HiddenSize, VocabSize)
+
+  # Stack of MLMBs
+  DEF blocks : List[MLMB]
+
+  # Model initialization
+  DEF init := (
+    blocks := [MLMB(IF i = 0 THEN EmbeddingSize ELSE HiddenSize,
+                    HiddenSize,
+                    FFSize)
+               FOR i : RANGE(NumLayers)] # Initialize MLMB stack
+  )
+
+  # --- Forward Pass and Inference ---
+
+  DEF forward(input : Sequence[Int], seq_len : Int) -> TensorLike[VocabSize] := (
+    LET input_emb := token_embedding[input] + pos_embedding[0:seq_len], # Input embedding
+        hidden := FOLDL(
+          (h, block) -> block.forward(input_emb, h), # Pass through MLMB stack
+          ZEROS(HiddenSize),
+          blocks
+        )
+    IN SOFTMAX(output_proj.forward(hidden[-1])) # Project last hidden state to vocab probs
+  )
+
+  # --- Model Properties and Assertions ---
+
+  # Model output is a valid probability distribution over vocabulary
+  [∀seq : Sequence[Int] .
+    SUM(forward(seq, LENGTH(seq))) = 1.0
+    AND ARGMAX(forward(seq, LENGTH(seq))) ∈ [0, VocabSize)
+  ]
+
+  # Permutation invariance of token mixing
+  [∀seq : Sequence[Int], ∀perm : Sequence[Int] .
+    IS_PERMUTATION(perm, RANGE(LENGTH(seq))) =>
+      PERMUTE(forward(seq, LENGTH(seq)), perm) = forward(PERMUTE(seq, perm), LENGTH(seq))
+  ]
+
+  RETURN forward
+}
+
+
+
+
+
+
+
+STRUCTURE MatMulFreeLM {
+  PARAMETERS {
+    VocabSize : Int
+    EmbeddingSize : Int
+    NumLayers : Int
+    FFSize : Int
+  }
+
+  DOCUMENTATION {
+    MatMulFreeLM is a Transformer-like language model that eliminates the need for 
+    expensive matrix multiplications (MatMuls) in both the self-attention and feedforward
+    layers. This is achieved through a combination of techniques:
+
+    1. Ternary Quantization: Weights in linear layers are quantized to {-1, 0, 1}, 
+       reducing MatMuls to accumulations.
+
+    2. MatMul-Free Attention: The standard self-attention is replaced with a MatMul-free 
+       variant called MatMul-free Linear GRU (MLGRU), which uses element-wise operations 
+       and ternary linear projections to mix information across tokens.  
+
+    3. MatMul-Free FFN: The feedforward network is replaced with a MatMul-free variant of 
+       the Gated Linear Unit (GLU), which uses ternary projections and gating to mix 
+       information across hidden dimensions.
+
+    4. RMS Normalization: RMSNorm layers are used before and after each major component to
+       stabilize activations and improve training stability after quantization.
+
+    The architecture is composed of a stack of MatMulFreeLMBlocks, each containing an 
+    MLGRU layer for token mixing and a GLU layer for channel mixing. The input sequence is 
+    first embedded using learned token and position embeddings, then passed through the 
+    block stack. The final hidden state is projected to the vocab size to predict the next
+    token.
+
+    This MatMul-free design allows the model to be scaled to billions of parameters while 
+    significantly reducing compute and memory costs, especially during inference. The use
+    of ternary weights and simplified operations also makes the model more amenable to 
+    hardware acceleration on platforms that can exploit sparsity and low-precision math.
+  }
+
+  NOTATION {
+    ⊛(x, W) := TernaryLinearProjection(x, W)
+    σ(x) := Sigmoid(x)
+    τ(x) := SiLU(x) 
+    ⊙(x, y) := ElementwiseMultiply(x, y)
+  }
+
+  # Ternary weights quantized to {-1, 0, 1}
+  STRUCTURE TernaryWeight(InputSize, OutputSize) {
+    DEF value : TensorLike[[InputSize, OutputSize], {-1, 0, 1}]
+  }
+
+  # Linear layer with ternary weights
+  STRUCTURE TernaryLinear(InputSize, OutputSize) {
+    DEF weight : TernaryWeight[InputSize, OutputSize]
+    DEF bias : TensorLike[[OutputSize], Float]
+
+    DOCUMENTATION {
+      TernaryLinear is a linear layer that uses ternary weights to replace matrix 
+      multiplication with accumulation. The weights are quantized to {-1, 0, 1} using the
+      following quantization function:
+
+      W_ternary = Quantize(W) = round(W / mean(|W|)) * mean(|W|)
+
+      During forward pass, the input is projected using ternary weights and accumulated:
+
+      y = x ⊛ W_ternary + b
+        = Σ_i x_i * sign(W_i) * mean(|W|) + b
+
+      This reduces both compute and memory cost compared to standard fp32 linear layers.
+    }
+
+    DEF forward(input : TensorLike[InputSize]) -> TensorLike[OutputSize] := (
+      input ⊛ weight + bias
+    )
+  }
+
+  # RMS Normalization layer
+  STRUCTURE RMSNorm(Size) {
+    DEF scale : TensorLike[[Size], Float]
+
+    DOCUMENTATION {
+      RMSNorm is a normalization layer that re-scales the activations by the root mean 
+      square after quantization:
+
+      y = x / sqrt(mean(square(x)) + ε) * scale
+
+      This helps to stabilize the activations and improve training stability in the 
+      quantized model. RMSNorm is applied before and after each ternary linear layer.  
+    }
+    
+    DEF forward(x : TensorLike[Size]) -> TensorLike[Size] := (
+      LET μ := MEAN(x),
+          σ² := MEAN(SQUARE(x - μ))  
+      IN (x - μ) / SQRT(σ² + ε) * scale
+    )
+  }
+  
+  # MatMul-free Linear GRU layer
+  STRUCTURE MLGRU(InputSize, HiddenSize) {
+    DEF forget_gate : TernaryLinear(InputSize, HiddenSize)
+    DEF candidate : TernaryLinear(InputSize, HiddenSize)
+    DEF output_gate : TernaryLinear(InputSize, HiddenSize)
+    DEF output_proj : TernaryLinear(HiddenSize, HiddenSize) 
+
+    DOCUMENTATION {
+      MLGRU is a MatMul-free variant of the Gated Recurrent Unit used as a token mixer in 
+      place of standard self-attention. It uses element-wise operations and ternary linear
+      projections to mix information across tokens.
+
+      At each step, the input token x_t is projected to a forget gate f_t, candidate 
+      state c_t, and output gate g_t using ternary linears. The hidden state is then 
+      updated as a gated combination of the previous state and candidate:
+
+      f_t = σ(x_t ⊛ W_f + b_f)
+      c_t = τ(x_t ⊛ W_c + b_c)  
+      h_t = f_t ⊙ h_{t-1} + (1 - f_t) ⊙ c_t
+      g_t = σ(x_t ⊛ W_g + b_g)  
+      o_t = g_t ⊙ h_t ⊛ W_o + b_o
+
+      This allows effective mixing of token information over time without any MatMuls.
+    }
+    
+    DEF forward(input : TensorLike[InputSize], 
+                prev_hidden : TensorLike[HiddenSize]) -> TensorLike[HiddenSize] := (
+      LET f := σ(forget_gate.forward(input)),
+          c := τ(candidate.forward(input)),
+          h := f ⊙ prev_hidden + (1 - f) ⊙ c,
+          g := σ(output_gate.forward(input))
+      IN output_proj.forward(g ⊙ h)
+    )  
+  }
+
+  # MatMul-free Gated Linear Unit
+  STRUCTURE MatMulFreeGLU(InputSize, FFSize) {
+    DEF gate_proj : TernaryLinear(InputSize, FFSize)
+    DEF update_proj : TernaryLinear(InputSize, FFSize)  
+    DEF output_proj : TernaryLinear(FFSize, InputSize)
+
+    DOCUMENTATION {
+      MatMulFreeGLU is a MatMul-free variant of the Gated Linear Unit used as a channel 
+      mixer (feedforward network) in each block. It first projects the input to a larger 
+      dimension FFSize using two ternary linears. The gate and update projections are then
+      combined using a gating mechanism:
+
+      g = σ(input ⊛ W_g + b_g)  
+      u = τ(input ⊛ W_u + b_u)
+      p = g ⊙ u
+      output = p ⊛ W_o + b_o
+
+      This allows effective mixing across channels and expansion of receptive field without
+      any MatMuls.  The output is finally projected back to the original hidden dimension. 
+    }
+    
+    DEF forward(input : TensorLike[InputSize]) -> TensorLike[InputSize] := (
+      LET g := gate_proj.forward(input),
+          u := update_proj.forward(input),
+          p := σ(g) ⊙ τ(u) 
+      IN output_proj.forward(p)
+    )
+  }
+
+  # Main MatMul-free LM Block 
+  STRUCTURE MatMulFreeLMBlock(InputSize, HiddenSize, FFSize) {
+    DEF input_norm : RMSNorm(InputSize)
+    DEF mlgru : MLGRU(InputSize, HiddenSize)
+    DEF mlgru_norm : RMSNorm(HiddenSize)
+    DEF ff : MatMulFreeGLU(HiddenSize, FFSize)
+    DEF ff_norm : RMSNorm(HiddenSize)  
+
+    DOCUMENTATION {
+      MatMulFreeLMBlock is the main building block of the MatMul-free language model. 
+      Each block contains:
+      
+      1. An input RMSNorm layer
+      2. An MLGRU layer for token mixing  
+      3. An RMSNorm layer after MLGRU
+      4. A MatMulFreeGLU layer for channel mixing
+      5. A final RMSNorm layer
+      
+      Blocks are stacked sequentially to form the full model. The hidden size is kept 
+      constant across all blocks, while the FFSize can be expanded to increase capacity.
+    }
+
+    DEF forward(input : TensorLike[InputSize], 
+                prev_hidden : TensorLike[HiddenSize]) -> TensorLike[HiddenSize] := (
+      LET x := input_norm.forward(input),
+          h := mlgru.forward(x, prev_hidden),
+          h_norm := mlgru_norm.forward(h),  
+          ff_out := ff.forward(h_norm)
+      IN ff_norm.forward(ff_out) 
+    )
+  }
+
+  DEF token_embedding : TensorLike[[VocabSize, EmbeddingSize], Float]
+  DEF pos_embedding : TensorLike[[MaxLen, EmbeddingSize], Float]
+
+  DEF blocks : List[MatMulFreeLMBlock] 
+
+  DEF init := (
+    blocks := [MatMulFreeLMBlock(
+                 IF i = 0 THEN EmbeddingSize ELSE HiddenSize,
+                 HiddenSize, 
+                 FFSize)
+               FOR i : RANGE(NumLayers)]
+  )
+
+  DOCUMENTATION {
+    The full MatMul-free language model is composed of:
+
+    1. A token embedding matrix of shape [VocabSize, EmbeddingSize]
+    2. A position embedding matrix of shape [MaxLen, EmbeddingSize]  
+    3. A stack of MatMulFreeLMBlocks
+    4. A final output projection to vocab size
+
+    The forward pass works as follows:
+
+    1. Input tokens are embedded using the token and position embeddings
+    2. The input embedding is passed through the block stack sequentially
+    3. Each block updates the hidden state using MLGRU and MatMulFreeGLU layers
+    4. The final hidden state is projected to vocab size to predict the next token
+    
+    The model is trained using a standard language modeling objective (cross-entropy on 
+    next token prediction). However, due to the quantized weights and activation, the 
+    model requires a higher learning rate and a customized optimizer to ensure stable 
+    training.
+
+    During inference, the model can generate text autoregressively by sampling from its
+    output distribution and feeding the sampled token back as input. The MatMul-free 
+    design allows for highly efficient inference on hardware that supports low-precision
+    arithmetic and sparse operations.
+  }
+  
+  DEF forward(input : Sequence[Int], seq_len : Int) -> TensorLike[VocabSize] := (
+    LET input_emb := token_embedding[input] + pos_embedding[0:seq_len],
+        hidden := FOLDL(
+          (h, block) -> block.forward(input_emb, h),
+          ZEROS(HiddenSize),
+          blocks   
+        )
+    IN SOFTMAX(TernaryLinear(HiddenSize, VocabSize).forward(hidden[-1]))
+  )
+
+  # Model output is a valid probability distribution over vocabulary
+  [∀seq : Sequence[Int] . 
+    SUM(forward(seq, LENGTH(seq))) = 1.0
+    AND ARGMAX(forward(seq, LENGTH(seq))) ∈ [0, VocabSize)
+  ]
+
+  # Permutation invariance of token mixing
+  [∀seq : Sequence[Int], ∀perm : Sequence[Int] . 
+    IS_PERMUTATION(perm, RANGE(LENGTH(seq))) =>
+      PERMUTE(forward(seq, LENGTH(seq)), perm) = forward(PERMUTE(seq, perm), LENGTH(seq))
+  ]
+
+  RETURN forward
+}

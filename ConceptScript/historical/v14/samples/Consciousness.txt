@@ -1,0 +1,89 @@
+CONCEPT Consciousness {
+  LANGUAGE {
+    type Consciousness = {qualia: Quale*, unity: Unity, self: Self, intentionality: Intentionality}
+    type Quale = Primitive
+    type Unity = Primitive 
+    type Self = Primitive
+    type Intentionality = Aboutness
+    type Aboutness = Quale -> Universe
+    
+    type PhysicalState = {matter: Matter, energy: Energy, information: Information}
+    type Matter = Primitive
+    type Energy = Primitive 
+    type Information = Primitive
+    
+    type FunctionalState = {computation: Computation, representation: Representation}
+    type Computation = Information -> Information
+    type Representation = Information -> Meaning
+    type Meaning = Information
+    
+    pred realizes(p: PhysicalState, f: FunctionalState): 𝔹 =
+      (f.computation ∘ encode)(p.information) = (decode ∘ f.computation)(p.information)
+      
+    func collapse(q: Quale*): Quale = foldl(λ(q1, q2) -> bind(q1, q2), baseQuale, q) 
+    
+    pred isConscious(c: Consciousness): 𝔹 = 
+      ∃ u: Unity, s: Self, i: Intentionality. 
+        (c.unity = u) ∧ (c.self = s) ∧ (c.intentionality = i) ∧
+        foldl(∧, true, [q ∈ c.qualia for q in domain(i)])
+  }
+
+  STRUCTURE {
+    Supervenience(Consciousness, PhysicalState):
+      ∀ c1, c2: Consciousness. ∀ p: PhysicalState.
+        realizes(p, c1) ∧ realizes(p, c2) ⇒ c1 = c2
+        
+    Irreducibility(Consciousness, PhysicalState):
+      ¬∀ c: Consciousness. ∃ p: PhysicalState. realizes(p, c)
+    
+    PrivateAccess(Consciousness):  
+      ∀ c1, c2: Consciousness. c1 ≠ c2 ⇒ 
+        ¬∃ q: Quale. (q ∈ c1.qualia) ∧ (q ∈ c2.qualia)
+        
+    UnityOfConsciousness(Consciousness):
+      ∀ c: Consciousness. ∀ q1, q2: Quale.
+        (q1 ∈ c.qualia) ∧ (q2 ∈ c.qualia) ⇒ 
+          ∃ q3: Quale. collapse([q1, q2]) = q3
+          
+    Intentionality(Consciousness): 
+      ∀ c: Consciousness. ∀ q: Quale.
+        q ∈ c.qualia ⇒ c.intentionality(q) ≠ ∅
+  }
+  
+  PROOFS {
+    theorem ConsciousnessNonFunctional:
+      ¬∀ c: Consciousness. ∃ f: FunctionalState. realizes(f, c)
+    {
+      assume ∀ c: Consciousness. ∃ f: FunctionalState. realizes(f, c)
+      let c1, c2: Consciousness, f: FunctionalState
+      assume realizes(f, c1), realizes(f, c2)
+      have c1 = c2 by Supervenience(Consciousness, FunctionalState)
+      let q1 ∈ c1.qualia, q2 ∈ c2.qualia
+      have q1 = q2 by substitution  ; Since c1 = c2
+      hence ∃ q: Quale. (q ∈ c1.qualia) ∧ (q ∈ c2.qualia)  ; Contradicts PrivateAccess
+      therefore, ¬∀ c: Consciousness. ∃ f: FunctionalState. realizes(f, c)  ; Reductio ad absurdum
+    }
+    
+    theorem ConsciousnessHasUnity:
+      ∀ c: Consciousness. isConscious(c) ⇒ 
+        ∀ q1, q2: Quale. (q1 ∈ c.qualia) ∧ (q2 ∈ c.qualia) ⇒ 
+          ∃ q3: Quale. collapse([q1, q2]) = q3
+    {
+      assume c: Consciousness, isConscious(c)
+      assume q1 ∈ c.qualia, q2 ∈ c.qualia
+      have c.unity ≠ ∅ by definition of isConscious
+      hence collapse([q1, q2]) ∈ c.qualia by UnityOfConsciousness
+      therefore, ∃ q3. collapse([q1, q2]) = q3 by existential instantiation
+    }
+    
+    theorem QualiaAreAboutSomething:
+      ∀ c: Consciousness. isConscious(c) ⇒
+        ∀ q: Quale. q ∈ c.qualia ⇒ c.intentionality(q) ≠ ∅  
+    {
+      assume c: Consciousness, isConscious(c)
+      let q ∈ c.qualia
+      have c.intentionality ≠ ∅ by definition of isConscious
+      hence c.intentionality(q) ≠ ∅ by Intentionality
+    }
+  }
+}

@@ -1,0 +1,143 @@
+CONCEPT NPCompleteness {
+
+  LANGUAGE {
+    TYPE Problem
+    TYPE Instance
+    TYPE Solution
+    TYPE Complexity
+    TYPE PolynomialTime <: Complexity
+    TYPE VerificationAlgorithm <: PolynomialTime
+
+    PRED IsSolvable : Problem -> Instance -> Solution -> 𝔹
+    PRED IsVerifiable : Problem -> Instance -> Solution -> 𝔹
+    PRED IsPolynomiallyVerifiable : Problem -> 𝔹
+    PRED IsPolynomiallyReducible : Problem -> Problem -> 𝔹
+    PRED IsNPComplete : Problem -> 𝔹
+
+    FUNC Reduce : Problem -> Problem -> Instance -> Instance
+    FUNC Verify : Problem -> Instance -> Solution -> 𝔹
+
+    NOTATION "A ≤_p B" = IsPolynomiallyReducible(A, B)
+    NOTATION "NP" = { P : Problem | IsPolynomiallyVerifiable(P) }
+  }
+
+  STRUCTURE {
+    DEF IsPolynomiallyVerifiable(P) = 
+      ∃ (V : VerificationAlgorithm) . 
+        ∀ (I : Instance) (S : Solution) . 
+          Verify(P, I, S) = IsSolvable(P, I, S)
+
+    DEF IsPolynomiallyReducible(A, B) =
+      ∃ (F : PolynomialTime) .
+        ∀ (I : Instance) .
+          IsSolvable(A, I, _) <-> IsSolvable(B, Reduce(A, B, I), _)
+
+    DEF IsNPComplete(P) =
+      (P ∈ NP) ∧ (∀ (Q : Problem) . (Q ∈ NP) -> (Q ≤_p P))
+
+    AXIOM NPContainsNPComplete :
+      ∃ (P : Problem) . IsNPComplete(P)
+  }
+
+  PROOFS {
+    THEOREM PolynomialVerifiabilityOfNPComplete {
+      STATEMENT : ∀ (P : Problem) . IsNPComplete(P) -> IsPolynomiallyVerifiable(P)
+
+      PROOF {
+        ASSUME [P : Problem] : IsNPComplete(P)
+
+        HAVE : P ∈ NP BY {
+          ASSUME IsNPComplete(P)
+          SHOW P ∈ NP BY NPCompleteDefinition
+        }
+
+        SHOW IsPolynomiallyVerifiable(P) BY {
+          ASSUME P ∈ NP
+          SHOW ∃ (V : VerificationAlgorithm) .
+            ∀ (I : Instance) (S : Solution) .
+              Verify(P, I, S) = IsSolvable(P, I, S)
+          BY PolynomialVerifiabilityDefinition
+        }
+      }
+    }
+
+    THEOREM TransitivityOfReduction {
+      STATEMENT : ∀ (A B C : Problem) . (A ≤_p B) ∧ (B ≤_p C) -> (A ≤_p C)
+
+      PROOF {
+        ASSUME [A B C : Problem] : (A ≤_p B) ∧ (B ≤_p C)
+
+        HAVE [F : PolynomialTime] : 
+          ∀ (I : Instance) . 
+            IsSolvable(A, I, _) <-> IsSolvable(B, Reduce(A, B, I), _)
+        BY PolynomialReducibilityDefinition
+
+        HAVE [G : PolynomialTime] :
+          ∀ (J : Instance) .
+            IsSolvable(B, J, _) <-> IsSolvable(C, Reduce(B, C, J), _)  
+        BY PolynomialReducibilityDefinition
+
+        LET H : PolynomialTime = λ (I : Instance) . Reduce(B, C, Reduce(A, B, I))
+
+        SHOW ∀ (I : Instance) .
+          IsSolvable(A, I, _) <-> IsSolvable(C, Reduce(A, C, I), _)
+        BY {
+          ASSUME [I : Instance]
+          
+          HAVE : IsSolvable(A, I, _) <-> IsSolvable(B, Reduce(A, B, I), _) BY F
+          HAVE : IsSolvable(B, Reduce(A, B, I), _) <-> 
+                 IsSolvable(C, Reduce(B, C, Reduce(A, B, I)), _) BY G
+
+          LET J : Instance = Reduce(A, B, I)
+          HAVE : Reduce(A, C, I) = H(I) = Reduce(B, C, J) BY {
+            Reduce(A, C, I) 
+            = Reduce(B, C, Reduce(A, B, I))  BY H
+            = Reduce(B, C, J)                BY J
+          }
+
+          HENCE IsSolvable(A, I, _) <-> IsSolvable(C, Reduce(A, C, I), _)
+        }
+
+        SHOW A ≤_p C BY PolynomialReducibilityDefinition
+      }
+    }
+
+    THEOREM NPHardnessOfNPComplete {
+      STATEMENT : ∀ (P : Problem) . IsNPComplete(P) -> 
+                  ∀ (Q : Problem) . (Q ∈ NP) -> (Q ≤_p P)
+
+      PROOF {
+        ASSUME [P : Problem] : IsNPComplete(P)
+        ASSUME [Q : Problem] : Q ∈ NP
+
+        HAVE : ∀ (R : Problem) . (R ∈ NP) -> (R ≤_p P) BY {
+          ASSUME IsNPComplete(P)
+          SHOW ∀ (R : Problem) . (R ∈ NP) -> (R ≤_p P) 
+          BY NPCompleteDefinition
+        }
+
+        SHOW Q ≤_p P BY {
+          HAVE : Q ∈ NP BY ASSUMPTION
+          HENCE Q ≤_p P BY MODUS_PONENS
+        }
+      }
+    }
+
+    THEOREM NPCompleteImpliesNPHard {
+      STATEMENT : ∀ (P : Problem) . IsNPComplete(P) -> 
+                  ∀ (Q : Problem) . (Q ∈ NP) -> (Q ≤_p P)
+
+      PROOF {
+        ASSUME [P : Problem] : IsNPComplete(P)
+
+        SHOW ∀ (Q : Problem) . (Q ∈ NP) -> (Q ≤_p P) BY {
+          ASSUME [Q : Problem] : Q ∈ NP
+
+          HAVE : IsNPComplete(P) BY ASSUMPTION
+
+          SHOW Q ≤_p P BY NPHardnessOfNPComplete
+        }
+      }  
+    }
+  }
+}

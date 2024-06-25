@@ -1,0 +1,118 @@
+CONCEPT FormalLanguageTheory {
+  LANGUAGE {
+    TYPE Symbol
+    TYPE String = List[Symbol]
+    TYPE Language = Set[String]
+    TYPE Grammar[S <: Symbol, T <: Symbol]
+
+    FUNC Concat(L1 : Language, L2 : Language) : Language
+    FUNC Union(L1 : Language, L2 : Language) : Language
+    FUNC Star(L : Language) : Language
+    FUNC Plus(L : Language) : Language
+
+    PRED Generates(G : Grammar[S, T], s : String) : Bool
+    PRED Recognizes(L : Language, s : String) : Bool
+
+    AXIOM ConcatAssoc: ∀(L1 L2 L3 : Language).
+      Concat(Concat(L1, L2), L3) = Concat(L1, Concat(L2, L3))
+    
+    AXIOM UnionAssoc: ∀(L1 L2 L3 : Language).  
+      Union(Union(L1, L2), L3) = Union(L1, Union(L2, L3))
+
+    AXIOM StarUnroll: ∀(L : Language). Star(L) = Union(ε, Concat(L, Star(L)))
+
+    NOTATION "ε" = EmptyString  
+    NOTATION "∅" = EmptyLanguage
+    NOTATION "·" = Concat
+    NOTATION "∪" = Union
+    NOTATION "★" = Star
+    NOTATION "⁺" = Plus
+  }
+
+  STRUCTURE ContextFreeGrammar[S <: Symbol, T <: Symbol] <: Grammar[S, T] {
+    RULES : Set[(S, String[S | T])]
+
+    FUNC GenHelper(s : S, str : String) : Set[String] = {
+      LET expansions = { r[1] | r ∈ RULES, r[0] = s }
+      MATCH str {
+        ε => {ε}  
+        a :: rest => 
+          UNION(MAP((e) => {a :: s' | s' ∈ GenHelper(e, rest)}, expansions))
+      }
+    }
+
+    FUNC Generates(str : String) -> Bool = str ∈ GenHelper(S, str)
+  }
+
+  STRUCTURE RegularExpression[T <: Symbol] <: Language {
+    FUNC Compile(re : String[(T | "(" | ")" | "+" | "*" | "|")]) : Language = {
+      MATCH re {
+        ε => {ε}
+        a :: ε => {{a}}  
+        "(" :: rest => {
+          LET (inner, ")" :: after) = SplitFirst(rest, ")")
+          Concat(Compile(inner), Compile(after))
+        }
+        a :: "+" :: rest => Concat(Plus({a}), Compile(rest))
+        a :: "*" :: rest => Concat(Star({a}), Compile(rest))  
+        a :: "|" :: b :: rest => Union(Compile(a :: rest), Compile(b :: rest))
+      }
+    }
+
+    FUNC Recognizes(str : String) -> Bool = str ∈ SELF
+  }
+
+  PROOFS {
+    TACTIC Induct(prop, n) = {
+      BASIS: prop(0)
+      IND_STEP: ∀(k : Nat). prop(k) ⇒ prop(k+1)  
+      CONCLUSION: ∀(n : Nat). prop(n)
+    }
+
+    TACTIC StructuralInduction(prop, s) = {
+      BASIS: prop(ε)
+      IND_STEP: ∀(a : Symbol, s : String). prop(s) ⇒ prop(a :: s)
+      CONCLUSION: ∀(s : String). prop(s)  
+    }
+
+    THEOREM RegexPumping {
+      STATEMENT: 
+        ∀(L : RegularExpression[T]).
+          ∃(p : Nat). ∀(s : String) ∈ L. |s| ≥ p ⇒ 
+            ∃(xyz : String * String * String). 
+              s = xyz[0] · xyz[1] · xyz[2]
+              ∧ |xyz[1]| ≥ 1
+              ∧ ∀(i : Nat). xyz[0] · xyz[1]^i · xyz[2] ∈ L
+
+      PROOF:
+        LET L : RegularExpression[T]
+        LET p = NumStates(MinDFA(L))
+        
+        ASSUME s ∈ L, |s| ≥ p
+        SHOW ∃(xyz : String * String * String). 
+          s = xyz[0] · xyz[1] · xyz[2] 
+          ∧ |xyz[1]| ≥ 1
+          ∧ ∀(i : Nat). xyz[0] · xyz[1]^i · xyz[2] ∈ L
+        BY {
+          LET q_0 = StartState(MinDFA(L))
+          LET π = Path(q_0, s)
+          
+          BY PigeonholePrinciple 
+          HAVE ∃(i j : Nat). i < j ∧ π[i] = π[j]
+
+          LET xyz = (s[..i], s[i..j], s[j..])
+          SHOW s = xyz[0] · xyz[1] · xyz[2]                BY DEFINITION xyz
+          SHOW |xyz[1]| ≥ 1                                BY j > i
+          SHOW ∀(k : Nat). xyz[0] · xyz[1]^k · xyz[2] ∈ L  BY {
+            LET k : Nat
+            LET t = xyz[0] · xyz[1]^k · xyz[2]
+            LET π' = π[..i] · REPEAT(π[i..j], k) · π[j..]
+            
+            SHOW Path(q_0, t) = π'                         BY DEFINITION t, π'
+            SHOW π'[-1] ∈ AcceptStates(MinDFA(L))          BY π ∈ AcceptPaths(MinDFA(L))
+            SHOW t ∈ L                                     BY DEFINITION Recognizes
+          }
+        }
+    }
+  }
+}

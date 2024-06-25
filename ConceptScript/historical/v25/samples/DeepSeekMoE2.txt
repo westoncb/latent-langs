@@ -1,0 +1,221 @@
+CONCEPT DeepSeekMoE {
+  LANGUAGE {
+    TYPE Token
+    TYPE Expert
+    TYPE SharedExpert <: Expert
+    TYPE RoutedExpert <: Expert
+    TYPE Embedding = Vector[Real]
+    TYPE FFN = Embedding -> Embedding
+    
+    TYPE Optimizer = {
+      lr: Real,
+      beta1: Real, 
+      beta2: Real,
+      eps: Real,
+      weight_decay: Real,
+      Params
+    }
+    
+    TYPE Model = {
+      numParams: Nat,
+      numLayers: Nat,
+      numExperts: Nat,
+      numSharedExperts: Nat,
+      numRoutedExperts: Nat,
+      hiddenDimension: Nat,
+      activationFactor: Real
+    }
+    
+    CONST SequenceLength: Nat
+    CONST BatchSize: Nat
+    CONST InitStdDev: Real
+    
+    FUNC Tokenize: Corpus -> List[Token]
+    FUNC TrainTokenizer: Corpus -> Tokenizer
+    FUNC SampleTrainingData: (Corpus, Nat) -> (Nat, List[List[Token]])
+    
+    FUNC Initialize: Model -> Params
+    FUNC Train: (Model, List[List[Token]], Optimizer) -> Params
+    
+    FUNC Router: (Token, List[RoutedExpert]) -> List[RoutedExpert]
+    FUNC Eval: (Expert, Embedding) -> Embedding
+    FUNC Combine: List[Embedding] -> Embedding
+    
+    PRED IsUnitary: Matrix[Real] -> Bool
+    
+    NOTATION "⨂" = TensorProduct
+    NOTATION "∇" = Gradient
+  }
+  
+  STRUCTURE MoE(model: Model) {
+    LET numExperts = model.numExperts
+    LET numSharedExperts = model.numSharedExperts
+    LET numRoutedExperts = model.numRoutedExperts
+    LET hiddenDimension = model.hiddenDimension
+    LET activationFactor = model.activationFactor
+    
+    DEF experts: List[Expert] = 
+      List[SharedExpert](numSharedExperts) ++
+      List[RoutedExpert](numRoutedExperts)
+    
+    REQUIRE numExperts = numSharedExperts + numRoutedExperts
+    REQUIRE numRoutedExperts = activationFactor * (numExperts - numSharedExperts)
+    REQUIRE ∀ (e: RoutedExpert) ∈ experts. Dimension(e) = hiddenDimension / activationFactor
+    
+    FUNC Forward(tokens: List[Token]): List[Embedding] = {
+      LET sharedActivations = 
+        tokens.Map(token => 
+          experts.Take(numSharedExperts)
+            .Map(expert => Eval(expert, token))
+            .Reduce(Combine)
+        )
+      
+      LET routedActivations =
+        tokens.FlatMap(token => 
+          Router(token, experts.Drop(numSharedExperts))
+            .Map(expert => Eval(expert, token))  
+        )
+      
+      Zip(sharedActivations, routedActivations).Map(Combine)
+    }
+  }
+  
+  STRUCTURE TrainedModel(model: Model, corpus: Corpus) {
+    LET numTokens = MATCH model.numParams {
+      2B -> 100B
+      16B -> 2T
+      145B -> 245B
+    }
+    
+    LET (_, tokenizedData) = SampleTrainingData(corpus, numTokens)
+    
+    LET optimizer = MATCH model.numParams {
+      2B -> {
+        lr = 1.08e-3, beta1 = 0.9, beta2 = 0.95,
+        eps = 1e-8, weight_decay = 0.1,
+        Params = Initialize(model)
+      }
+      16B -> {
+        lr = 4.2e-4, beta1 = 0.9, beta2 = 0.95,  
+        eps = 1e-8, weight_decay = 0.1,
+        Params = Initialize(model)
+      }
+      145B -> {
+        lr = 3.0e-4, beta1 = 0.9, beta2 = 0.95,
+        eps = 1e-8, weight_decay = 0.1, 
+        Params = Initialize(model)
+      }
+    }
+    
+    LET trainedParams = Train(model, tokenizedData, optimizer)
+    
+    FUNC Accuracy(benchmarks: Benchmarks): Real
+    FUNC ComputationCost(input: List[Token]): Real
+    
+    REQUIRE Accuracy(model { numParams = 2B }, benchmarks) > Accuracy(GShard(2B), benchmarks)
+    REQUIRE Accuracy(model { numParams = 2B }, benchmarks) ≈ Accuracy(GShard(2.9B), benchmarks)
+    REQUIRE Accuracy(model { numParams = 2B }, benchmarks) ≈ Accuracy(Dense(2B), benchmarks)
+    
+    REQUIRE Accuracy(model { numParams = 16B }, benchmarks) ≈ Accuracy(DeepSeek(7B), benchmarks)
+    REQUIRE Accuracy(model { numParams = 16B }, benchmarks) ≈ Accuracy(LLaMA2(7B), benchmarks)
+    
+    REQUIRE Accuracy(model { numParams = 145B }, benchmarks) > Accuracy(GShard(137B), benchmarks)
+    REQUIRE Accuracy(model { numParams = 145B }, benchmarks) ≈ Accuracy(DeepSeek(67B), benchmarks)
+    
+    REQUIRE model.numParams < 16.5B ⇒
+      LET activatedParams = 
+        model.numSharedExperts * 8 * model.hiddenDimension^2 +
+        model.activationFactor * model.numRoutedExperts * 8 * model.hiddenDimension^2
+      IN activatedParams < 3B
+  }
+  
+  REWRITE TensorProductAssociativity(t1, t2, t3) =
+    (t1 ⨂ t2) ⨂ t3 = t1 ⨂ (t2 ⨂ t3)
+  
+  AXIOM MatrixTraceInvariance: ∀ (A: Matrix[Real]) (U: Matrix[Real]). 
+    IsUnitary(U) ⇒ Trace(A) = Trace(U × A × Transpose(U))
+  
+  PROOFS {
+    THEOREM ExpertSpecialization {
+      STATEMENT:
+        ∀ (model: Model) (tokens: List[Token]).
+          LET routedExperts = experts.Drop(model.numSharedExperts)
+          IN ∀ (e: RoutedExpert) ∈ Router(tokens, routedExperts). Specialized(e)
+      
+      PROOF:
+        LET N = model.numRoutedExperts,
+            K = model.activationFactor * (N - model.numSharedExperts),
+            oldN = N / 4,
+            oldK = 2
+        IN {
+          NumCombinations(N, K)
+            > NumCombinations(oldN, oldK) BY CombinatoricsLemma
+          HENCE HigherSpecialization(routedExperts)
+        }
+    }
+    
+    THEOREM ComputationEfficiency {
+      STATEMENT:
+        ∀ (model: Model) (input: List[Token]).
+          ComputationCost(MoE(model), input) ≈ 40% * ComputationCost(DenseModel(model.numParams), input)
+      
+      PROOF:
+        MATCH model.numParams {
+          16B -> {
+            LET activatedParams = 
+              model.numSharedExperts * 8 * model.hiddenDimension^2 +
+              model.activationFactor * model.numRoutedExperts * 8 * model.hiddenDimension^2
+            IN {
+              activatedParams 
+                ≈ (2 * 4 + 6 * 4) * model.hiddenDimension^2
+                ≈ 32 * model.hiddenDimension^2
+              
+              LET totalParams = 12 * model.numLayers * model.hiddenDimension^2
+              IN {
+                totalParams
+                  ≈ 12 * 28 * model.hiddenDimension^2
+                  ≈ 80 * model.hiddenDimension^2
+                
+                ComputationCost(MoE(model), input) / ComputationCost(DenseModel(model.numParams), input)
+                  ≈ activatedParams / totalParams
+                  ≈ 40%
+              }
+            }
+          }
+          
+          145B -> {
+            LET activatedParams =
+              model.numSharedExperts * 8 * model.hiddenDimension^2 +
+              model.activationFactor * model.numRoutedExperts * 8 * model.hiddenDimension^2
+            IN {
+              activatedParams
+                ≈ (4 * 2 + 12 * 2) * model.hiddenDimension^2
+                ≈ 32 * model.hiddenDimension^2
+              
+              LET halfActivatedParams =
+                model.numSharedExperts * 8 * model.hiddenDimension^2 +
+                model.activationFactor / 2 * model.numRoutedExperts * 8 * model.hiddenDimension^2
+              IN {
+                halfActivatedParams
+                  ≈ (2 * 2 + 6 * 2) * model.hiddenDimension^2
+                  ≈ 16 * model.hiddenDimension^2
+                
+                LET totalParams = 12 * 62 * model.hiddenDimension^2
+                IN {
+                  totalParams ≈ 176 * model.hiddenDimension^2
+                  
+                  ComputationCost(MoE(model), input) / ComputationCost(DenseModel(model.numParams), input)
+                    ≈ activatedParams / totalParams
+                    ≈ 18.2%
+                  
+                  ComputationCost(MoE(model) { activationFactor /= 2 }, input) / ComputationCost(DenseModel(model.numParams), input)
+                    ≈ halfActivatedParams / totalParams  
+                    ≈ 9.1%
+                }
+              }
+            }
+          }
+        }
+    }
+  }
+}

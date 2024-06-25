@@ -1,0 +1,118 @@
+CONCEPT TonkotsuRamen EXTENDS CulinaryExperience {
+  LANGUAGE {
+    TYPE Broth <: Ingredient
+    TYPE Noodle <: Ingredient
+    TYPE Topping <: Ingredient
+    
+    FUNC FlavorIntensity : Ingredient -> Nat
+    FUNC IsTonkotsuBroth : Broth -> Bool
+    FUNC IsAlkalineNoodle : Noodle -> Bool
+    
+    PRED HasUmamiSynergy : List[Ingredient] -> Bool
+    PRED HasContrastingTextures : List[Ingredient] -> Bool
+    PRED HasWarmingEffect : List[Ingredient] -> Bool
+    PRED HasSavoryRichness : List[Ingredient] -> Bool
+    PRED HasNostalgicFlavors : List[Ingredient] -> Bool
+  }
+
+  STRUCTURE TonkotsuRamenDish {
+    DEF Ingredients = [
+      ("ramen noodles", FlavorProfile(Wheaty(6), Neutral(5)), Chewy),
+      ("tonkotsu broth", FlavorProfile(Umami(8), Salty(5), Rich(7)), Liquid),
+      ("chashu pork", FlavorProfile(Umami(6), Sweet(3), Salty(2)), Tender),
+      ("soft-boiled egg", FlavorProfile(Umami(4), Creamy(6)), Soft),
+      ("bamboo shoots", FlavorProfile(Earthy(4), Crunchy(5)), Crunchy),
+      ("nori seaweed", FlavorProfile(Umami(5), Salty(3)), Crisp),
+      ("scallions", FlavorProfile(Sharp(4), Oniony(5)), Crunchy)
+    ]
+
+    DEF CulinaryTechniques = [Boil, Simmer, Marinate, SoftBoil]
+
+    DEF CuisineInfluences = [Japanese]
+
+    DEF DesiredQualities = [
+      λ dish. ∀ (ingredient, _, _) ∈ dish.Ingredients.
+        ∃ cuisine ∈ dish.CuisineInfluences. AuthenticIngredient(ingredient, cuisine),
+      λ dish. ∀ technique ∈ dish.CulinaryTechniques.
+        ∀ (ingredient, _, _) ∈ dish.Ingredients. CompatibleTechnique(technique, ingredient),
+      λ dish. HarmoniousFlavors(Fst(UnzipTriple(dish.Ingredients))),
+      λ dish. HasContrastingTextures(Snd(UnzipTriple(dish.Ingredients))),
+      λ dish. HasUmamiSynergy(Fst(UnzipTriple(dish.Ingredients))),
+      λ dish. HasWarmingEffect(dish.Ingredients),
+      λ dish. HasSavoryRichness(Fst(UnzipTriple(dish.Ingredients))),
+      λ dish. HasNostalgicFlavors(Fst(UnzipTriple(dish.Ingredients)))
+    ]
+  }
+
+  PROOFS {
+    THEOREM TonkotsuRamenIsDesirable {
+      STATEMENT:
+        ∃ (dish : TonkotsuRamenDish).
+          ∀ (quality : TonkotsuRamenDish -> Bool) ∈ DesiredQualities. quality(dish)
+
+      PROOF:
+        DEFINE dish = TonkotsuRamenDish {
+          Ingredients = [
+            ("ramen noodles", FlavorProfile(Wheaty(6), Neutral(5)), Chewy),
+            ("tonkotsu broth", FlavorProfile(Umami(8), Salty(5), Rich(7)), Liquid),
+            ("chashu pork", FlavorProfile(Umami(6), Sweet(3), Salty(2)), Tender),
+            ("soft-boiled egg", FlavorProfile(Umami(4), Creamy(6)), Soft),
+            ("bamboo shoots", FlavorProfile(Earthy(4), Crunchy(5)), Crunchy),
+            ("nori seaweed", FlavorProfile(Umami(5), Salty(3)), Crisp),
+            ("scallions", FlavorProfile(Sharp(4), Oniony(5)), Crunchy)
+          ],
+          CulinaryTechniques = [Boil, Simmer, Marinate, SoftBoil],
+          CuisineInfluences = [Japanese]
+        }
+
+        SHOW ∀ (quality : TonkotsuRamenDish -> Bool) ∈ DesiredQualities. quality(dish) BY {
+          LET quality ∈ DesiredQualities
+          MATCH quality WITH
+          | λ dish. ∀ (ingredient, _, _) ∈ dish.Ingredients.
+              ∃ cuisine ∈ dish.CuisineInfluences. AuthenticIngredient(ingredient, cuisine) -> {
+            SHOW ∀ (ingredient, _, _) ∈ dish.Ingredients. AuthenticIngredient(ingredient, Japanese)
+          }
+          | λ dish. ∀ technique ∈ dish.CulinaryTechniques.
+              ∀ (ingredient, _, _) ∈ dish.Ingredients. CompatibleTechnique(technique, ingredient) -> {
+            SHOW ∀ (ingredient, _, _) ∈ dish.Ingredients.
+              CompatibleTechnique(Boil, ingredient) ∧
+              CompatibleTechnique(Simmer, ingredient) ∧
+              CompatibleTechnique(Marinate, ingredient) ∧
+              CompatibleTechnique(SoftBoil, ingredient)
+          }
+          | λ dish. HarmoniousFlavors(Fst(UnzipTriple(dish.Ingredients))) -> {
+            LET fp = FlavorProfile(Wheaty(6), Neutral(5), Umami(8), Salty(5), Rich(7),
+                                   Umami(6), Sweet(3), Salty(2), Umami(4), Creamy(6),
+                                   Earthy(4), Crunchy(5), Umami(5), Salty(3), Sharp(4), Oniony(5))
+            SHOW HarmoniousFlavors(fp)
+          }
+          | λ dish. HasContrastingTextures(Snd(UnzipTriple(dish.Ingredients))) -> {
+            LET textures = [Chewy, Liquid, Tender, Soft, Crunchy, Crisp, Crunchy]
+            SHOW HasContrastingTextures(textures)
+          }
+          | λ dish. HasUmamiSynergy(Fst(UnzipTriple(dish.Ingredients))) -> {
+            LET ingredients = Fst(UnzipTriple(dish.Ingredients))
+            ARGUE ∀ i ∈ ingredients. FlavorIntensity(i) ≥ 4
+            ARGUE IsTonkotsuBroth("tonkotsu broth")
+            HENCE HasUmamiSynergy(ingredients)
+          }
+          | λ dish. HasWarmingEffect(dish.Ingredients) -> {
+            ARGUE ∃ i ∈ dish.Ingredients. IsHot(i) ∧ IsComforting(i)
+            HENCE HasWarmingEffect(dish.Ingredients)
+          }
+          | λ dish. HasSavoryRichness(Fst(UnzipTriple(dish.Ingredients))) -> {
+            LET ingredients = Fst(UnzipTriple(dish.Ingredients))
+            ARGUE ∀ i ∈ ingredients. IsSavory(i) ∧ IsRich(i)
+            HENCE HasSavoryRichness(ingredients)
+          }
+          | λ dish. HasNostalgicFlavors(Fst(UnzipTriple(dish.Ingredients))) -> {
+            LET ingredients = Fst(UnzipTriple(dish.Ingredients))
+            ARGUE ∃ i ∈ ingredients. IsNostalgic(i)
+            HENCE HasNostalgicFlavors(ingredients)
+          }
+        }
+
+        QED BY DesiredQualities
+    }
+  }
+}

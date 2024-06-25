@@ -1,0 +1,77 @@
+CONCEPT MultiParamPHT {
+  EXTENDS ShapeSpace
+
+  NOTATION {
+    O^k = {O^k_d} = o-minimal structure on (ℝ^d)^k
+    Shv(X, 𝒟) = Category of 𝒟-valued sheaves on X
+    D^b(𝒜) = Bounded derived category of abelian category 𝒜
+    𝕜_Z = Constant sheaf valued in field 𝕜 on space Z
+    
+    Z^k_M = {(x,v_1,..,v_k,t_1,..,t_k) ∈ M × (𝕊^(d-1))^k × ℝ^k | x·v_i ≤ t_i ∀i} 
+    f^k_M: Z^k_M → (𝕊^(d-1) × ℝ)^k
+    
+    MPH(M) = R(f^k_M)_*𝕜_Z^k_M ∈ D^b(Shv((𝕊^(d-1) × ℝ)^k))
+    MPH^i_M = R^i(f^k_M)_*𝕜_Z^k_M ∈ Shv((𝕊^(d-1) × ℝ)^k)
+  }
+
+  LANGUAGE {
+    TYPE MultiShape = Constructible subset of (ℝ^d)^k
+    TYPE MultiDirection = k-tuple of unit vectors in (𝕊^(d-1))^k
+    TYPE MultiPHT = D^b(Shv((𝕊^(d-1) × ℝ)^k))
+    
+    FUNC MultiSublevel(M: MultiShape, v: MultiDirection, t: ℝ^k): MultiShape =
+      {x ∈ M | x·v_i ≤ t_i ∀i}
+    
+    FUNC MultiDgm(i: Int, M: MultiShape, v: MultiDirection) =
+      Multi-D persistence diagram of MPH^i_M restricted to {v}×ℝ^k
+  }
+
+  STRUCTURES {
+    STRUCTURE MultiPHTSheaf {
+      FIELD Sections(M: MultiShape): MultiPHT = MPH(M) 
+      FIELD Restriction(ι: M ↪ N): MPH(N) → MPH(M)
+    }
+  }
+
+  PROOFS {
+    THEOREM MPHDeterminesMultiShape: MPH(M) ≃ MPH(N) ⇒ M ≃ N
+    
+    THEOREM MPHDescentTheorem:  
+      ∀ M: MultiShape, 𝓒: Cover . FiniteCover(𝓒,M) ⇒
+      MPH(M) ≃ holim[ ∏ MPH(M_i) ⇒ ∏ MPH(M_I) → ⋯ ]
+      
+    THEOREM MPHStability:
+      d_I(MPH(M), MPH(N)) ≤ Cε if M ≃_ε N
+      
+    THEOREM MPHApproximation:  
+      d_I(MPH(M),MPH(K)) ≤ Cε w.h.p. for C=O(1)
+      if K is a sufficiently dense sample of M
+  }
+
+  EXAMPLES {
+    EXAMPLE MPHofMultiAnnulus:
+      MPH(MultiAnn)(v,t) ≃ IF t_i≤r_i ∀i THEN 𝕜[0] ELSE 
+                            IF t_i∈(r_i,R_i) ∀i THEN ⨁𝕜[S] ELSE 𝕜[k]
+      WHERE |S|=k, MultiAnn = {x | r_i≤‖x_i‖≤R_i ∀i}  
+  }
+}
+
+This MultiParamPHT Concept extends the key ideas of the PHT to the setting of multi-parameter persistence, enabling the analysis of shapes equipped with multiple scalar functions. The key theorems of MPH being a complete invariant, stable, computable, and satisfying descent all extend, building on the foundations of the single-parameter case. Expressing this relied on the sheaf-theoretic language and stability results established for the PHT.
+
+Furthermore, the common Möbius inversion framework suggests deep connections between multi-parameter persistence and various notions of higher-order interaction in other fields. Exploring these connections could potentially lead to the transfer of techniques and insights between these domains.
+
+
+-------
+
+
+The key novel ideas from the previous Concepts are:
+
+1. Expressing higher-order interactions and decompositions in various domains (statistics, information theory, biology, physics, chemistry, game theory, machine learning) using a common algebraic framework based on the Möbius inversion formula on posets. This allows unifying many disparate concepts.
+
+2. Defining the Persistent Homology Transform (PHT) of a shape M as a sheaf on the sphere cross the reals, PHT(M) ∈ D^b(Shv(𝕊^(d-1) × ℝ)). This is a complete shape descriptor invariant to rigid motions.
+
+3. Proving that the PHT determines the shape up to isomorphism, is stable to perturbations of the shape, and can be approximated from finite samples with guarantees. 
+
+4. Showing the PHT satisfies a sheaf-theoretic descent property for coverings of the shape, allowing local-to-global assembly of the PHT.
+
+Building on these ideas, here is a new Concept for multi-parameter persistent homology:

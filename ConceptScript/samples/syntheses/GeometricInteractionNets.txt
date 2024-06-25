@@ -1,0 +1,356 @@
+CONCEPT GeometricInteractionNets {
+  PARAMETERS {
+    d : Nat -- Ambient dimension
+  }
+
+  CONTEXT {
+    TYPES {
+      Symbol := String
+      Port := (Symbol, Nat)
+      Cell := (Symbol, List(Port))
+      Net := (Set(Cell), Set(Port), Set((Port, Port)))
+
+      Shape := CS(ℝ^d)
+      Direction := {v ∈ 𝕊^(d-1)} 
+      EmbeddedNet := (Net, Map(Cell, Shape))
+    }
+
+    DEFINITIONS {
+      Arity(s : Symbol) -> Nat
+      Interaction(a b : Symbol) -> EmbeddedNet?
+      Reduced(e : EmbeddedNet) -> Bool
+
+      Sublevel(e : EmbeddedNet, v : Direction, t : ℝ) -> Bool := 
+        ∀ (c, s) ∈ e.2 . ⟨Centroid(s), v⟩ ≤ t
+
+      Reduces(e e' : EmbeddedNet, S : InteractionSystem) -> Bool
+      ReducesInMany(e e' : EmbeddedNet, S : InteractionSystem) -> Bool
+    }
+    
+    NOTATION {
+      INFIX "→ₛ" := Reduces
+      INFIX "→*ₛ" := ReducesInMany
+      DgmPHT^i_e(v) := PersistenceDiagram(Sublevel(e, v, ?), i)
+      dI(e, e') := inf {ε | ∃ (ϕ ψ : Sublevel(e, ?, ?) -> Sublevel(e', ?, ?)) . 
+                              IsInterleaving(ϕ, ψ, ε)}
+    }
+
+    STRUCTURES {
+      STRUCTURE InteractionSystem {
+        FIELD alphabet : Set(Symbol)
+        FIELD rules : Map((Symbol, Symbol), EmbeddedNet)
+
+        AXIOM WellFormedRules(a b : Symbol)(α : EmbeddedNet) :
+          rules(a, b) = α IMPLIES (a ∈ alphabet ∧ b ∈ alphabet ∧ Reduced(α))
+
+        AXIOM Symmetry(a b : Symbol) :
+          Interaction(a, b) = Flip(Interaction(b, a))
+          WHERE Flip((net, embed)) := (net, c ↦ Reflect(embed(c)))
+      }
+
+      STRUCTURE EmbeddingPerturbation {
+        FIELD Family : Map(Cell, FUNC(Shape) -> Shape)
+        AXIOM Uniformity(ε : ℝ>0)(c : Cell) : 
+          ∀ s . dH(Family(c)(s), s) ≤ ε
+        AXIOM Homeomorphism(c : Cell) :  
+          ∀ s . Family(c)|_s : s -> Family(c)(s) is homeomorphism
+      }
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE EmbeddingShift(ε) : EmbeddedNet -> EmbeddedNet {
+      MATCH (net, embed) 
+      REWRITE (net, c ↦ Translate(embed(c), ε))
+    }
+
+    REWRITE PullbackInteraction(S : InteractionSystem) : EmbeddedNet -> EmbeddedNet {
+      MATCH (net, embed) 
+      WHERE (a, b) ↦ ((ω_i), ps, ws) ∈ S.rules, (a, pa) ∈ net.1, (b, pb) ∈ net.1
+      REWRITE (
+        net ∪ {(ω_i, pw)},
+        embed ∪ {(ω_i, pw) ↦ ConvexHull{p | (p, _) ∈ ps ∧ p ∈ embed(a, pa) ∪ embed(b, pb)}}  
+      )
+    }
+  }
+
+  PROOFS {
+    THEOREM InteractionStability {
+      ∀ (S : InteractionSystem) (e e' ê : EmbeddedNet)(ε : ℝ≥0) .
+        e →ₛ e' ∧ dI(e, ê) ≤ ε ⇒ ∃ (ê' C : ℝ≥0) . ê →ₛ ê' ∧ dI(e', ê') ≤ Cε 
+    }
+    PROOF {
+      ASSUME S : InteractionSystem, 
+             e e' ê : EmbeddedNet, ε : ℝ≥0,
+             e →ₛ e', dI(e, ê) ≤ ε
+      
+      LET (a, b) ↦ ((ω_i), ps, ws) ∈ S.rules 
+        SUCH_THAT (e.1 ∪ {(a, _), (b, _)}, _) →ₛ e'
+
+      dI(e, ê) ≤ ε
+      ⇒ ∃ (ϕ ψ : Sublevel(e, ?, ?) -> Sublevel(ê, ?, ?)) . 
+          IsInterleaving(ϕ, ψ, ε)
+      ⇒ ∃ (ϕ' ψ' : Sublevel(EmbeddingShift(ε)(ω_i ↦ ?), ?, ?) -> Sublevel(ê, ?, ?)) .
+          IsInterleaving(ϕ', ψ', Cε)
+        BY ConvexityOfSublevels, StabilityOfEmbeddings
+      ⇒ dI(EmbeddingShift(ε)(ω_i ↦ ?), PullbackInteraction(S)(ê)) ≤ Cε  
+      ⇒ ∃ ê' . ê →ₛ ê' ∧ dI(e', ê') ≤ Cε
+
+      TAKE ê' = PullbackInteraction(S)(ê), C = <CONSTANT>
+    }
+
+    THEOREM PersistentCombinators {
+      ∀ (a b : Symbol)(ℓ : Nat)(ε : ℝ>0) .
+        a ∈ Combinators ∧ b ∈ Combinators ⇒
+        ∃ (Rℓ_ε : ℝ>0) . ∀ (e : EmbeddedNet) .
+          Sublevel(e, Centroid(e.2(a))-Centroid(e.2(b)), ?) has [ε]-persistent ℓ-dim feature ⇒
+          ∀ (v : Direction) . DgmPHT^ℓ_e(v) has [Rℓ_ε]-persistent feature
+    }
+    PROOF {
+      SUFFICES_TO_SHOW ∃ (R0_ε : ℝ>0) . <STATEMENT> 
+        BY Hurewicz ∧ DimensionalityReduction
+      
+      ASSUME a b : Symbol, ε : ℝ>0,
+             e : EmbeddedNet,
+             Sublevel(e, Centroid(e.2(a))-Centroid(e.2(b)), ?) has [ε]-persistent 0-dim feature
+
+      Sublevel(e, Centroid(e.2(a))-Centroid(e.2(b)), ?) has [ε]-persistent 0-dim feature    
+      ⇒ ∃ (t : ℝ) . Sublevel(e, Centroid(e.2(a))-Centroid(e.2(b)), t) =/= ∅ ∧
+                    Sublevel(e, Centroid(e.2(a))-Centroid(e.2(b)), t+ε) =/= ∅
+        BY PersistenceImpliesNonEmptyIntervals
+      ⇒ Sublevel(e', Centroid(e'.2(a))-Centroid(e'.2(b)), ?) =/= ∅  
+        WHERE e →ₛ e'
+        BY PullbackInteraction
+      ⇒ ∀ (v : Direction) . DgmPHT^0_e'(v) has [R0_ε]-persistent feature
+        WHERE R0_ε := <CONSTANT> 
+        BY StabilityOfEmbeddings, Hausdorff-Gromov, ConvexityOfSublevels
+
+      TAKE R0_ε := <CONSTANT>  
+    }
+      
+    THEOREM EmbeddedNetApproximation {
+      ∀ (e : EmbeddedNet | ∀ c . e.2(c) is n-manifold) 
+        (τ : ℝ>0, ε δ : ℝ>0 | ε < τ/2 ∧ δ < 1) .
+      Prob[ ∃ (K : EmbeddedNet | K.1 = e.1 ∧ ∀ c . K.2(c) = AlphaComplex({x_i} ∩ e.2(c))) .
+              dI(e, K) ≤ Cε ] ≥ 1 - δ
+      WHERE {x_i} ⊂ ⋃ e.2 is (ε/2)-dense, C = <CONSTANT>      
+    }
+    PROOF {
+      ASSUME e : EmbeddedNet, τ ε : ℝ>0, ε < τ/2, δ : ℝ>0, δ < 1
+      
+      LET {x_i}_i ⊂ ⋃ e.2 with {x_i} is (ε/2)-dense, |{x_i}| = O((1/ε)^d)
+      LET U := ⋃_i B(x_i, ε)
+      DEFINE K : EmbeddedNet {
+        K.1 := e.1
+        ∀ c . K.2(c) := AlphaComplex({x_i} ∩ e.2(c))
+      }
+      
+      ∀ c . e.2(c) ≃ U ∩ e.2(c) with probability ≥ 1 - δ  
+        BY NiyogiSmaleWeinberger, Assumption[ε < τ/2]
+      ∀ c . U ∩ e.2(c) ≃ K.2(c)   
+        BY NerveTheorem
+
+      ⇒ ∀ c . ∃ (ϕ_c : e.2(c) -> K.2(c))(H_c : I × e.2(c) -> e.2(c)) . 
+          ϕ_c is ε-homotopy equivalence ∧
+          H_c : id_c ∼ ϕ_c with Im(H_c) ⊂ Nε(e.2(c))
+        BY Assumption[δ < 1], NiyogiSmaleWeinberger, AlphaApproximation
+
+      ⇒ dI(e, K) ≤ Cε with probability ≥ 1 - δ
+        WHERE C = <CONSTANT>
+        BY {ϕ_c}_c is (Cε)-interleaving, 
+           H_c moves points by ≤ 2ε, 
+           StabilityOfEmbeddings  
+    }
+
+    THEOREM InteractionSensitivity {
+      ∀ (S : InteractionSystem)(e e' : EmbeddedNet)(F : EmbeddingPerturbation) .
+        e →ₛ e' ⇒ 
+        ∃ (ê ê' C : ℝ≥0) .
+          ê.1 = e.1 ∧ ê'.1 = e'.1 ∧ 
+          ê.2 = F.Family ∘ e.2 ∧
+          ê →ₛ ê' ∧ dI(e', ê') ≤ C(ε + dI(e.2(ω), ê.2(ω)))
+        WHERE ε := sup{dH(s, F.Family(c)(s)) | c ∈ e.1, s ⊆ e.2(c)}
+    }
+    PROOF {  
+      ASSUME S : InteractionSystem, e e' : EmbeddedNet,
+             F : EmbeddingPerturbation,
+             e →ₛ e' with (a, b) ↦ ((ω_i), ps, ws)
+      
+      DEFINE ê : EmbeddedNet {
+        ê.1 := e.1
+        ê.2 := F.Family ∘ e.2
+      }
+
+      DEFINE ps' := [(F.Family(a)(p), q) | (p, q) ∈ ps ∩ e.2(a)] ++
+                    [(F.Family(b)(p), q) | (p, q) ∈ ps ∩ e.2(b)]
+      DEFINE ê' := PullbackInteraction(S)((ê.1, {(ω_i, pw)} ∪ ê.2))
+        WHERE ((ω_i), pw, ?) := S.rules(a, b)
+      
+      HAVE ê →ₛ ê' 
+        BY PullbackInteraction with (a, b) ↦ ((ω_i), ps', ws)
+      
+      HAVE dI(e'.2(ω), ê'.2(ω))
+             ≤ dI(e'.2(ω), ConvexHull(e.2(ω))) +
+               dI(ConvexHull(e.2(ω)), ConvexHull(ê.2(ω))) + 
+               dI(ConvexHull(ê.2(ω)), ê'.2(ω))
+             ≤ C(ε + dI(e.2(ω), ê.2(ω))) 
+        WHERE C := <CONSTANT>
+        BY ConvexityOfSublevels, StabilityOfEmbeddings, Hausdorff-Gromov
+        
+      TAKE C := <CONSTANT>
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE BraidInteractions : EmbeddedNet {
+      LET X1 : Cell := ("X", [(0, 1)])
+      LET X2 : Cell := ("X", [(1, 2)])  
+      LET Y : Cell := ("Y", [(0, 1), (1, 2)])
+      LET net : Net := ({X1, X2, Y}, 
+                         {(0, 1), (0, 2), (1, 3), (1, 4)},
+                         {((0, 1), (1, 3)), ((0, 2), (1, 4))})
+      LET embed : Map(Cell, Shape) := {
+        X1 ↦ Rectangle(0, 0, 2, 1),  
+        X2 ↦ Rectangle(1, 1, 3, 2),
+        Y ↦ Polygon((1, 0), (2, 1), (1, 2), (0, 1))  
+      }
+
+      (net, embed)
+    }
+
+    EXAMPLE SystemForBraids : InteractionSystem {
+      LET alphabet : Set(Symbol) := {"X", "Y"}
+      LET rules : Map((Symbol, Symbol), EmbeddedNet) := {
+        ("X", "Y") ↦ BraidInteraction("X", "Y"),
+        ("Y", "X") ↦ BraidInteraction("Y", "X")
+      }
+      { alphabet, rules }
+    }
+  }
+}  
+
+
+
+
+
+CONCEPT GeometricSymbolicDuality {
+  REQUIRES {
+    GeometricInteractionNets: CONCEPT
+    SymbolicInteractionNets: CONCEPT = InteractionCombinators
+  }
+
+  CONTEXT {
+    STRUCTURES {
+      STRUCTURE GeometricSymbolicCorrespondence {
+        FIELD Geometric: GeometricInteractionNets.InteractionSystem
+        FIELD Symbolic: SymbolicInteractionNets.InteractionSystem
+
+        AXIOM ShapeTypeCorrespondence(a: Geometric.Alphabet, A: Symbolic.Alphabet) {
+          ∃(f: Geometric.Shape -> Symbolic.Agent) . 
+            Geometric.Interaction(a, b) = (net, embed) IFF
+            Symbolic.Interaction(f(a), f(b)) = (net, f ∘ embed)
+        }
+        
+        AXIOM ReductionCorrespondence(e_G: Geometric.EmbeddedNet, e_S: Symbolic.Net) {
+          Geometric.Reduces(e_G, Geometric, e_G') IFF 
+          Symbolic.Reduces(e_S, Symbolic, e_S') AND
+          e_S' = (e_G'.Net, f ∘ e_G'.Embedding)
+        }
+      }
+    }
+  }
+
+  TRANSFORMERS {
+    DERIVE DiscreteApproximation(e: Geometric.EmbeddedNet, δ: Real) -> Symbolic.Net {
+      DEFINE f = LAMBDA (s: Geometric.Shape) . MIN {A: Symbolic.Agent | d(A, s) <= δ}
+      RETURN (e.Net, f ∘ e.Embedding) 
+    }
+    
+    DERIVE ContinuousExtension(e: Symbolic.Net, δ: Real) -> Geometric.EmbeddedNet {
+      DEFINE f_inv = LAMBDA (A: Symbolic.Agent) . Union {s: Geometric.Shape | f(s) = A}
+      RETURN (e.Net, f_inv ∘ e.Agents)
+    }
+  }
+
+  PROOFS {
+    THEOREM Approximation {
+      FORALL (e_G: Geometric.EmbeddedNet, e_S: Symbolic.Net, δ: Real) {
+        LET e_Sδ = DiscreteApproximation(e_G, δ)
+        LET e_Gδ = ContinuousExtension(e_S, δ)
+        
+        d(e_G, e_Gδ) <= 2δ AND d(e_S, e_Sδ) <= 2δ  
+      }
+      PROOF {
+        d(e_G, e_Gδ) 
+          = d(e_G, ContinuousExtension(DiscreteApproximation(e_G, δ), δ))
+          <= d(e_G, ContinuousExtension(e_G, δ)) + d(ContinuousExtension(e_G, δ), e_Gδ)
+          <= δ + δ = 2δ
+          BY Triangle inequality, Definitions of Approximation and Extension
+        
+        d(e_S, e_Sδ)
+          = d(e_S, DiscreteApproximation(ContinuousExtension(e_S, δ), δ))  
+          <= d(e_S, DiscreteApproximation(e_S, δ)) + d(DiscreteApproximation(e_S, δ), e_Sδ)
+          <= δ + δ = 2δ
+          BY Triangle inequality, Definitions of Approximation and Extension
+        QED  
+      }
+    }
+    
+    THEOREM DualityInvariance {
+      FORALL (C: GeometricSymbolicCorrespondence, e_G: Geometric.EmbeddedNet, e_S: Symbolic.Net) {
+        Geometric.ReducesInMany(e_G, C.Geometric, e_G') IFF
+        Symbolic.ReducesInMany(e_S, C.Symbolic, e_S')
+      }
+      PROOF {
+        ASSUME Geometric.ReducesInMany(e_G, C.Geometric, e_G') 
+        
+        e_G →* e_G' in C.Geometric
+          IFF ∀i. e_G_i → e_G_{i+1} in C.Geometric
+          IFF ∀i. e_S_i → e_S_{i+1} in C.Symbolic 
+            WHERE e_S_i = (e_G_i.Net, f ∘ e_G_i.Embedding)
+          IFF e_S →* e_S' in C.Symbolic
+            WHERE e_S' = (e_G'.Net, f ∘ e_G'.Embedding)
+          BY ReductionCorrespondence
+        QED
+      }
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE BooleanCircuits {
+      LET G: GeometricInteractionNets.InteractionSystem {
+        Alphabet = {Wire, And, Or, Not}
+        Shapes = {Line, AndGate, OrGate, NotGate}
+        
+        Interaction(Wire, And) = (net_AND, embed_AND)
+        Interaction(Wire, Or) = (net_OR, embed_OR)  
+        Interaction(Wire, Not) = (net_NOT, embed_NOT)
+      } 
+      
+      LET S: SymbolicInteractionNets.InteractionSystem {
+        Alphabet = {W, A, O, N}
+        
+        Interaction(W, A) = (net_AND, Agent_AND)
+        Interaction(W, O) = (net_OR, Agent_OR)
+        Interaction(W, N) = (net_NOT, Agent_NOT)
+      }
+
+      DEFINE C: GeometricSymbolicCorrespondence {
+        Geometric = G
+        Symbolic = S
+        
+        f(Wire) = W
+        f(And) = A  
+        f(Or) = O
+        f(Not) = N
+      }
+
+      THEN {
+        FORALL (e_G: G.EmbeddedNet, e_S: S.Net) {
+          G.ReducesInMany(e_G, G, e_G') IFF 
+          S.ReducesInMany(e_S, S, e_S')
+        }
+      }
+    }    
+  }
+}

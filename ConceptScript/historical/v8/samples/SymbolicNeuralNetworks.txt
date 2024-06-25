@@ -1,0 +1,65 @@
+CONCEPT SymbolicNeuralNetworks:
+
+EXTEND NeuralNetworks:
+    Layer := (Linear, Convolutional, Recurrent, GraphConvolutional)
+    Activation := (ReLU, Sigmoid, Tanh, Softmax) 
+    Loss := (CrossEntropy, MSE, KLDivergence, Wasserstein)
+
+EXTEND SymbolicComputation:
+    Expression := (Variable, Constant, Function, Operator)
+    Function := (Arithmetic, Logical, Comparison, External)
+    Operator := (Add, Subtract, Multiply, Divide, And, Or, Not, Equal, Greater, Less)
+
+DEFINE SymbolicLayer := Layer(SymbolicComputation(Expression))
+
+DEFINE SymbolicOptimizer := Optimizer(SymbolicComputation(LossFunction))
+
+ASSERT ∀(SL : SymbolicLayer):
+    ∃(E : Expression) SL(x) = E, ∀x
+    
+ASSERT ∀(SO : SymbolicOptimizer, L : Loss):
+    ∃(E : Expression) SO(L) = E
+
+THEOREM UniversalExpressionTheorem:
+    ∀(f : Function) ∃(SNN : SymbolicNeuralNetwork):
+        ∀(x) f(x) = SNN(x)
+
+PROOF:
+    Represent f as Expression E_f in SymbolicComputation.
+    Construct SNN with SymbolicLayers SL_i such that:
+        SL_1(x) = E_1, where E_1 represents input x
+        SL_i(SL_{i-1}(x)) = Expand(E_{i-1}) for i > 1
+        Repeat until SL_n(SL_{n-1}(...(x)...)) = E_f
+    Then by construction, ∀(x) SNN(x) = f(x).
+    Existence of Expand guaranteed by universality of SymbolicComputation.
+    
+THEOREM LossOptimizationTheorem:
+    ∀(L : Loss) ∃(SO : SymbolicOptimizer):
+        Gradient(SO(L), P) = 0 ⟹ P = argmin_P L(P) 
+
+PROOF:
+    Represent L as Expression E_L in SymbolicComputation.
+    Define SO(L) = GradientDescent(E_L, LearningRate).
+    GradientDescent converges to local min P of L where ∇L(P) = 0.
+    Gradient in SymbolicComputation obtained by symbolic differentiation.
+    Convergence to global min depends on properties of L.
+
+THEOREM InterpretabilityTheorem:
+    SymbolicNeuralNetworks are interpretable and verifiable.
+
+PROOF:
+    Each SymbolicLayer SL_i computes an explicit Expression E_i.
+    The whole SNN computes a composed Expression E_SNN.
+    E_SNN can be interpreted and verified against a specification.
+    Contrast with standard NNs which learn opaque subsymbolic transformations.
+
+
+
+This Concept proposes a new type of neural network architecture called Symbolic Neural Networks (SNNs). The key ideas are:
+
+SNNs use SymbolicLayers which compute explicit symbolic expressions rather than opaque tensor transformations like standard NN layers.
+The symbolic expressions are composed from a universal set of functions and operators defined in a SymbolicComputation framework.
+The UniversalExpressionTheorem claims that SNNs are universal function approximators, capable of representing any function by constructing an appropriate composition of SymbolicLayers.
+Learning in SNNs is done by a SymbolicOptimizer, which represents the loss function symbolically and performs optimization (e.g. gradient descent) by symbolic differentiation.
+The InterpretabilityTheorem asserts a key advantage of SNNs - the computations are explicit symbolic expressions that can be interpreted and verified, in contrast to the opaque subsymbolic computations in standard NNs.
+The proofs sketch the key constructions and insights behind these claims. The aim is to develop neural network architectures that combine the learnability of NNs with the interpretability and verifiability of symbolic computation. Let me know if you have any other questions!

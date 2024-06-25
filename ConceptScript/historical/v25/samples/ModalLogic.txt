@@ -1,0 +1,219 @@
+CONCEPT ModalLogic {
+  LANGUAGE {
+    TYPE World
+    TYPE Proposition
+    TYPE Accessibility(Relation[World, World])
+
+    FUNC Necessary(p : Proposition) : Proposition
+    FUNC Possible(p : Proposition) : Proposition
+    PRED Satisfies(w : World, p : Proposition) : Bool
+
+    AXIOM K: ∀(p q : Proposition).
+      (Necessary(p ⇒ q) ⇒ (Necessary(p) ⇒ Necessary(q)))
+    
+    AXIOM T: ∀(p : Proposition). (Necessary(p) ⇒ p)
+    
+    AXIOM Dual: ∀(p : Proposition). (Possible(p) ⇔ ¬Necessary(¬p))
+
+    NOTATION "□" = Necessary
+    NOTATION "◇" = Possible
+    NOTATION "⊩" = Satisfies
+  }
+
+  STRUCTURE KripkeFrame(W : Set[World], R : Accessibility) {
+    REQUIRE Reflexive(R) ∧ Transitive(R)
+
+    FUNC Evaluate(w : World, p : Proposition) : Bool =
+      MATCH p {
+        ⊤ => True
+        ⊥ => False  
+        a => w ⊩ a
+        ¬q => ¬Evaluate(w, q)
+        p ∧ q => Evaluate(w, p) ∧ Evaluate(w, q)
+        p ∨ q => Evaluate(w, p) ∨ Evaluate(w, q)
+        p ⇒ q => Evaluate(w, p) ⇒ Evaluate(w, q)
+        □q => ∀(v : World). (R(w, v) ⇒ Evaluate(v, q))
+        ◇q => ∃(v : World). (R(w, v) ∧ Evaluate(v, q))
+      }
+  }
+
+  PROOFS {
+    TACTIC Induct(prop, p) = {
+      BASE_CASE: prop(⊤), prop(⊥), ∀(a : Atom). prop(a)
+      IND_STEP: ∀(p q : Proposition). 
+        prop(p) ∧ prop(q) ⇒ prop(¬p) ∧ prop(p∧q) ∧ prop(p∨q) ∧ prop(p⇒q) 
+      MODAL_CASE: ∀(p : Proposition). prop(p) ⇒ prop(□p) ∧ prop(◇p)
+      CONCLUSION: ∀(p : Proposition). prop(p)
+    }
+
+    THEOREM NecessitationRule {
+      STATEMENT:
+        ∀(F : KripkeFrame, p : Proposition).
+          (∀(w : World). Evaluate(F, w, p)) ⇒ 
+          (∀(w : World). Evaluate(F, w, □p))
+
+      PROOF:
+        LET F : KripkeFrame, p : Proposition
+        ASSUME (H) : ∀(w : World). Evaluate(F, w, p)
+        LET w : World
+        SHOW Evaluate(F, w, □p)
+        {
+          LET v : World
+          ASSUME (wRv) : R(w, v)
+          SHOW Evaluate(F, v, p) BY H
+        }
+    }
+
+    THEOREM AxiomKIntuition {
+      STATEMENT:
+        ∀(F : KripkeFrame, w : World, p q : Proposition).
+          (Evaluate(F, w, □(p ⇒ q)) ∧ Evaluate(F, w, □p))
+          ⇒ Evaluate(F, w, □q)
+
+      PROOF:
+        LET F : KripkeFrame, w : World, p q : Proposition
+        ASSUME (H1) : Evaluate(F, w, □(p ⇒ q)),
+               (H2) : Evaluate(F, w, □p)
+        SHOW Evaluate(F, w, □q)
+        {
+          LET v : World
+          ASSUME (wRv) : R(w, v)
+          SHOW Evaluate(F, v, q) 
+          {
+            HAVE Evaluate(F, v, p ⇒ q) BY H1, wRv
+            HAVE Evaluate(F, v, p) BY H2, wRv
+            CONCLUDE Evaluate(F, v, q) BY MP
+          }  
+        }
+    }
+
+    THEOREM Equivalences {
+      STATEMENT:
+        ∀(p q : Proposition).
+          (1) □(p ∧ q) ⇔ (□p ∧ □q)
+          (2) ◇(p ∨ q) ⇔ (◇p ∨ ◇q)
+          (3) □p ⇒ ◇p
+          (4) □(p ⇒ q) ⇒ (◇p ⇒ ◇q)
+        
+      PROOF:
+        PROVE (1) BY Induct((p, q) ↦ □(p ∧ q) ⇔ (□p ∧ □q), p)
+        PROVE (2) BY REWRITE ◇(p ∨ q) 
+                    ⇔ ¬□¬(p ∨ q)                       BY Dual
+                    ⇔ ¬□(¬p ∧ ¬q)                     BY DeMorgan
+                    ⇔ ¬(□(¬p) ∧ □(¬q))                BY (1)  
+                    ⇔ ¬□(¬p) ∨ ¬□(¬q)                 BY DeMorgan
+                    ⇔ ◇p ∨ ◇q                         BY Dual
+        PROVE (3) BY {
+            LET w : World  
+            ASSUME Evaluate(F, w, □p)
+            THEN Evaluate(F, w, p) BY T
+            HENCE ∃(v : World). (R(w, v) ∧ Evaluate(F, v, p)) 
+              WHERE v = w, R(w, w) BY Reflexivity
+            HENCE Evaluate(F, w, ◇p) BY Dual
+          }
+        PROVE (4) BY {
+            LET w : World
+            ASSUME Evaluate(F, w, □(p ⇒ q)),
+                   Evaluate(F, w, ◇p)
+            SHOW Evaluate(F, w, ◇q)
+            {
+              HAVE ∃(v : World). (R(w, v) ∧ Evaluate(F, v, p)) BY Assumption
+              LET v : World
+              ASSUME (wRv) : R(w, v), 
+                     (vPp) : Evaluate(F, v, p)
+              HAVE Evaluate(F, v, p ⇒ q) BY Assumption, (wRv)
+              HAVE Evaluate(F, v, q) BY MP, (vPp)
+              CONCLUDE Evaluate(F, w, ◇q) BY Dual
+            }
+          }  
+    }
+  }
+}
+
+
+
+
+
+
+
+CONCEPT ModalLogic {
+  LANGUAGE {
+    TYPE World
+    TYPE Agent
+    TYPE Proposition
+
+    FUNC Believes : Agent -> Proposition -> World -> Bool
+    FUNC Knows : Agent -> Proposition -> World -> Bool
+
+    PRED True : Proposition -> World -> Bool
+    PRED Possible : Proposition -> World -> Bool
+    PRED Necessary : Proposition -> World -> Bool
+
+    NOTATION "⊩" = True
+    NOTATION "◇" = Possible
+    NOTATION "□" = Necessary  
+    NOTATION "B[" a "](" p ")" = Believes(a)(p)
+    NOTATION "K[" a "](" p ")" = Knows(a)(p)
+  }
+
+  STRUCTURE KripkeModel {  
+    LET Accessibility(R : World -> World -> Bool) = ∀ (w1 w2 : World). R(w1)(w2) ⇒ ∃ (w3 : World). R(w1)(w3) ∧ R(w3)(w2)
+
+    REQUIRE ∀ (a : Agent) (p : Proposition) (w : World).
+      K[a](p)(w) ⇒ B[a](p)(w)
+      
+    REQUIRE ∀ (a : Agent) (p : Proposition) (w : World).
+      K[a](p)(w) ⇒ (⊩ p)(w)
+
+    REQUIRE ∀ (a : Agent) (p : Proposition) (w : World).  
+      B[a](p)(w) ⇒ ∀ (w' : World). Accessibility(Believes(a))(w)(w') ⇒ (⊩ p)(w')
+
+    REQUIRE ∀ (a : Agent) (p : Proposition) (w : World).
+      K[a](p)(w) ⇒ ∀ (w' : World). Accessibility(Knows(a))(w)(w') ⇒ (⊩ p)(w')
+  }
+
+  PROOFS {
+    TACTIC Necessitation(p) = (∀ (w : World). (⊩ p)(w)) ⇒ □ p
+
+    TACTIC Distribution(p, q) = (□ (p ⇒ q)) ⇒ ((□ p) ⇒ (□ q))
+
+    THEOREM KnowledgeAxioms {  
+      STATEMENT:  
+        ∀ (a : Agent) (p q : Proposition).
+          K[a](p ⇒ q) ⇒ (K[a](p) ⇒ K[a](q)) ∧  
+          K[a](p) ⇒ p ∧
+          K[a](p) ⇒ K[a](K[a](p)) ∧
+          ¬K[a](p) ⇒ K[a](¬K[a](p))
+
+      PROOF:
+        LET a : Agent, p q : Proposition, w : World  
+        ASSUME K[a](p ⇒ q)(w), K[a](p)(w)
+        SHOW K[a](q)(w) BY {
+          HAVE (⊩ (p ⇒ q))(w) BY ASSUME  
+          HAVE (⊩ p)(w) BY ASSUME
+          HAVE (⊩ q)(w) BY ModusPonens  
+          SHOW K[a](q)(w) BY KripkeModel  
+        }
+        SHOW K[a](p)(w) ⇒ (⊩ p)(w) BY KripkeModel
+        SHOW K[a](p)(w) ⇒ K[a](K[a](p))(w) BY {  
+          ASSUME K[a](p)(w)
+          HAVE ∀ (w' : World). Accessibility(Knows(a))(w)(w') ⇒ (⊩ p)(w') BY KripkeModel
+          LET w' : World  
+          ASSUME Accessibility(Knows(a))(w)(w')
+          HAVE (⊩ p)(w') BY ASSUME  
+          SHOW K[a](p)(w') BY KripkeModel
+          SHOW K[a](K[a](p))(w) BY DEFINITION
+        }
+        SHOW ¬K[a](p)(w) ⇒ K[a](¬K[a](p))(w) BY {
+          ASSUME ¬K[a](p)(w)  
+          LET w' : World
+          ASSUME Accessibility(Knows(a))(w)(w')
+          SHOW ¬K[a](p)(w') BY {  
+            ASSUME K[a](p)(w')
+            HAVE K[a](p)(w) BY KripkeModel, CONTRADICTION  
+          }
+          SHOW K[a](¬K[a](p))(w) BY DEFINITION
+        }  
+    }
+  } 
+}

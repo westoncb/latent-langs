@@ -1,0 +1,53 @@
+CONCEPT CulinaryExperience {
+  LANGUAGE {
+    TYPE Ingredient
+    TYPE FlavorProfile = List[Flavor]
+    TYPE Flavor = (BasicTaste, Intensity)
+    TYPE BasicTaste = NewType(Sweet | Salty | Sour | Bitter | Umami | Spicy)
+    TYPE Intensity = Nat  -- scale from 1 to 10
+    TYPE Texture = NewType(Crispy | Crunchy | Tender | Chewy | Smooth | Creamy)
+    TYPE CulinaryTechnique = NewType(Sauté | Roast | Grill | Braise | Blanch | Poach | ...)  
+    TYPE CuisineInfluence = NewType(French | Italian | Chinese | Japanese | Indian | ...)
+    
+    FUNC FlavorBalance : FlavorProfile -> Bool
+    FUNC TextureContrast : List[Texture] -> Bool
+    FUNC TechniqueCompatibility : (CulinaryTechnique, Ingredient) -> Bool
+    FUNC CuisineAffinity : (Ingredient, CuisineInfluence) -> Bool
+    
+    PRED Harmonious : FlavorProfile -> Bool
+    PRED Balanced : FlavorProfile -> Bool
+    PRED Contrasting : List[Texture] -> Bool
+    PRED Complementary : (CulinaryTechnique, Ingredient) -> Bool  
+    PRED Authentic : (Ingredient, CuisineInfluence) -> Bool
+
+    AXIOM FlavorHarmony {
+      ∀ (fp : FlavorProfile).
+        Harmonious(fp) ⇔ 
+          ∃ (f1 f2 : Flavor) ∈ fp. f1.BasicTaste ≠ f2.BasicTaste ∧ 
+            Abs(f1.Intensity - f2.Intensity) ≤ 2
+    }
+
+    AXIOM TexturalInterest {
+      ∀ (textures : List[Texture]).  
+        Contrasting(textures) ⇔ ∃ (t1 t2 : Texture) ∈ textures. t1 ≠ t2
+    }
+  }
+
+  PROOFS {
+    TACTIC HarmoniousFlavors(fp : FlavorProfile) -> Bool {
+      SHOW Harmonious(fp) USING FlavorHarmony
+    }
+    
+    TACTIC ContrastingTextures(textures : List[Texture]) -> Bool {
+      SHOW Contrasting(textures) USING TexturalInterest  
+    }
+
+    TACTIC CompatibleTechnique(technique : CulinaryTechnique, ingredient : Ingredient) -> Bool {
+      SHOW Complementary(technique, ingredient)
+    }
+    
+    TACTIC AuthenticIngredient(ingredient : Ingredient, cuisine : CuisineInfluence) -> Bool {
+      SHOW Authentic(ingredient, cuisine)  
+    }
+  }
+}

@@ -1,0 +1,106 @@
+CONCEPT HighDimensionalBayesianOptimization {
+  LANGUAGE {
+    TYPE X = ℝ^n  ; Domain
+    TYPE Y = ℝ  ; Codomain
+    TYPE GP = X -> 𝒩(Y)  ; Gaussian Process
+    TYPE Acquisition = X -> ℝ  ; Acquisition Function
+
+    FUNC Kernel : X × X -> ℝ
+    FUNC Noise : ℝ  
+    FUNC UCB(μ σ : X -> ℝ, β : ℝ) : Acquisition
+    FUNC EI(μ σ : X -> ℝ, τ : ℝ) : Acquisition
+    FUNC PI(μ σ : X -> ℝ, τ : ℝ) : Acquisition
+    FUNC Optimize(α : Acquisition, D : 𝒫(X)) : X
+    FUNC ArgMax(f : X -> ℝ, D : 𝒫(X)) : X
+
+    AXIOM GaussianProcessRegression {
+      ∀ (x : X) (D : 𝒫(X × Y)) . 
+        LET (μ, σ) = GP(Kernel, Noise, D)
+        IN μ(x) = Kernel(x, D.X) * Inv(Kernel(D.X, D.X) + Noise * I) * D.Y ∧
+           σ(x)^2 = Kernel(x, x) - Kernel(x, D.X) * Inv(Kernel(D.X, D.X) + Noise * I) * Kernel(D.X, x)
+    }
+
+    NOTATION "𝒩" = NormalDistribution
+    NOTATION "𝒫" = PowerSet
+    NOTATION "I" = IdentityMatrix
+  }
+
+  PROOFS {
+    THEOREM BayesianRegretBound {
+      STATEMENT : ∀ (f : X -> Y) (x_* = ArgMax(f, X)) (D_0 : 𝒫(X × Y)) (T : ℕ) .
+        LET β(t) = 2 * Log(Card(X) * t^2 * π^2 / 6δ),
+            x(t) = Optimize(UCB(GP(D_(t-1)), β(t)), X),  
+            D_t = D_(t-1) ∪ {(x(t), f(x(t)))}
+        IN ∀ (δ : ℝ) (0 < δ < 1) . P(∀ (t : 1..T) . f(x_*) - f(x(t)) ≤ √(β(t) * σ(x(t)))) ≥ 1 - δ
+
+      PROOF {
+        LET f : X -> Y, x_* = ArgMax(f, X), D_0 : 𝒫(X × Y), T : ℕ
+        LET β(t) = 2 * Log(Card(X) * t^2 * π^2 / 6δ),
+            x(t) = Optimize(UCB(GP(D_(t-1)), β(t)), X),
+            D_t = D_(t-1) ∪ {(x(t), f(x(t)))}
+
+        ∀ (δ : ℝ) (0 < δ < 1) . P(∀ (t : 1..T) . f(x_*) - f(x(t)) ≤ √(β(t) * σ(x(t)))) ≥ 1 - δ BY {
+          LET μ_t σ_t = GP(D_(t-1))
+
+          ∀ (t : 1..T) (x : X) . P(|f(x) - μ_t(x)| ≤ √(β(t) * σ_t(x))) ≥ 1 - Card(X) * e^(-β(t)/2)  BY {
+            P(|f(x) - μ_t(x)| ≤ √(β(t) * σ_t(x)))
+              = 2 * Φ(√β(t)) - 1  WHERE Φ = CDF(𝒩(0, 1))
+              ≥ 1 - e^(-β(t)/2)  BY Chernoff
+          }
+
+          P(∀ (t : 1..T) (x : X) . |f(x) - μ_t(x)| ≤ √(β(t) * σ_t(x)))
+            ≥ 1 - ∑[t<-1..T][x<-X] P(|f(x) - μ_t(x)| > √(β(t) * σ_t(x)))  BY Union
+            ≥ 1 - T * Card(X) * e^(-β(t)/2)  USING PREV
+            = 1 - δ  BY CHOICE OF β
+          
+          ∀ (t : 1..T) . f(x_*) - f(x(t)) ≤ √(β(t) * σ(x(t))) BY {
+            f(x_*) 
+              ≤ μ_t(x_*) + √(β(t) * σ_t(x_*))  USING PREV  
+              ≤ μ_t(x(t)) + √(β(t) * σ_t(x(t)))  BY OPTIMALITY OF x(t)
+              ≤ f(x(t)) + 2√(β(t) * σ_t(x(t)))  USING PREV
+          }
+        }
+      }
+    }
+
+    THEOREM OptimalConvergenceRate {
+      STATEMENT : ∀ (f : X -> Y) (K : Kernel) (γ : ℝ) (D_0 : 𝒫(X × Y)) (T : ℕ) .
+        (∀ (x x' : X) . |f(x) - f(x')| ≤ L * ||x - x'||) ∧
+        (∀ (x x' : X) . K(x, x') ≤ 1 - γ * ||x - x'||^2)
+        =>  
+        LET x(t) = Optimize(UCB(GP(D_(t-1)), β(t)), X),
+            D_t = D_(t-1) ∪ {(x(t), f(x(t)))}  
+        IN E[∑[t<-1..T] f(x_*) - f(x(t))] = O(√(T * γ_T))
+        WHERE γ_T = max[A<-𝒫(X : Card(A)=T)] min[x<-X] ∑[x'<-A] ||x - x'||^2
+
+      PROOF {
+        LET f : X -> Y, K : Kernel, γ : ℝ, D_0 : 𝒫(X × Y), T : ℕ
+        ASSUME (1) ∀ (x x' : X) . |f(x) - f(x')| ≤ L * ||x - x'||,
+               (2) ∀ (x x' : X) . K(x, x') ≤ 1 - γ * ||x - x'||^2
+        LET x(t) = Optimize(UCB(GP(D_(t-1)), β(t)), X),  
+            D_t = D_(t-1) ∪ {(x(t), f(x(t)))}
+            γ_T = max[A<-𝒫(X : Card(A)=T)] min[x<-X] ∑[x'<-A] ||x - x'||^2
+
+        E[∑[t<-1..T] f(x_*) - f(x(t))] = O(√(T * γ_T)) BY {
+          E[∑[t<-1..T] f(x_*) - f(x(t))]
+            ≤ ∑[t<-1..T] E[f(x_*) - f(x(t))]  BY Linearity
+            ≤ ∑[t<-1..T] E[√(β(t) * σ(x(t)))]  BY BayesianRegretBound
+            ≤ ∑[t<-1..T] √(β(t) * E[σ(x(t))^2])  BY Jensen
+            ≤ ∑[t<-1..T] √(β(t) * γ_t)  BY {
+                E[σ(x(t))^2]
+                  ≤ E[K(x(t), x(t)) - K(x(t), D_(t-1).X) * Inv(K(D_(t-1).X, D_(t-1).X) + Noise * I) * K(D_(t-1).X, x(t))]  BY GaussianProcessRegression  
+                  ≤ 1 - γ * E[min[x<-X] ∑[x'<-D_(t-1).X] ||x - x'||^2]  BY (2)
+                  = 1 - γ * γ_t  BY DEFINITION OF γ_t
+              }
+            = O(√(T * γ_T))  BY {
+                ∑[t<-1..T] √(β(t) * γ_t)
+                  ≤ √(∑[t<-1..T] β(t)) * √(∑[t<-1..T] γ_t)  BY Cauchy-Schwarz
+                  ≤ √(2 * Log(Card(X) * T^3 * π^2 / 6δ) * T) * √(T * γ_T)  BY DEFINITION OF β, MONOTONICITY OF γ_t
+                  = O(√(T * Log(T)) * √(T * γ_T))
+                  = O(√(T * γ_T))  IGNORING Log FACTORS
+              }
+        }
+      }
+    }
+  }
+}

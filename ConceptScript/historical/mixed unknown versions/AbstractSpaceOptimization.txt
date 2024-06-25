@@ -1,0 +1,86 @@
+CONCEPT AbstractSpaceOptimization {
+  METALANGUAGE {
+    type Space
+    type Element
+    type Property<T>
+    type Transformation
+    type Morphism<S1, S2>
+
+    func Invariant<S, P>(s: Space<S>, p: Property<P>): 𝔹
+    func Covariant<S1, S2, P>(m: Morphism<S1, S2>, p: Property<P>): 𝔹 
+    func Optimal<S, P>(s: Space<S>, p: Property<P>, r: Region<S>): Element<S>
+    func Gradient<S, P>(s: Space<S>, p: Property<P>, e: Element<S>): Transformation<S>
+    func Dynamics<S>(s: Space<S>, t: Transformation<S>, e: Element<S>): Element<S>
+
+    notation "s ⊧ p" = Invariant(s, p)
+    notation "m ◁ p" = Covariant(m, p) 
+    notation "arg opt {p(e) | e ∈ r}" = Optimal(s, p, r)
+    notation "∇p[e]" = Gradient(s, p, e)
+    notation "e ↦ t" = Dynamics(s, t, e)
+    
+    infer AbstractConvergence<S, P, R>(s: Space<S>, p: Property<P>, r: Region<S>,
+                                        t: Transformation<S>, e₀: Element<S>):
+      let e(n) = Iterate(λe. e ↦ ∇p[e], n)(e₀) in
+      ∃e* ∈ r. ∀ε > 0. ∃N. ∀n ≥ N. |p(e(n)) - p(e*)| < ε ∧ s ⊧ p 
+
+    infer AbstractOptimality<S, P, R>(s: Space<S>, p: Property<P>, r: Region<S>):
+      ∃t: Transformation<S>. ∀e₀ ∈ r. AbstractConvergence<S, P, R>(s, p, r, t, e₀)
+      -> 
+      lim (λn. e(n)) = arg opt {p(e) | e ∈ r}
+  }
+
+  STRUCTURE {
+    ; Invariance-Covariance Duality
+    ∀S1, S2, P, m: Morphism<S1, S2>, p: Property<P>.
+      (∀s1: Space<S1>. s1 ⊧ p <-> m(s1) ⊧ p) <-> m ◁ p
+
+    ; Gradient Ascent
+    ∀S, P, e: Element<S>, p: Property<P>, ε > 0.
+      p(e ↦ ε * ∇p[e]) ≥ p(e) + O(ε)
+  }
+
+  PROOFS {
+    theorem AbstractConvergenceTheorem<S, P, R>:
+      ∀(s: Space<S>, p: Property<P>, r: Region<S>). 
+        (∃t: Transformation<S>. ∀e₀ ∈ r. AbstractConvergence<S, P, R>(s, p, r, t, e₀))
+        ->
+        ∃e*. AbstractOptimality<S, P, R>(s, p, r) ∧ 
+              ∀e₀ ∈ r. lim (λn. Iterate(λe. e ↦ ∇p[e], n)(e₀)) = e*
+    {
+      assume s: Space<S>, p: Property<P>, r: Region<S>
+      assume ∃t: Transformation<S>. ∀e₀ ∈ r. AbstractConvergence<S, P, R>(s, p, r, t, e₀)
+      let t: Transformation<S> such that ∀e₀ ∈ r. AbstractConvergence<S, P, R>(s, p, r, t, e₀)
+
+      let e* = arg opt {p(e) | e ∈ r}
+      have s ⊧ p   ; by AbstractConvergence<S, P, R>
+
+      have ∀e₀ ∈ r. let e(n) = Iterate(λe. e ↦ t, n)(e₀) in
+                    ∀ε > 0. ∃N. ∀n ≥ N. |p(e(n)) - p(e*)| < ε   
+      proof {
+        assume e₀ ∈ r
+        let e(n) = Iterate(λe. e ↦ t, n)(e₀)
+        have ∀ε > 0. ∃N. ∀n ≥ N. |p(e(n)) - p(e*)| < ε   ; by AbstractConvergence<S, P, R>
+      }
+
+      have ∀e₀ ∈ r. lim (λn. p(e(n))) = p(e*)   ; by definition of limit
+      have ∀e₀ ∈ r. lim (λn. e(n)) = e*         ; by continuity of p
+
+      have ∀e₀ ∈ r. lim (λn. Iterate(λe. e ↦ ∇p[e], n)(e₀)) = e*   
+      proof {
+        assume e₀ ∈ r
+        let ê(n) = Iterate(λe. e ↦ ∇p[e], n)(e₀)
+        have ∀n. p(ê(n+1)) ≥ p(ê(n)) + O(1/n)   ; by Gradient Ascent
+        have lim (λn. p(ê(n))) = p(e*)           ; by Monotone Convergence Theorem
+        have lim (λn. ê(n)) = e*                 ; by continuity of p
+      }
+
+      hence ∃e*. AbstractOptimality<S, P, R>(s, p, r) ∧ 
+                  ∀e₀ ∈ r. lim (λn. Iterate(λe. e ↦ ∇p[e], n)(e₀)) = e*
+    }
+  }
+}
+
+This Concept, AbstractSpaceOptimization, provides a general framework for reasoning about optimization problems in abstract spaces. It introduces types for spaces, elements, properties, transformations, and morphisms between spaces. Key notions include invariance of properties under certain transformations, covariance of properties with morphisms, and optimality of elements with respect to a property.
+The Concept includes inference rules for abstract convergence and optimality, which state conditions under which a sequence of transformed elements converges to an optimal element. The structure axioms encode an invariance-covariance duality and a gradient ascent property.
+Finally, the AbstractConvergenceTheorem proves that under suitable conditions, iterated gradient ascent from any starting point in a region converges to an optimal point. The proof relies on the abstract convergence and continuity assumptions to establish the limit.
+This Concept could be instantiated to various concrete optimization problems by specifying the space, property, transformations, and so on. It aims to capture the essential abstract structure of optimization in a way that supports rigorous reasoning.

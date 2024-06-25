@@ -1,0 +1,63 @@
+CONCEPT BuddhistEthics {
+  LANGUAGE {
+    type Action
+    type Intention
+    type Consequence
+    type Virtue
+    type Precept
+    
+    func karma(a: Action): Consequence
+    func intention(a: Action): Intention
+    func skillful(a: Action): Boolean
+    func virtuous(i: Intention): Boolean
+    func precept(p: Precept): Boolean
+    
+    axiom Karma {
+      forall a: Action. karma(a) = (k: Consequence, p: Probability) where
+        k = (benefit(a) + harm(a)) and
+        p = (skillful(a) ? merit(a) : demerit(a))
+    }
+    
+    axiom Skillful_Action {
+      forall a: Action. skillful(a) <=>
+        (intention(a) = (wisdom, compassion, generosity, patience, ...)) and
+        (not (intention(a) = (ignorance, greed, hatred, delusion, ...)))
+    }
+    
+    axiom Virtuous_Intention {
+      forall i: Intention. virtuous(i) <=>
+        (i = (non_harming, truthfulness, contentment, generosity, ...)) and
+        (not (i = (harming, lying, stealing, sensuality, intoxication, ...)))
+    }
+    
+    axiom Precepts {
+      precept(non_harming) and
+      precept(truthfulness) and
+      precept(not_stealing) and 
+      precept(sexual_responsibility) and
+      precept(sobriety)
+    }
+  }
+  
+  THEOREMS {
+    theorem Right_Action {
+      forall a: Action. right(a) <=> (skillful(a) and virtuous(intention(a)))
+    }
+    
+    theorem Precept_Keeping {
+      forall p: Precept, a: Action. 
+        precept(p) => (intention(a) = p => skillful(a))
+    }
+    
+    theorem Altruism {
+      forall a: Action. 
+        (intention(a) = compassion) => 
+        (benefit(karma(a)) = others and harm(karma(a)) = self)
+    }
+    
+    theorem Equanimity {
+      forall a1, a2: Action.
+        (skillful(a1) and skillful(a2)) => (karma(a1) = karma(a2))
+    }
+  }
+}

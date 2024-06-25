@@ -1,0 +1,302 @@
+METALANGUAGE MaterialsScience {
+  EXTENDS SymbolicDifferentialGeometry {
+    type Material
+    type Structure
+    type Properties
+    type Processes
+    type Elements
+    type Bonds
+    type Atom
+    type Molecule 
+    type Defect
+    type Scale
+    type Phase
+    type Microstructure
+    type Lattice
+    type Dislocation
+    type Grain
+    type GrainBoundary
+    type Interface
+    type ElasticityTensor
+    type PlasticityTensor  
+    type FractureToughness
+    type Hardness
+    type Conductivity
+    type Permeability
+    type Permittivity
+    type FreeEnergy
+    type Entropy
+    type ChemicalPotential
+    type ReactionRate
+    
+    func Tuple(Structure, Properties, Processes): Material
+    func Graph(Elements, Bonds): Structure
+    func Mechanical(Material): ElasticityTensor
+    func Thermal(Material): Function(ℝ)
+    func Electromagnetic(Material): VectorField
+    func Flow(Properties): Processes
+    func Composite(Material, Material): Material
+    func Polycrystal(Grain): Material
+    func SingleCrystal(Lattice): Material
+    func Isotropic(Properties): Properties
+    func Anisotropic(Properties): Properties
+    func Homogeneous(Properties): Properties
+    func Heterogeneous(Properties): Properties
+    func +(Properties, Properties): Properties
+    func *(ℝ, Properties): Properties
+    func ⊗(Properties, Properties): Properties
+    func ∘(Processes, Processes): Processes
+    func ⊕(Processes, Processes): Processes
+    func ⊖(Processes, Processes): Processes
+    func Deformation(Material): Material
+    func Fracture(Material): Material  
+    func PhaseTransformation(Material): Material
+    func Recrystallization(Material): Material
+    func Sintering(Material): Material
+    
+    pred Ionic(Bonds)
+    pred Covalent(Bonds)
+    pred Metallic(Bonds) 
+    pred vanDerWaals(Bonds)
+    pred HydrogenBond(Bonds)
+    
+    rel Coupling(StructureFlow, PropertyFlow, ProcessFlow)
+    rel Equilibrium(Material)
+    rel Diffusion(Elements, Material)
+    rel Nucleation(Phase, Material)
+    rel Growth(Phase, Material)
+    
+    const YoungModulus(Material): ℝ 
+    const ShearModulus(Material): ℝ
+    const BulkModulus(Material): ℝ
+    const PoissonRatio(Material): ℝ
+    const YieldStrength(Material): ℝ
+    const UltimateTensileStrength(Material): ℝ
+    
+    notation "𝓜" = Material
+    notation "𝓢" = Structure
+    notation "𝓟" = Properties
+    notation "𝓕" = Processes  
+    notation "𝓔" = Elements
+    notation "𝓑" = Bonds
+    notation "ε" = Scale
+    
+    infer Equivariance(ℱ, g):
+      ℱ(g ⋅ 𝓢, 𝓟) = g ⋅ ℱ(𝓢, 𝓟) ⊢ 
+        ∀ 𝓢, 𝓟. ℱ(𝓢, 𝓟) ≈ ℱ(g ⋅ 𝓢, 𝓟)
+        
+    rewrite Leibniz(𝓢, 𝓟):
+      d[𝓢 ⊗ 𝓟] ~> d[𝓢] ⊗ 𝓟 + 𝓢 ⊗ d[𝓟]
+      
+    axiom Linearity(p, q: Properties, a, b: ℝ):  
+      (a * p) + (b * q) = (a + b) * (p + q)
+      
+    axiom Monotonicity(p, q: Properties):
+      p ≤ q ⇒ ∀ r: Properties. p + r ≤ q + r
+      
+    infer Associativity(p, q, r: Properties):
+      (p + q) + r = p + (q + r)
+      
+    infer Distributivity(p, q, r: Properties):
+      p ⊗ (q + r) = (p ⊗ q) + (p ⊗ r)  
+  }
+}
+
+THEORY MultiscaleMaterialEvolution : MaterialsScience {
+
+  structure HeterogeneousMaterial {
+    matrix: Material
+    inclusions: Material
+    interfaces: Interface
+    
+    couple: Coupling(
+      StructureFlow(matrix), 
+      PropertyFlow(inclusions),
+      ProcessFlow(interfaces)
+    )
+  }
+  
+  theorem MultiscaleStructureEvolution(𝓜: HeterogeneousMaterial, t: Time)
+  {
+    let 𝓢_matrix = 𝓜.matrix.Structure
+    let 𝓢_inclusions = 𝓜.inclusions.Structure
+    
+    assert ∂[𝓢_matrix, t] = Deformation(𝓢_matrix) + Recrystallization(𝓢_matrix)
+    assert ∂[𝓢_inclusions, t] = Fracture(𝓢_inclusions) + PhaseTransformation(𝓢_inclusions)
+    
+    assert Nucleation(NewPhase, 𝓜.interfaces) ⇒ Growth(NewPhase, 𝓜.matrix)
+  }
+  
+  theorem MultiscalePropertyEvolution(𝓜: HeterogeneousMaterial, t: Time)
+  {
+    let 𝓟_matrix = 𝓜.matrix.Properties
+    let 𝓟_inclusions = 𝓜.inclusions.Properties
+    
+    assert ∂[Mechanical(𝓟_matrix), t] = Elastic(∂[𝓢_matrix, t]) + Plastic(∂[𝓢_matrix, t])
+    assert ∂[Thermal(𝓟_inclusions), t] = Conduction(∇[Temperature(𝓜)], 𝓟_inclusions)
+    
+    assert Diffusion(Species, 𝓜.interfaces) ⇒ ∇[ChemicalPotential(Species), 𝓜.interfaces] ≠ 0
+  }
+  
+  theorem MultiscaleProcessCoupling(𝓜: HeterogeneousMaterial, t: Time)
+  {
+    let 𝓕_matrix = Processes(𝓜.matrix)
+    let 𝓕_inclusions = Processes(𝓜.inclusions) 
+    let 𝓕_interfaces = Processes(𝓜.interfaces)
+    
+    assert 𝓕_matrix ≈ ⨁_i 𝓕_matrix_i(ε)
+    assert 𝓕_inclusions ≈ ⨁_j 𝓕_inclusions_j(ε) 
+    assert 𝓕_interfaces ≈ ⨁_k 𝓕_interfaces_k(ε)
+    
+    assert ∃ ε, i, j, k. Coupling(𝓕_matrix_i(ε), 𝓕_inclusions_j(ε), 𝓕_interfaces_k(ε)) ≠ 0
+  }
+  
+  proof MultiscaleStructurePropertyCoupling(𝓜: HeterogeneousMaterial, t: Time):
+    ∀ ε, i, j. d[𝓢_matrix_i(ε) ⊗ 𝓟_inclusions_j(ε)] ≈ 0 
+    ⊢ ∃ k. Coupling(𝓕_matrix_i(ε), 𝓕_inclusions_j(ε), 𝓕_interfaces_k(ε)) ≠ 0
+  {
+    assume ∀ ε, i, j. d[𝓢_matrix_i(ε) ⊗ 𝓟_inclusions_j(ε)] ≈ 0
+    
+    have ⟨d[𝓢_matrix_i(ε)], 𝓟_inclusions_j(ε)⟩ + ⟨𝓢_matrix_i(ε), d[𝓟_inclusions_j(ε)]⟩ ≈ 0
+      by StructurePropertyDuality(𝓜.matrix ⊕ 𝓜.inclusions)
+      
+    let 𝓕_matrix_i = Processes(𝓢_matrix_i(ε))  
+    let 𝓕_inclusions_j = Processes(𝓟_inclusions_j(ε))
+    
+    have 𝓕_matrix_i(𝓢_matrix_i(ε), 𝓟_inclusions_j(ε)) 
+         ≈ 𝓕_matrix_i(𝓢_matrix_i(ε) + d[𝓢_matrix_i(ε)], 𝓟_inclusions_j(ε) - ⟨d[𝓢_matrix_i(ε)], d[𝓟_inclusions_j(ε)]⟩)
+      by StructurePropertyCorrespondence(𝓜.matrix ⊕ 𝓜.inclusions, 𝓕_matrix_i)
+      
+    let Δ𝓢_matrix_i = d[𝓢_matrix_i(ε)]
+    let Δ𝓟_inclusions_j = -⟨d[𝓢_matrix_i(ε)], d[𝓟_inclusions_j(ε)]⟩
+    
+    have Δ𝓢_matrix_i ≈ ⨁_k Δ𝓢_interfaces_k(ε) 
+      by 𝓜.couple
+    have Δ𝓟_inclusions_j ≈ ⨁_k Δ𝓟_interfaces_k(ε)
+      by 𝓜.couple
+      
+    so ∃ k. Coupling(𝓕_matrix_i(ε), 𝓕_inclusions_j(ε), 𝓕_interfaces_k(ε)) ≠ 0  
+  }
+}
+
+
+
+
+
+METALANGUAGE MaterialsScience {
+  EXTENDS SymbolicDifferentialGeometry {
+    type Material
+    type Structure
+    type Properties
+    type Processes
+    type Elements
+    type Bonds
+    type Atom
+    type Molecule 
+    type Defect
+    type Scale
+    
+    func Tuple(Structure, Properties, Processes): Material
+    func Graph(Elements, Bonds): Structure
+    func Mechanical(Material): (1,1)-Tensor
+    func Thermal(Material): Function(ℝ)  
+    func Electromagnetic(Material): VectorField
+    func Flow(Properties): Processes
+    
+    pred Ionic(Bonds)
+    pred Covalent(Bonds) 
+    pred Metallic(Bonds)
+    pred vanDerWaals(Bonds)
+    pred HydrogenBond(Bonds)
+    
+    rel Coupling(StructureFlow, PropertyFlow, ProcessFlow)
+    
+    notation "𝓜" = Material
+    notation "𝓢" = Structure 
+    notation "𝓟" = Properties
+    notation "𝓕" = Processes
+    notation "𝓔" = Elements
+    notation "𝓑" = Bonds
+    notation "ε" = Scale
+    
+    infer Equivariance(ℱ, g):
+      ℱ(g ⋅ 𝓢, 𝓟) = g ⋅ ℱ(𝓢, 𝓟) ⊢ 
+        ∀ 𝓢, 𝓟. ℱ(𝓢, 𝓟) ≈ ℱ(g ⋅ 𝓢, 𝓟)
+        
+    rewrite Leibniz(𝓢, 𝓟):  
+      d[𝓢 ⊗ 𝓟] ~> d[𝓢] ⊗ 𝓟 + 𝓢 ⊗ d[𝓟]
+  }
+}
+
+
+
+THEORY MultiscaleMaterialBehavior : MaterialsScience {
+
+  structure MultiscaleMaterial {
+    macro: Material
+    meso: Material
+    micro: Material
+    
+    couple: Coupling(StructureFlow(macro), PropertyFlow(meso), ProcessFlow(micro))
+  }
+  
+  theorem MultiscaleDecomposition(𝓜: Material, ε: Scale)
+  {
+    let 𝓢 = 𝓜.Structure
+    let 𝓟 = 𝓜.Properties
+    
+    assert 𝓢 = 𝓢_macro(ε) ⊕ 𝓢_meso(ε) ⊕ 𝓢_micro(ε)
+    assert 𝓟 = 𝓟_macro(ε) ⊕ 𝓟_meso(ε) ⊕ 𝓟_micro(ε)
+    
+    let ℱ = Processes(𝓜)
+    
+    assert ℱ(𝓢, 𝓟) ≈ ⨁_i ℱ(𝓢_i(ε), 𝓟_i(ε))
+  }
+  
+  proof MultiscaleEquivariance: 
+    ∀ g: StructureFlow(𝓜.macro), ℱ: Processes(𝓜).
+      Equivariance(ℱ, g) ⊢ 
+        ℱ(𝓢, 𝓟) ≈ ⨁_i ℱ(𝓢_i(ε), 𝓟_i(ε))
+  {
+    assume g: StructureFlow(𝓜.macro), ℱ: Processes(𝓜)
+    assume Equivariance(ℱ, g)
+    
+    let 𝓢_i = 𝓜.Structure_i(ε)
+    let 𝓟_i = 𝓜.Properties_i(ε) 
+    have ℱ(𝓢_i, 𝓟_i) ≈ ℱ(g ⋅ 𝓢_i, 𝓟_i) by Equivariance(ℱ, g)
+    
+    let ℱ_i = ℱ(𝓢_i, 𝓟_i)
+    suffices to show ℱ(𝓢, 𝓟) ≈ ⨁_i ℱ_i
+    {
+      have ℱ(⨁_i 𝓢_i, ⨁_i 𝓟_i) = ⨁_i ⨁_j ℱ(𝓢_i, 𝓟_j) by linearity of ℱ
+      have ℱ(𝓢_i, 𝓟_j) ≈ 0 for i ≠ j by 𝓜.couple
+      hence ℱ(𝓢, 𝓟) ≈ ⨁_i ℱ(𝓢_i, 𝓟_i) = ⨁_i ℱ_i
+    }
+  }
+  
+  theorem StructurePropertyDuality(𝓜: Material)
+  {
+    let 𝓢 = 𝓜.Structure
+    let 𝓟 = 𝓜.Properties
+    
+    assert d[𝓢 ⊗ 𝓟] ≈ 0 ⟺ ⟨d[𝓢], 𝓟⟩ + ⟨𝓢, d[𝓟]⟩ ≈ 0
+  }
+  
+  proof StructurePropertyCorrespondence(𝓜: Material, ℱ: Processes):
+    ∀ 𝓢: 𝓜.Structure, 𝓟: 𝓜.Properties. 
+      d[𝓢 ⊗ 𝓟] ≈ 0 ⊢ ℱ(𝓢, 𝓟) ≈ ℱ(𝓢 + d[𝓢], 𝓟 - ⟨d[𝓢], d[𝓟]⟩)
+  {
+    assume 𝓢: 𝓜.Structure, 𝓟: 𝓜.Properties
+    assume d[𝓢 ⊗ 𝓟] ≈ 0
+    
+    have d[𝓢 ⊗ 𝓟] ~> d[𝓢] ⊗ 𝓟 + 𝓢 ⊗ d[𝓟] by Leibniz(𝓢, 𝓟)
+    so d[𝓢] ⊗ 𝓟 + 𝓢 ⊗ d[𝓟] ≈ 0
+    iff ⟨d[𝓢], 𝓟⟩ + ⟨𝓢, d[𝓟]⟩ ≈ 0  by tensor-inner product duality
+    iff ⟨d[𝓢], 𝓟⟩ ≈ ⟨d[𝓢], -d[𝓟]⟩
+    so 𝓟 ≈ -d[𝓟] at d[𝓢]
+    
+    have ℱ(𝓢, 𝓟) ≈ ℱ(𝓢, 𝓟 - ⟨d[𝓢], d[𝓟]⟩) by substitution
+    have ℱ(𝓢, 𝓟 - ⟨d[𝓢], d[𝓟]⟩) ≈ ℱ(𝓢 + d[𝓢], 𝓟 - ⟨d[𝓢], d[𝓟]⟩) by ℱ is a flow
+    hence ℱ(𝓢, 𝓟) ≈ ℱ(𝓢 + d[𝓢], 𝓟 - ⟨d[𝓢], d[𝓟]⟩)
+  }
+}

@@ -1,0 +1,195 @@
+CONCEPT MolecularAssembler {
+  PARAMETERS {
+    kB : ℝ  -- Boltzmann constant
+    h : ℝ   -- Planck constant
+    NA : ℝ  -- Avogadro's number
+    T : ℝ   -- Temperature
+    η : ℝ   -- Viscosity of medium
+  }
+
+  CONTEXT {
+    TYPES {
+      Pos := ℝ³
+      Force := ℝ³
+      Atom := STRUCT { Z : ℕ, pos : Pos, velocity : Pos }
+      Molecule := LIST(Atom)
+      Bond := STRUCT { a1 : Atom, a2 : Atom, type : ENUM { Single, Double, Triple } }
+      
+      PotentialFunc := FUNC(Pos, Pos) -> ℝ
+      ReactionFunc := FUNC(Molecule, Molecule) -> (ℝ, ℝ)  -- (ΔG, Ea)
+    }
+
+    STRUCTURES {
+      STRUCTURE AssemblerTip {
+        FIELD pos : Pos
+        FIELD atom : Atom
+        
+        FUNC Force(target : Pos) : Force := 
+          -k * (pos - target) - γ * velocity
+          WHERE k := SpringConstant, γ := DampingCoefficient
+        
+        FUNC Move(F : Force, dt : ℝ) {
+          velocity += F * dt / m
+          pos += velocity * dt
+          WHERE m := AtomicMass(atom.Z)
+        }
+      }
+      
+      STRUCTURE Workspace {
+        FIELD molecules : LIST(Molecule)
+        FIELD bonds : LIST(Bond)
+        
+        FUNC PotentialEnergy() : ℝ :=
+          ∑ᵢⱼ V_LJ(‖atoms[i].pos - atoms[j].pos‖) + 
+          ∑ᵦ V_bond(‖β.a1.pos - β.a2.pos‖, β.type)
+          WHERE atoms := FLATTEN(molecules)
+        
+        FUNC Force(a : Atom) : Force :=
+          -∇ₐ PotentialEnergy()
+        
+        FUNC AddAtom(a : Atom) {
+          molecules += [a]
+        }
+        
+        FUNC RemoveAtom(a : Atom) {
+          molecules = [m - {a} FOR m IN molecules]
+          bonds = [b FOR b IN bonds WHERE b.a1 ≠ a AND b.a2 ≠ a]
+        }
+        
+        FUNC FormBond(a1 : Atom, a2 : Atom, type : Bond.type) {
+          bonds += Bond(a1, a2, type)
+        }
+        
+        FUNC BreakBond(b : Bond) {
+          bonds -= {b}
+        }
+      }
+      
+      STRUCTURE Assembler {
+        FIELD tip : AssemblerTip
+        FIELD workspace : Workspace
+        FIELD reactions : LIST(ReactionFunc)
+        
+        FUNC PerformOperation(op : AssemblerOperation) {
+          CASE AddAtom(a) => workspace.AddAtom(a)
+          CASE RemoveAtom(a) => workspace.RemoveAtom(a)
+          CASE FormBond(a1, a2, type) => workspace.FormBond(a1, a2, type)
+          CASE BreakBond(b) => workspace.BreakBond(b)
+          CASE MoveTip(target) => 
+            WHILE ‖tip.pos - target‖ > ε DO
+              LET F = tip.Force(target)
+              tip.Move(F, dt)
+        }
+        
+        FUNC AttemptReaction(r : ReactionFunc, reactants : LIST(Molecule)) : 𝔹 {
+          LET (ΔG, Ea) = r(reactants)
+          LET k_f = (kB * T / h) * exp(-Ea / (kB * T))
+          LET K_eq = exp(-ΔG / (kB * T))
+          
+          IF RandUniform() < k_f * dt THEN
+            IF ΔG < 0 OR RandUniform() < K_eq THEN
+              ApplyReaction(r, reactants)
+              RETURN True
+          
+          RETURN False
+        }
+        
+        FUNC Simulate(steps : ℕ) {
+          FOR _ IN 1..steps DO
+            FOR a IN FLATTEN(workspace.molecules) DO
+              LET F = workspace.Force(a)
+              a.velocity += F * dt / AtomicMass(a.Z)
+              a.pos += a.velocity * dt
+            
+            FOR r IN reactions DO
+              LET reactants = FindReactants(r, workspace.molecules)
+              IF reactants ≠ ∅ THEN
+                AttemptReaction(r, reactants)
+        }
+      }
+    }
+
+    NOTATION {
+      ‖x‖ := EuclideanNorm(x)
+      x · y := DotProduct(x, y)
+      ∇ₐ := GradientWrtAtom(a)
+      ∑ᵢⱼ := Sum(i < j)
+      ∑ᵦ := Sum(β IN bonds)
+    }
+    
+    ASSERTIONS {
+      AXIOM ConservationOfEnergy {
+        |Assembler.PotentialEnergy() + KineticEnergy(FLATTEN(workspace.molecules)) - E_initial| < ε
+      }
+      
+      AXIOM DetailedBalance {
+        ∀ r : ReactionFunc, reactants : LIST(Molecule) .
+          P(r, reactants → products) / P(r⁻¹, products → reactants) = exp(-ΔG / (kB * T))
+      }
+    }
+  }
+
+  TRANSFORMERS {
+    SIMPLIFY LennardJonesPotential(r) {
+      V_LJ(r) := 4ε((σ/r)¹² - (σ/r)⁶)
+        WHERE ε := WellDepth, σ := EquilibriumDistance
+    }
+    
+    REWRITE BondPotential(r, type) {
+      V_bond(r, type) := 0.5 * k_type * (r - r_eq_type)²
+        WHERE k_type, r_eq_type := BondParameters(type)
+    }
+    
+    SIMPLIFY LowTemperatureApprox(T → 0) {
+      AttemptReaction(r, reactants) ≈ (ΔG < 0)
+    }
+  }
+
+  PROOFS {
+    THEOREM Ergodicity {
+      ∀ c1 c2 : Configuration . ∃ n : ℕ .
+        P(config(t+n*dt) = c2 | config(t) = c1) > 0
+    }
+    PROOF {
+      -- Show that any configuration can be reached through a series of
+      -- elementary operations and reactions with non-zero probability
+      ...
+    }
+
+    THEOREM ReactionRateLimits {
+      lim(T→∞) k_f = kB * T / h
+      lim(T→0) k_f = 0
+    }
+    PROOF {
+      k_f = (kB * T / h) * exp(-Ea / (kB * T))
+      lim(T→∞) k_f = lim(T→∞) (kB * T / h) * 1 = ∞
+      lim(T→0) k_f = lim(T→0) (kB * T / h) * 0 = 0
+      QED
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE SimpleHydrogenMolecule {
+      DEFINE assembler = Assembler(
+        tip: AssemblerTip(pos: (0,0,0), atom: Atom(Z: 1, pos: (0,0,0), velocity: (0,0,0))),
+        workspace: Workspace(molecules: [], bonds: []),
+        reactions: [
+          (reactants) => 
+            IF |reactants| = 2 AND ALL(a.Z = 1 FOR a IN FLATTEN(reactants)) THEN
+              RETURN (-436 kJ/mol, 51 kJ/mol)  -- ΔG and Ea for H-H bond formation
+            ELSE
+              RETURN (0, ∞)
+        ]
+      )
+      
+      assembler.PerformOperation(AddAtom(Atom(Z: 1, pos: (0,0,0), velocity: (0,0,0))))
+      assembler.PerformOperation(AddAtom(Atom(Z: 1, pos: (0,0,1), velocity: (0,0,0))))
+      assembler.Simulate(1000000)
+      
+      THEN
+        |assembler.workspace.bonds| = 1 AND
+        ALL(m.Z = 1 FOR m IN FLATTEN(assembler.workspace.molecules)) AND
+        ‖assembler.workspace.molecules[0][0].pos - assembler.workspace.molecules[0][1].pos‖ ≈ 74 pm
+    }
+  }
+}

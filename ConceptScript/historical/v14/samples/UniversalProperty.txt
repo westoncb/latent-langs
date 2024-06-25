@@ -1,0 +1,101 @@
+CONCEPT UniversalProperty {
+  LANGUAGE {
+    type Object = Primitive
+    type Morphism = Object -> Object
+    type Diagram = {Objects: Object*, Morphisms: Morphism*}
+    type Functor(C, D: Category) = {ObjMap: C.Obj -> D.Obj, MorMap: C.Mor -> D.Mor}
+
+    notation "Δ ⇒ X" = CommutativeCone(Δ: Diagram, X: Object) = 
+      {η: Δ.Objects -> Morphism(_, X) | 
+       ∀ f: Morphism ∈ Δ.Morphisms. η(cod(f)) ∘ f = η(dom(f))}
+
+    notation "Δ ⊸ X" = LimitCone(Δ: Diagram, X: Object) = 
+      {(L, η): (Object, CommutativeCone(Δ, L)) |
+       ∀ (Y, ψ): (Object, CommutativeCone(Δ, Y)). ∃! f: Morphism(L, Y). ψ = f ∘ η}
+      
+    func Lim(F: Functor, Δ: Diagram): Object = 
+      X where (X, _): Object * CommutativeCone(F(Δ), X) = (F ∘ Δ) ⊸ X
+
+    axiom ProductCone(X, Y, Z): 
+      Cone(X, Y; π1, π2) = (Z, (π1, π2)) ⇔ ∀ W. (W -> X) × (W -> Y) ≅ (W -> Z)
+  }
+
+  STRUCTURE {
+    [Category: 
+      {Obj: Object*, Mor: Morphism*, 
+       ∘: Mor × Mor -> Mor, id: Obj -> Mor | 
+       f ∘ (g ∘ h) = (f ∘ g) ∘ h, f ∘ id = f = id ∘ f}
+    ]
+
+    [Functor(C, D: Category): 
+      {ObjMap: C.Obj -> D.Obj, MorMap: C.Mor -> D.Mor |
+       F(f ∘ g) = F(f) ∘ F(g), F(id_X) = id_F(X)}
+    ]
+
+    [NaturalTransformation(F, G: Functor(C, D)): 
+      {η_X: Morphism(F(X), G(X)) | 
+       ∀ f: Morphism(X, Y). η_Y ∘ F(f) = G(f) ∘ η_X}
+    ]
+  }
+
+  PROOFS {
+    tactic CommutativityArgument(Δ, F, G, η, ε) = {
+      have ∀ f: Morphism ∈ Δ.Morphisms. 
+             η(cod(f)) ∘ F(f) = G(f) ∘ η(dom(f))   ; Naturality of η
+           ε(cod(f)) ∘ G(f) = F(f) ∘ ε(dom(f))   ; Naturality of ε
+      hence ε(cod(f)) ∘ η(cod(f)) ∘ F(f) = ε(cod(f)) ∘ G(f) ∘ η(dom(f)) 
+                                          = F(f) ∘ ε(dom(f)) ∘ η(dom(f))
+      therefore ∀ X ∈ Δ.Objects. ε(X) ∘ η(X) = id_F(X)
+                                 η(X) ∘ ε(X) = id_G(X)   ; η, ε mutual inverses
+    }
+           
+    theorem YonedaLemma(C: Category, X, Y ∈ C.Obj):
+      Hom(Hom(_, X), Hom(_, Y)) ≅ Hom(X, Y)  ; Functors C -> Set
+    {
+      define y_X = Hom(_, X): Functor(C, Set)   ; Yoneda embedding
+      have η_Y ∈ Hom(y_X, y_Y) -> ψ_f ∈ Hom(X, Y)  ; Induced natural transformation  
+      have ε_X ∈ Hom(X, Y) -> φ_f ∈ Hom(y_X, y_Y)  ; Induced morphism of functors
+      
+      let η ∈ Hom(y_X, y_Y), ε ∈ Hom(X, Y)
+      CommutativityArgument(C, y_X, y_Y, ψ_ε, φ_η)
+      hence ψ_ε ∘ φ_η = id_Hom(y_X, y_Y)
+            φ_η ∘ ψ_ε = id_Hom(X, Y)
+      hence Hom(Hom(_, X), Hom(_, Y)) ≅ Hom(X, Y)  ; Isomorphism of sets
+    }
+
+    theorem ProductUniversalProperty(C: Category, X, Y ∈ C.Obj):
+      (Z, π1, π2) = Product(X, Y) ⇔ ∀ W. Hom(W, Z) ≅ Hom(W, X) × Hom(W, Y)
+    { 
+      assume (Z, π1, π2) = Product(X, Y)
+      let W ∈ C.Obj
+      have ∀ f ∈ Hom(W, X), g ∈ Hom(W, Y). ∃! h ∈ Hom(W, Z). f = π1 ∘ h ∧ g = π2 ∘ h
+           ; Universal property of product
+      let α: Hom(W, X) × Hom(W, Y) -> Hom(W, Z) = (f, g) ↦ (π1, π2)⁻¹(f, g) 
+          β: Hom(W, Z) -> Hom(W, X) × Hom(W, Y) = h ↦ (π1 ∘ h, π2 ∘ h)
+
+      have ∀ (f, g) ∈ Hom(W, X) × Hom(W, Y).  
+             β(α(f, g)) = β((π1, π2)⁻¹(f, g)) 
+                        = (π1 ∘ (π1, π2)⁻¹(f, g), π2 ∘ (π1, π2)⁻¹(f, g))
+                        = (f, g)   ; By universal property
+           ∀ h ∈ Hom(W, Z).
+             α(β(h)) = α(π1 ∘ h, π2 ∘ h)  
+                     = (π1, π2)⁻¹(π1 ∘ h, π2 ∘ h)
+                     = h         ; By uniqueness in universal property
+      hence α, β are mutual inverses
+      hence Hom(W, Z) ≅ Hom(W, X) × Hom(W, Y)  ; Isomorphism of sets
+
+      conversely, assume ∀ W. Hom(W, Z) ≅ Hom(W, X) × Hom(W, Y)
+      specialize to W = Z
+      have Hom(Z, Z) ≅ Hom(Z, X) × Hom(Z, Y)
+      let π1 = (id_Z ↦ Hom(Z, X))(id_Z), π2 = (id_Z ↦ Hom(Z, Y))(id_Z) 
+      have π1 ∈ Hom(Z, X), π2 ∈ Hom(Z, Y)   ; Projections
+      let W ∈ C.Obj, f ∈ Hom(W, X), g ∈ Hom(W, Y)
+      have Hom(W, Z) ≅ Hom(W, X) × Hom(W, Y)  ; Assumption
+      let h = ((f, g) ↦ Hom(W, Z))(f, g)
+      have h ∈ Hom(W, Z) ∧ (π1 ∘ h, π2 ∘ h) = (f, g)  ; Commutativity 
+      have h is unique by cancellation law
+      hence (Z, π1, π2) satisifies universal property of product
+      hence (Z, π1, π2) = Product(X, Y)
+    }
+  }
+}

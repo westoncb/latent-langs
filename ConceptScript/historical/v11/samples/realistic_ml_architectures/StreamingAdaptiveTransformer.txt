@@ -1,0 +1,229 @@
+CONCEPT StreamingAdaptiveTransformer {
+  STRUCTURE {
+    [𝒳 := Sequence of input tokens]
+    [𝒴 := Sequence of output tokens]
+    [d := Dimensionality of token embeddings]
+    [n := Maximum sequence length]
+    [m := Number of attention heads]
+
+    [Embedding : 𝒳 → ℝ^d ↦ Token embedding function]
+    [PositionalEncoding : ℕ → ℝ^d ↦ Positional encoding function]
+    [AdaptiveAttentionLayer : ℝ^(∞×d) → (ℝ^(n×d), ℝ^(∞×d)) ↦ Adaptive attention layer over infinite context]
+    [ContextMixing : ℝ^(n×d) → ℝ^(n×d) ↦ Context mixing layer]
+    [FeedForward : ℝ^(n×d) → ℝ^(n×d) ↦ Position-wise feed-forward network]
+    [Output : ℝ^(n×d) → 𝒴 ↦ Output decoding function]
+
+    [ContextStream := ℝ^(∞×d) ↦ Continuous stream of context embeddings]
+
+    [StreamingAdaptiveTransformerLayer(X, C) := 
+      let Q := X + PositionalEncoding(1..n)
+      let (Y, C') := AdaptiveAttentionLayer(concat(C, Q))
+      let Z := ContextMixing(Y)
+      (FeedForward(Z), C')
+    ]
+
+    [StreamingAdaptiveTransformer(X) :=
+      let X₀ := Embedding(X)
+      let C₀ := []
+      let (X₁, C₁) := StreamingAdaptiveTransformerLayer(X₀, C₀)
+      let (X₂, C₂) := StreamingAdaptiveTransformerLayer(X₁, C₁)
+      ...
+      let (X_L, C_L) := StreamingAdaptiveTransformerLayer(X_{L-1}, C_{L-1})
+      Output(X_L)
+    ]
+  }
+
+  PROOFS {
+    tactic induct_on_stream(C, P):
+      // Perform induction on the structure of the context stream C
+      // to prove a property P that holds for all prefixes of C.
+      P([]) by base_case
+      ∀C', ∀x, P(C') ⇒ P(concat(C', [x])) by inductive_step
+
+    tactic decompose_attention(C, Q):
+      // Decompose the adaptive attention computation into a sequence
+      // of more primitive operations, such as context selection, summarization,
+      // and attention weight computation.
+      let (C₁, C₂, ..., C_k) := SelectContexts(C, Q)
+      let (S₁, S₂, ..., S_k) := SummarizeContexts(C₁, C₂, ..., C_k)
+      let A := ComputeAttentionWeights(Q, S₁, S₂, ..., S_k)
+      let Y := AttentionOutput(A, S₁, S₂, ..., S_k)
+      (Y, concat(C, Q))
+
+    theorem attention_complexity_bound:
+      ∀C ∈ ContextStream, ∀Q ∈ ℝ^(n×d),
+      let (Y, _) := AdaptiveAttentionLayer(concat(C, Q))
+      AttentionComplexity(Y) = O(n × polylog(|C|))
+    {
+      let C ∈ ContextStream, Q ∈ ℝ^(n×d) by hypothesis
+      let (Y, _) := AdaptiveAttentionLayer(concat(C, Q)) by definition
+
+      decompose_attention(C, Q) {
+        |SelectContexts(C, Q)| = O(polylog(|C|)) by context_selection_complexity
+        |SummarizeContexts(...)| = O(k) by context_summarization_complexity
+        ComputeAttentionWeights(Q, ...) = O(n × k) by attention_weights_complexity
+        AttentionOutput(...) = O(n × d) by attention_output_complexity
+      }
+
+      AttentionComplexity(Y) = O(n × polylog(|C|)) by composition_of_complexity_bounds
+    }
+
+    theorem context_mixing_locality:
+      ∀Y ∈ ℝ^(n×d), ∀i ∈ {1, ..., n},
+      let Z := ContextMixing(Y)
+      Z[i] = f(Y[max(1, i-k)..min(n, i+k)])
+      for some constant k and function f
+    {
+      let Y ∈ ℝ^(n×d), i ∈ {1, ..., n} by hypothesis
+      
+      // Prove the locality property by induction on the position i
+      induct_on_position(i, λj. Z[j] = f(Y[max(1, j-k)..min(n, j+k)])) {
+        case i = 1 {
+          Z[1] = ContextMixing(Y)[1] by definition
+               = f(Y[1..min(n, 1+k)]) by definition_of_context_mixing
+        }
+        case i > 1 {
+          assume Z[i-1] = f(Y[max(1, (i-1)-k)..min(n, (i-1)+k)])
+
+          Z[i] = ContextMixing(Y)[i] by definition
+               = f(Y[max(1, i-k)..min(n, i+k)]) by definition_of_context_mixing
+        }
+      }
+    }
+  }
+
+  LANGUAGE {
+    type Token
+    type TokenSequence = List[Token]
+    type TokenEmbedding = Vector[Float]
+    type AttentionHead = Int
+    type ContextStream = List[TokenEmbedding]
+    type TransformerLayer = (TokenEmbedding, ContextStream) → (TokenEmbedding, ContextStream)
+    type Transformer = TokenSequence → TokenSequence
+
+    axiom context_selection_complexity:
+      ∀C ∈ ContextStream, ∀Q ∈ ℝ^(n×d),
+      |SelectContexts(C, Q)| = O(polylog(|C|))
+
+    axiom context_summarization_complexity:
+      ∀C₁, C₂, ..., C_k ∈ ContextStream,
+      |SummarizeContexts(C₁, C₂, ..., C_k)| = O(k)
+
+    axiom attention_weights_complexity:
+      ∀Q ∈ ℝ^(n×d), ∀S₁, S₂, ..., S_k ∈ ℝ^(d×d),
+      ComputeAttentionWeights(Q, S₁, S₂, ..., S_k) = O(n × k)
+
+    axiom attention_output_complexity:
+      ∀A ∈ ℝ^(n×k), ∀S₁, S₂, ..., S_k ∈ ℝ^(d×d),
+      AttentionOutput(A, S₁, S₂, ..., S_k) = O(n × d)
+
+    func Embedding(X : TokenSequence) : TokenEmbedding
+    func PositionalEncoding(pos : Int) : TokenEmbedding
+    func AdaptiveAttentionLayer(C : ContextStream) : (TokenEmbedding, ContextStream)
+    func ContextMixing(Y : TokenEmbedding) : TokenEmbedding
+    func FeedForward(X : TokenEmbedding) : TokenEmbedding
+    func Output(X : TokenEmbedding) : TokenSequence
+
+    func concat(C : ContextStream, X : TokenEmbedding) : ContextStream = append(C, X)
+    func AttentionComplexity(Y : TokenEmbedding) : Int
+
+    func SelectContexts(C : ContextStream, Q : TokenEmbedding) : List[ContextStream]
+    func SummarizeContexts(C₁ : ContextStream, C₂ : ContextStream, ..., C_k : ContextStream) : List[Matrix[Float]]
+    func ComputeAttentionWeights(Q : TokenEmbedding, S₁ : Matrix[Float], S₂ : Matrix[Float], ..., S_k : Matrix[Float]) : Matrix[Float]
+    func AttentionOutput(A : Matrix[Float], S₁ : Matrix[Float], S₂ : Matrix[Float], ..., S_k : Matrix[Float]) : TokenEmbedding
+  }
+}
+
+
+
+
+
+
+CONCEPT SketchAttention {
+  STRUCTURE {
+    [d := Dimensionality of token embeddings]
+    [n := Maximum sequence length]
+    [k := Number of hash functions in the sketch]
+    [m := Size of each hash table in the sketch]
+
+    [Sketch := { h₁ : ℝ^d → [m], ..., h_k : ℝ^d → [m] } ↦ Set of hash functions for sketching]
+    [SketchTable := [m] → List[ℝ^d] ↦ Hash table for storing sketched embeddings]
+    
+    [Query : ℝ^(n×d) ↦ Query embeddings]
+    [Context : Sketch[ℝ^d] ↦ Sketched context embeddings]
+    
+    [AttentionWeights(Q, C) := 
+      let W := zeros(n × k)
+      for i in 1..n:
+        for j in 1..k:
+          let idx := C.h_j(Q[i])
+          let S_j := C.tables[j][idx]
+          let w_ij := softmax(dot(Q[i], S_j))
+          W[i, j] := w_ij
+      W
+    ]
+    
+    [AttentionOutput(Q, C) :=
+      let W := AttentionWeights(Q, C)
+      let Y := zeros(n × d)
+      for i in 1..n:
+        for j in 1..k:
+          let idx := C.h_j(Q[i])
+          let S_j := C.tables[j][idx]
+          let y_ij := sum(W[i, j] * S_j)
+          Y[i] := Y[i] + y_ij
+      Y
+    ]
+    
+    [SketchAttention(Q, C) := AttentionOutput(Q, C)]
+  }
+  
+  PROOFS {
+    theorem attention_weights_sum_to_one:
+      ∀Q ∈ ℝ^(n×d), ∀C : Sketch[ℝ^d], ∀i ∈ 1..n,
+      sum(AttentionWeights(Q, C)[i]) = 1
+    {
+      let Q ∈ ℝ^(n×d), C : Sketch[ℝ^d], i ∈ 1..n by hypothesis
+      
+      let W := AttentionWeights(Q, C) by definition
+      
+      for j in 1..k:
+        let idx := C.h_j(Q[i]) by definition
+        let S_j := C.tables[j][idx] by definition
+        W[i, j] = softmax(dot(Q[i], S_j)) by definition of AttentionWeights
+      
+      sum(W[i]) = sum(softmax(dot(Q[i], S_j)) for j in 1..k)
+                = 1 by softmax_sum_to_one
+    }
+    
+    theorem attention_output_bounds:
+      ∀Q ∈ ℝ^(n×d), ∀C : Sketch[ℝ^d], 
+      ∀i ∈ 1..n, ∀j ∈ 1..d,
+      AttentionOutput(Q, C)[i, j] ∈ [min(C), max(C)]
+    {
+      let Q ∈ ℝ^(n×d), C : Sketch[ℝ^d], i ∈ 1..n, j ∈ 1..d by hypothesis
+      
+      let W := AttentionWeights(Q, C) by definition
+      let Y := AttentionOutput(Q, C) by definition
+      
+      Y[i, j] = sum(W[i, l] * C.tables[l][C.h_l(Q[i])][j] for l in 1..k) by definition of AttentionOutput
+              ≥ min(C) * sum(W[i, l] for l in 1..k)
+              = min(C) by attention_weights_sum_to_one
+              
+      Y[i, j] = sum(W[i, l] * C.tables[l][C.h_l(Q[i])][j] for l in 1..k) by definition of AttentionOutput
+              ≤ max(C) * sum(W[i, l] for l in 1..k)
+              = max(C) by attention_weights_sum_to_one
+    }
+  }
+  
+  LANGUAGE {
+    func zeros(shape : (ℕ, ℕ)) : Matrix[Float]
+    func dot(x : Vector[Float], y : Vector[Float]) : Float
+    func softmax(x : Vector[Float]) : Vector[Float]
+    func min(C : Sketch[ℝ^d]) : Float
+    func max(C : Sketch[ℝ^d]) : Float
+    
+    axiom softmax_sum_to_one:
+      ∀x ∈ ℝ^d, sum(softmax(x)) = 1
+  }
+}

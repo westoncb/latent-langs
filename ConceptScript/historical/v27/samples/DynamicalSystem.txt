@@ -1,0 +1,142 @@
+CONCEPT DynamicalSystem {
+  NOTATION {
+    x(t) = state vector at time t
+    x'(t) = derivative of state vector with respect to time
+    f(x, t) = vector field governing system dynamics
+    φ(x0, t0, t1) = flow map from initial state x0 at time t0 to state at time t1
+    γ(x0, t0) = trajectory starting at x0 at time t0
+    ∇ · f = divergence of vector field f
+    J_f = Jacobian matrix of f
+    λ_i = i-th Lyapunov exponent
+  }
+
+  LANGUAGE {
+    TYPE State[N] = [Real]
+    TYPE Time = Real
+    TYPE VectorField[N] = (State[N], Time) -> State[N] 
+    TYPE FlowMap[N] = (State[N], Time, Time) -> State[N]
+    TYPE Trajectory[N] = (State[N], Time) -> State[N]
+    
+    FUNC jacobian[N] : VectorField[N] -> Tensor[N, N] = f => (x, t) => {
+      LET J(i, j) = ∂(f(x, t)_i) / ∂x_j
+      J  
+    }
+    
+    FUNC divergence[N] : VectorField[N] -> (State[N], Time) -> Real = 
+      f => (x, t) => SUM[i in 0..N-1] ∂(f(x, t)_i) / ∂x_i
+      
+    FUNC lyapunovExponents[N] (f: VectorField[N], x0: State[N], t0: Time) : [Real] = {
+      LET J = jacobian[N](f)
+      LET Φ(t) = solution to matrix ODE: Φ'(t) = J(φ(x0, t0, t), t) · Φ(t),  Φ(t0) = I
+      LET QR(t) = QR decomposition of Φ(t)
+      [LOG(R(t)_ii) / (t - t0) for i in 0..N-1] AS t -> ∞
+    }
+  }
+  
+  STRUCTURES {
+    STRUCTURE ContinuousDynamicalSystem[N] {
+      FIELD dynamics : VectorField[N]
+      
+      AXIOM Existence : ∀ x0 : State[N], t0 : Time . ∃ φ : FlowMap[N] . 
+        ∀ t : Time . φ(x0, t0, t0) = x0 ∧ ∂φ(x0, t0, t) / ∂t = dynamics(φ(x0, t0, t), t)
+        
+      AXIOM Uniqueness : ∀ x0 : State[N], t0 : Time, φ1, φ2 : FlowMap[N] . 
+        (∀ t : Time . φ1(x0, t0, t0) = φ2(x0, t0, t0) ∧ 
+           ∂φ1(x0, t0, t) / ∂t = ∂φ2(x0, t0, t) / ∂t) => φ1 = φ2
+           
+      COMPUTE trajectory(x0: State[N], t0: Time) : Trajectory[N] = (x0, t0) => φ(x0, t0, t)
+    }
+    
+    STRUCTURE LinearSystem[N] EXTENDS ContinuousDynamicalSystem[N] {
+      FIELD A : Tensor[N, N]
+      FIELD dynamics : VectorField[N] = (x, t) => A · x
+      
+      COMPUTE equilibria : [State[N]] = {x | A · x = 0}
+      COMPUTE isStable : Bool = ∀ λ in eigenvalues(A) . REAL(λ) < 0
+    }
+  }
+
+  TRANSFORMERS {
+    -- Divergence theorem relates flow through boundary to divergence of vector field
+    REWRITE DivergenceTheorem[N] : 
+      (∫_∂Ω f · n dS) -> (∫_Ω ∇ · f dV)  
+      
+    -- Liouville's theorem states that phase space volume is conserved  
+    REWRITE LiouvilleTheorem[N] : 
+      ∇ · dynamics -> TR(jacobian[N](dynamics))
+  }
+
+  PROOFS {
+    PROOF LinearizationTheorem[N] : ∀ f : VectorField[N], x0 : State[N] . 
+      (∃ δ > 0 . ∀ x : State[N] . |x - x0| < δ => 
+        f(x, t) = f(x0, t) + J_f(x0, t) · (x - x0) + o(|x - x0|)) 
+    {
+      GIVEN f : VectorField[N], x0 : State[N]
+      
+      ASSUME
+        ZeroAtEquilibrium: f(x0, t) = 0
+      
+      f(x, t)
+        == f(x0, t) + ∇f(x0, t) · (x - x0) + O(|x - x0|^2)   BY Taylor expansion
+        == J_f(x0, t) · (x - x0) + o(|x - x0|)               BY ZeroAtEquilibrium, definition of Jacobian/gradient
+        
+      QED
+    }
+    
+    PROOF HartmanGrobmanTheorem[N] : ∀ f : VectorField[N], x0 : State[N] .
+      (J_f(x0) has no eigenvalues with zero real part) =>  
+      (∃ U, V neighborhoods of x0 and a homeomorphism h: U -> V . 
+        ∀ x in U . h(φ_f(x, t)) = e^(t * J_f(x0)) · h(x))
+    {
+      GIVEN f : VectorField[N], x0 : State[N] 
+      ASSUME NoCenter: J_f(x0) has no eigenvalues with zero real part
+      
+      LET g = (x, t) => J_f(x0) · x  -- Linearization of f at x0
+      
+      φ_f(x0 + ∆x, t) 
+        ≈ φ_f(x0, t) + ∂(φ_f(x, t))/∂x|_x0 · ∆x                BY Taylor expansion
+        == x0 + ∂(φ_f(x, t))/∂x|_x0 · ∆x                        BY φ_f(x0, t) = x0
+        == x0 + φ_g(∆x, t)                                      BY definition of linearization
+        == x0 + e^(t * J_f(x0)) · ∆x                            BY solution of linear systems
+        
+      LET U, V be neighborhoods of x0 where above approximation holds
+      DEFINE h(x) = x - x0  -- a homeomorphism between U and V
+      
+      ∀ x in U . h(φ_f(x, t)) 
+                  = h(φ_f(x0 + (x - x0), t))
+                  ≈ h(x0 + e^(t * J_f(x0)) · (x - x0)) 
+                  = e^(t * J_f(x0)) · h(x)
+      
+      QED      
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE LotkaVolterra : ContinuousDynamicalSystem[2] = {
+      dynamics(x, t) = {
+        LET α = 1   -- prey growth rate
+        LET β = 1   -- prey death rate by predation  
+        LET γ = 1   -- predator death rate
+        LET δ = 1   -- predator growth rate by predation
+        [α * x_0 - β * x_0 * x_1,
+         δ * x_0 * x_1 - γ * x_1] 
+      }
+    }
+
+    EXAMPLE LinearOscillator : LinearSystem[2] = {  
+      A = [[0, 1], 
+           [-1, 0]]
+    }
+
+    EXAMPLE LorenzSystem : ContinuousDynamicalSystem[3] = {
+      dynamics(x, t) = {
+        LET σ = 10
+        LET ρ = 28 
+        LET β = 8/3
+        [σ * (x_1 - x_0),
+         x_0 * (ρ - x_2) - x_1,  
+         x_0 * x_1 - β * x_2]
+      }      
+    }
+  }  
+}

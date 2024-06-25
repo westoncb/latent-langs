@@ -1,0 +1,693 @@
+CONCEPT AbstractSpaces {
+  LANGUAGE {
+    type Space
+    type Morphism = Space -> Space
+    type Structure = Space -> Prop
+    type Invariant = Morphism -> Prop
+    
+    S := Abstract(X) | S + S | S × S | S ⊗ S | S - S | S / S | S ∘ S | 0 | 1 
+    where  
+      Abstract(X) is an abstraction of a concrete space X
+      +, -, × are binary operations forming new spaces
+      ⊗, /, ∘ are tensor product, quotient, and composition 
+      0, 1 are empty and singleton spaces
+      
+    notation "f ∘ g" = λx. f(g(x))
+    notation "f ⊗ g" = λ(x, y). (f(x), g(y))
+    notation "S / ~" = Quotient(S, ~)
+    
+    φ := id | φ + φ | φ × φ | φ ⊗ φ | φ ∘ φ | φ⁻¹
+    where  
+      id is the identity morphism
+      +, ×, ⊗, ∘ lift to morphisms
+      φ⁻¹ is the inverse of an isomorphism φ
+      
+    σ := i | σ + σ | σ × σ | σ ⊗ σ | σ / ~ | ⟨σ⟩
+    where
+      i is an intrinsic (object-level) structure 
+      +, ×, ⊗, / lift to structures
+      ⟨σ⟩ is a global (meta-level) property of σ
+    
+    I := I ∧ I | I ∨ I | φ ⟼ I | ∀φ. I | ∃φ. I
+    where  
+      ∧, ∨ are logical operations on invariants
+      φ ⟼ I is an invariant parameterized by φ
+      ∀φ. I, ∃φ. I quantify over morphisms
+      
+    func Object(X: Space, σ: Structure): Prop 
+    func Arrow(f: Morphism, I: Invariant): Prop
+    
+    pred Hom(X, Y: Space) = Σ(f: X -> Y). ∀φ: X -> X. I(φ) ⇒ I(f ∘ φ)
+    pred Iso(X, Y: Space) = ∃(f: X ≅ Y). Hom(f) ∧ Hom(f⁻¹)
+    pred Aut(X: Space) = Hom(X, X) ∧ Group(Hom(X, X))
+    
+    axiom Abstraction: ∀ X: Concrete. ∃ S: Abstract. ∃ m: Morphism. m: X -> S
+    axiom Preservation: ∀ f: S -> T. ∀ σ: Structure. (Object(S, σ) ∧ Hom(f)) ⇒ Object(T, σ)
+    axiom Invariance: ∀ f: S -> S. ∀ I: Invariant. Arrow(f, I) ⇒ I(f)
+  }
+  
+  STRUCTURE {
+    SpaceConstructors: {
+      Abstract(X) with map m          ; Abstraction of a concrete space
+      S + T with inj₁, inj₂           ; Coproduct with injections  
+      S × T with proj₁, proj₂         ; Product with projections
+      S ⊗ T with factor(φ, ψ)        ; Tensor product with universal property
+      S / ~ with quo(f)               ; Quotient by an equivalence relation
+    }
+    
+    MorphismConstructors: {
+      id(S)                           ; Identity morphism
+      φ + ψ                           ; Coproduct of morphisms 
+      φ × ψ                           ; Product of morphisms
+      φ ⊗ ψ                           ; Tensor product of morphisms
+      φ ∘ ψ                           ; Composition of morphisms
+      φ⁻¹                             ; Inverse of an isomorphism
+    }
+    
+    InvariantConstructors: {  
+      I₁ ∧ I₂                         ; Conjunction of invariants
+      I₁ ∨ I₂                         ; Disjunction of invariants 
+      φ ⟼ I                           ; Invariant parameterized by a morphism
+      ∀(φ: X -> X). I                 ; Universal quantification over automorphisms
+      ∃(φ: X ≅ Y). I                  ; Existential quantification over isomorphisms
+    }
+  }
+  
+  PROOFS {
+    tactic AbstractionExists(X: Concrete):
+      ⊢ ∃ S: Abstract, m: X -> S. Object(S, σ) ∧ Arrow(m, I)
+    {
+      assume X: Concrete
+      let S = Abstract(X) with map m  ; Abstraction axiom
+      suffices to show Object(S, σ) ∧ Arrow(m, I) for some σ, I
+      ; Omitted: construct suitable σ and I from X
+    }  
+      
+    tactic PreservationOfStructure(f: S -> T, σ: Structure):
+      Object(S, σ), Arrow(f, I) ⊢ Object(T, σ)
+    {
+      assume Object(S, σ) ∧ Arrow(f, I) 
+      Preservation(f, σ)
+    }
+      
+    tactic InvarianceUnderMorphisms(f: S -> S, I: Invariant):  
+      Arrow(f, I) ⊢ I(f)
+    {
+      assume Arrow(f, I)
+      Invariance(f, I)
+    }
+    
+    theorem CategoryOfAbstractSpaces:
+      ⊢ Category(AbstractSpaces)
+    {
+      ; Omitted: verify category axioms
+      ; Identity morphisms exist: id(S)
+      ; Composition is associative: f ∘ (g ∘ h) = (f ∘ g) ∘ h
+      ; Composition respects identities: f ∘ id(S) = f, id(T) ∘ f = f
+    }
+    
+    theorem AbstractionFunctor:
+      ⊢ Functor(Abstraction)  
+    {
+      let F = Abstraction  
+      suffices to show
+        F(X) = Abstract(X),
+        F(f: X -> Y) = Abstract(f): Abstract(X) -> Abstract(Y),
+        F(id(X)) = id(Abstract(X)),
+        F(f ∘ g) = F(f) ∘ F(g)
+      ; Omitted: verify functor axioms  
+    }
+      
+    theorem QuotientIsLocallyInvariant:  
+      ⊢ ∀ S: Abstract, ~: Equivalence. ∀ f: S / ~  -> S / ~. Invariant(f)
+    {
+      assume S: Abstract, ~: Equivalence  
+      let Q = S / ~ 
+      assume f: Q -> Q
+      suffices to show ∀ x, y: S. x ~ y ⇒ f(quo(x)) = f(quo(y))
+      {
+        assume x ~ y
+        have quo(x) = quo(y)       ; Quotient 
+        hence f(quo(x)) = f(quo(y)) ; Morphism preserves equality
+      }
+    }
+      
+    theorem InvariantIsInvariant:
+      I: Invariant ⊢ ∀(f: S -> S). I(f) ⇒ I(f)  
+    {
+      assume I: Invariant  
+      let f: S -> S
+      assume I(f)
+      InvarianceUnderMorphisms(f, I)
+    }
+  }
+}
+
+This Concept introduces a language for describing and manipulating abstract spaces and their morphisms, structures, and invariants. It provides axioms for abstraction, preservation of structure, and invariance under morphisms.
+Key ideas include:
+
+Constructing abstract spaces from concrete ones via an abstraction functor
+Building new spaces via operators like products, coproducts, tensor products, quotients
+Lifting these constructions to morphisms and invariants
+Defining hom-sets, isomorphisms and automorphism groups
+Proving the category of abstract spaces and key theorems about functoriality, quotients, and invariance
+
+The goal is to develop a general framework for reasoning about abstraction and invariance in mathematical structures. The language enables expressing complex abstract constructions while the axioms and theorems provide tools for formally verifying their properties.
+
+
+
+
+
+CONCEPT VectorSpaces {
+  IMPORT AbstractSpaces
+
+  LANGUAGE {
+    type Vect = Abstract(R^n)  ; Vector spaces over the field R
+    type Lin = Vect -> Vect    ; Linear maps between vector spaces
+    
+    V := Vect | V + V | V × V | V ⊗ V | V / ~
+    where
+      + is direct sum
+      × is cartesian product 
+      ⊗ is tensor product
+      / ~ is quotient by a linear subspace
+      
+    L := idₗ | L + L | L × L | L ⊗ L | L ∘ L 
+    where  
+      idₗ is the identity linear map  
+      +, ×, ⊗, ∘ lift to linear maps
+      
+    B := Basis(V)                 ; A basis of a vector space  
+    D := Dim(V)                   ; The dimension of a vector space
+    K := Kernel(L)                ; The kernel of a linear map
+    I := Image(L)                 ; The image of a linear map
+    λ := Eigenvalue(L, v)         ; An eigenvalue of a linear map
+    
+    func Dual(V: Vect): Vect
+    func Transpose(L: Lin): Lin
+    func Det(L: Lin): R
+    
+    notation "v · w" = DotProduct(v, w)
+    notation "v ⊗ w" = TensorProduct(v: V, w: W)  
+    notation "V ⊕ W" = DirectSum(V, W)
+    notation "V ⊗ W" = TensorProduct(V, W)
+    
+    pred LinearMap(f) = ∀ u, v, a. f(u + v) = f(u) + f(v) ∧ f(a * v) = a * f(v)
+    pred LinearSubspace(U, V) = U ⊆ V ∧ ∀ u, v ∈ U, a. u + v ∈ U ∧ a * u ∈ U
+    pred IsomorphicVectorSpaces(V, W) = Iso(V, W) ∧ Vect(V) ∧ Vect(W)
+  }
+  
+  STRUCTURE {
+    VectorSpaceAxioms: {
+      V + 0 = V                                  ; Identity element for direct sum
+      V + W = W + V                              ; Commutativity of direct sum  
+      (U + V) + W = U + (V + W)                  ; Associativity of direct sum
+      V ⊗ 1 = V                                  ; Identity element for tensor product
+      V ⊗ (W + U) = (V ⊗ W) + (V ⊗ U)           ; Distributivity of tensor product
+      (V ⊗ W) ⊗ U = V ⊗ (W ⊗ U)                 ; Associativity of tensor product
+      Dual(V + W) = Dual(V) × Dual(W)            ; Duality distributes over direct sum
+      Dual(V ⊗ W) = Dual(V) ⊗ Dual(W)            ; Duality distributes over tensor product
+      Dim(V + W) = Dim(V) + Dim(W)               ; Dimension of a direct sum
+      Dim(V ⊗ W) = Dim(V) × Dim(W)               ; Dimension of a tensor product
+      Transpose(L + M) = Transpose(L) + Transpose(M)  ; Transpose of a sum
+      Transpose(L ∘ M) = Transpose(M) ∘ Transpose(L)  ; Transpose of a composition
+      Det(L ⊗ M) = Det(L) × Det(M)               ; Determinant of a tensor product
+    }
+    
+    LinearMapConstructors: {
+      idₗ(V: Vect)                                ; Identity linear map  
+      L + M                                       ; Sum of linear maps
+      L ⊗ M                                       ; Tensor product of linear maps
+      L ∘ M                                       ; Composition of linear maps 
+      Transpose(L)                                ; Transpose of a linear map
+    }
+  }
+
+  PROOFS {
+    theorem KernelIsSubspace(L: Lin, V: Vect):
+      ⊢ LinearSubspace(Kernel(L), V)
+    {
+      assume L: Lin, V: Vect
+      let K = Kernel(L)
+      suffices to show K ⊆ V ∧ ∀ u, v ∈ K, a ∈ R. u + v ∈ K ∧ a * u ∈ K
+      {
+        K ⊆ V by definition of kernel
+        assume u, v ∈ K, a ∈ R
+        have L(u) = 0 and L(v) = 0  ; By definition of kernel  
+        have L(u + v) = L(u) + L(v) = 0  ; Linearity of L
+        hence u + v ∈ K  
+        have L(a * u) = a * L(u) = 0     ; Linearity of L
+        hence a * u ∈ K
+      }
+    }
+    
+    theorem ImageIsSubspace(L: Lin, V: Vect):  
+      ⊢ LinearSubspace(Image(L), V)
+    {
+      assume L: Lin, V: Vect
+      let I = Image(L) 
+      suffices to show I ⊆ V ∧ ∀ u, v ∈ I, a ∈ R. u + v ∈ I ∧ a * u ∈ I
+      ; Omitted: similar to proof for kernels, using linearity of L
+    }
+    
+    theorem RankNullityTheorem(L: Lin, V: Vect):
+      ⊢ Dim(V) = Dim(Kernel(L)) + Dim(Image(L))  
+    {
+      assume L: Lin, V: Vect
+      let B = Basis(V), K = Kernel(L), I = Image(L)
+      have Dim(K) + Dim(I) = |B ∩ K| + |B \ K|  ; Basis partitions into K and complement
+      have |B \ K| = Dim(I)  ; Complement maps bijectively to image under L
+      hence Dim(K) + Dim(I) = |B| = Dim(V)
+    }
+    
+    theorem DualOfDualIsomorphism(V: Vect):
+      ⊢ IsomorphicVectorSpaces(V, Dual(Dual(V)))
+    {
+      assume V: Vect
+      let φ: V -> Dual(Dual(V)) = v ⟼ (f ⟼ f(v))  ; Canonical map 
+      suffices to show Iso(φ)
+      {
+        φ is linear: 
+          φ(u + v) = (f ⟼ f(u + v)) = (f ⟼ f(u) + f(v)) = φ(u) + φ(v)
+          φ(a * v) = (f ⟼ f(a * v)) = (f ⟼ a * f(v)) = a * φ(v)  
+        φ is injective:
+          φ(u) = φ(v) ⇒ ∀ f. f(u) = f(v) ⇒ u = v  ; Separate points
+        φ is surjective:  
+          ∀ ψ: Dual(Dual(V)). ∃ v. φ(v) = ψ  ; Omitted: construct v from ψ
+      }
+    }
+    
+    theorem VectorSpaceCategory:
+      ⊢ Category(Vect, Lin)  
+    {
+      ; Omitted: similar to proof for AbstractSpaces, with linear maps as morphisms
+    }
+  }
+}
+
+This Concept formalizes key notions from vector spaces and linear algebra, including:
+
+Constructing vector spaces via direct sums, products, tensor products, quotients
+Defining linear maps, kernels, images, eigenvalues, dual spaces, transposes, determinants
+Stating axioms for vector space operations and morphism properties
+Proving theorems about subspaces, dimensions, rank-nullity, dual spaces, and the category of vector spaces
+
+The proofs showcase some common linear algebra techniques, like using basis decompositions, linearity properties, and universal properties.
+The AbstractSpaces framework provides a nice foundation, with the vector space constructions as special cases of the abstract space constructions, and linear maps as morphisms preserving the vector space structure.
+We could further expand this by adding inner product spaces, normed spaces, modules over rings, etc. The beauty is how the language enables expressing abstract linear algebra concepts in a modular, composable way.
+
+
+
+
+
+CONCEPT VectorSpaces {
+  LANGUAGE {
+    extend AbstractSpaces
+    
+    type Vector
+    type LinearMap = Morphism
+    
+    V := Vector(F) | V + V | V - V | V ⊗ V
+    where  
+      Vector(F) is a vector space over a field F
+      +, -, ⊗ are addition, subtraction, tensor product
+      
+    φ := φ + φ | φ - φ | α · φ | φ ⊗ φ
+    where
+      +, -, ⊗ are addition, subtraction, tensor product  
+      α · φ is scalar multiplication by α ∈ F
+      
+    σ := Dimension(n) | Basis(B) | InnerProduct(⟨-,-⟩) 
+    where  
+      Dimension(n) means V has dimension n < ∞
+      Basis(B) means B = {b₁, ..., bₙ} generates V
+      InnerProduct(⟨-,-⟩) is a positive-definite symmetric bilinear form
+    
+    I := I(+) | I(⊗) | I(·) | I(⟨-,-⟩)
+    where
+      I(+), I(⊗), I(·), I(⟨-,-⟩) are invariants for each operation
+  }
+    
+  STRUCTURE {
+    VectorSpaceAxioms(V: Vector, F: Field): {
+      ∀ u, v, w ∈ V. (u + v) + w = u + (v + w)               ; Addition is associative
+      ∀ v ∈ V. v + 0 = v                                     ; Zero vector is identity  
+      ∀ v ∈ V. v + (-v) = 0                                  ; Inverse exists
+      ∀ u, v ∈ V. u + v = v + u                              ; Addition is commutative
+      ∀ α, β ∈ F. ∀ v ∈ V. (α + β) · v = α · v + β · v       ; Distributivity 1
+      ∀ α ∈ F. ∀ u, v ∈ V. α · (u + v) = α · u + α · v       ; Distributivity 2
+      ∀ α, β ∈ F. ∀ v ∈ V. (α * β) · v = α · (β · v)         ; Scalar multiplication compatible
+      ∀ v ∈ V. 1 · v = v                                     ; Scalar identity  
+    }
+  
+    DualVectorSpace(V: Vector): {  
+      V* = Hom(V, F)                     ; Dual space is space of linear functionals
+      ∀ φ ∈ V*. ∀ u, v ∈ V. φ(u + v) = φ(u) + φ(v)  ; Functionals preserve addition
+      ∀ φ ∈ V*. ∀ α ∈ F. ∀ v ∈ V. φ(α · v) = α * φ(v)  ; Functionals preserve scalar mult
+    }
+    
+    TensorProduct(V, W: Vector): V ⊗ W = Abstract(V × W) with map (v, w) ↦ v ⊗ w
+  }
+  
+  PROOFS {
+    tactic DualBasis(V: Vector, B: Basis):  
+      ⊢ ∃ B*: Basis. ∀ i, j. (b*ᵢ: V*) ∧ ⟨b*ᵢ, bⱼ⟩ = δᵢⱼ 
+    {
+      assume Basis(B) = {b₁, ..., bₙ}
+      let b*ᵢ(v) = αᵢ where v = Σⱼ αⱼ · bⱼ   ; Dual basis vectors as projections
+      suffices to show ⟨b*ᵢ, bⱼ⟩ = δᵢⱼ
+      {
+        ⟨b*ᵢ, bⱼ⟩ = b*ᵢ(bⱼ) = αᵢ where bⱼ = Σₖ αₖ · bₖ 
+        αₖ = 1 if k = j else 0, so αᵢ = 1 if i = j else 0
+        hence ⟨b*ᵢ, bⱼ⟩ = δᵢⱼ  
+      }
+    }
+    
+    theorem DualDimension(V: Vector):
+      Dimension(V, n) ⊢ Dimension(V*, n)
+    {
+      assume Dimension(V, n) with Basis(B)  
+      DualBasis(V, B) gives Basis(B*) for V*
+      hence Dimension(V*, n)
+    }
+    
+    theorem DoubleDouble(V: Vector):  
+      ⊢ Iso(V, V**)
+    {
+      define φ: V -> V** by v ↦ (f ↦ f(v))
+      suffices to show Iso(φ)
+      {
+        Hom(φ): 
+          φ(u + v)(f) = f(u + v) = f(u) + f(v) = φ(u)(f) + φ(v)(f)
+          φ(α · v)(f) = f(α · v) = α * f(v) = α * φ(v)(f)
+        Hom(φ⁻¹):  
+          ∀ ψ: V**. ∃! v: V. ∀ f: V*. ψ(f) = f(v) 
+          φ⁻¹(ψ) ≝ the unique such v
+        φ(φ⁻¹(ψ))(f) = f(φ⁻¹(ψ)) = ψ(f)  
+        φ⁻¹(φ(v))(f) = φ(v)(f) = f(v)
+      }
+    }
+  }  
+}
+
+The VectorSpaces Concept extends AbstractSpaces with specific types, operations and axioms for vector spaces and their duals:
+
+Vector spaces are constructed from a base field by zero, addition, negation and scalar multiplication
+Linear maps between vector spaces preserve these operations
+Vector spaces can have additional invariant structure like dimension, bases and inner products
+The dual space V* consists of linear functionals V -> F
+There is a canonical isomorphism V ≅ V** between a space and its double dual
+
+Key theorems proved include:
+
+Dual spaces have the same dimension as the original space
+Dual bases can be constructed as projection functionals
+The canonical map V -> V** sending v to evaluation at v is an isomorphism
+
+This demonstrates how the language of abstract spaces allows precisely defining and reasoning about common mathematical structures in a modular way. The abstract theorems about preservation of structure, invariance etc. can be directly instantiated for the specific case of vector spaces.
+
+
+
+
+
+CONCEPT SymmetryAndGroupActions {
+  IMPORT AbstractSpaces
+  
+  LANGUAGE {
+    G := Group(X, ∙) | Subgroup(G, P) | G × G | G ⋊ G
+    where 
+      Group(X, ∙) is a group with carrier X and operation ∙
+      Subgroup(G, P) is a subgroup of G defined by property P
+      G × G is the direct product of groups
+      G ⋊ G is the semidirect product of groups
+      
+    g := e | g ∙ g | g⁻¹ | ⟨g₁, g₂⟩ | ⟨g, x⟩
+    where
+      e is the group identity
+      ∙ is the group operation  
+      g⁻¹ is the group inverse
+      ⟨g₁, g₂⟩ is a pair in the direct product
+      ⟨g, x⟩ is a pair in the semidirect product
+      
+    ρ := λ(x: S). g ∙ x | ρ(g) | ρ₁ × ρ₂ | ρ₁ ⋊ ρ₂  
+    where
+      λ(x: S). g ∙ x is the action of g on x
+      ρ(g) is the homomorphism representing the action of g
+      ρ₁ × ρ₂ is the product action 
+      ρ₁ ⋊ ρ₂ is the semidirect product action
+      
+    pred Action(G: Group, S: Space) = Hom(ρ: G -> Aut(S))
+    pred FreeAction(ρ: Action) = ∀ x: S. ∀ g: G. (g ≠ e ⇒ ρ(g)(x) ≠ x)
+    pred TransitiveAction(ρ: Action) = ∀ x, y: S. ∃ g: G. ρ(g)(x) = y
+    pred FaithfulAction(ρ: Action) = ∀ g₁, g₂: G. (∀ x: S. ρ(g₁)(x) = ρ(g₂)(x)) ⇒ g₁ = g₂
+    
+    func Orbit(x: S, ρ: Action) = { ρ(g)(x) | g: G }
+    func Stabilizer(x: S, ρ: Action) = { g: G | ρ(g)(x) = x }
+    func CosetSpace(G: Group, H: Subgroup) = G / ~ᴴ where g ~ᴴ h ⟺ g⁻¹ ∙ h ∈ H
+    
+    axiom OrbitStabilizerTheorem: 
+      ∀ x: S. |Orbit(x)| * |Stabilizer(x)| = |G|
+      
+    axiom Burnside'sLemma:
+      ∀ ρ: Action. |S/G| = (1/|G|) * ∑ |Fix(g)| where Fix(g) = { x | ρ(g)(x) = x }  
+  }
+  
+  PROOFS {
+    theorem OrbitClosure:
+      ∀ ρ: Action. ∀ x, y: S. y ∈ Orbit(x) ⇒ Orbit(y) = Orbit(x)
+    {
+      assume ρ: Action, x, y: S, y ∈ Orbit(x)
+      suffices to show Orbit(y) ⊆ Orbit(x) ∧ Orbit(x) ⊆ Orbit(y)
+      {
+        assume z ∈ Orbit(y)  
+        exists g₁: G such that ρ(g₁)(y) = z
+        exists g₂: G such that ρ(g₂)(x) = y
+        let g = g₁ ∙ g₂
+        have ρ(g)(x) = ρ(g₁)(ρ(g₂)(x)) = ρ(g₁)(y) = z
+        hence z ∈ Orbit(x)
+      }
+      {  
+        assume z ∈ Orbit(x)
+        exists g₁: G such that ρ(g₁)(x) = z
+        exists g₂: G such that ρ(g₂)(x) = y
+        let g = g₁ ∙ (g₂⁻¹)  
+        have ρ(g)(y) = ρ(g₁)(ρ(g₂⁻¹)(y)) = ρ(g₁)(x) = z
+        hence z ∈ Orbit(y)
+      }
+    }
+    
+    theorem StabilizerSubgroup:
+      ∀ ρ: Action. ∀ x: S. Subgroup(Stabilizer(x))
+    {
+      assume ρ: Action, x: S
+      let H = Stabilizer(x)
+      suffices to show Identity(e, H), Closure(H), Inverses(H)
+      {
+        Identity(e, H):
+          have ρ(e)(x) = x                ; Identity action
+          hence e ∈ H
+          
+        Closure(H):  
+          assume g₁, g₂ ∈ H
+          have ρ(g₁)(x) = x ∧ ρ(g₂)(x) = x ; Definition of H
+          let g = g₁ ∙ g₂
+          have ρ(g)(x) = ρ(g₁ ∙ g₂)(x)
+                        = ρ(g₁)(ρ(g₂)(x))  ; Homomorphism
+                        = ρ(g₁)(x)          ; ρ(g₂)(x) = x
+                        = x                 ; ρ(g₁)(x) = x
+          hence g ∈ H                     
+          
+        Inverses(H):
+          assume g ∈ H  
+          have ρ(g)(x) = x                ; Definition of H
+          have ρ(g⁻¹)(ρ(g)(x)) = ρ(g⁻¹)(x) ; Substitution
+          have ρ(g⁻¹ ∙ g)(x) = x           ; Inverse in G  
+          have ρ(g⁻¹)(x) = x              ; Identity action
+          hence g⁻¹ ∈ H
+      }
+    }
+      
+    theorem StructureOfCosets:
+      ∀ G: Group, H: Subgroup. ∀ g: G. ∀ x: CosetSpace(G, H). Hom(λ(y). g ∙ y) ∧ Iso(g ∙ H, H) 
+    {
+      assume G: Group, H: Subgroup, g: G, x: CosetSpace(G, H)
+      let ~ᴴ = λ g₁ g₂. g₁⁻¹ ∙ g₂ ∈ H
+      have Hom(λ(y). g ∙ y):
+      {
+        assume y₁ ~ᴴ y₂
+        suffices to show (g ∙ y₁) ~ᴴ (g ∙ y₂)  
+        have (g ∙ y₁)⁻¹ ∙ (g ∙ y₂) = y₁⁻¹ ∙ (g⁻¹ ∙ g) ∙ y₂   ; Inverse, associativity
+                                  = y₁⁻¹ ∙ y₂               ; Simplify
+                                  ∈ H                      ; y₁ ~ᴴ y₂
+      }
+      have Iso(g ∙ H, H):  
+      {
+        let φ = λ h. g ∙ h
+        have Hom(φ)                     ; Shown above
+        have Hom(φ⁻¹):
+        {  
+          let ψ = λ h. g⁻¹ ∙ h
+          assume h₁, h₂: H, h₁ ~ᴴ h₂
+          suffices to show ψ(h₁) ~ᴴ ψ(h₂)
+          have ψ(h₁)⁻¹ ∙ ψ(h₂) = (g⁻¹ ∙ h₁)⁻¹ ∙ (g⁻¹ ∙ h₂)  
+                              = h₁⁻¹ ∙ (g ∙ g⁻¹) ∙ h₂      ; Inverse, associativity
+                              = h₁⁻¹ ∙ h₂                 ; Simplify
+                              ∈ H                        ; h₁ ~ᴴ h₂
+        }                                
+        have ψ ∘ φ = λ h. g⁻¹ ∙ (g ∙ h) = λ h. h  ; Identity in H
+        have φ ∘ ψ = λ h. g ∙ (g⁻¹ ∙ h) = λ h. h  ; Identity in g ∙ H
+      }
+    }
+  }
+}
+
+This Concept extends AbstractSpaces with notions from group theory and group actions on spaces. It introduces:
+
+Language for describing groups, subgroups, group elements and operations
+Definitions of group actions, orbits, stabilizers, and coset spaces
+Key properties of actions like freeness, transitivity, faithfulness
+Important theorems like Orbit-Stabilizer and Burnside's Lemma
+
+The proofs explore some fundamental results:
+
+Orbits form a partition of the space
+Stabilizers are subgroups of the acting group
+Cosets have a well-defined action-compatible structure
+
+The goal is to showcase how the AbstractSpaces framework can naturally express and reason about these algebraic structures and symmetries. The language allows defining complex objects like semidirect products and coset spaces, while the proofs demonstrate the power of the axiomatic setup.
+Potential next steps could be proving more advanced theorems, studying specific examples of group actions, or extending to related concepts like representations and G-spaces.
+
+
+
+
+
+
+CONCEPT AgentProcess {
+  LANGUAGE {
+    extend AbstractSpaces
+    
+    type Agent
+    type EnergyLandscape
+    type FreeParameters 
+    
+    A := Agent(E, P) | A + A | A × A
+    where
+      Agent(E, P) is an agent with energy E and parameters P
+      +, × are parallel and sequential composition of agents
+    
+    E := Analog(S, H) 
+    where  
+      Analog(S, H) is an analog process on state space S with Hamiltonian H
+      S is a smooth manifold representing possible states
+      H: T*S -> R is a smooth function representing energies of states
+      
+    P := Digital(N, K)
+    where
+      Digital(N, K) is a digital process with nodes N and edges K  
+      N is a finite set of control states or "choices"
+      K ⊆ N × N is a transition relation between states
+      
+    σ := Evolution(Φ) | Trajectory(γ) | Optima(O)
+    where
+      Evolution(Φ) means E evolves by the flow Φ generated by H
+      Trajectory(γ) is a path γ: [0,1] -> S through the state space
+      Optima(O) means O ⊆ S is the set of energy minima
+        
+    I := I(+) | I(×) | I(Φ) | I(γ)  
+    where
+      I(+), I(×) are invariants for composition of agents  
+      I(Φ), I(γ) are invariants for evolution and trajectories
+  }
+  
+  STRUCTURE {
+    EnergyLandscapeAxioms(E: EnergyLandscape): {
+      ∀ s ∈ S. ∃! Φ(s) ∈ T(S).  H(Φ(s)) = min {H(v) | v ∈ T(S)}   ; Gradient descent  
+      ∀ s₁, s₂ ∈ S. ∃ γ: [0,1] -> S. γ(0) = s₁, γ(1) = s₂       ; Connectivity
+      ∀ s ∈ S. ∃ U ∋ s. ∀ s' ∈ U. |H(s') - H(s)| < ε           ; Continuity
+    }
+    
+    FreeParametersAxioms(P: FreeParameters): {
+      |N| < ∞                                    ; Finite choice  
+      ∀ n₁, n₂ ∈ N. (n₁, n₂) ∈ K ⇒ H(n₁) ≥ H(n₂)  ; Downhill principle
+    }
+    
+    AgentAxioms(A: Agent, α: A -> P, ε: A -> E): {
+      ∀ n ∈ N. ∃ U ∋ α⁻¹(n). ∀ a ∈ U.  α(a) = n                ; α is locally constant 
+      ∀ s ∈ S. ∃ V ∋ ε⁻¹(s). ∀ a ∈ V.  H(ε(a)) - H(s) < δ     ; ε is δ-optimal
+      ∀ (n₁, n₂) ∈ K. ∃ a₁ ∈ α⁻¹(n₁), a₂ ∈ α⁻¹(n₂).
+        Evolution(ε(a₁), ε(a₂))                                 ; ε respects transitions
+    }
+  }
+    
+  PROOFS {
+    tactic FlowInvariance(E: EnergyLandscape, γ: Trajectory):
+      ⊢ ∀ t₁, t₂ ∈ [0,1]. H(γ(t₂)) ≤ H(γ(t₁))  
+    {
+      assume Evolution(Φ)  
+      suffices to show ∀ t ∈ [0,1]. d/dt H(γ(t)) ≤ 0
+      {
+        d/dt H(γ(t)) = dH(γ'(t)) = ⟨∇H(γ(t)), γ'(t)⟩
+                      = ⟨∇H(γ(t)), Φ(γ(t))⟩ ≤ 0
+        by definition of the gradient flow Φ  
+      }
+    }
+    
+    tactic OptimalityAttractor(A: Agent, O: Optima):
+      ε(A) ⊆ S, α(A) ⊆ N ⊢ ∃ t. Trajectory(ε(A(t))) ∋ O
+    {
+      assume a ∈ A, s ∈ ε(a)
+      let n = α(a) and γ = Trajectory(s)
+      suffices to find t such that γ(t) ∈ O  
+      FlowInvariance(E, γ) gives ∀ t₁ < t₂. H(γ(t₂)) ≤ H(γ(t₁))
+      FreeParametersAxioms give a sequence n₁, n₂, ... ∈ N with H(nᵢ₊₁) ≤ H(nᵢ)
+      AgentAxioms give a sequence a₁, a₂, ... ∈ A "tracking" this descent 
+      Continuity of H means γ(t) must converge to some minimum o ∈ O as t -> ∞
+    }
+    
+    theorem AscentDescent(A: Agent):  
+      ⊢ ∀ (n₁, n₂) ∈ K. ∃ γ: Trajectory(ε(α⁻¹(n₁))), s ∈ S. 
+        γ(0) ∈ ε(α⁻¹(n₁)), γ(1) ∈ ε(α⁻¹(n₂)), H(s) ≥ H(γ(t)) 
+    {
+      assume (n₁, n₂) ∈ K  
+      AgentAxioms give a₁ ∈ α⁻¹(n₁), a₂ ∈ α⁻¹(n₂) with Evolution(ε(a₁), ε(a₂))
+      let γ = Trajectory(ε(a₁)) and s = γ(0)  
+      have γ(1) ∈ ε(α⁻¹(n₂)) by AgentAxioms  
+      FlowInvariance(E, γ) gives H(γ(1)) ≤ H(γ(0))
+    }
+    
+    theorem EquilibriumConvergence(A: Agent, E: EnergyLandscape):
+      ⊢ ∀ a ∈ A. ∃ o ∈ Optima(E). Trajectory(ε(a)) ∋ o
+    {
+      assume a ∈ A and let s = ε(a)
+      OptimalityAttractor(A, Optima(E)) gives t with Trajectory(ε(A(t))) ∋ o ∈ Optima(E)  
+      AgentAxioms give Trajectory(s) ∋ o
+    }
+  }
+}
+
+The key ideas formalized in this AgentProcess Concept are:
+
+An Agent is a coupling of an analog EnergyLandscape and digital FreeParameters
+The energy landscape is a smooth manifold with a Hamiltonian energy function
+Free parameters are a finite transition graph of control states
+The coupling consists of two maps:
+
+α: Agent -> FreeParameters assigning agents to control states
+ε: Agent -> EnergyLandscape assigning agents to energy states
+
+
+These maps are required to respect the transition structure and energy gradients
+The energy landscape evolves by gradient descent flow to local minima
+The free parameters transition to lower energy control states
+Agents track this coupled evolution, descending the energy landscape
+Optimal agent trajectories are attracted to the minima of the landscape
+
+The main theorems establish:
+
+Invariance of energy descent along optimal trajectories
+Convergence of agent evolution to global energy equilibria
+Necessity of uphill free parameter transitions for downhill flow
+
+In terms of the original idea, the analog energy landscape provides a continuous optimization process, while the digital free parameters provide a discrete control process.
+Their mutual recursion consists of the parameters "guiding" the landscape descent by selecting attractors, while the landscape "informs" the parameter transitions by revealing the energy topology.
+The result is an abstraction of goal-driven agency as a composite of low-level energy optimization and high-level decision-making, cooperating to achieve dynamic equilibrium.

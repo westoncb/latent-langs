@@ -1,0 +1,103 @@
+CONCEPT DualAveragingOptimizer {
+  LANGUAGE {
+    TYPE X                     
+    TYPE Y                     
+    TYPE ℝ₊
+    
+    FUNC f : X -> Real         
+    FUNC g : Y -> Real         
+    FUNC h : X -> Real         
+    FUNC d : Y × Y -> ℝ₊        
+
+    FUNC ∇h : X -> Y           
+    FUNC ∇g : Y -> X           
+    FUNC ∇f : X -> Y           
+    FUNC Mirrorh : Y -> X      
+    FUNC Mirrorg : X -> Y      
+
+    REQUIRE ℝ₊ <: Real
+
+    NOTATION "⟨⋅,⋅⟩" = λ(x : X) (y : Y), dot(x, y)  
+    NOTATION "Bregmanh" = λ(x : X) (x' : X), d(∇h(x), ∇h(x'))   
+    NOTATION "Bregmang" = λ(y : Y) (y' : Y), d(∇g(y), ∇g(y'))  
+  }
+
+  STRUCTURE DualAveragingOptimizer(x_0 : X, y_0 : Y, K : Nat) {
+    REQUIRE h is σ_h-strongly convex w.r.t. some norm ‖⋅‖_h
+    REQUIRE g is σ_g-strongly convex w.r.t. the dual norm ‖⋅‖_g
+    REQUIRE ∀(x : X) (y : Y), ⟨x, y⟩ ≤ ‖x‖_h * ‖y‖_g  
+    REQUIRE ∀(x x' : X), Bregmanh(x, x') ≥ (σ_h/2) * ‖x - x'‖_h^2  
+    REQUIRE ∀(y y' : Y), Bregmang(y, y') ≥ (σ_g/2) * ‖y - y'‖_g^2  
+    REQUIRE ∀(x : X), x = Mirrorh(∇h(x))  
+    REQUIRE ∀(y : Y), y = Mirrorg(∇g(y))  
+
+    DEF (x, y) : (X, Y) = LOOP (from k = 0 to K - 1) (x_k, y_k) -> 
+      LET α_k = Adaptive_Stepsize(k), β_k = k + 1
+      IN Dual_Averaging_Update(x_k, y_k, α_k, β_k)
+  }
+
+  PROOFS {
+    TACTIC Dual_Averaging_Update(x_k : X, y_k : Y, α_k : ℝ₊, β_k : ℝ₊) -> (X, Y) = {
+      y_{k+1} := y_k - α_k * ∇f(x_k)
+      x_{k+1} := Mirrorh(β_k * y_{k+1})
+      return (x_{k+1}, y_{k+1})
+    }
+
+    TACTIC Adaptive_Stepsize(k : Nat) -> ℝ₊ = {
+      return 1 / sqrt(k + 1)  
+    }
+
+    THEOREM Convergence_Rate {
+      STATEMENT ∀(x_* : X), f(x) - f(x_*) ≤ O(1 / sqrt(K))
+      
+      PROOF {
+        LET x_* : X, D_h = max {Bregmanh(x_*, x_0), Bregmang(y_0, ∇f(x_*))}
+        
+        HAVE ∀(k : 0..K-1), 
+          β_k * f(x_k) + Bregmang(y_k, ∇f(x_*))
+          ≤ β_k * f(x_*) + Bregmang(y_0, ∇f(x_*)) + (1/2) * Σ_{i=0}^{k-1} α_i^2 * ‖∇f(x_i)‖_g^2
+          BY {
+            LET k : 0..K-1, y' = ∇f(x_*)
+            REWRITE β_k * f(x_k) + Bregmang(y_k, y')
+              = β_k * f(x_k) + Bregmang(y_{k-1} - α_{k-1} * ∇f(x_{k-1}), y')
+              = β_k * f(x_k) + Bregmang(y_{k-1}, y') 
+                - α_{k-1} * ⟨∇f(x_{k-1}), y_{k-1} - y'⟩ 
+                + (1/2) * α_{k-1}^2 * ‖∇f(x_{k-1})‖_g^2
+              ≤ β_k * f(x_k) + Bregmang(y_{k-1}, y')
+                - α_{k-1} * (f(x_{k-1}) - f(x_*))
+                + (1/2) * α_{k-1}^2 * ‖∇f(x_{k-1})‖_g^2
+              = β_{k-1} * f(x_{k-1}) + Bregmang(y_{k-1}, y')
+                + α_{k-1} * (f(x_k) - f(x_{k-1}))  
+                + (1/2) * α_{k-1}^2 * ‖∇f(x_{k-1})‖_g^2
+              ≤ β_{k-1} * f(x_*) + Bregmang(y_0, y')
+                + Σ_{i=0}^{k-1} α_i * (f(x_{i+1}) - f(x_i))
+                + (1/2) * Σ_{i=0}^{k-1} α_i^2 * ‖∇f(x_i)‖_g^2
+              ≤ β_k * f(x_*) + Bregmang(y_0, y') + (1/2) * Σ_{i=0}^{k-1} α_i^2 * ‖∇f(x_i)‖_g^2
+          }
+
+        HAVE ∀(k : 0..K-1), ‖∇f(x_k)‖_g^2 ≤ 2 * L_f^2 * D_h / σ_g BY {
+          LET k : 0..K-1  
+          ‖∇f(x_k)‖_g^2
+            ≤ (2/σ_g) * Bregmang(∇f(x_k), ∇f(x_*))  
+            ≤ (2/σ_g) * L_f^2 * Bregmanh(x_k, x_*)
+            ≤ (2/σ_g) * L_f^2 * D_h
+        }
+
+        HAVE Σ_{i=0}^{K-1} α_i^2 ≤ 2 * sqrt(K) BY {
+          Σ_{i=0}^{K-1} α_i^2  
+            = Σ_{i=0}^{K-1} 1 / (i + 1)
+            ≤ 1 + ∫_1^K 1/x dx
+            = 1 + log(K)
+            ≤ 2 * sqrt(K)  
+        }
+
+        HAVE β_K * (f(x) - f(x_*))
+          ≤ Bregmang(y_0, ∇f(x_*)) + L_f^2 * D_h * sqrt(K) / σ_g
+          ≤ D_h + L_f * sqrt(2 * D_h / σ_g) * sqrt(K)
+          = O(sqrt(K))
+
+        HENCE f(x) - f(x_*) ≤ O(1 / sqrt(K))  
+      }
+    }
+  }
+}

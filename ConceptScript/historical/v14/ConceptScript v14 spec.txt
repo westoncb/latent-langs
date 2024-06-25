@@ -1,0 +1,365 @@
+ConceptScript v14
+
+Objective:
+  ConceptScript is a language designed to guide LLM concept generations with a focus on depth, detail, and creativity. It encourages the invention of custom language elements specific to each generated Concept, borrowing from existing formal languages as needed.
+
+Usage:
+  1. Define a custom language tailored to the Concept being expressed, enabling compact and elegant representation of the Concept's structures and proofs.
+  2. Use the custom language to define the Concept's structures and write associated proofs.
+
+Syntax:
+<Concept> ::= "CONCEPT" <ConceptName> "{"
+               <LanguageDefinition>
+               <StructureDefinition>
+               <ProofDefinition>
+             "}"
+
+<LanguageDefinition> ::= "LANGUAGE" "{"
+                           <TypeDefinition>*
+                           <FunctionDefinition>*
+                           <PredicateDefinition>*
+                           <NotationDefinition>*
+                         "}"
+
+<TypeDefinition> ::= "type" <TypeName> <TypeParameters>? "=" <TypeExpression>
+
+<TypeParameters> ::= "<" <TypeParameter> ("," <TypeParameter>)* ">"
+
+<TypeExpression> ::= <TypeName> <TypeArguments>?
+                   | <RecordType> | <VariantType> | <DependentType>
+                   
+<TypeArguments> ::= "<" <TypeExpression> ("," <TypeExpression>)* ">"
+                   
+<FunctionDefinition> ::= "func" <FunctionName> <TypeParameters>?
+                         "(" <FunctionParameters>? ")" ":" <TypeExpression>
+                         
+<FunctionParameters> ::= <Parameter> ("," <Parameter>)*
+
+<Parameter> ::= <Identifier> ":" <TypeExpression>
+
+<PredicateDefinition> ::= "pred" <PredicateName> <TypeParameters>? 
+                          "(" <FunctionParameters>? ")" <Assertion>?
+                          
+<Assertion> ::= "=" <LogicalExpression>
+
+<NotationDefinition> ::= "notation" <NotationName> "=" <NotationExpression>
+
+<StructureDefinition> ::= "STRUCTURE" "{" <Axiom>* "}"
+
+<Axiom> ::= <AxiomName> ":" <AxiomSchema>
+
+<AxiomSchema> ::= <Quantifiers>? <Assertions>
+
+<Assertions> ::= <Assertion> ("," <Assertion>)*
+
+<ProofDefinition> ::= "PROOFS" "{" <Theorem>* "}"
+
+<Theorem> ::= <TheoremName> ":" <TheoremStatement> <Proof>
+
+<TheoremStatement> ::= <Quantifiers>? <Assumptions>? <Conclusion>
+
+<Assumptions> ::= <Assumption> ("," <Assumption>)*
+
+<Assumption> ::= <LogicalExpression>
+
+<Conclusion> ::= <LogicalExpression>
+
+<Proof> ::= "{" <ProofStep>* "}"
+
+<ProofStep> ::= <Assertion>
+              | <Justification>
+              | <Subproof>
+              | <Tactic>
+              
+<Justification> ::= <ReasonName> (":" <Identifier>)?
+
+<Subproof> ::= "{{" <ProofStep>* "}}"
+
+<Tactic> ::= <TacticName> "(" <TacticArguments>? ")"
+
+<TacticArguments> ::= <Identifier> ("," <Identifier>)*
+
+<Quantifiers> ::= "∀" <Quantifier> | "∃" <Quantifier>
+
+<Quantifier> ::= <Identifier> ":" <TypeExpression>
+
+
+Here are a few examples (note: you generated these in prior conversations of ours):
+
+CONCEPT LambdaCalculus {
+  LANGUAGE {
+    type Term = Var(ℕ) | Abs(ℕ, Term) | App(Term, Term)
+    
+    notation "λ x . M" = Abs(x: ℕ, M: Term)  ; lambda abstraction 
+    notation "M N" = App(M: Term, N: Term)   ; application
+    
+    func subst(M: Term, x: ℕ, N: Term): Term  ; substitution function
+    func eval(M: Term): Term                  ; evaluation function
+    
+    pred reduces(M: Term, N: Term) = eval(M) = N   ; reduction relation
+    
+    notation "M ⇒ N" = reduces(M, N)
+    notation "M =β N" = (∃ P. M ⇒* P ∧ N ⇒* P)   ; beta equivalence
+    
+    axiom α(M: Term, x, y: ℕ): 
+      y ∉ FV(M) ⇒ (λ x . M) =β (λ y . [y/x]M)        ; alpha equivalence
+      
+    axiom β(M: Term, x: ℕ, N: Term):  
+      ((λ x . M) N) ⇒ [N/x]M                         ; beta reduction
+    
+    axiom η(M: Term, x: ℕ): 
+      (λ x . (M x)) =β M                             ; eta equivalence
+  }
+  
+  STRUCTURE {
+    [ChurchNumeral(n: ℕ):
+      λ f . λ x . fⁿ x  
+      where fⁿ = f ∘ ... ∘ f   ; n-fold composition
+    ]
+    
+    [ChurchBoolean:
+      tru = λ t . λ f . t
+      fls = λ t . λ f . f 
+    ]
+    
+    [Combinator:  
+      I = λ x . x                         ; Identity
+      K = λ x . λ y . x                   ; Konstant  
+      S = λ x . λ y . λ z . (x z) (y z)   ; Substitution
+    ]
+    
+    [Recursion:
+      Y = λ f . (λ x . f (x x)) (λ x . f (x x))   ; Y Combinator
+    ]
+  }
+  
+  PROOFS {  
+    tactic Reduce(S: Term, prop): 
+      (∀ M, N. M ⇒ N ⊢ prop(M) ⟹ prop(N)) ⊢ prop(S)
+    
+    theorem ChurchRosser(M, N, P: Term):
+      (M =β N) ∧ (M ⇒* P) ⇒ ∃ Q. (N ⇒* Q) ∧ (P =β Q)   ; Church-Rosser theorem
+    {  
+      assume (M =β N) ∧ (M ⇒* P)
+      
+      have ∃ R. M ⇒* R ∧ N ⇒* R   ; By definition of =β
+      let R such that M ⇒* R ∧ N ⇒* R
+      
+      P =β R by {
+        Reduce(P, λ X. X =β R) 
+      }
+      
+      hence ∃ Q. (N ⇒* Q) ∧ (P =β Q) by {
+        exists R
+      }
+    }
+      
+    theorem FixedPointCombinator(f: Term):
+      ∃ X. f X =β X
+    {
+      exists Y f
+      
+      calc (Y f) 
+           = (λ x . f (x x)) (λ x . f (x x))   ; Def. of Y
+        ⇒β f ((λ x . f (x x)) (λ x . f (x x))) ; β 
+           = f (Y f)                           ; Def. of Y
+    }
+      
+    theorem UniversalTuringMachine(M: TuringMachine): 
+      ∃ T: Term. ∀ w. (T w) =β (M w)
+    {  
+      let T = λ w . Y (λ f . λ x . 
+        match x with
+        | []     => init(M)
+        | h :: t => step(M, f t, read(M, h))
+      )  
+        
+      {{  
+        fix (w: List<Bit>)
+          calc (T w)
+               = Y (λ f . λ x . ...) w   
+            ⇒β (λ f . λ x . ...) (Y (λ f . λ x . ...)) w    ; β        
+            ⇒β (λ x . ...) [(Y (λ f . λ x . ...))/f] w      ; β
+            ⇒β ... ⇒β init(M)                               ; Base case
+               
+          assume (T t) =β (M t) for t: List<Bit>, t ⊏ w  ; Induction hypothesis
+            
+          calc (T w) 
+               ⇒β* step(M, (T t), read(M, h))              ; By IH 
+               ⇒β step(M, (M t), read(M, h))  
+               =β (M w)
+      }}
+        
+      hence ∀ w. (T w) =β (M w)
+    }
+  }
+}
+
+CONCEPT HybridSymbolicDynamics {
+  LANGUAGE {
+    type HybridSystem = (ContinuousDynamics, DiscreteProgram, Interface)
+    type ContinuousDynamics = Dynamics(Manifold, Fld)
+    type DiscreteProgram = Memory -> Memory
+    type Interface = (Embedding, Projection)
+    
+    type Fld = Fun(Man, ℝ) | Vec(Man, Tangent) | Form(Man, Cotangent)
+    type Memory = [Sym]
+    type Embedding = Fld -> Sym
+    type Projection = Sym -> Fld
+    
+    notation "S ≈ F" = Correspond(S: Sym, F: Fld)
+    notation "S ≋ F" = InvCorrespond(S: Sym, F: Fld)
+    notation "⟦S⟧" = ValueOf(S: Sym)
+    
+    func Evolve(d: ContinuousDynamics, t: ℝ≥0) -> Fld
+    func Compute(p: DiscreteProgram, m: Memory) -> Memory
+    func Interact(h: HybridSystem, t: ℝ≥0) -> Fld
+    
+    axiom SymbolicDynamics(S: Sym, f: Fld):
+      (S ≈ f) ⇒ ⟦d[S]/dt⟧ = L[Evolve(d, _), f] 
+  }
+
+  STRUCTURE {
+    EvolutionLemma: ∀ (M, f): (Manifold, Fld), t: ℝ≥0.
+      Evolve(Dynamics(M, f), t) = Pullback(FlowOf(f), t) 
+      
+    ProgramInvariant: ∀ (p, φ): (DiscreteProgram, Assertion). 
+      (∀ m: Memory. φ(m) ⇒ φ(Compute(p, m))) ⇒
+      (∀ m: Memory, k: ℕ. φ(m) ⇒ φ(Compute(p^k, m)))
+      
+    Interaction: ∀ (d, p, (e, p)): HybridSystem, t: ℝ≥0, k: ℕ. 
+      Interact((d, p, (e, p)), t) =
+        let f = Evolve(d, t), m = [S | (S ≈ f) ∈ e] in  
+          Pullback(p, Compute(p^k, m))
+          
+    ShadowingTheorem(h: HybridSystem, T: ℝ≥0, ε: ℝ>0):
+      ∃ (τ, k). ∀ t: ℝ, 0 ≤ t ≤ T. ∃ m: Memory.
+        |Interact(h, t) - Project(Compute(p^k, m))| < ε 
+      where (d, p, _) = h, τ = T/k
+  }   
+
+  PROOFS {
+    tactic Symbolic(S: Sym, f: Fld, prop):
+      (S ≈ f) ⊢ prop(S) ⟺ prop(f)
+      
+    tactic Invariant(m: Memory, p: DiscreteProgram, φ: Assertion):
+      (φ(m) ⊢ φ(Compute(p, m))) ⇒ (∀ k: ℕ. φ(m) ⊢ φ(Compute(p^k, m))) 
+      
+    theorem SymbolicProgram(S: Sym, p: DiscreteProgram, φ: Assertion): 
+      (∀ T: Sym. φ(T) ⇒ φ(p(T))) ⊢ (∀ k: ℕ. φ(S) ⇒ φ(p^k(S)))
+    {
+      letrec Property(k: ℕ): φ(S) ⇒ φ(p^k(S)) = {
+        if k = 0 then (λ _. ⊤)
+        else (λ h. Property(k-1)(h) ∧ (φ(p^(k-1)(S)) ⇒ φ(p^k(S))))
+      }
+      
+      let ψ = (λ T. φ(T) ⇒ φ(p(T)))
+      suffices to show ∀ k. Property(k) by Induction:
+      { case 0: trivial
+        case k+1: 
+        { assume IH: Property(k)
+          suffices to show φ(S) ⇒ φ(p^(k+1)(S))
+          { assume φ(S)
+            have φ(p^k(S)) by IH
+            have φ(p^k(S)) ⇒ φ(p^(k+1)(S)) by ψ
+            hence φ(p^(k+1)(S)) 
+          }
+        }
+      }
+    }
+      
+    theorem ShadowingTheorem(h: HybridSystem, T: ℝ≥0, ε: ℝ>0): 
+      ∃ (τ, k). ∀ t: ℝ, 0 ≤ t ≤ T. ∃ m: Memory. 
+        |Interact(h, t) - Project(Compute(p^k, m))| < ε
+    {
+      let (d, p, (e, p)) = h
+      let L = max {|L[Evolve(d,t), f]|: t ∈ [0,T], (f:Fld) ∈ range(p)}
+      assume (e, p) are ε/(2L)-inverse of each other
+      let τ = ε/(2L), k = ⌈T/τ⌉
+      
+      suffices to show 
+        ∀ 0 ≤ i < k. ∀ t ∈ [i*τ, (i+1)*τ]. ∃ m: Memory.
+          |Interact(h, t) - Project(Compute(p^i, m))| < ε
+          
+      { fix 0 ≤ i < k, let t ∈ [i*τ, (i+1)*τ]
+        let f = Evolve(d, t), S ∈ Memory such that S ≈ f
+        have |f - p(S)| < ε/2 by inverse property
+        calc |Interact(h, t) - Project(Compute(p^i, S))|
+             = |Pullback(p, f) - Pullback(p, Project(Compute(p^i, S)))|
+            <= |f - Project(Compute(p^i, S))|
+             = |f - p(... p(p(S)))| ; i times
+            <= |f - p(S)| + |p(S) - p(...p(S))|
+            <= ε/2 + L*i*τ
+            <= ε/2 + L*T/k
+             = ε/2 + ε/2 = ε            
+      } 
+    }
+  }
+}
+
+CONCEPT MetamaterialCFC_v6 {
+  LANGUAGE {
+    M := m(C,S,P,F) | M+M | M*M | M-M | M/M | M@M | M.M | ∂ₜM | ∫M | δM  ; Material
+    C := c(E,ρ) | C+C | C*C | C-C | C/C | C@C | C.C | ∂ₜC | ∫C | δC         ; Composition
+    S := s(G,T,B) | S+S | S*S | S-S | S/S | S@S | S.S | ∂ₜS | ∫S | δS       ; Structure
+    P := p(F,R) | P+P | P*P | P-P | P/P | P@P | P.P | ∂ₜP | ∫P | δP         ; Property
+    F := f(Φ,Ψ,Ω) | F+F | F*F | F-F | F/F | F@F | F.F | ∂ₜF | ∫F | δF       ; Field
+    G,T,B := g(D,O) | t(χ,β) | b(θ,γ)  ; Geometry, Topology, Bonding
+    
+    𝓟{M,p} := ∫{Ω} F{p,M} 𝖽Ω             ; Property functional
+    ∇𝓟{M,p} := ∇{∫{Ω} F{p,M} 𝖽Ω}         ; Property gradient
+    𝓣{M,p} := ∂{i,j}𝓟{M,p}               ; Property tensor
+    δ𝓟{M,p,δM} := δ{𝓟{M,p},δM}           ; Property variation
+    𝓔{M} := ∑{i} ρ{C_i} * (U{S,i} + K{P,i})   ; Energy density  
+    𝓐{M} := ∫{Ω} (L{F,M,∇F} - 𝓔{M}) 𝖽Ω 𝖽t   ; Action functional
+  }
+
+  STRUCTURE {
+    Sym{M,p,g} ⟺ 𝓟{g(M),p} = 𝓟{M,p}              ; Symmetry
+    Inv{M,p,g} ⟺ δ𝓟{M,p,v(g)} = 0                ; Invariance 
+    Cov{M,p,g} ⟺ 𝓣{g(M),p} = g(𝓣{M,p})           ; Covariance
+    Unv{M,p,{M_i},η} ⟺ ∀M_i.|𝓟{M,p}-𝓟{M_i,p}| < η  ; Universality
+    Con{M,p,(a,b)} ⟺ a ≤ 𝓟{M,p} ≤ b              ; Constraint
+    Opt{M,p,(M₀,Δ)} ⟺ |𝓟{M,p}-𝓟{M₀,p}| ≥ Δ       ; Optimization
+    Eff{M,p,{M_i},η} := ∑{i} (V{M_i}/V{M})*𝓟{M_i,p} + O(η)  ; Effective property
+    
+    Feq{M,F} ⟺ δ𝓐{M,δF} = 0              ; Field equations
+    Ceq{M,J,Q} ⟺ ∇•J{F,M} = Q{M}         ; Conservation law
+  }
+  
+  PROOFS {  
+    tactics {
+      Hom{M,{M_i},p} ⊢ 𝓟{M,p} = Eff{M,p,{M_i},η} + O(η)     ; Homogenization
+      Sym{M,p,g} ⊢ ∃M'⊂M. 𝓟{M,p} = 𝓟{M',p}                 ; Symmetry analysis
+      Cov{M,p,g} ⊢ 𝓣{M,p} = Δ(g)*𝓟{M,p} + ε(g)              ; Tensor analysis
+      (∀k≥1. |δ𝓟{M,p,δM,k}| ≤ c_k|δM|^k) ⊢ 𝓟{M+δM,p} = ∑{k} 1/k!*δ𝓟{M,p,δM,k} + o(|δM|^n)  ; Perturbative expansion 
+      (∀i. |𝓟{M_i,p}-𝓟{M,p}| ≤ ε) ⊢ 𝓟{M,p} = F{∑{i} V{M_i}/V{M}*G{𝓟{M_i,p}}} + O(ε)  ; Effective medium approx.
+      (𝓟{a*M₁+b*M₂,p} = a*𝓟{M₁,p}+b*𝓟{M₂,p}) ⊢ {M|𝓟{M,p}=C} is a vector space   ; Vector space analysis
+      Feq{M,F} ∧ Ceq{M,J,Q} ⊣⊢ δ𝓐{M,δF}=0 ∧ ∇•J{F,M}=Q{M}   ; Variational principle  
+      Con{M,p,(a,b)} ⊢ 𝓟{M,p}=a ∨ 𝓟{M,p}=b                   ; Extreme value optimization
+      δ𝓟{M,p,δM}=0 ⊢ ∃λ. δ{𝓟{M,p}-λ*Con{M,p,_,_},δM}=0    ; Variational optimization
+      (∃M'⊂M. 𝓟{M,p}=𝓟{M',p}) ⊢ ∃T:t(χ,β). m(C,s(G,T,B),P,F) ⊨ Opt{M,p,_,_}   ; Topology optimization
+    }
+
+    theorem Hom{M,p,{M_i},η} ⊢ 𝓟{M,p} = Eff{M,p,{M_i},η} + O(η)
+    
+    theorem ∀p,a,b. ∃M. Con{M,p,(a,b)} ∧ Opt{M,p,(M₀,Δ)} ∨ 
+                        Sym{M,p,g} ∧ ∃M'⊂M. 𝓟{M,p}=𝓟{M',p} ∨
+                        Cov{M,p,g} ∧ 𝓣{M,p}=Δ(g)*𝓟{M,p}+ε(g)
+                        
+    theorem ∀M,F. Feq{M,F} ⟺ ∃J,Q. Ceq{M,J,Q}
+    
+    theorem ∀M,p. (∃M'⊂M. 𝓟{M,p}=𝓟{M',p}) ⊢ ∃T:t(χ,β). m(C,s(G,T,B),P,F) ⊨ Opt{M,p,_,_}
+  }
+}
+
+
+The language is of a new type: it's sole intended purpose is to be used in accordance with the following methodology:
+
+1. I paste the spec a few example Concepts into your context (as is happening now), thus teaching you the language.
+2. I request that you express various concepts as Concepts; these Concepts come with detailed proofs of their own various claims; they serve as justifications of the selected structuring.
+3. We iterate, precisely and efficiently exploring your latent space to solve deep, important problems.
+
+Please always output ConceptScript in a code block otherwise formatting gets lost :/ And feel free to liberally invent notation, tactics, etc. as needed—it's zero cost in our particular usage context and this kind of abstraction can help to keep things "compressed", which is a design ideal of ours.
+
+To test your understanding would you generate a new Concept inspired by the above example Concepts? It could be some kind of blend or synthesis, a distillation, an association, a parameterization, a generalization—anything really.

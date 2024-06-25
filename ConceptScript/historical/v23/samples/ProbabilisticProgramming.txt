@@ -1,0 +1,189 @@
+CONCEPT ProbabilisticProgramming {
+
+  LANGUAGE {
+    TYPE Var
+    TYPE Value
+    TYPE Dist = Var -> 𝒫(Value)
+    TYPE Model = Var -> (𝒫(Value) -> 𝒫(Value)) -> 𝒫(Value)
+    TYPE Inference = Model -> (Var -> Value) -> 𝒫(Value)
+
+    FUNC Expectation[A] : (A -> ℝ) -> 𝒫(A) -> ℝ
+    FUNC KLDivergence : 𝒫(Value) -> 𝒫(Value) -> ℝ⁺
+    FUNC Entropy : 𝒫(Value) -> ℝ⁺
+    
+    NOTATION "𝔼[X∈D] f" = Expectation(D, f)
+    NOTATION "D_KL(P ∥ Q)" = KLDivergence(P, Q)
+    NOTATION "H(P)" = Entropy(P)
+  }
+
+  STRUCTURE {
+    LET X = SampleSpace(Value)
+    
+    DEF Var = Symbol
+    DEF Value = Any
+    DEF Dist(v) = λ x . P(v = x) 
+    DEF Model(v)(P) = λ x . ∫ P(v = x | Pa(v) = pa) dP(pa)
+    
+    DEF VariationalInference(M)(Q) = 
+      ArgMin[Q] 𝔼[v∈M(v)] D_KL(M(v) ∥ Q(v))
+      
+    DEF MaximumLikelihood(M)(D) = 
+      ArgMax[θ] ∏ Pθ(D)
+      
+    DEF MaximumAPosteriori(M)(D) =
+      ArgMax[θ] P(θ) ∏ Pθ(D)
+      
+    AXIOM DistributionPositive : ∀ (P : 𝒫(X)) . P(x) ≥ 0
+    AXIOM DistributionUnity : ∀ (P : 𝒫(X)) . ∑ P(x) = 1
+    
+    REWRITE ExpectationLinearity : 
+      𝔼[X∈D] (a·f + b·g) => a·𝔼[X∈D] f + b·𝔼[X∈D] g
+      
+    REWRITE KLDivergencePositive :
+      D_KL(P ∥ Q) => ∫ P(x) log (P(x) / Q(x)) dx ≥ 0
+      
+    REWRITE EntropySubadditivity : 
+      H(P × Q) ≤ H(P) + H(Q)
+  }
+
+  PROOFS {
+    THEOREM SoundnessOfVariationalInference {
+      STATEMENT : Qᵛ = M -> ∀ v . D_KL(M(v) ∥ Qᵛ(v)) ≤ D_KL(M(v) ∥ Q(v))
+      
+      PROOF {
+        LET Qᵛ = VariationalInference(M)
+        
+        ASSUME [v : Var] [Q : Var -> 𝒫(Value)] : 
+          𝔼[x∈Qᵛ(v)] log (Qᵛ(v, x) / M(v, x)) ≤ 
+          𝔼[x∈Q(v)]  log (Q(v, x)  / M(v, x))
+
+        REWRITE KLDivergencePositive
+        REWRITE ExpectationLinearity
+        
+        SHOW D_KL(M(v) ∥ Qᵛ(v)) ≤ D_KL(M(v) ∥ Q(v))
+      }
+    }
+
+    THEOREM MaximumLikelihoodIsMAP[n : ℕ] {
+      STATEMENT : 
+        ∀ (M : Model) (D : Value^n) . 
+        MaximumLikelihood(M)(D) = MaximumAPosteriori(M)(D) 
+        ASSUMING P(θ) = Uniform
+      
+      PROOF {
+        ASSUME [M : Model] [D : Value^n] : P(θ) = Uniform
+        
+        HAVE ArgMax[θ] ∏ Pθ(D) <-> ArgMax[θ] log ∏ Pθ(D)
+          BY MonotonicityOfLog
+        
+        REWRITE log ∏ Pθ(D) = ∑ log Pθ(D)
+
+        HAVE ArgMax[θ] P(θ) ∏ Pθ(D) <-> ArgMax[θ] log P(θ) + ∑ log Pθ(D)
+          BY MonotonicityOfLog  
+          
+        REWRITE log P(θ) = -log |Θ| ASSUMING P(θ) = Uniform
+        
+        HAVE ArgMax[θ] log P(θ) + ∑ log Pθ(D) <-> ArgMax[θ] ∑ log Pθ(D)
+          BY ConstantTermsDoNotAffectArgMax
+                
+        SHOW MaximumLikelihood(M)(D) = MaximumAPosteriori(M)(D)
+      }
+    }
+
+    THEOREM EntropyBoundsMutualInformation {
+      STATEMENT : I(X; Y) ≤ min {H(X), H(Y)}
+      
+      PROOF {
+        REWRITE I(X; Y) = H(X) - H(X|Y) = H(Y) - H(Y|X)
+        
+        HAVE H(X|Y) ≥ 0 AND H(Y|X) ≥ 0  
+          BY NonNegativityOfEntropy
+          
+        HENCE H(X) ≥ I(X; Y) AND H(Y) ≥ I(X; Y)
+        
+        SHOW I(X; Y) ≤ min {H(X), H(Y)}
+      }
+    }
+  }
+  
+  CONCEPT BayesianNetwork EXTENDS ProbabilisticProgramming {
+    LANGUAGE {
+      TYPE DAG = (𝒫(Var), Var -> 𝒫(Var))
+      FUNC Ancestors : DAG -> Var -> 𝒫(Var)
+      FUNC MarkovBlanket : DAG -> Var -> 𝒫(Var)
+    }
+    
+    STRUCTURE {
+      DEF Ancestors((V, E))(v) = { w ∈ V | Path(w, v) ∈ E* }  
+      DEF MarkovBlanket((V, E))(v) = Parents(v) ∪ Children(v) ∪ Spouses(v)
+      
+      AXIOM DAGIsAcyclic : ∀ ((V, E) : DAG) . ∀ v ∈ V . v ∉ Ancestors((V, E))(v)
+      
+      DEF BayesianNetwork : DAG -> Model
+      BayesianNetwork((V, E)) = λ v . ∏ Pv|Pa(v)
+      
+      REWRITE IndependenceInBN : 
+        (v ⊥ NonDescendants(v) | Parents(v))
+        IN BayesianNetwork((V, E))
+    }
+    
+    PROOFS {
+      THEOREM EquivalenceUnderFactorization {
+        STATEMENT : 
+          ∀ ((V, E) : DAG) .
+          JPD(BayesianNetwork((V, E))) =
+          ∏ Pv|An(v) =
+          ∏ Pv|Pa(v)
+
+        PROOF {        
+          LET ((V, E) : DAG), (G : BayesianNetwork((V, E)))
+          
+          HAVE ∀ v ∈ V . Pv|An(v) = Pv|Pa(v) {
+            ASSUME [v ∈ V]
+            
+            LET NonDescendants(v) = V \ ({v} ∪ Descendants(v))
+            
+            HAVE v ⊥ NonDescendants(v) | Parents(v) IN G 
+              BY IndependenceInBN
+            
+            HAVE Ancestors(v) = Parents(v) ∪ NonDescendants(v)
+            
+            HAVE Pv|An(v) = Pv|Pa(v) BY ConditionalIndependence
+          }
+            
+          SHOW JPD(G) = ∏ Pv|An(v) = ∏ Pv|Pa(v) BY ChainRule, INDUCTION
+        }
+      }
+
+      THEOREM MarkovEquivalence {
+        STATEMENT :
+          ∀ ((V, E1) : DAG) ((V, E2) : DAG) .
+          BayesianNetwork((V, E1)) = BayesianNetwork((V, E2))
+          <-> SameSkeletonSameV((V, E1), (V, E2))
+
+        PROOF {
+          ASSUME [(V, E1) : DAG] [(V, E2) : DAG] {
+            BayesianNetwork((V, E1)) = BayesianNetwork((V, E2))
+          }
+          
+          LET G1 = BayesianNetwork((V, E1)), G2 = BayesianNetwork((V, E2))
+          
+          HAVE ∀ v ∈ V . MarkovBlanket(G1, v) = MarkovBlanket(G2, v) {
+            ASSUME [v ∈ V] 
+            
+            HAVE Pv|V\{v} SAME IN G1, G2 BY ASSUMPTION
+            HENCE MarkovBlanket(G1, v) = MarkovBlanket(G2, v) 
+          }
+           
+          HENCE ∀ v w ∈ V . AdjacentOrSpouses(v, w) IN G1 <-> AdjacentOrSpouses(v, w) IN G2
+          HENCE Skeleton(G1) = Skeleton(G2) AND ImmoralsMatch(G1, G2)
+          
+          LET (R, F) = CPDAG(G1)
+          
+          HAVE (V, E1) IN PerfectMaps((R, F)) AND (V, E2) IN PerfectMaps((R, F))
+          SHOW SameSkeletonSameV((V, E1), (V, E2))
+        }
+      }
+    }
+  }
+}

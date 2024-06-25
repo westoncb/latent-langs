@@ -1,0 +1,355 @@
+CONCEPT Chip8 {
+  LANGUAGE {
+    TYPE Byte = Bit[8]
+    TYPE Word = Bit[16]
+    TYPE Address = Bit[12]
+    TYPE Register = Byte
+    TYPE Opcode = Word
+    TYPE Memory = Address -> Byte
+    TYPE Stack = List[Address]
+    TYPE Keypad = Bit[16]
+    TYPE Display = Bit[64, 32]
+
+    FUNC Fetch(pc : Address, mem : Memory) : Opcode
+    FUNC DecodeExecute(op : Opcode, regs : Register[16], 
+                       i : Address, stack : Stack, 
+                       mem : Memory, keys : Keypad,
+                       graphics : Display, 
+                       pc : Address, delay_t : Byte, sound_t : Byte) 
+         : (Register[16], Address, Stack, Memory, Display, Address, Byte, Byte)
+
+    FUNC Run(mem : Memory, keys : Keypad) : Display
+  }
+
+  STRUCTURE State {
+    pc        : Address      ; Program counter 
+    i         : Address      ; Address register
+    memory    : Memory
+    stack     : Stack
+    registers : Register[16]
+    graphics  : Display
+    keypad    : Keypad  
+    delay_timer : Byte
+    sound_timer : Byte
+
+    INIT {
+      pc := 0x200
+      i := 0
+      memory := Zero
+      stack := []
+      registers := Zero
+      graphics := Zero
+      keypad := Zero
+      delay_timer := 0
+      sound_timer := 0
+    }
+
+    DEF Fetch() -> Opcode = {
+      LET b1 = memory[pc]
+      LET b2 = memory[pc+1]
+      ((b1 : Word) << 8) | (b2 : Word)
+    }
+    
+    DEF DecodeExecute(op : Opcode) -> State = {
+      MATCH (op >> 12) {
+        0x0 => MATCH op {
+          0x00E0 => graphics := Zero
+          0x00EE => pc := stack.Pop(); pc += 2
+          _      => INVALID  
+        }
+        0x1 => pc := op & 0x0FFF
+        0x2 => stack.Push(pc); pc := op & 0x0FFF  
+        0x3 => IF registers[op >> 8 & 0xF] = (op & 0xFF) THEN pc += 4 ELSE pc += 2
+        0x4 => IF registers[op >> 8 & 0xF] ≠ (op & 0xFF) THEN pc += 4 ELSE pc += 2
+        0x5 => IF registers[op >> 8 & 0xF] = registers[op >> 4 & 0xF] THEN pc += 4 ELSE pc += 2
+        0x6 => registers[op >> 8 & 0xF] := op & 0xFF; pc += 2
+        0x7 => registers[op >> 8 & 0xF] += op & 0xFF; pc += 2
+        0x8 => MATCH (op & 0xF) {
+          0x0 => registers[op >> 8 & 0xF] := registers[op >> 4 & 0xF]; pc += 2
+          0x1 => registers[op >> 8 & 0xF] |= registers[op >> 4 & 0xF]; pc += 2
+          0x2 => registers[op >> 8 & 0xF] &= registers[op >> 4 & 0xF]; pc += 2
+          0x3 => registers[op >> 8 & 0xF] ^= registers[op >> 4 & 0xF]; pc += 2
+          0x4 => {
+            IF (registers[op >> 8 & 0xF] + registers[op >> 4 & 0xF] > 255)
+            THEN registers[0xF] := 1 ELSE registers[0xF] := 0
+            registers[op >> 8 & 0xF] += registers[op >> 4 & 0xF]; pc += 2
+          }
+          0x5 => {  
+            IF (registers[op >> 8 & 0xF] < registers[op >> 4 & 0xF])
+            THEN registers[0xF] := 0 ELSE registers[0xF] := 1
+            registers[op >> 8 & 0xF] -= registers[op >> 4 & 0xF]; pc += 2              
+          }
+          0x6 => {
+            registers[0xF] := registers[op >> 8 & 0xF] & 1
+            registers[op >> 8 & 0xF] >>= 1; pc += 2
+          } 
+          0x7 => {
+            IF (registers[op >> 8 & 0xF] > registers[op >> 4 & 0xF]) 
+            THEN registers[0xF] := 0 ELSE registers[0xF] := 1
+            registers[op >> 8 & 0xF] =  registers[op >> 4 & 0xF] - registers[op >> 8 & 0xF]; pc += 2
+          }
+          0xE => {
+            registers[0xF] := registers[op >> 8 & 0xF] >> 7  
+            registers[op >> 8 & 0xF] <<= 1; pc += 2
+          }
+        }
+        0x9 => IF registers[op >> 8 & 0xF] ≠ registers[op >> 4 & 0xF] THEN pc += 4 ELSE pc += 2
+        0xA => i := op & 0x0FFF; pc += 2  
+        0xB => pc := (op & 0x0FFF) + registers[0]
+        0xC => registers[op >> 8 & 0xF] := Random() & (op & 0xFF); pc += 2
+        0xD => {
+          LET x = registers[op >> 8 & 0xF]
+          LET y = registers[op >> 4 & 0xF]
+          LET height = op & 0xF
+          registers[0xF] := 0
+          FOR row = 0 TO height {
+            LET sprite = memory[i + row]
+            FOR col = 0 TO 8 {
+              IF (sprite & 0x80 > 0) {  
+                IF graphics[x + col, y + row] = 1 THEN registers[0xF] := 1
+                graphics[x + col, y + row] ^= 1
+              }
+              sprite <<= 1
+            }
+          }
+          pc += 2
+        }  
+        0xE => MATCH (op & 0xFF) {
+          0x9E => IF keypad[registers[op >> 8 & 0xF]] = 1 THEN pc += 4 ELSE pc += 2
+          0xA1 => IF keypad[registers[op >> 8 & 0xF]] = 0 THEN pc += 4 ELSE pc += 2
+          _    => INVALID
+        }
+        0xF => MATCH (op & 0xFF) {
+          0x07 => registers[op >> 8 & 0xF] := delay_timer; pc += 2
+          0x0A => {
+            LET key_pressed = FALSE
+            FOR i = 0 TO 16 {
+              IF keypad[i] = 1 THEN { 
+                registers[op >> 8 & 0xF] := i
+                key_pressed := TRUE
+                BREAK
+              }
+            }
+            IF ¬key_pressed THEN pc -= 2 ELSE pc += 2
+          }
+          0x15 => delay_timer := registers[op >> 8 & 0xF]; pc += 2
+          0x18 => sound_timer := registers[op >> 8 & 0xF]; pc += 2 
+          0x1E => i += registers[op >> 8 & 0xF]; pc += 2
+          0x29 => i := HexCharAddress(registers[op >> 8 & 0xF]); pc += 2
+          0x33 => {
+            memory[i]     := registers[op >> 8 & 0xF] / 100
+            memory[i + 1] := (registers[op >> 8 & 0xF] / 10) % 10
+            memory[i + 2] := registers[op >> 8 & 0xF] % 10; pc += 2
+          }
+          0x55 => {
+            FOR reg_num = 0 TO (op >> 8 & 0xF) {
+              memory[i + reg_num] := registers[reg_num]  
+            }
+            i += (op >> 8 & 0xF) + 1; pc += 2
+          }
+          0x65 => {  
+            FOR reg_num = 0 TO (op >> 8 & 0xF) {
+              registers[reg_num] := memory[i + reg_num]
+            }
+            i += (op >> 8 & 0xF) + 1; pc += 2
+          }          
+          _ => INVALID
+        }
+        _ => INVALID  
+      }
+
+      IF delay_timer > 0 THEN delay_timer -= 1
+      IF sound_timer > 0 THEN {
+        IF sound_timer = 1 THEN Beep()
+        sound_timer -= 1
+      }
+      RETURN SELF
+    }
+    
+    DEF Run() -> Display = {
+      LOOP {
+        LET opcode = Fetch()
+        DecodeExecute(opcode)
+      }
+      RETURN graphics  
+    }
+  }
+
+  PROOFS {
+    TACTIC ValidState(s) -> 𝔹 = { 
+      s.pc ∈ {0x200 .. 0xFFF}
+      s.i ∈ {0x0 .. 0xFFF}
+      ∀ r ∈ s.registers. r ∈ {0x0 .. 0xFF}  
+      s.delay_timer ∈ {0x0 .. 0xFF}
+      s.sound_timer ∈ {0x0 .. 0xFF}
+      ∀ a. s.memory[a] ∈ {0x0 .. 0xFF}
+      ∀ p. s.keypad[p] ∈ {𝔹}
+      ∀ x y. s.graphics[x, y] ∈ {𝔹}
+    } 
+
+    THEOREM FetchIsValid {
+      ∀ (s : State). ValidState(s) => 
+        s.Fetch() ∈ {0x0000 .. 0xFFFF}
+
+      PROOF:
+        LET s : State
+        ASSUME ValidState(s)
+        
+        REWRITE s.Fetch() = ((s.memory[s.pc] : Word) << 8) | (s.memory[s.pc+1] : Word)
+            BY DEFINITION State.Fetch
+        
+        s.memory[s.pc] ∈ {0x0 .. 0xFF} ∧ 
+        s.memory[s.pc+1] ∈ {0x0 .. 0xFF}
+            BY ValidState(s)
+
+        ((s.memory[s.pc] : Word) << 8) ∈ {0x0000 .. 0xFF00} ∧
+        (s.memory[s.pc+1] : Word) ∈ {0x0 .. 0xFF}
+            BY ZeroExtension(Byte, Word), BoundShift(<, Word, 8) 
+
+        (((s.memory[s.pc] : Word) << 8) | (s.memory[s.pc+1] : Word)) ∈ {0x0000 .. 0xFFFF}  
+            BY BitwiseOr(0x0000 .. 0xFF00, 0x0 .. 0xFF)
+        
+        QED
+    }
+
+    THEOREM DecodeExecuteIsValid {
+      ∀ (s s' : State) (op : Opcode).
+        ValidState(s) ∧ s' = s.DecodeExecute(op) => ValidState(s')
+
+      PROOF:
+        LET s s' : State, op : Opcode
+        ASSUME ValidState(s), s' = s.DecodeExecute(op)
+
+        ARGUE s'.pc ∈ {0x200 .. 0xFFF} BY {
+          MATCH (op >> 12) {
+            0x0 => MATCH op {
+              0x00EE => {
+                s.stack ≠ [] BY ValidState(s)
+                ∃ addr. s.stack = addr :: s.stack' BY Cons
+                s'.pc = addr ∈ {0x200 .. 0xFFF} BY ValidState(s)
+              }
+              _ => s'.pc = s.pc + 2 ∈ {0x200 .. 0xFFF} BY ValidState(s)
+            }
+            0x1 => s'.pc = op & 0x0FFF ∈ {0x200 .. 0xFFF} BY OpcodeBound
+            0x2 => s'.pc = op & 0x0FFF ∈ {0x200 .. 0xFFF} BY OpcodeBound
+            _ => s'.pc = s.pc + 2 ∨ s'.pc = s.pc + 4 ∈ {0x200 .. 0xFFF} BY ValidState(s)
+          }
+        }
+
+        ARGUE s'.i ∈ {0x0 .. 0xFFF} BY {
+          IF (op >> 12) = 0xA THEN
+            s'.i = op & 0x0FFF ∈ {0x0 .. 0xFFF} BY OpcodeBound
+          ELSE IF (op >> 12) = 0xF ∧ (op & 0xFF) = 0x1E THEN  
+            s'.i = s.i + s.registers[op >> 8 & 0xF] ∈ {0x0 .. 0xFFF}
+              BY ValidState(s), RegisterBound, AddressBound, AddressAdd
+          ELSE  
+            s'.i = s.i ∈ {0x0 .. 0xFFF} BY ValidState(s)
+        }
+
+        ARGUE ∀ r ∈ s'.registers. r ∈ {0x0 .. 0xFF} BY {
+          MATCH (op >> 12) {
+            0x6 => s'.registers[op >> 8 & 0xF] = op & 0xFF ∈ {0x0 .. 0xFF} BY OpcodeBound
+            0x7 => {
+              s'.registers[op >> 8 & 0xF] = s.registers[op >> 8 & 0xF] + (op & 0xFF)
+              s'.registers[op >> 8 & 0xF] ∈ {0x0 .. 0xFF} BY ValidState(s), OpcodeBound, ByteAdd
+            }  
+            0x8 => {
+              MATCH (op & 0xF) {
+                0x0 | 0x1 | 0x2 | 0x3 => 
+                  s'.registers[op >> 8 & 0xF] ∈ {0x0 .. 0xFF} BY ValidState(s)
+                0x4 => {
+                  r1 = s.registers[op >> 8 & 0xF]
+                  r2 = s.registers[op >> 4 & 0xF]
+                  s'.registers[op >> 8 & 0xF] = r1 + r2
+                  r1 + r2 ∈ {0x0 .. 0x1FE}
+                  IF r1 + r2 > 0xFF THEN 
+                    s'.registers[0xF] = 1 ∧ s'.registers[op >> 8 & 0xF] ∈ {0x0 .. 0xFF} 
+                  ELSE
+                    s'.registers[0xF] = 0 ∧ s'.registers[op >> 8 & 0xF] = r1 + r2 ∈ {0x0 .. 0xFF}
+                }
+                0x5 | 0x7 => {
+                  r1 = s.registers[op >> 8 & 0xF]  
+                  r2 = s.registers[op >> 4 & 0xF]
+                  s'.registers[op >> 8 & 0xF] ∈ {0x0 .. 0xFF} BY ValidState(s), ByteSub
+                }
+                0x6 | 0xE => s'.registers[op >> 8 & 0xF] ∈ {0x0 .. 0xFF} BY ValidState(s), ByteShift  
+              }
+            }
+            0xC => s'.registers[op >> 8 & 0xF] = Random() & (op & 0xFF) ∈ {0x0 .. 0xFF} 
+                    BY RandomBits, OpcodeBound, BitwiseAnd
+            0xF => MATCH (op & 0xFF) {
+              0x07 => s'.registers[op >> 8 & 0xF] = s.delay_timer ∈ {0x0 .. 0xFF} BY ValidState(s)  
+              0x0A => s'.registers[op >> 8 & 0xF] ∈ {0x0 .. 0xF} BY KeyIndex
+              0x33 => {
+                mem_i = s.registers[op >> 8 & 0xF] / 100 ∈ {0x0 .. 0xFF}
+                mem_i1 = (s.registers[op >> 8 & 0xF] / 10) % 10 ∈ {0x0 .. 0xFF}
+                mem_i2 = s.registers[op >> 8 & 0xF] % 10 ∈ {0x0 .. 0xFF}
+                s'.memory[s.i .. s.i+2] = [mem_i, mem_i1, mem_i2]
+              }
+              0x55 | 0x65 => s'.memory[s.i .. s.i + (op >> 8 & 0xF)] ∈ List({0x0 .. 0xFF}^(op >> 8 & 0xF + 1))
+                  BY ValidState(s)
+            } 
+            _ => s'.registers = s.registers ∧ ∀ r ∈ s.registers. r ∈ {0x0 .. 0xFF} BY ValidState(s)
+          }
+        }
+
+        ARGUE s'.delay_timer ∈ {0x0 .. 0xFF} BY {
+          IF s.delay_timer > 0 THEN  
+            s'.delay_timer = s.delay_timer - 1 ∈ {0x0 .. 0xFE} BY ValidState(s)
+          ELSE
+            s'.delay_timer = s.delay_timer = 0 BY ValidState(s)
+        }
+
+        ARGUE s'.sound_timer ∈ {0x0 .. 0xFF} BY {
+          IF (op >> 12) = 0xF ∧ (op & 0xFF) = 0x18 THEN
+            s'.sound_timer = s.registers[op >> 8 & 0xF] ∈ {0x0 .. 0xFF} BY ValidState(s)
+          ELSE IF s.sound_timer > 0 THEN
+            s'.sound_timer = s.sound_timer - 1 ∈ {0x0 .. 0xFE} BY ValidState(s)
+          ELSE  
+            s'.sound_timer = s.sound_timer = 0 BY ValidState(s)
+        }
+        
+        ARGUE ∀ a. s'.memory[a] ∈ {0x0 .. 0xFF} BY {
+          MATCH (op >> 12) {
+            0xF => MATCH (op & 0xFF) {
+              0x33 | 0x55 => {
+                ∀ a. a ∉ {s.i .. s.i + 2} => s'.memory[a] = s.memory[a] ∈ {0x0 .. 0xFF} BY ValidState(s)  
+                ∀ a. a ∈ {s.i .. s.i + 2} => s'.memory[a] ∈ {0x0 .. 0xFF} BY AboveArgument
+              }
+            }
+            _ => ∀ a. s'.memory[a] = s.memory[a] ∈ {0x0 .. 0xFF} BY ValidState(s)
+          }  
+        }
+
+        ARGUE ∀ p. s'.keypad[p] ∈ {𝔹} BY {
+          MATCH (op >> 12) {
+            0xE => {
+              LET key_idx = s.registers[op >> 8 & 0xF]
+              key_idx ∈ {0x0 .. 0xF} BY ValidState(s)
+              s'.keypad[key_idx] ∈ {𝔹} ∧ ∀ p. p ≠ key_idx => s'.keypad[p] = s.keypad[p] ∈ {𝔹} BY ValidState(s)
+            }
+            _ => ∀ p. s'.keypad[p] = s.keypad[p] ∈ {𝔹} BY ValidState(s)
+          }
+        }
+
+        ARGUE ∀ x y. s'.graphics[x, y] ∈ {𝔹} BY {
+          MATCH (op >> 12) {
+            0x0 => s'.graphics = Zero ∧ ∀ x y. Zero[x, y] = 0 ∈ {𝔹}
+            0xD => {
+              height = op & 0xF
+              x = s.registers[op >> 8 & 0xF]
+              y = s.registers[op >> 4 & 0xF]
+              sprite = s.memory[s.i .. s.i + height - 1]
+              ∀ r c. (r,c) ∉ {y..y+height-1}×{x..x+7} => s'.graphics[r,c] = s.graphics[r,c] ∈ {𝔹} BY ValidState(s)
+              ∀ r c. (r,c) ∈ {y..y+height-1}×{x..x+7} => 
+                s'.graphics[r,c] = s.graphics[r,c] ^ TestBit(sprite[r-y], 7-(c-x)) ∈ {𝔹}
+                BY ValidState(s), SpriteBit, ValidState(sprite), XorBool
+            }
+            _ => ∀ x y. s'.graphics[x, y] = s.graphics[x, y] ∈ {𝔹} BY ValidState(s)  
+          }
+        }
+
+        HENCE ValidState(s') BY DEFINITION
+    }
+  }
+}

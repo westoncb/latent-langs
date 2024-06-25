@@ -1,0 +1,103 @@
+CONCEPT EvolutionaryLandscape {
+  NOTATION {  
+    𝒫 = Set of phenotypes
+    𝒢 = Set of genotypes 
+    ℱ: 𝒢 → 𝒫 = Genotype-phenotype map
+    w: 𝒫 → ℝ = Fitness function
+    μ: 𝒢 × 𝒢 → ℝ≥0 = Mutation probability  
+    d_H(g,g') = Hamming distance between g, g'
+    𝒩_ε(g) = {g' ∈ 𝒢 | d_H(g,g') ≤ ε} = ε-neighborhood of g
+    ℳ_ε(p) = {p' ∈ 𝒫 | ∃ g∈ℱ⁻¹(p), g'∈ℱ⁻¹(p') . d_H(g,g') ≤ ε}  
+    
+    Landscape = (𝒫, 𝒢, ℱ, w, μ) 
+    Evolvability_ε(p) = E[w(𝒩_ε(g)) - w(g) | g ∈ ℱ⁻¹(p)]
+    Accessibility_ε(p,q) = Probability(ℳ_ε(q) | start at p)
+    
+    M_ε(p,q) = log(Accessibility_ε(p,q)/Accessibility_ε(q,p))
+    MPH_ε(𝒫) = (𝒫, {M_ε(p,q)})
+  }
+  
+  LANGUAGE {
+    TYPE Genotype = Sequence of alleles  
+    TYPE Phenotype = Morphological/behavioral traits
+    
+    FUNC Fitness : Phenotype -> ℝ  
+    FUNC GenotypeDistance(g1: Genotype, g2: Genotype): ℝ≥0
+    FUNC MutationProbability(g1: Genotype, g2: Genotype): ℝ≥0
+    FUNC Evolvability(ε: ℝ≥0, p: Phenotype): ℝ 
+    FUNC Accessibility(ε: ℝ≥0, p: Phenotype, q: Phenotype): ℝ
+    
+    PRED Interconvertible(ε: ℝ≥0, p: Phenotype, q: Phenotype) =
+      Accessibility(ε,p,q) > 0 ∧ Accessibility(ε,q,p) > 0
+      
+    AXIOM Triangle: ∀ε>0, g1,g2,g3. 
+      d_H(g1,g3) ≤ d_H(g1,g2) + d_H(g2,g3)
+      
+    AXIOM Accessibility: ∀ε>0, p,q. 
+      M_ε(p,q) = -M_ε(q,p)  
+  }
+  
+  STRUCTURES {
+    STRUCTURE EvolvabilityLandscape {
+      FIELD phenotypes : Set[Phenotype]
+      FIELD accessibilityMap : phenotypes × phenotypes → ℝ 
+      
+      COMPUTE M_ε(p,q: Phenotype): ℝ = log(Accessibility_ε(p,q)/Accessibility_ε(q,p))
+      
+      AXIOM Detailed Balance: ∀p,q∈phenotypes. M_ε(p,q) = -M_ε(q,p)
+    }
+  }
+  
+  TRANSFORMERS {
+    TACTIC InferEvolvability:
+      Evolvability_ε(p) = E[Fitness(𝒩_ε(g)) - Fitness(g) | g ∈ ℱ⁻¹(p)]  
+                        = ∫ [w(q)-w(p)] Accessibility_ε(p,q) dq
+  }
+   
+  PROOFS {  
+    PROOF EvolvabilityDecomposition:  
+      Evolvability_ε(p) = ∫ [w(q)-w(p)] Accessibility_ε(p,q) dq
+    {
+      Evolvability_ε(p) 
+        = E[w(𝒩_ε(g)) - w(g) | g ∈ ℱ⁻¹(p)]   BY def
+        = ∫_q [w(q) - w(p)] P(𝒩_ε(g) ∩ ℱ⁻¹(q) | g ∈ ℱ⁻¹(p)) dq
+        = ∫_q [w(q) - w(p)] Accessibility_ε(p,q) dq   BY def
+    }
+      
+    THEOREM EvolvabilityCycle:  
+      ∮_γ Evolvability_ε = 0 for any closed path γ in MPH_ε(𝒫)
+    { 
+      ∮_γ Evolvability_ε 
+        = ∮_γ ∫ [w(q)-w(p)] Accessibility_ε(p,q) dq   BY EvolvabilityDecomposition
+        = ∮_γ ∫ w(q) Accessibility_ε(p,q) dq             
+        = ∮_γ ∫ w(q) exp(M_ε(p,q)) Accessibility_ε(q,p) dq   BY def of M_ε
+        = 0                                             BY Detailed Balance                        
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE RNAFitness : EvolutionaryLandscape = {  
+      𝒢 = {A,C,G,U}^n = RNA sequences of length n
+      𝒫 = Secondary structures of length n RNA   
+      ℱ = MinimumFreeEnergy : 𝒢 -> 𝒫
+      w(p) = -|{g | ℱ(g)=p}|  = negative log size of neutral network  
+      μ(g,g') = q^(d_H(g,g')) (1-q)^(n-d_H(g,g'))
+    }
+    
+    EXAMPLE Antibiotics : EvolutionaryLandscape = {
+      𝒢 = {0,1}^n = Genome presence/absence vectors  
+      𝒫 = MIC = Minimum inhibitory concentration of antibiotic
+      ℱ(g) = log MIC of genotype g
+      w(p) = p = log MIC  
+      μ(g,g') = q if d_H(g,g')=1 else 0
+    }
+    
+    EXAMPLE PhageLambda : EvolutionaryLandscape = {
+      𝒢 = {0,1}^5 = cI, cro, cII, N, Q gene activity  
+      𝒫 = {Lysogenic, Lytic} = Viral life cycle  
+      ℱ(g) = IF Count(g,1) ≥ 3 THEN Lysogenic ELSE Lytic
+      w(Lytic) = 50, w(Lysogenic) = 5   
+      μ(g,g') = q if d_H(g,g')=1 else 0
+    }
+  }
+}

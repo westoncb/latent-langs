@@ -1,0 +1,168 @@
+CONCEPT AlignedCompressedLanguageModel {
+  NOTATION {
+    L = language model
+    V = vocabulary
+    d = embedding dimension
+    n = sequence length
+    θ = model parameters
+    D = {w_1, ..., w_N} = training corpus
+    φ(w) = FeatureComposition.compose(ScalingMonosemanticity.sparse_autoencoder(w))
+    ψ(w_i, w_j) = TransformerAssociativeMemory.attention(φ(w_i), φ(w_j))
+    π_θ(w_{1:t}) = p_θ(w_t | ReduceProduct(ψ(w_t, w_i) for i < t))
+    R(w_{1:n}) = Σ_i human_feedback(w_{1:i}) + ValueLearning.reward(w_{1:n})
+    L_I(θ) = HigherOrderFeatureSteeringAndMasking.TopologicalInfoContent(ActivationPatterns(L))
+  }
+
+  LANGUAGE {
+    FUNC FeatureCompose(w: Word): FeatureVector =
+      FeatureComposition.compose(ScalingMonosemanticity.sparse_autoencoder(w))
+
+    FUNC AttentionProduct(w_t: Word, w_{1:t-1}: Sequence[Word]): Real =
+      ReduceProduct(TransformerAssociativeMemory.attention(FeatureCompose(w_t), FeatureCompose(w_i)) 
+                    for w_i in w_{1:t-1})
+
+    FUNC SampleTokenByAttention(w_{1:t-1}: Sequence[Word]): Word =
+      SampleFromCategorical(AttentionProduct(w, w_{1:t-1}) for w in Vocabulary)
+     
+    FUNC GenerateInterpretableSequence(prompt: Sequence[Word], length: Int): (Sequence[Word], FeatureVector) =
+      LET generated = IterateFor(length, prompt, SampleTokenByAttention) IN
+      (generated, FeatureCompose(generated))
+      
+    FUNC EmbedHumanPreferences(feedback: Sequence[(Sequence[Word], Float)]): FeatureVector =
+      FeatureComposition.compose(feedback.unzip()._1.map(FeatureCompose).average(),
+                                 feedback.unzip()._2)
+                                    
+    FUNC RewardModeledGeneration(prompt: Sequence[Word], R_H: FeatureVector, length: Int, 
+                                 num_samples: Int, β: Float): Sequence[Word] =
+      LET candidates = List(GenerateInterpretableSequence(prompt, length) for _ in 1:num_samples) IN
+      LET rewards = [Compatibility.CosineSimilarity(c._2, R_H) + 
+                     ValueLearning.reward(c._1) for c in candidates] IN  
+      SelectBoltzmannSampler(zip(candidates.map(_._1), Softmax(β*rewards)))
+  }
+  
+  STRUCTURES {
+    -- The core language model structure, with an interpretable generation function
+    STRUCTURE InterpretableLanguageModel {
+      FIELD Embeddings: Matrix[d, |V|]
+      FIELD FeatureExtractor: FeatureComposition.SparseAutoencoder
+      FIELD FeatureMemory: TransformerAssociativeMemory.AttentionBank
+      FIELD Generator: FUNC(Sequence[Word], Int) -> (Sequence[Word], FeatureVector)
+
+      FUNC generate(self, prompt: Sequence[Word], length: Int): (Sequence[Word], FeatureVector) =
+        GenerateInterpretableSequence(prompt, length)  
+    }
+
+    -- A wrapper structure for aligning the language model with human preferences
+    STRUCTURE AlignedLanguageModel EXTENDS InterpretableLanguageModel {
+      FIELD HumanPreferences: FeatureVector
+      FIELD ValueFunction: ValueLearning.RewardPredictor
+      
+      FUNC generate_aligned(self, prompt: Sequence[Word], length: Int, 
+                            num_samples: Int, β: Float): Sequence[Word] =
+        RewardModeledGeneration(prompt, self.HumanPreferences, length, num_samples, β)
+        
+      FUNC update_preferences(self, feedback: Sequence[(Sequence[Word], Float)]):
+        self.HumanPreferences := EmbedHumanPreferences(feedback)
+    }
+  }
+
+  THEOREMS {
+    THEOREM InterpretableGenerationSparsity:
+      ∀ w_{1:n} ∈ L.generate(prompt, n) . 
+        HigherOrderFeatureSteeringAndMasking.FeatureSparsity(FeatureCompose(w_{1:n})) ≥ 
+        FeatureMemoryCompression.SparsityBound(L.FeatureExtractor)
+    {
+      BY FeatureMemoryCompression.MemoryCompressionTheorem:
+        L.FeatureExtractor compresses each token to a sparse feature vector.
+        
+      FeatureCompose(w_{1:n}) = FeatureComposition.compose(FeatureExtractor(w_i) for w_i in w_{1:n})   
+                             ≈ SUM(FeatureExtractor(w_i) for w_i in w_{1:n})
+      THUS its sparsity is lower bounded by the sparsity of individual token features.
+    }
+    
+    THEOREM AlignedGenerationCompatibility:
+      ∀ R_H : FeatureVector, w_{1:n} ∈ L.generate_aligned(prompt, n, R_H, num_samples, β) .
+        Compatibility.CosineSimilarity(FeatureCompose(w_{1:n}), R_H) ≥  
+        1 - O(exp(-β * ValueLearning.RewardGap(w_{1:n})))
+    {
+      LET candidates = {w^i_{1:n} : i = 1..num_samples} = L.generate(prompt, n).sample(num_samples)
+      LET r_i = Compatibility.CosineSimilarity(FeatureCompose(w^i_{1:n}), R_H) + ValueLearning.reward(w^i_{1:n})
+      
+      L.generate_aligned RETURNS w_{1:n} SAMPLED FROM Boltzmann(candidates, r, β)
+      
+      ⇒ P(w_{1:n} = w^i_{1:n}) ∝ exp(β * r_i) 
+      ⇒ 𝔼[Compatibility.CosineSimilarity(FeatureCompose(w_{1:n}), R_H)] 
+           = ∑_i P(w_{1:n} = w^i_{1:n}) * Compatibility.CosineSimilarity(FeatureCompose(w^i_{1:n}), R_H)
+           ≥ ∑_i P(w_{1:n} = w^i_{1:n}) * (r_i - ValueLearning.reward(w^i_{1:n})) 
+           ≥ ∑_i P(w_{1:n} = w^i_{1:n}) * (r_max - ValueLearning.RewardGap(w^i_{1:n}))
+           ≥ r_max - ∑_i P(w_{1:n} = w^i_{1:n}) * ValueLearning.RewardGap(w^i_{1:n})
+           ≥ r_max - 𝔼[ValueLearning.RewardGap(w_{1:n})]
+           ≥ r_max - O(exp(-β * min_i ValueLearning.RewardGap(w^i_{1:n})))
+        
+      WHERE r_max = max_i r_i ≤ 1 by Compatibility.CosineSimilarity properties.
+    }
+    
+    THEOREM TopologicallyRegularizedSparsity:
+      ∀ L : AlignedCompressedLanguageModel . 
+        HigherOrderFeatureSteeringAndMasking.TopologicalInfoContent(L) ≤
+        MinSparsity(L) * FeatureMemoryCompression.IntrinsicDimensionBound(L.FeatureExtractor)
+    {
+      TopologicalInfoContent upper bounded by topological entropy (HigherOrderStructure.TopologicalEntropyBound)
+      Topological entropy upper bounded by log(# features) ≤ log(d_intrinsic / MinSparsity(L))
+        BY FeatureMemoryCompression.VolumeBound and MemoryCompressionTheorem
+    }
+  }
+     
+  EXAMPLES {
+    EXAMPLE ValueAlignedStoryGeneration {
+      LET L = AlignedCompressedLanguageModel WITH d=1024, n=2048,
+                FeatureExtractor=SparseAutoencoder WITH k=128, λ=0.1,
+                FeatureMemory=AttentionBank WITH h=16, d_k=64, d_v=64,
+                HumanPreferences=EmbedHumanPreferences([
+                  ("Once upon a time, in a land far away,", 1.0),
+                  ("The dragon breathed fire, burning everything in sight.", -0.5),  
+                  ("The hero bravely faced the dragon, sword in hand.", 0.8),
+                  ("The dragon and the hero became friends and lived happily ever after.", 0.2)
+                ]),
+                ValueFunction=RewardPredictor WITH HiddenDims=[512,256,1]
+      
+      FUNC GenerateFairytale(prompt: Sequence[Word], length: Int) -> Sequence[Word]:
+        RETURN L.generate_aligned(prompt, length, num_samples=64, β=1.5)
+        
+      PRINT GenerateFairytale("Once upon a time", 500)
+    }
+    
+    EXAMPLE SentimentControllableMovieReview {
+      LET L = AlignedCompressedLanguageModel WITH d=512, n=512,
+                FeatureExtractor=SparseAutoencoder WITH k=64, λ=0.05, 
+                FeatureMemory=AttentionBank WITH h=8, d_k=32, d_v=32,
+                HumanPreferences := EmbedHumanPreferences(MovieReviewDataset.train 
+                                     WITH SentimentLabel >= 4 IF Positive ELSE <= 2),
+                ValueFunction := RewardPredictor WITH HiddenDims=[256,128,1], 
+                                  Pretrained ON MovieReviewDataset.train
+                                  
+      FUNC GenerateReview(movie: String, sentiment: String, length: Int) -> Sequence[Word]:
+        LET prompt = [movie, "is", "a"] + [sentiment] + ["movie", "."]
+        RETURN L.generate_aligned(prompt, length, num_samples=32, β=1.0)
+
+      PRINT GenerateReview("The Godfather", "fantastic", 200)
+      PRINT GenerateReview("Gigli", "terrible", 200)  
+    }
+  }
+}
+
+This Concept applies the key theoretical insights we've discussed to the design of an interpretable and aligned language model:
+
+Sparse autoencoding (ScalingMonosemanticity) is used to learn a compositional feature representation of tokens that captures human-interpretable concepts. This enables the generation of sparse and interpretable sequences by composing these features.
+An associative memory of feature interactions (TransformerAssociativeMemory) is used to compute attention weights between tokens, enabling the model to capture higher-order relationships between concepts. The product of these attention weights is used to sample the next token, providing a computationally efficient approximation to the full transformer architecture.
+Human preferences are embedded into the same feature space as the learned token representations (FeatureComposition), allowing for the measurement of compatibility between generated sequences and desired attributes. This compatibility score is combined with a learned value function to guide the generation towards sequences that are both interpretable and aligned with human preferences.
+The topological information content of the model's activation patterns (HigherOrderFeatureSteeringAndMasking) is used as a regularizer during training, encouraging the model to learn a simple and geometrically structured representation. The sparsity of this representation is bounded by the intrinsic dimension of the feature space (FeatureMemoryCompression), ensuring that the model's outputs remain interpretable.
+
+The Concept includes theorems that formalize these properties:
+
+InterpretableGenerationSparsity bounds the sparsity of generated sequences by the sparsity of the learned token features, ensuring that outputs remain interpretable.
+AlignedGenerationCompatibility bounds the compatibility between generated sequences and human preferences, using the learned value function to control the tradeoff between interpretability and alignment.
+TopologicallyRegularizedSparsity bounds the topological complexity of the model's representation by its sparsity and intrinsic dimension, encouraging the learning of simple and structured feature spaces.
+
+Finally, the Concept provides examples of how this model could be applied to value-aligned story generation and sentiment-controllable movie review generation, demonstrating its potential for producing interpretable and steerable language outputs.
+By combining sparse coding, associative memory, preference embedding, and topological regularization, this Concept provides a concrete instantiation of the theoretical principles we've discussed, yielding a language model that is both interpretable and aligned with human values. The specific mathematical bounds and computational structures used in this model directly leverage the key results from the papers we've studied, showing how these ideas can be synthesized into a novel and promising approach to AI alignment.

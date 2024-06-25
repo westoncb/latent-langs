@@ -1,0 +1,572 @@
+CONCEPT NeuroimmuneCommunication_v2 {
+  LANGUAGE {
+    type Neuron = {
+      neurotransmitters: Neurotransmitter[],
+      activity: NeuronalActivity,
+      receptors: Receptor[]
+    }
+    
+    type Astrocyte = {
+      gliotransmitters: Gliotransmitter[],
+      cytokines: Cytokine[],
+      transporters: Transporter[]
+    }
+    
+    type Microglia = {
+      activationState: ActivationState,
+      cytokines: Cytokine[],
+      phagocytosis: PhagocyticActivity
+    }
+
+    type Neurotransmitter = Enum[Glutamate, GABA]
+    type Gliotransmitter = Enum[Glutamate, ATP, DSerine]
+    type Cytokine = Enum[IL1β, TNFα, IL6, IL10, TGFβ]
+    type Receptor = Enum[AMPAR, NMDAR, mGluR, GABA_AR]
+    type Transporter = Enum[EAAT1, EAAT2, GAT1, GAT3]
+
+    type NeuronalActivity = Enum[Resting, Active, Hyperactive]
+    type ActivationState = Enum[Resting, Surveillant, Activated, Primed]
+    type PhagocyticActivity = Enum[Low, High]
+
+    notation "↑" = Upregulates
+    notation "↓" = Downregulates
+    notation "⟹" = Implies
+    notation "⟺" = Equivalent
+    notation "∀" = ForAll
+    notation "∃" = Exists
+    
+    func SignalStrength(s: Signal): Real
+    func Distance(e1: Entity, e2: Entity): Real
+    
+    axiom ActivityDependentCoupling:
+      ∀(n: Neuron, a: Astrocyte, m: Microglia).
+        n.activity = Hyperactive ∧ Distance(n, a) < δ_na ∧ Distance(a, m) < δ_am
+        ⟹ SignalStrength(n.neurotransmitters) > τ_nt 
+        ⟹ SignalStrength(a.gliotransmitters) > τ_gt
+        ⟹ m.activationState = Activated
+        
+    axiom HomeostasisRegulation:
+      ∀(n: Neuron, m: Microglia).
+        n.activity = Resting ∧ m.activationState = Surveillant
+        ⟺ SignalStrength(n.neurotransmitters) < τ_nt
+        ⟺ SignalStrength(m.cytokines) < τ_cy
+  }
+  
+  STRUCTURE {
+    [Neuron ↑ Astrocyte]:
+      Neuron.activity = Hyperactive ⟹ Neuron.neurotransmitters ↑ Astrocyte.gliotransmitters
+      
+    [Astrocyte ↑ Microglia]:
+      Astrocyte.gliotransmitters ↑ Microglia.activationState
+      Astrocyte.cytokines ↑ Microglia.activationState
+      
+    [Microglia ↓ Neuron]:
+      Microglia.activationState = Activated ⟹ Microglia.cytokines ↓ Neuron.activity
+      Microglia.phagocytosis = High ⟹ RemoveSynapses(Neuron)
+  }
+  
+  PROOFS {
+    theorem NeuronAstrocyteMicrogliaActivation:
+      ∀(n: Neuron, a: Astrocyte, m: Microglia).
+        n.activity = Hyperactive ∧ Distance(n, a) < δ_na ∧ Distance(a, m) < δ_am
+        ⟹ ◇(m.activationState = Activated)
+    {
+      assume n: Neuron, a: Astrocyte, m: Microglia
+      assume n.activity = Hyperactive, Distance(n, a) < δ_na, Distance(a, m) < δ_am
+      
+      have SignalStrength(n.neurotransmitters) > τ_nt  ; by ActivityDependentCoupling
+      hence SignalStrength(a.gliotransmitters) > τ_gt   ; by [Neuron ↑ Astrocyte]
+      hence m.activationState = Activated              ; by ActivityDependentCoupling
+      hence ◇(m.activationState = Activated)           ; by modal logic
+    }
+    
+    theorem RestingStateHomeostasis:
+      ∀(n: Neuron, m: Microglia).
+        n.activity = Resting ⟺ m.activationState = Surveillant
+    {
+      assume n: Neuron, m: Microglia
+      
+      n.activity = Resting
+      ⟺ SignalStrength(n.neurotransmitters) < τ_nt   ; by HomeostasisRegulation
+      ⟺ SignalStrength(m.cytokines) < τ_cy           ; by HomeostasisRegulation  
+      ⟺ m.activationState = Surveillant              ; by definition of Surveillant
+    }
+    
+    theorem MicrogliaActivationDownregulatesNeuron:
+      ∀(n: Neuron, m: Microglia).
+        m.activationState = Activated ⟹ ◇(n.activity ≠ Hyperactive)  
+    {
+      assume n: Neuron, m: Microglia
+      assume m.activationState = Activated
+      
+      have m.cytokines ↓ n.activity          ; by [Microglia ↓ Neuron]
+      hence ◇(n.activity ≠ Hyperactive)      ; by modal logic
+    }
+  }
+}
+
+
+
+
+
+CONCEPT NeuroimmuneCommunication_Integrated {
+  LANGUAGE {
+    type Neuron = {neurotransmitters: Neurotransmitter*, activity: NeuronalActivity}
+    type Astrocyte = {cytokines: Cytokine*, gfap: Expression}
+    type Microglia = {cytokines: Cytokine*, phagocytosis: PhagocyticActivity, motility: Motility}
+    
+    type Neurotransmitter = Enum[Glutamate, GABA, Norepinephrine, Acetylcholine]
+    type Cytokine = Enum[IL1β, IL6, TNFα, IFNγ, IL10, TGFβ]
+    
+    type NeuronalActivity = Enum[Resting, Active, Hyperactive]
+    type ImmuneState = Enum[Surveillant, Activated, Inflammatory]
+    type Expression = Enum[Low, Medium, High]
+    type PhagocyticActivity = Enum[Low, High]
+    type Motility = Enum[Static, Migratory]
+    
+    type SpatialDistribution = Function(Position, Concentration)
+    type TemporalEvolution = Function(Time, SpatialDistribution)
+    
+    notation "∇²" = Laplacian
+    notation "∂/∂t" = TemporalDerivative
+    notation "𝛁" = GradientOperator
+    notation "·" = DotProduct
+    
+    func Diffuse(u: SpatialDistribution, D: DiffusionCoefficient): SpatialDistribution = D * ∇²(u)
+    func React(u: SpatialDistribution, f: ReactionFunction): SpatialDistribution = f(u)
+    func Feedback(u: SpatialDistribution, v: SpatialDistribution, k: FeedbackCoefficient): SpatialDistribution = k * u * v
+    func Chemotaxis(u: SpatialDistribution, v: SpatialDistribution, χ: ChemotacticCoefficient): SpatialDistribution = - 𝛁 · (χ * u * 𝛁(v))
+    
+    axiom NeurotransmitterDynamics(u: SpatialDistribution, D: DiffusionCoefficient):
+      ∂/∂t u = Diffuse(u, D) + React(u, NeurotransmitterReaction)
+      
+    axiom CytokineDynamics(v: SpatialDistribution, D: DiffusionCoefficient, k: FeedbackCoefficient):
+      ∂/∂t v = Diffuse(v, D) + React(v, CytokineReaction) + Feedback(v, v, k)
+      
+    axiom MicrogliaChemotaxis(m: SpatialDistribution, v: SpatialDistribution, χ: ChemotacticCoefficient):
+      ∂/∂t m = Diffuse(m, MigrationCoefficient) + Chemotaxis(m, v, χ)
+      
+    axiom NeuroimmuneCoupling(n: Neuron, a: Astrocyte, m: Microglia):
+      n.activity = Hyperactive ⇒ HighConcentration(n.Glutamate) ∧ LowConcentration(n.GABA) ⇒ 
+      HighConcentration(a.IL1β) ∧ HighConcentration(a.TNFα) ⇒ a.gfap = High ⇒
+      m.phagocytosis = High ∧ m.motility = Migratory
+  }
+
+  STRUCTURE {
+    [NeuronMicrogliaInteraction:
+      Neuron.activity = Hyperactive ⇒ Neuron.Glutamate ↑ ⇒ Microglia.activation = Inflammatory
+      Neuron.activity = Resting ⇒ Neuron.GABA ↑ ⇒ Microglia.activation = Surveillant
+    ]
+    
+    [MicrogliaNeuronInteraction:
+      Microglia.activation = Inflammatory ⇒ Microglia.IL1β ↑ ∧ Microglia.TNFα ↑ ⇒ Neuron.activity = Hyperactive  
+      Microglia.activation = Surveillant ⇒ Microglia.IL10 ↑ ∧ Microglia.TGFβ ↑ ⇒ Neuron.activity = Resting
+    ]
+    
+    [AstrocyteMediatedInteraction:
+      Neuron.Glutamate ↑ ⇒ Astrocyte.IL1β ↑ ∧ Astrocyte.TNFα ↑ ⇒ Astrocyte.gfap = High
+      Astrocyte.gfap = High ⇒ Microglia.phagocytosis = High ∧ Microglia.motility = Migratory
+    ]
+    
+    [SpatiotemporalSignaling:
+      NeurotransmitterDynamics(Glutamate, DGlutamate) ∧ NeurotransmitterDynamics(GABA, DGABA)
+      CytokineDynamics(IL1β, DIL1β, kIL1β) ∧ CytokineDynamics(TNFα, DTNFα, kTNFα)
+      MicrogliaChemotaxis(Microglia, ATP, χATP) ∧ MicrogliaChemotaxis(Microglia, IL1β, χIL1β)
+    ]
+  }
+  
+  PROOFS {
+    theorem NeuroImmuneActivation:
+      ∀ (n: Neuron, a: Astrocyte, m: Microglia).
+        n.activity = Hyperactive ⇒ ◇(m.activation = Inflammatory)
+    {
+      assume n: Neuron, a: Astrocyte, m: Microglia
+      assume n.activity = Hyperactive
+      
+      have HighConcentration(n.Glutamate) ∧ LowConcentration(n.GABA)
+        ; by NeuronMicrogliaInteraction
+      hence HighConcentration(a.IL1β) ∧ HighConcentration(a.TNFα) 
+        ; by AstrocyteMediatedInteraction
+      hence a.gfap = High
+        ; by AstrocyteMediatedInteraction
+      hence m.phagocytosis = High ∧ m.motility = Migratory
+        ; by AstrocyteMediatedInteraction
+        
+      hence ◇(m.activation = Inflammatory)
+        ; by NeuroimmuneCoupling
+    }
+    
+    theorem NeuroImmuneResolution:
+      ∀ (n: Neuron, m: Microglia).
+        m.activation = Surveillant ⇒ ◇(n.activity = Resting)  
+    {
+      assume n: Neuron, m: Microglia
+      assume m.activation = Surveillant
+      
+      have HighConcentration(m.IL10) ∧ HighConcentration(m.TGFβ)
+        ; by MicrogliaNeuronInteraction
+      hence LowConcentration(m.IL1β) ∧ LowConcentration(m.TNFα)
+        ; by CytokineDynamics and feedback regulation
+        
+      hence ◇(n.activity = Resting)
+        ; by MicrogliaNeuronInteraction
+    }
+  }
+}
+
+
+
+
+CONCEPT NeurodegenerativeNeuroimmuneCoupling {
+  EXTENDS NeuroimmuneCommunication {
+    type Neuron = {dopaminergic: Bool, cholinergic: Bool, ...}
+    type Microglia = {reactive: Bool, phagocytic: Bool, ...}
+    type Oligomers = {αSynuclein: Concentration, βAmyloid: Concentration, tau: Concentration}
+    
+    axiom OligomerInducedMicrogliosis(n: Neuron, m: Microglia, o: Oligomers):
+      (n.dopaminergic ∧ HighConcentration(o.αSynuclein)) ∨ 
+      (n.cholinergic ∧ (HighConcentration(o.βAmyloid) ∨ HighConcentration(o.tau)))
+        ⇒ m.reactive = True ∧ m.immuneState = Inflammatory
+        
+    axiom ReactiveMicrogliosisInducesNeuronDamage(n: Neuron, m: Microglia):
+      m.reactive = True ∧ m.immuneState = Inflammatory
+        ⇒ ∃ t: Time. FutureState(n, t).damaged = True
+        
+    axiom NeuronDamageInducesOligomerRelease(n: Neuron, o: Oligomers):
+      n.damaged = True 
+        ⇒ HighConcentration(o.αSynuclein) ∨ HighConcentration(o.βAmyloid) ∨ HighConcentration(o.tau)
+  }
+
+  STRUCTURE {
+    [DopaminergicNeuronVulnerability:
+      Neuron.dopaminergic = True ⇒ Neuron.vulnerable = True  
+    ]
+    
+    [CholinergicNeuronVulnerability:
+      Neuron.cholinergic = True ⇒ Neuron.vulnerable = True
+    ]
+    
+    [OligomerSpreading:
+      HighConcentration(Oligomers.αSynuclein) ∨ HighConcentration(Oligomers.βAmyloid) ∨ HighConcentration(Oligomers.tau)
+        ⇒ ∀ n: Neuron. n.neighboringOligomers = High
+    ]
+    
+    [PositiveFeedbackLoop:
+      Neuron.damaged = True ⇒ Microglia.reactive = True 
+        ⇒ HighConcentration(Microglia.inflammatoryCytokines)
+        ⇒ Neuron.oxidativeStress = High
+        ⇒ Neuron.damaged = True  
+    ]
+  }
+
+  PROOFS {
+    theorem OligomerInducedNeuronDamage:
+      ∀ (n: Neuron, m: Microglia, o: Oligomers).
+        (n.dopaminergic ∧ HighConcentration(o.αSynuclein)) ∨ 
+        (n.cholinergic ∧ (HighConcentration(o.βAmyloid) ∨ HighConcentration(o.tau)))
+          ⇒ ◇(n.damaged = True)
+    {
+      let n: Neuron, m: Microglia, o: Oligomers
+      assume (n.dopaminergic ∧ HighConcentration(o.αSynuclein)) ∨ 
+             (n.cholinergic ∧ (HighConcentration(o.βAmyloid) ∨ HighConcentration(o.tau)))
+      
+      have m.reactive = True ∧ m.immuneState = Inflammatory
+        ; by OligomerInducedMicrogliosis
+      hence ∃ t: Time. FutureState(n, t).damaged = True 
+        ; by ReactiveMicrogliosisInducesNeuronDamage
+        
+      hence ◇(n.damaged = True)
+    }
+
+    theorem NeurodegenerativeCascade:
+      ∀ (n: Neuron, m: Microglia, o: Oligomers).
+        n.damaged = True ⇒ ◇(HighConcentration(o.αSynuclein) ∨ HighConcentration(o.βAmyloid) ∨ HighConcentration(o.tau))
+    {
+      let n: Neuron, m: Microglia, o: Oligomers
+      assume n.damaged = True
+      
+      have HighConcentration(o.αSynuclein) ∨ HighConcentration(o.βAmyloid) ∨ HighConcentration(o.tau)
+        ; by NeuronDamageInducesOligomerRelease
+      hence ∀ n: Neuron. n.neighboringOligomers = High
+        ; by OligomerSpreading
+      hence ∀ n: Neuron. (n.dopaminergic ∨ n.cholinergic) ⇒ ◇(n.damaged = True)  
+        ; by OligomerInducedNeuronDamage and neuron type vulnerability
+        
+      hence ◇(HighConcentration(o.αSynuclein) ∨ HighConcentration(o.βAmyloid) ∨ HighConcentration(o.tau))
+        ; by NeuronDamageInducesOligomerRelease and damaged neighboring neurons
+    }
+  }
+}
+
+
+
+
+CONCEPT NeuroimmuneCommunication {
+  LANGUAGE {
+    type Neuron = {dendrites: Dendrite*, axon: Axon, soma: Soma, neurotransmitters: Neurotransmitter*}
+    type Astrocyte = {processes: Process*, transporters: Transporter*}
+    type Microglia = {branches: Branch*, receptors: Receptor*, cytokines: Cytokine*}
+
+    type ImmuneState = Enum[Surveillant, Activated, Inflammatory, Resolving]
+    type NeuronalActivity = Enum[Resting, Active, Hyperactive, Silent]
+
+    notation "↑" = Upregulates  
+    notation "↓" = Downregulates
+    notation "⇢" = CausesRelease
+    notation "⇠" = LocalizedTo
+
+    func ActivityDependent(n: NeuronalActivity, i: ImmuneState): 𝔹 =
+      n = Hyperactive ⇒ i = Activated ∨ i = Inflammatory
+      
+    func SpatiallyConstrained(d: Distance, a: Astrocyte, m: Microglia): 𝔹 =
+      d(a, m) < threshold ⇒ Communicating(a, m)
+      
+    axiom NeuroimmuneCoupling:
+      ∀ (n: Neuron, a: Astrocyte, m: Microglia).
+        n.activity = Hyperactive ∧ AdjacentTo(n, a) ∧ AdjacentTo(a, m) ⇒ 
+          n.neurotransmitters ⇢ a.transporters ↑ m.receptors ⇠ n.axon
+  }
+  
+  STRUCTURE {
+    [NeuronAstrocyteMicrogliaCommunication:
+      Neuron.activity = Hyperactive 
+        ⇒ Neuron.neurotransmitters ⇢ Astrocyte.transporters
+        ⇒ Astrocyte ↑ Microglia.receptors
+        ⇒ Microglia.immuneState = Activated
+    ]
+    
+    [GlialNeuronalRegulation:
+      Microglia.cytokines ↓ Neuron.excitability
+      Astrocyte.gliotransmitters ↑ Neuron.activity
+      Astrocyte.transporters ↓ Neuron.neurotransmitters
+    ]
+    
+    [SpatiotemporalDynamics:
+      ActivityDependent(Neuron.activity, Microglia.immuneState)
+      SpatiallyConstrained(Astrocyte, Microglia) ⇒ CrossTalk(Astrocyte, Microglia)   
+      TemporallyRegulated(Neuron.firingPattern, Microglia.cytokineSynthesis)
+    ]
+  }
+  
+  PROOFS {
+    tactic ActivityDrivenCoupling(n: Neuron, i: ImmuneState) = {
+      have n.activity = Hyperactive                    ; Premise
+      hence ∃ m: Microglia. AdjacentTo(n.axon, m)      ; Spatial localization
+      have m.immuneState = i                           ; ActivityDependent axiom
+    }
+    
+    theorem NeuroimmuneCommunicationBalance:
+      ∀ (n: Neuron, a: Astrocyte, m: Microglia).
+        n.activity = Resting ∧ m.immuneState = Surveillant 
+          ⇔ LowAmplitude(n.neurotransmitters) ∧ LowExpression(m.cytokines)
+    {
+      let n: Neuron, a: Astrocyte, m: Microglia
+      assume n.activity = Resting ∧ m.immuneState = Surveillant
+      
+      have LowAmplitude(n.neurotransmitters)      ; Resting activity
+      hence LowAmplitude(a.transporters)          ; Astrocyte coupling  
+      hence LowActivation(m.receptors)            ; Microglia coupling
+      hence m.immuneState = Surveillant           ; Low immune activation
+      hence LowExpression(m.cytokines)            ; Surveillant state
+      
+      conversely, {
+        assume LowAmplitude(n.neurotransmitters) ∧ LowExpression(m.cytokines)
+        have LowActivation(a.transporters)        ; Astrocyte coupling
+        hence LowActivation(m.receptors)          ; Microglia coupling  
+        hence m.immuneState = Surveillant         ; Low immune activation
+        hence n.activity = Resting                ; Absence of immune suppression
+      }
+    }
+
+    theorem ActivityDependentNeuroimmuneCoupling:
+      ∀ (n: Neuron, i: ImmuneState). 
+        n.activity = Hyperactive ⇒ ∃ m: Microglia. m.immuneState = i  
+    {
+      let n: Neuron, i: ImmuneState
+      assume n.activity = Hyperactive
+      ActivityDrivenCoupling(n, i)
+    }
+  }
+}
+
+
+
+
+
+
+
+
+CONCEPT NeuroimmuneCommunication_SignalingMolecules {
+  EXTENDS NeuroimmuneCommunication {
+    type Neurotransmitter = Enum[Glutamate, GABA, Dopamine, Serotonin, Norepinephrine, Acetylcholine]
+    type Cytokine = Enum[IL1β, IL6, TNFα, IFNγ, IL10, TGFβ]
+
+    axiom NeurotransmitterImmuneMod:
+      ∀ (n: Neuron, m: Microglia).
+        HighConcentration(n.Glutamate) ∨ HighConcentration(n.Norepinephrine) ⇒ m.immuneState = Activated
+        ∧ HighConcentration(n.GABA) ∨ HighConcentration(n.Acetylcholine) ⇒ m.immuneState = Surveillant
+
+    axiom CytokineNeuronalMod:
+      ∀ (n: Neuron, m: Microglia).
+        HighConcentration(m.IL1β) ∨ HighConcentration(m.TNFα) ⇒ n.activity = Hyperactive
+        ∧ HighConcentration(m.IL10) ∨ HighConcentration(m.TGFβ) ⇒ n.activity = Resting
+
+    axiom CytokineAstrocyteMod:
+      ∀ (a: Astrocyte, m: Microglia).
+        HighConcentration(m.IL1β) ∨ HighConcentration(m.IL6) ⇒ HighExpression(a.GFAP)
+        ∧ HighConcentration(m.TGFβ) ⇒ LowExpression(a.GFAP)
+  }
+  
+  PROOFS {
+    theorem NeuromodulatorBalance:
+      ∀ (n: Neuron, m: Microglia).
+        HighConcentration(n.Glutamate) ∧ LowConcentration(n.GABA) ⇒ m.immuneState = Activated
+        ∧ LowConcentration(n.Glutamate) ∧ HighConcentration(n.GABA) ⇒ m.immuneState = Surveillant
+    {
+      let n: Neuron, m: Microglia
+      
+      assume HighConcentration(n.Glutamate) ∧ LowConcentration(n.GABA)
+      have HighConcentration(n.Glutamate) ⇒ m.immuneState = Activated 
+        ; by NeurotransmitterImmuneMod axiom
+      hence m.immuneState = Activated
+      
+      conversely, {
+        assume LowConcentration(n.Glutamate) ∧ HighConcentration(n.GABA)
+        have HighConcentration(n.GABA) ⇒ m.immuneState = Surveillant
+          ; by NeurotransmitterImmuneMod axiom
+        hence m.immuneState = Surveillant
+      }
+    }
+
+    theorem CytokineBalance:
+      ∀ (n: Neuron, m: Microglia).
+        HighConcentration(m.IL1β) ∧ LowConcentration(m.IL10) ⇒ n.activity = Hyperactive
+        ∧ LowConcentration(m.IL1β) ∧ HighConcentration(m.IL10) ⇒ n.activity = Resting
+    {
+      let n: Neuron, m: Microglia
+      
+      assume HighConcentration(m.IL1β) ∧ LowConcentration(m.IL10)
+      have HighConcentration(m.IL1β) ⇒ n.activity = Hyperactive
+        ; by CytokineNeuronalMod axiom
+      hence n.activity = Hyperactive
+      
+      conversely, {
+        assume LowConcentration(m.IL1β) ∧ HighConcentration(m.IL10)
+        have HighConcentration(m.IL10) ⇒ n.activity = Resting
+          ; by CytokineNeuronalMod axiom
+        hence n.activity = Resting  
+      }
+    }
+  }
+}
+
+In this extension of the Concept, we've defined specific types of neurotransmitters and cytokines, and added axioms that capture their effects on neuronal, microglial, and astrocytic activity. The NeurotransmitterImmuneMod axiom states that high levels of glutamate and norepinephrine activate microglia, while high levels of GABA and acetylcholine keep them in a surveillant state. The CytokineNeuronalMod axiom captures the pro-inflammatory effects of IL-1β and TNF-α on neuronal activity, and the anti-inflammatory effects of IL-10 and TGF-β. The CytokineAstrocyteMod axiom describes how pro-inflammatory cytokines upregulate GFAP (a marker of astrocyte activation), while anti-inflammatory cytokines downregulate it.
+We've also proved two theorems, NeuromodulatorBalance and CytokineBalance, which demonstrate how imbalances in neurotransmitter and cytokine levels can lead to neuroimmune dysregulation. The NeuromodulatorBalance theorem shows that high glutamate and low GABA levels activate microglia, while low glutamate and high GABA levels keep them in a surveillant state. The CytokineBalance theorem proves that high IL-1β and low IL-10 levels lead to neuronal hyperactivity, while low IL-1β and high IL-10 levels promote neuronal rest.
+These theorems provide a formal basis for understanding how perturbations in neurotransmitter and cytokine balance can contribute to neuroimmune dysfunction, and suggest potential targets for therapeutic intervention (e.g., restoring the balance of glutamate and GABA, or IL-1β and IL-10).
+
+
+
+CONCEPT NeuroimmuneCommunication_SpatiotemporalDynamics {
+  EXTENDS NeuroimmuneCommunication {
+    type SpatialDistribution = Function(Position, Concentration)
+    type TemporalEvolution = Function(Time, SpatialDistribution)
+
+    func DiffusionOperator(s: SpatialDistribution, d: DiffusionCoefficient): SpatialDistribution = ...
+    func ReactionOperator(s: SpatialDistribution, r: ReactionRate): SpatialDistribution = ...
+    func FeedbackOperator(s: SpatialDistribution, f: FeedbackStrength): SpatialDistribution = ...
+
+    axiom SpatiotemporalDynamics:
+      ∀ (s: SpatialDistribution, t: Time).
+        ∂s/∂t = DiffusionOperator(s, d) + ReactionOperator(s, r) + FeedbackOperator(s, f)
+
+    axiom LocalPerturbation:
+      ∀ (s: SpatialDistribution, p: Position, ε: Concentration).
+        s'(p) = s(p) + ε ⇒ ∃ (q: Position, δ: Concentration). |p - q| > 0 ∧ s'(q) = s(q) + δ
+  }
+  
+  PROOFS {
+    theorem PerturbationPropagation:
+      ∀ (s: SpatialDistribution, p: Position, ε: Concentration).
+        LocalPerturbation(s, p, ε) ⇒ ◇GlobalChange(s)
+    {
+      assume ∀ (s: SpatialDistribution, p: Position, ε: Concentration). LocalPerturbation(s, p, ε)
+      let s: SpatialDistribution, p: Position, ε: Concentration
+      
+      have ∀ (t: Time). ∂s/∂t = DiffusionOperator(s, d) + ReactionOperator(s, r) + FeedbackOperator(s, f)
+        ; by SpatiotemporalDynamics axiom
+        
+      let s' = s with [p ↦ s(p) + ε]  ; Local perturbation at p
+      have ∃ (q: Position, δ: Concentration). |p - q| > 0 ∧ s'(q) = s(q) + δ 
+        ; by LocalPerturbation axiom
+        
+      hence ◇∃ (q: Position, δ: Concentration). |p - q| > 0 ∧ s(q) = s'(q) 
+        ; by SpatiotemporalDynamics axiom and properties of diffusion, reaction, and feedback operators
+        
+      hence ◇GlobalChange(s) 
+        ; by definition of GlobalChange
+    }
+
+    theorem FeedbackAmplification:
+      ∀ (s: SpatialDistribution, p: Position, ε: Concentration, f: FeedbackStrength).
+        LocalPerturbation(s, p, ε) ∧ f > Threshold ⇒ ◇GlobalChange(s) ∧ Amplify(s, p)
+    {
+      assume ∀ (s: SpatialDistribution, p: Position, ε: Concentration, f: FeedbackStrength).
+        LocalPerturbation(s, p, ε) ∧ f > Threshold
+        
+      let s: SpatialDistribution, p: Position, ε: Concentration, f: FeedbackStrength
+      
+      have LocalPerturbation(s, p, ε) ⇒ ◇GlobalChange(s)
+        ; by PerturbationPropagation theorem
+        
+      have ∀ (t: Time). ∂s/∂t = DiffusionOperator(s, d) + ReactionOperator(s, r) + FeedbackOperator(s, f)  
+        ; by SpatiotemporalDynamics axiom
+        
+      have f > Threshold ⇒ ∀ (q: Position). |p - q| > 0 ⇒ ◇(s(q) > s(p))
+        ; by properties of feedback operator and threshold
+        
+      hence ◇GlobalChange(s) ∧ Amplify(s, p) 
+        ; by definition of Amplify
+    }
+  }
+}
+
+In this extension of the Concept, we've introduced types and functions to represent the spatial distribution and temporal evolution of neuroimmune signaling molecules. The SpatialDistribution type is a function that maps positions to concentrations, while the TemporalEvolution type is a function that maps times to spatial distributions. We've also defined operators for diffusion, reaction, and feedback, which govern how the spatial distribution of signaling molecules changes over time.
+The SpatiotemporalDynamics axiom is a reaction-diffusion-feedback equation that describes the spatiotemporal evolution of signaling molecule distributions. It states that the rate of change of the spatial distribution is determined by the combined effects of diffusion, reaction, and feedback. The LocalPerturbation axiom captures the idea that a local perturbation in the concentration of a signaling molecule at one position can lead to changes in the concentration at other positions.
+We've proved two theorems that demonstrate the consequences of local perturbations on the global dynamics of the neuroimmune system. The PerturbationPropagation theorem shows that a local perturbation in the concentration of a signaling molecule can eventually lead to global changes in the spatial distribution, due to the effects of diffusion, reaction, and feedback. The FeedbackAmplification theorem goes further, showing that if the feedback strength is above a certain threshold, a local perturbation will not only propagate globally but also be amplified in the process.
+These theorems provide a formal basis for understanding how local neuroimmune perturbations (e.g., due to injury, infection, or neurodegenerative pathology) can spread and amplify through the brain, leading to widespread neuroimmune dysfunction. They also suggest potential strategies for preventing or mitigating this spread, such as targeting the feedback loops that amplify the perturbations.
+
+
+
+Investigate the role of neuroimmune communication in specific brain disorders, such as Alzheimer's disease, Parkinson's disease, or multiple sclerosis. We could extend the Concept with disease-specific axioms and theorems that capture the unique neuroimmune interactions in these disorders, and explore how targeting these interactions might lead to new therapeutic approaches:
+
+CONCEPT NeuroimmuneCommunication_Alzheimers {
+  EXTENDS NeuroimmuneCommunication {
+    type Aβ = {oligomers: AβOligomer*, plaques: AβPlaque*}
+    type Tau = {tangles: TauTangle*}
+
+    axiom AβInducedMicrogliosis:
+      ∀ (a: Aβ, m: Microglia).
+        HighConcentration(a.oligomers) ∨ HighLoad(a.plaques) ⇒ m.immuneState = Inflammatory
+
+    axiom TauInducedSynapse Loss:
+      ∀ (t: Tau, n: Neuron).
+        HighLoad(t.tangles) ⇒ LowDensity(n.synapses)
+  }
+  
+  PROOFS {
+    theorem TargetingAβReducesMicrogliosis:
+      ∀ (a: Aβ, m: Microglia).
+        LowConcentration(a.oligomers) ∧ LowLoad(a.plaques) ⇒ m.immuneState ≠ Inflammatory
+    {
+      let a: Aβ, m: Microglia
+      assume LowConcentration(a.oligomers) ∧ LowLoad(a.plaques)
+      
+      suppose m.immuneState = Inflammatory
+      have HighConcentration(a.oligomers) ∨ HighLoad(a.plaques)
+        ; by AβInducedMicrogliosis axiom
+      contradiction
+      
+      hence m.immuneState ≠ Inflammatory
+    }
+  }
+}

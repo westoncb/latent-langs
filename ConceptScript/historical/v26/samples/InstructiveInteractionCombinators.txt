@@ -1,0 +1,182 @@
+CONCEPT InstructiveInteractionCombinators {
+  LANGUAGE {
+    -- Symbols represent the different types of combinators in the interaction system.
+    TYPE Symbol
+
+    -- A cell is a pair of a symbol and a list of ports, representing a combinator and its connections.
+    TYPE Cell = (Symbol, List[Port])
+
+    -- A port is a pair of a cell and a natural number, representing a connection point on a cell.
+    TYPE Port = (Cell, ℕ)
+
+    -- A net is a triple of sets: cells, ports, and connections between ports.
+    -- It represents the state of the interaction system at a given point in time.
+    TYPE Net = (Set[Cell], Set[Port], Set[(Port, Port)])
+    
+    -- The arity function maps a symbol to the number of auxiliary ports it has.
+    FUNC Arity : Symbol -> ℕ
+
+    -- The interaction function defines the rewrite rules for pairs of symbols.
+    -- It returns a net that represents the result of the interaction, if defined.
+    FUNC Interaction : (Symbol, Symbol) -> Maybe[Net]
+
+    -- The reduced predicate checks whether a net is in a fully reduced state.
+    PRED Reduced : Net -> 𝔹
+    
+    -- Axiom: The number of ports in a cell must match the arity of its symbol plus one (for the principal port).
+    AXIOM PortCount {
+      ∀ (s : Symbol) (c : Cell) (ps : List[Port]) . 
+        (c = (s, ps)) => Length(ps) = Arity(s) + 1
+    }
+    
+    -- Axiom: All ports in a cell must be distinct.
+    AXIOM PortDistinct {
+      ∀ (c : Cell) (ps : List[Port]) (i j : ℕ) . 
+        ((c, ps) ∈ Net ∧ (c, i) ∈ ps ∧ (c, j) ∈ ps ∧ i ≠ j) => (c, i) ≠ (c, j)
+    }
+    
+    -- Axiom: The interaction rules are symmetric.
+    -- If 'a' interacts with 'b' to produce net 'α', then 'b' interacts with 'a' to produce the flipped version of 'α'.
+    AXIOM Symmetry {
+      ∀ (a b : Symbol) (α β : Net) . 
+        Interaction(a, b) = α ∧ Interaction(b, a) = β => α = Flip(β)
+    }
+    
+    -- Axiom: The interaction rules are deterministic.
+    -- If 'a' interacts with 'b', there is only one possible resulting net.
+    AXIOM Determinism {
+      ∀ (a b : Symbol) (α β : Net) . 
+        Interaction(a, b) = α ∧ Interaction(a, b) = β => α = β
+    }
+  }
+  
+  NOTATION {
+    -- Notation for reduction steps in a specific interaction system.
+    "+ --S--> &" = "Net + reduces to Net & in system S"
+    "+ --*S--> &" = "Net + reduces to Net & in zero or more steps in system S"
+
+    -- Notation for reduction steps in the general Interaction Combinators system.
+    "+ --IC--> &" = "Net + reduces to Net & in the Interaction Combinators system"
+    "+ --*IC--> &" = "Net + reduces to Net & in zero or more steps in the Interaction Combinators system"
+
+    -- Notation for the set of translations between interaction systems.
+    "𝒯(S, T)" = "The set of translations from interaction system S to interaction system T"
+
+    -- Notation for substitution of a cell in a net.
+    "<x ↦ y>z" = "Substitution of x with y in z"
+  }
+
+  STRUCTURE InteractionSystem {
+    -- An interaction system consists of an alphabet of symbols and a set of interaction rules.
+    alphabet : Set[Symbol]
+    rules : Map[(Symbol, Symbol), Net]
+      
+    -- Requirements:
+    -- - All symbols in the interaction rules must belong to the alphabet.
+    -- - The resulting net of each interaction rule must be reduced.
+    REQUIRE ∀ ((a, b) ↦ α) ∈ rules . a ∈ alphabet ∧ b ∈ alphabet ∧ Reduced(α)
+
+    -- - For every pair of symbols in the alphabet, there must be an interaction rule defined
+    --   (either in the original order or in the flipped order).
+    REQUIRE ∀ (a, b) ∈ (alphabet × alphabet) . ((a, b) ∈ rules.Keys ∨ (b, a) ∈ rules.Keys)  
+  }
+    
+  TRANSFORMERS {
+    -- Tactic for substituting a cell in a net with another net.
+    TACTIC Substitution(+ : Net, c : Cell, ? : Net) -> Net = {  
+      MATCH + WITH
+      | ({c} ∪ cs, ps, ws) ->  (cs ∪ ?.Cells, <c ↦ ?.Ports>ps, <c ↦ ?.Wires>ws)
+    }
+  }
+  
+  PROOFS {  
+    THEOREM ChurchRosser {
+      STATEMENT:
+        -- The Church-Rosser property (also known as confluence):
+        -- If a net '+' reduces to two nets '&1' and '&2' in an interaction system 'S',
+        -- then there exists a unique net '!' such that both '&1' and '&2' reduce to '!' in 'S'.
+        ∀ (S : InteractionSystem) (+ : Net) .
+          (+ --*S--> &1 ∧ + --*S--> &2) => (∃ ! : Net . &1 --*S--> ! ∧ &2 --*S--> !)
+          
+      PROOF:
+        -- Proof sketch:
+        -- 1. Assume a net '+' reduces to '&1' and '&2' in system 'S'.
+        -- 2. Show that '&1' and '&2' have a common reduct '!', using local confluence and induction.
+        -- 3. Show that the common reduct '!' is unique, using induction and the determinism axiom.
+
+        LET S : InteractionSystem, + : Net
+        ASSUME +1 : + --*S--> &1, +2 : + --*S--> &2
+        
+        HAVE LocalConfluence := ∀ (. : Net) .
+          (. --S--> .1 ∧ . --S--> .2) => (∃ ! : Net . .1 --S--> ! ∧ .2 --S--> !)
+        
+        SHOW ∃ (! : Net) . &1 --*S--> ! ∧ &2 --*S--> ! {
+          REWRITE &1 
+            = .1 --S--> ... --S--> /1
+          REWRITE &2
+            = .1 --S--> ... --S--> /k --S--> ... --S--> /2  
+          HAVE /1 = /2 BY Induction, LocalConfluence 
+        }
+        
+        SHOW ! : ! = &1 --*S--> ? ∧ &2 --*S--> ? {  
+          REWRITE &1
+            = .1 --S--> ... --S--> !
+          REWRITE &2
+            = .1 --S--> ... --S--> /k --S--> ... --S--> !
+          
+          ASSUME &1 --*S--> ?1, &2 --*S--> ?2
+          
+          REWRITE ?1
+            = ! --S--> ... --S--> ?1  
+          REWRITE ?2
+            = ! --S--> ... --S--> ?2
+          
+          HAVE ?1 = ?2 BY Induction, Determinism
+        }  
+      }
+    }
+    
+    THEOREM TranslationTheorem {
+      STATEMENT:  
+        -- For every interaction system 'S', there exists a translation 'T' to the Interaction Combinators system
+        -- such that 'T' faithfully represents the behavior of 'S'.
+        ∀ (S : InteractionSystem) .
+          ∃ (T : 𝒯(S, InteractionCombinatorsSystem)) . FaithfullyRepresents(T)
+      
+      PROOF:
+        -- Proof sketch:
+        -- 1. Define the translation 'T' from system 'S' to the Interaction Combinators system.
+        -- 2. Show that 'T' preserves reduction steps (equivariance).
+        -- 3. Show that 'T' preserves net reducedness.
+        -- 4. Conclude that 'T' faithfully represents the behavior of 'S'.
+
+        LET S : InteractionSystem
+        LET (C, D, E, #p, #q, $p, $q) := InteractionCombinatorsSystem.alphabet
+        
+        -- Define the translation 'T' as follows:
+        -- - For each symbol 'a' in the alphabet of 'S', 'T(a)' is the tree encoding of the interaction rules for 'a'.
+        -- - For each net '+' in 'S', 'T(+)' is the substitution of each cell in '+' with its translated version.
+        DEFINE 𝒯 : 𝒯(S, InteractionCombinatorsSystem) {
+          ON a : S.alphabet
+            DEFINE 𝒯(a) := TreeOf(CodesOf({& | (a, b) ↦ & ∈ S.rules}))
+          ON + : Net 
+            DEFINE 𝒯(+) := <a ↦ 𝒯(a)>+
+        }  
+        
+        -- Show that 'T' preserves reduction steps (equivariance):
+        -- If '+' reduces to '&' in 'S', then 'T(+)' reduces to 'T(&)' in the Interaction Combinators system.
+        SHOW Equivariant(𝒯) BY {
+          LET + & : Net, + --S--> &
+          SHOW 𝒯(+) --*IC--> 𝒯(&) USING DecodingSimulation
+        }
+
+        -- Show that 'T' preserves net reducedness:
+        -- A net '+' is reduced in 'S' if and only if 'T(+)' is reduced in the Interaction Combinators system.
+        SHOW Reduced(𝒯(+)) <=> Reduced(+) USING DecodingSimulation, Definitions
+        
+        -- Conclude that 'T' faithfully represents the behavior of 'S'.
+        HENCE FaithfullyRepresents(𝒯)
+      }
+    }
+  }
+}

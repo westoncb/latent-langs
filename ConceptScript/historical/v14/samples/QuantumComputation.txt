@@ -1,0 +1,73 @@
+CONCEPT QuantumComputation {
+  LANGUAGE {
+    type Qubit = C²
+    type Ket = Vector<Qubit>
+
+    type Operator = Matrix<Complex, 2^n, 2^n>  ; n-qubit operator
+    type Unitary = { U : Operator | U * U† = I }  ; Unitary operators
+    type Observable = { H : Operator | H† = H }  ; Hermitian operators
+
+    type Bra<φ> = φ†  ; Dual vector
+    type InnerProduct<φ, ψ> = <φ|ψ> = Bra<φ> * Ket<ψ>  ; Inner product
+    type OuterProduct<φ, ψ> = |φ><ψ| = Ket<φ> * Bra<ψ>  ; Outer product
+
+    func kron<n, m>(A: Matrix<n,n>, B: Matrix<m,m>) -> Matrix<n*m, n*m>  ; Kronecker product
+    func tensor<n, m>(|φ>: Ket<n>, |ψ>: Ket<m>) -> Ket<n*m>  ; Tensor product of states
+
+    axiom CommutatorZero<A, B>(A: Observable, B: Observable) = 
+      A * B - B * A = 0  ; Commuting observables
+
+    notation "⟨0|" = [1, 0]  ; Computational basis states 
+    notation "|0⟩" = [1, 0]†
+    notation "⟨1|" = [0, 1]
+    notation "|1⟩" = [0, 1]†
+  }
+
+  STRUCTURE {
+    [QuantumCircuit(n: ℕ): 
+      input: Ket<2^n>
+      operations: List<Unitary>
+      ∀ U ∈ operations. U ∈ Unitary<n>
+      output: Ket<2^n> = (∏ᵢ Uᵢ) * input
+    ]
+
+    [Measurement<n>(observable: Observable<n>, state: Ket<2^n>):
+      probability(λ) = <state| Pλ |state> 
+        where Pλ = ∑ᵢ |λᵢ><λᵢ| such that observable |λᵢ> = λ |λᵢ>  ; Spectral decomposition
+      state -> Pλ |state> / sqrt(<state| Pλ |state>) with probability(λ)
+    ]
+
+    [Entanglement<n, m>(|ψ>: Ket<n*m>):
+      |ψ> is entangled <-> ¬∃ |a>: Ket<n>, |b>: Ket<m>. |ψ> = |a> ⊗ |b>
+    ] 
+  }
+
+  PROOFS {
+    BellStateEntanglement:
+      let |Φ+> = (|00> + |11>) / sqrt(2)  ; Bell state
+      ¬∃ |a>, |b>. |Φ+> = |a> ⊗ |b>
+    {
+      assume ∃ |a>, |b>. |Φ+> = |a> ⊗ |b>
+        let |a> = α|0> + β|1>, |b> = γ|0> + δ|1>  
+        have |Φ+> = (αγ|00> + αδ|01> + βγ|10> + βδ|11>) / sqrt(2)
+        for |Φ+> = (|00> + |11>) / sqrt(2):
+          have αγ = 1/sqrt(2), αδ = 0, βγ = 0, βδ = 1/sqrt(2)
+          have α = β = γ = δ = 1/sqrt(2)
+          but <a|a> = α^2 + β^2 = 1/2 ≠ 1, contradicting |a> being a state
+      therefore ¬∃ |a>, |b>. |Φ+> = |a> ⊗ |b>
+      hence |Φ+> is entangled by definition
+    }
+
+    NoCloning: ¬∃ U: Unitary. ∀ |ψ>. U |ψ>|0> = |ψ>|ψ>  ; No cloning theorem
+    {
+      assume ∃ U. ∀ |ψ>. U |ψ>|0> = |ψ>|ψ>
+      let |ψ> = α|0> + β|1>, |φ> = γ|0> + δ|1> be distinct states
+      have U |ψ>|0> = |ψ>|ψ> = α^2 |00> + αβ |01> + αβ |10> + β^2 |11>  
+      have U |φ>|0> = |φ>|φ> = γ^2 |00> + γδ |01> + γδ |10> + δ^2 |11>
+      have <ψ|φ> = <ψ|U†U|φ> = <ψψ|φφ> = α^2γ^2 + 2αβγδ + β^2δ^2 
+        = (αγ + βδ)^2 = <ψ|φ>^2  ; by inner product preservation of U
+      but <ψ|φ>^2 = <ψ|φ> only if <ψ|φ> = 0 or 1, contradicting |ψ>, |φ> being distinct
+      therefore ¬∃ U: Unitary. ∀ |ψ>. U |ψ>|0> = |ψ>|ψ>
+    }
+  }
+}

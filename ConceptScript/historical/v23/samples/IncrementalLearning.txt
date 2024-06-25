@@ -1,0 +1,155 @@
+CONCEPT IncrementalLearning {
+
+  LANGUAGE {
+    TYPE Example = ⟨x: Vector[n], y: Label⟩
+    TYPE Hypothesis = Vector[n] -> Label
+    TYPE Loss = Label -> Label -> ℝ⁺
+    TYPE Regret = ℝ⁺
+    
+    FUNC Predict(h: Hypothesis, x: Vector[n]) -> Label
+    FUNC Update(h: Hypothesis, 𝒟: 𝒫(Example)) -> Hypothesis
+    FUNC EmpiricalRisk(h: Hypothesis, 𝒟: 𝒫(Example), L: Loss) -> ℝ⁺
+    
+    PRED Realizable(𝒟: 𝒫(Example), 𝓗: 𝒫(Hypothesis)) <->
+      ∃ h* ∈ 𝓗: ∀ ⟨x, y⟩ ∈ 𝒟. Predict(h*, x) = y
+      
+    NOTATION "𝒪(·)" = AsymptoticUpperBound
+    NOTATION "⌈x⌉" = Ceil(x)
+  }
+  
+  STRUCTURE {
+    DEF Realizable(𝒟: 𝒫(Example), 𝓗: 𝒫(Hypothesis)) =
+      ∃ h* ∈ 𝓗: ∀ ⟨x, y⟩ ∈ 𝒟. h*(x) = y
+      
+    DEF EmpiricalRisk(h: Hypothesis, 𝒟: 𝒫(Example), L: Loss) = 
+      ∑ ⟨x, y⟩ ∈ 𝒟: L(h(x), y) / |𝒟|
+      
+    DEF Mistake[L](h: Hypothesis, ⟨x, y⟩: Example) <->
+      L(h(x), y) > 0
+      
+    DEF WeightedMajority(𝓗: 𝒫(Hypothesis), w: Vector[|𝓗|], x: Vector[n]) =
+      LET p = ∑ i ∈ 𝓗. wᵢ · 𝟙[Predict(hᵢ, x) = 1] / ∑ i ∈ 𝓗. wᵢ IN 
+        IF p ≥ 1/2 THEN 1 ELSE 0
+        
+    DEF UpdateWeights(𝓗: 𝒫(Hypothesis), w: Vector[|𝓗|], ⟨x, y⟩: Example, η: ℝ⁺) =
+      [IF Mistake[ZeroOneLoss](hᵢ, ⟨x, y⟩) THEN wᵢ · e^(-η) ELSE wᵢ for i ∈ 𝓗]
+  }
+  
+  PROOFS {
+    THEOREM WMRegretBound[n] {
+      STATEMENT:
+        ∀ (𝒟: [Example]^T) (𝓗: 𝒫(Hypothesis)[n]) (η : ℝ⁺).
+          Realizable(𝒟, 𝓗) ->
+          ∑ t ≤ T: Mistake[ZeroOneLoss](WeightedMajority(𝓗, wᵗ, xᵗ), ⟨xᵗ, yᵗ⟩)
+            ≤ ⌈(η + ln(n))/η⌉ · OPT(𝒟, 𝓗)
+        WHERE 
+          wᵗ = [1 / n for i ∈ 𝓗] for t = 1,
+          wᵗ = UpdateWeights(𝓗, wᵗ⁻¹, ⟨xᵗ⁻¹, yᵗ⁻¹⟩, η) for t > 1,
+          OPT(𝒟, 𝓗) = min h ∈ 𝓗: ∑ t ≤ T: Mistake[ZeroOneLoss](h, ⟨xᵗ, yᵗ⟩)
+          
+      PROOF {
+        ASSUME [𝒟: [Example]^T] [𝓗: 𝒫(Hypothesis)[n]] [η: ℝ⁺]:
+          Realizable(𝒟, 𝓗)
+          
+        LET h* ∈ 𝓗 SUCH THAT ∀ ⟨x, y⟩ ∈ 𝒟. h*(x) = y
+        LET M = ∑ t ≤ T: Mistake[ZeroOneLoss](WeightedMajority(𝓗, wᵗ, xᵗ), ⟨xᵗ, yᵗ⟩)
+        
+        HAVE Bound1: ∀ t ≤ T. ∑ i ∈ 𝓗. wᵗ⁽ⁱ⁾ ≤ n · e^(η · M - η · ∑ i ∈ 𝓗: Mistake[ZeroOneLoss](hᵢ, ⟨xᵗ, yᵗ⟩)) BY {
+          INDUCE ON t:
+            BASE CASE t = 1:
+              ∑ i ∈ 𝓗. w¹⁽ⁱ⁾ = n · (1/n) = 1 ≤ n · e^(η · 0 - η · 0) = n
+            INDUCTIVE CASE t > 1:
+              ASSUME: ∑ i ∈ 𝓗. wᵗ⁻¹⁽ⁱ⁾ ≤ n · e^(η · Mᵗ⁻¹ - η · ∑ i ∈ 𝓗: Mistake[ZeroOneLoss](hᵢ, ⟨xᵗ⁻¹, yᵗ⁻¹⟩))
+              LET mᵗ = ∑ i ∈ 𝓗: Mistake[ZeroOneLoss](hᵢ, ⟨xᵗ, yᵗ⟩)
+              HAVE: ∑ i ∈ 𝓗. wᵗ⁽ⁱ⁾ 
+                = ∑ i ∈ 𝓗. IF Mistake[ZeroOneLoss](hᵢ, ⟨xᵗ, yᵗ⟩) THEN wᵗ⁻¹⁽ⁱ⁾ · e^(-η) ELSE wᵗ⁻¹⁽ⁱ⁾ 
+                = e^(-η) · ∑ i ∈ 𝓗: Mistake[ZeroOneLoss](hᵢ, ⟨xᵗ, yᵗ⟩). wᵗ⁻¹⁽ⁱ⁾ + ∑ i ∈ 𝓗: ¬Mistake[ZeroOneLoss](hᵢ, ⟨xᵗ, yᵗ⟩). wᵗ⁻¹⁽ⁱ⁾
+                ≤ e^(-η) · ∑ i ∈ 𝓗. wᵗ⁻¹⁽ⁱ⁾
+                ≤ e^(-η) · n · e^(η · Mᵗ⁻¹ - η · ∑ i ∈ 𝓗: Mistake[ZeroOneLoss](hᵢ, ⟨xᵗ⁻¹, yᵗ⁻¹⟩)) BY ASSUMPTION  
+                = n · e^(η · (Mᵗ⁻¹ + 1 - mᵗ) - η · ∑ i ∈ 𝓗: Mistake[ZeroOneLoss](hᵢ, ⟨xᵗ⁻¹, yᵗ⁻¹⟩))
+                = n · e^(η · Mᵗ - η · ∑ i ∈ 𝓗: Mistake[ZeroOneLoss](hᵢ, ⟨xᵗ, yᵗ⟩))
+        }
+        
+        HAVE Bound2: ∀ t ≤ T. wᵗ⁽*⁾ ≥ e^(-η · ∑ t' ≤ t: Mistake[ZeroOneLoss](h*, ⟨xᵗ', yᵗ'⟩)) / n BY {
+          INDUCE ON t:
+            BASE CASE t = 1:
+              w¹⁽*⁾ = 1/n = e^(0) / n ≥ e^(-η · 0) / n
+            INDUCTIVE CASE t > 1:
+              ASSUME: wᵗ⁻¹⁽*⁾ ≥ e^(-η · ∑ t' ≤ t-1: Mistake[ZeroOneLoss](h*, ⟨xᵗ', yᵗ'⟩)) / n
+              HAVE: wᵗ⁽*⁾ = IF Mistake[ZeroOneLoss](h*, ⟨xᵗ, yᵗ⟩) THEN wᵗ⁻¹⁽*⁾ · e^(-η) ELSE wᵗ⁻¹⁽*⁾
+                ≥ e^(-η · ∑ t' ≤ t-1: Mistake[ZeroOneLoss](h*, ⟨xᵗ', yᵗ'⟩)) / n · e^(-η · Mistake[ZeroOneLoss](h*, ⟨xᵗ, yᵗ⟩))
+                = e^(-η · ∑ t' ≤ t: Mistake[ZeroOneLoss](h*, ⟨xᵗ', yᵗ'⟩)) / n
+        }
+        
+        HAVE: ∀ t ≤ T. e^(-η · ∑ t' ≤ t: Mistake[ZeroOneLoss](h*, ⟨xᵗ', yᵗ'⟩)) / n ≤ n · e^(η · M - η · ∑ i ∈ 𝓗: Mistake[ZeroOneLoss](hᵢ, ⟨xᵗ, yᵗ⟩)) BY {
+          Bound2, Bound1, wᵗ⁽*⁾ ≤ ∑ i ∈ 𝓗. wᵗ⁽ⁱ⁾
+        }
+        
+        HENCE: e^(-η · OPT(𝒟, 𝓗)) / n ≤ n · e^(η · M - η · OPT(𝒟, 𝓗))
+        
+        HENCE: ln(n) - η · OPT(𝒟, 𝓗) ≤ ln(n) + η · M - η · OPT(𝒟, 𝓗)
+        
+        HENCE: η · M ≤ η · OPT(𝒟, 𝓗) + ln(n)
+        
+        HENCE: M ≤ ⌈(η · OPT(𝒟, 𝓗) + ln(n)) / η⌉
+               ≤ ⌈(η + ln(n)) / η⌉ · OPT(𝒟, 𝓗) 
+               
+        SHOW: ∑ t ≤ T: Mistake[ZeroOneLoss](WeightedMajority(𝓗, wᵗ, xᵗ), ⟨xᵗ, yᵗ⟩) ≤ ⌈(η + ln(n)) / η⌉ · OPT(𝒟, 𝓗)
+      }
+    }
+    
+    THEOREM OnlineToBatchConversion[n] {
+      STATEMENT:
+        ∀ (𝒟: 𝒫(Example)) (𝓗: 𝒫(Hypothesis)[n]) (A: IncrementalLearner) (m : ℕ) (δ : ℝ⁺).
+          Realizable(𝒟, 𝓗) ∧ RegretBound(A, 𝒟, 𝓗, m) ≤ α·m + β ->
+          ℙ_{S ∼ 𝒟^m} [EmpiricalRisk(A(S), 𝒟, ZeroOneLoss) ≤ α + √(ln(2/δ)/(2m))] ≥ 1 - δ
+        WHERE
+          A(S) = LAST (MAP (A.Update, SCAN (A.Predict, A.h₀, S)))
+          RegretBound(A, 𝒟, 𝓗, m) = max S ∈ 𝒟^m: ∑ t ≤ m: Mistake[ZeroOneLoss](A.Predict(Sᵗ₋₁), Sᵗ) - OPT(S, 𝓗)
+          
+      PROOF {
+        ASSUME [𝒟: 𝒫(Example)] [𝓗: 𝒫(Hypothesis)[n]] [A: IncrementalLearner] [m: ℕ] [δ: ℝ⁺]:
+          Realizable(𝒟, 𝓗),
+          RegretBound(A, 𝒟, 𝓗, m) ≤ α·m + β
+        
+        LET S ∼ 𝒟^m  
+        LET h = A(S)
+        LET M(S) = ∑ t ≤ m: Mistake[ZeroOneLoss](A.Predict(Sᵗ₋₁), Sᵗ)
+        
+        HAVE: 𝔼[M(S)] ≤ α·m + β BY {
+          𝔼[M(S)] 
+            = 𝔼[∑ t ≤ m: Mistake[ZeroOneLoss](A.Predict(Sᵗ₋₁), Sᵗ)
+            ]
+            ≤ 𝔼[OPT(S, 𝓗) + α·m + β] BY RegretBound
+            = 𝔼[OPT(S, 𝓗)] + α·m + β
+            ≤ α·m + β BECAUSE 𝔼[OPT(S, 𝓗)] = 0 BY Realizable
+        }
+
+        HAVE: ℙ[M(S) ≥ 𝔼[M(S)] + m·ε] ≤ e^(-2·m·ε²) BY Hoeffding {
+          M(S) = ∑ t ≤ m: Mistake[ZeroOneLoss](A.Predict(Sᵗ₋₁), Sᵗ) ∈ [0, m]
+        }
+
+        CHOOSE ε = √(ln(2/δ)/(2m))
+
+        HENCE: ℙ[M(S) ≥ α·m + β + m·√(ln(2/δ)/(2m))] ≤ δ/2
+
+        HAVE: EmpiricalRisk(h, 𝒟, ZeroOneLoss) = 𝔼_{⟨x, y⟩ ∼ 𝒟}[ZeroOneLoss(h(x), y)]
+          = 𝔼_{⟨x, y⟩ ∼ 𝒟}[Mistake[ZeroOneLoss](h, ⟨x, y⟩)]
+          ≤ 𝔼_{S' ∼ 𝒟^m}[M(S')/m] + √(ln(2/δ)/(2m)) BY {
+            Hoeffding {
+              ℙ_{⟨x, y⟩ ∼ 𝒟}[Mistake[ZeroOneLoss](h, ⟨x, y⟩)] ∈ [0, 1]  
+            },
+            M(S')/m IS AN UNBIASED ESTIMATE OF ℙ_{⟨x, y⟩ ∼ 𝒟}[Mistake[ZeroOneLoss](h, ⟨x, y⟩)]
+          }
+          ≤ α + √(ln(2/δ)/(2m)) + √(ln(2/δ)/(2m))
+          = α + √(2·ln(2/δ)/m)
+
+        SHOW: ℙ[EmpiricalRisk(h, 𝒟, ZeroOneLoss) ≤ α + √(2·ln(2/δ)/m)] ≥ 1 - δ BY {
+          ℙ[EmpiricalRisk(h, 𝒟, ZeroOneLoss) > α + √(2·ln(2/δ)/m)]
+            ≤ ℙ[M(S)/m > α + √(ln(2/δ)/(2m))] + ℙ[𝔼_{S' ∼ 𝒟^m}[M(S')/m] > M(S)/m + √(ln(2/δ)/(2m))]
+            ≤ δ/2 + δ/2 = δ
+        }
+      }
+    }
+  }
+}

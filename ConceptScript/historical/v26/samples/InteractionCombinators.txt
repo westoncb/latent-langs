@@ -1,0 +1,122 @@
+CONCEPT InteractionCombinators {
+  LANGUAGE {
+    TYPE Symbol
+    TYPE Cell = (Symbol, List[Port])
+    TYPE Port = (Cell, ℕ)
+    TYPE Net = (Set[Cell], Set[Port], Set[(Port, Port)])
+
+    FUNC Arity(s: Symbol): ℕ
+    FUNC Interaction(a: Symbol, b: Symbol): Maybe[Net]
+    PRED Reduced(n: Net): 𝔹
+
+    AXIOM PortCount {
+      ∀ (s: Symbol) (c: Cell) (ps: List[Port]) .
+        (c = (s, ps)) => Length(ps) = Arity(s) + 1
+    }
+
+    AXIOM PortDistinct {
+      ∀ (c: Cell) (ps: List[Port]) (i: ℕ) (j: ℕ) .
+        ((c, ps) ∈ Net ∧ (c, i) ∈ ps ∧ (c, j) ∈ ps ∧ i ≠ j) => (c, i) ≠ (c, j)
+    }
+
+    AXIOM Symmetry {
+      ∀ (a: Symbol) (b: Symbol) (α: Net) (β: Net) .
+        Interaction(a, b) = α ∧ Interaction(b, a) = β => α = Flip(β)
+    }
+
+    AXIOM Determinism {
+      ∀ (a: Symbol) (b: Symbol) (α: Net) (β: Net) .
+        Interaction(a, b) = α ∧ Interaction(a, b) = β => α = β
+    }
+  }
+
+  NOTATION {
+    + --S--> & = Net + reduces to Net & in system S
+    + --*S--> & = Net + reduces to Net & in zero or more steps in system S
+    + --IC--> & = Net + reduces to Net & in the Interaction Combinators system
+    + --*IC--> & = Net + reduces to Net & in zero or more steps in the Interaction Combinators system
+    𝒯(S, T) = The set of translations from interaction system S to interaction system T
+    <x ↦ y>z = Substitution of x with y in z
+  }
+
+  STRUCTURE InteractionSystem {
+    PARAM alphabet: Set[Symbol]
+    PARAM rules: Map[(Symbol, Symbol), Net]
+
+    REQUIRE ∀ ((a, b) ↦ α) ∈ rules . a ∈ alphabet ∧ b ∈ alphabet ∧ Reduced(α)
+    REQUIRE ∀ (a: Symbol) (b: Symbol) . (a ∈ alphabet ∧ b ∈ alphabet) => ((a, b) ∈ rules.Keys ∨ (b, a) ∈ rules.Keys)
+  }
+
+  TRANSFORMERS {
+    TACTIC Substitution(+: Net, c: Cell, ?: Net) -> Net = {
+      MATCH + WITH
+      | ({c} ∪ cs, ps, ws) -> (cs ∪ ?.Cells, <c ↦ ?.Ports>ps, <c ↦ ?.Wires>ws)
+    }
+  }
+
+  PROOFS {
+    THEOREM ChurchRosser {
+      STATEMENT:
+        ∀ (S: InteractionSystem) (+: Net) .
+          (+ --*S--> &1 ∧ + --*S--> &2) => (∃ !: Net . &1 --*S--> ! ∧ &2 --*S--> !)
+
+      PROOF:
+        LET S: InteractionSystem, +: Net
+        ASSUME +1: + --*S--> &1, +2: + --*S--> &2
+
+        HAVE LocalConfluence := ∀ (.: Net) .
+          (. --S--> .1 ∧ . --S--> .2) => (∃ !: Net . .1 --S--> ! ∧ .2 --S--> !)
+
+        SHOW ∃ (!: Net) . &1 --*S--> ! ∧ &2 --*S--> !:
+          REWRITE &1
+            = .1 --S--> ... --S--> /1
+          REWRITE &2
+            = .1 --S--> ... --S--> /k --S--> ... --S--> /2
+          HAVE /1 = /2 BY Induction, LocalConfluence
+          
+        SHOW !: ! = &1 --*S--> ? ∧ &2 --*S--> ?:
+          REWRITE &1
+            = .1 --S--> ... --S--> !
+          REWRITE &2
+            = .1 --S--> ... --S--> /k --S--> ... --S--> !
+
+          ASSUME &1 --*S--> ?1, &2 --*S--> ?2
+
+          REWRITE ?1
+            = ! --S--> ... --S--> ?1
+          REWRITE ?2
+            = ! --S--> ... --S--> ?2
+
+          HAVE ?1 = ?2 BY Induction, Determinism
+        
+        QED
+    }
+
+    THEOREM TranslationTheorem {
+      STATEMENT:
+        ∀ (S: InteractionSystem) .
+          ∃ (T: 𝒯(S, InteractionCombinatorsSystem)) . FaithfullyRepresents(T)
+
+      PROOF:
+        LET S: InteractionSystem
+        LET (C, D, E, #p, #q, $p, $q) := InteractionCombinatorsSystem.alphabet
+
+        DEFINE 𝒯: 𝒯(S, InteractionCombinatorsSystem) {
+          ON a: S.alphabet
+            DEFINE 𝒯(a) := TreeOf(CodesOf({& | (a, b) ↦ & ∈ S.rules}))
+          ON +: Net
+            DEFINE 𝒯(+) := <a ↦ 𝒯(a)>+ 
+        }
+
+        SHOW Equivariant(𝒯):
+          LET +: Net, &: Net, + --S--> &
+          SHOW 𝒯(+) --*IC--> 𝒯(&) USING DecodingSimulation
+
+        SHOW Reduced(𝒯(+)) <=> Reduced(+) USING DecodingSimulation, Definitions
+
+        HENCE FaithfullyRepresents(𝒯)
+
+        QED
+    }
+  }
+}

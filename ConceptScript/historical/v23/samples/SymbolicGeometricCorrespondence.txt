@@ -1,0 +1,112 @@
+CONCEPT SymbolicGeometricCorrespondence {
+
+  LANGUAGE {
+    TYPE Sym
+    TYPE Geo
+
+    FUNC add : Sym -> Sym -> Sym
+    FUNC mul : Sym -> Sym -> Sym
+    FUNC compose : Sym -> Sym -> Sym
+    FUNC inverse : Sym -> Sym
+    FUNC differentiate : Sym -> Sym
+    FUNC integrate : Sym -> Sym
+    FUNC optimize : Sym -> Sym
+    FUNC transform : Sym -> Sym -> Sym
+    FUNC solve : Sym -> Sym
+
+    FUNC translate : Geo -> Vec -> Geo
+    FUNC rotate : Geo -> Real -> Geo
+    FUNC scale : Geo -> Real -> Geo
+    FUNC reflect : Geo -> Vec -> Geo
+    FUNC boundary : Geo -> Geo
+    FUNC interior : Geo -> Geo
+    FUNC extremize : Geo -> Geo
+    FUNC flow : Geo -> VecField -> Geo
+    FUNC meet : Geo -> Geo -> Geo
+
+    PRED Corresponds : Sym -> Geo -> Bool
+    PRED Optimal : Geo -> Bool
+    PRED Stable : Sym -> Bool
+    PRED Symmetric : Geo -> Geo -> Bool
+    PRED Allowed : Sym -> Sym -> Bool
+    PRED Unique : Geo -> Bool
+    PRED Determinate : Sym -> Bool
+
+    NOTATION "S ≈ G" = Corresponds(S, G)
+    NOTATION "G1 ≅ G2" = Symmetric(G1, G2)
+    NOTATION "S1 ~ S2" = Allowed(S1, S2)
+  }
+
+  STRUCTURE {
+    DEF Corresponds(S, G) <-> 
+      (S = add(S1, S2) <-> G = translate(G1, v) WHERE S1 ≈ G1, S2 ≈ v) /\
+      (S = mul(S1, S2) <-> G = scale(G1, r) WHERE S1 ≈ G1, S2 ≈ r) /\
+      (S = compose(S1, S2) <-> G = flow(G1, v) WHERE S1 ≈ G1, S2 ≈ v) /\
+      (S = inverse(S1) <-> G = reflect(G1, v) WHERE S1 ≈ G1) /\
+      (S = differentiate(S1) <-> G = boundary(G1) WHERE S1 ≈ G1) /\
+      (S = integrate(S1) <-> G = interior(G1) WHERE S1 ≈ G1) /\
+      (S = optimize(S1) <-> G = extremize(G1) WHERE S1 ≈ G1) /\
+      (S = transform(S1, S2) <-> G = rotate(G1, θ) WHERE S1 ≈ G1, S2 ≈ θ) /\
+      (S = solve(S1) <-> G = meet(G1, G1) WHERE S1 ≈ G1) 
+      
+    DEF Optimal(G) <-> ∃ S . S ≈ G /\ Stable(S)
+    DEF Stable(S) <-> ∀ S' . ∃ G . (S' ≈ G /\ S ≈ G) -> (S = optimize(S))
+    
+    DEF Symmetric(G1, G2) <-> ∃ S1, S2 . (S1 ≈ G1 /\ S2 ≈ G2) /\ Allowed(S1, S2)
+    DEF Allowed(S1, S2) <-> ∃ T . (S2 = transform(S1, T))
+    
+    DEF Unique(G) <-> ∃! S . S ≈ G
+    DEF Determinate(S) <-> ∃! G . S ≈ G
+  }
+  
+  PROOFS {
+    THEOREM OptimizationCorrespondence {
+      STATEMENT: ∀ S ∈ Sym, ∃ G ∈ Geo . S ≈ G /\ (Optimal(G) <-> Stable(S))
+
+      PROOF:
+        ASSUME S ∈ Sym
+        LET G ∈ Geo SUCH THAT S ≈ G
+        
+        S ≈ G => ∃ S' . (S = optimize(S') <-> G = extremize(G'))
+        
+        (∃ S' . (S = optimize(S') <-> G = extremize(G'))) 
+          => (S = optimize(S) <-> G = extremize(G))
+          => (Stable(S) <-> Optimal(G)) BY DEF OF Stable, Optimal
+
+        THEREFORE Optimal(G) <-> Stable(S)
+    }
+    
+    THEOREM SymmetryCorrespondence {
+      STATEMENT: ∀ S1, S2 ∈ Sym, ∃ G1, G2 ∈ Geo . 
+                 (S1 ≈ G1) /\ (S2 ≈ G2) /\ (Symmetric(G1, G2) <-> Allowed(S1, S2))
+                 
+      PROOF:
+        ASSUME S1, S2 ∈ Sym
+        LET G1, G2 ∈ Geo SUCH THAT S1 ≈ G1, S2 ≈ G2
+        
+        (S1 ≈ G1 /\ S2 ≈ G2)
+          => ∃ T . (S2 = transform(S1, T) <-> ∃ θ . G2 = rotate(G1, θ) /\ T ≈ θ)
+        
+        (∃ T . (S2 = transform(S1, T) <-> ∃ θ . G2 = rotate(G1, θ) /\ T ≈ θ))
+          => (Allowed(S1, S2) <-> Symmetric(G1, G2)) BY DEF OF Allowed, Symmetric
+
+        THEREFORE Symmetric(G1, G2) <-> Allowed(S1, S2)
+    }
+
+    THEOREM UniquenessCorrespondence {
+      STATEMENT: ∀ S ∈ Sym, ∃ G ∈ Geo . (S ≈ G) /\ (Unique(G) <-> Determinate(S))
+
+      PROOF:
+        ASSUME S ∈ Sym
+        ASSUME S ≈ G
+
+        S ≈ G => (S = solve(S) <-> G = meet(G, G))
+
+        (S = solve(S) <-> G = meet(G, G))
+          => (∃! S' . S' ≈ G <-> ∃! G' . S ≈ G')
+          => (Unique(G) <-> Determinate(S)) BY DEF OF Unique, Determinate
+
+        THEREFORE Unique(G) <-> Determinate(S)
+    }
+  }
+}

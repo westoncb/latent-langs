@@ -1,0 +1,85 @@
+CONCEPT DifferentialGeometry {
+  LANGUAGE {
+    TYPE Manifold(M)
+    TYPE Point[M : Manifold, p : M]
+    TYPE Curve[M : Manifold, I : ℝ] = I -> M
+    TYPE VectorField[M : Manifold] = Point[M] -> Tangent[M, Point[M]]
+    TYPE TensorField[M : Manifold, r s : ℕ] = Point[M] -> Tensor[M, Point[M], r, s]
+    
+    FUNC Christoffel[M : Manifold] : TensorField[M, 1, 2] ; Christoffel symbols
+    FUNC Ric[M : Manifold] : TensorField[M, 0, 2]        ; Ricci curvature tensor
+    FUNC R[M : Manifold] : Point[M] -> ℝ                 ; Scalar curvature
+
+    PRED Geodesic[M : Manifold, γ : Curve[M]] : 𝔹 = 
+      ∀ (t : ℝ). ∇{γ'(t)}(γ'(t)) = 0
+
+    AXIOM ChristoffelTransform {
+      ∀ (M : Manifold) (p : Point[M]) (X Y : Tangent[M, p]).
+        ∇{X}(Y)(p) = ∂{Y^i}/∂{X^j}(p) + Christoffel[i,j,k](p)*Y^k(p) 
+    }
+
+    AXIOM RicciTensorContraction {
+      ∀ (M : Manifold) (p : Point[M]).
+        R(p) = Contract(Ric(p))
+    }
+
+    AXIOM BianchiIdentity {
+      ∀ (M : Manifold).
+        Symm(∇(Ric) - 1/2*∇(R)*g) = 0
+    }
+
+    NOTATION "∇" = CovariantDeriv
+    NOTATION "∂" = PartialDeriv 
+  }
+
+  STRUCTURE Riemannian(M : Manifold, g : TensorField[M, 0, 2]) {
+    REQUIRE ∀ (p : Point[M]) (X Y : Tangent[M, p]). g(X, Y)(p) = g(Y, X)(p)  ; g is symmetric
+    REQUIRE ∀ (p : Point[M]) (X : Tangent[M, p]). g(X, X)(p) ≥ 0              ; g is positive semidefinite
+    REQUIRE ∀ (p : Point[M]) (X : Tangent[M, p]). g(X, X)(p) = 0 => X = 0     ; g is positive definite
+  }
+
+  STRUCTURE Einstein(M : Manifold, g : TensorField[M, 0, 2]) <: Riemannian(M, g) {
+    REQUIRE ∀ (p : Point[M]).
+      Ric(p) - 1/2*R(p)*g(p) = 8*π*G*StressEnergy(p)  ; Einstein field equation
+  }
+
+  PROOFS {
+    THEOREM GeodesicParallelTransport {
+      STATEMENT:
+        ∀ (M : Riemannian) (γ : Curve[M]) (X : VectorField[M]).
+          Geodesic(γ) ∧ ∇{γ'(0)}(X)(γ(0)) = 0 => ∀ (t : ℝ). ∇{γ'(t)}(X)(γ(t)) = 0
+
+      PROOF:
+        LET (M, g) : Riemannian, γ : Curve[M], X : VectorField[M]
+        ASSUME (H1) : Geodesic(γ), (H2) : ∇{γ'(0)}(X)(γ(0)) = 0
+        
+        SUFFICES-TO-SHOW ∀ (t : ℝ). ∇{γ'(t)}(X)(γ(t)) = 0
+        LET t : ℝ
+
+        ∇{γ'(t)}(X)(γ(t))
+          = D{t}(X(γ(t))) - X(γ(t)) ∇{γ'(t)}(γ'(t))  BY LeviCivitaProperty
+          = D{t}(X(γ(t))) - 0                         BY H1, Geodesic
+          = 0                                        BY {
+              D{t}(X(γ(t))) 
+                = ∇{Dt(γ(t))}(X(γ(t)))                BY CovariantDerivative 
+                = ∇{γ'(t)}(X)(γ(t))                   BY FundThmCalc, H2
+                = 0                                   IH
+            }
+      }
+    }
+
+    THEOREM RicciTensorDivergence {
+      STATEMENT:
+        ∀ (M : Einstein). ∇{a}(Ric[a,b] - 1/2*R*g[a,b]) = 0
+
+      PROOF:
+        LET (M, g) : Einstein
+
+        ∇{a}(Ric[a,b] - 1/2*R*g[a,b])
+          = ∂{a}(Ric[a,b] - 1/2*R*g[a,b]) + Γ{a,a,c}*(Ric[c,b] - 1/2*R*g[c,b])  BY CovariantDerivative
+          = ∂{a}(Ric[a,b]) - 1/2*∂{a}(R)*g[a,b] - 1/2*R*∂{a}(g[a,b]) + Γ{a,a,c}*(Ric[c,b] - 1/2*R*g[c,b]) BY ProductRule, ChainRule
+          = ∇{a}(Ric[a,b]) - 1/2*∇{a}(R)*g[a,b]   BY MetricCompatibility
+          = 0     BY BianchiIdentity
+    }
+  }
+}

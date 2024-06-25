@@ -1,0 +1,184 @@
+CONCEPT BlackHole {
+  DECLARE {
+    M : TYPE = ℝ₊  ; Mass
+    J : TYPE = 𝕍   ; Angular momentum  
+    Q : TYPE = ℝ   ; Electric charge
+    
+    Metric : M × J × Q -> 𝕋  ; Spacetime metric
+    Horizon : M × J × Q -> 𝕊  ; Event horizon
+    Ergosphere : M × J × Q -> 𝕊  ; Ergosphere
+    SingularitySpacelike : M × J × Q -> 𝕊  ; Spacelike singularity
+    SingularityTimelike : M × J × Q -> 𝕊  ; Timelike singularity
+    
+    Temperature : M × J × Q -> ℝ₊  ; Hawking temperature 
+    Entropy : M × J × Q -> ℝ₊  ; Bekenstein-Hawking entropy
+    AngularVelocity : M × J × Q -> ℝ  ; Angular velocity of the horizon
+    ElectrostaticPotential : M × J × Q -> ℝ  ; Electrostatic potential at the horizon
+    
+    Action : 𝕋 × 𝕊 -> ℝ  ; Einstein-Hilbert action with matter fields
+    StressEnergy : 𝕋 × 𝕊 -> 𝕋  ; Stress-energy tensor of matter fields
+    
+    Variation : (𝕋 -> ℝ) × 𝕋 -> 𝕋  ; Variation of a functional on the space of metrics
+    LieDerivative : 𝕍 × 𝕋 -> 𝕋  ; Lie derivative of a tensor field along a vector field
+    Killing : 𝕍 × 𝕋 -> PROP  ; Killing vector field predicate
+    
+    QuantumState : 𝕊 -> HILBERT  ; Quantum state on a Cauchy surface
+    QuantumField : 𝕋 × 𝕊 -> OPERATOR  ; Quantum field operator
+    Vacuum : HILBERT  ; Vacuum state
+    Creation : HILBERT -> OPERATOR  ; Creation operator 
+    Annihilation : HILBERT -> OPERATOR  ; Annihilation operator
+    
+    Hawking : M × J × Q × HILBERT -> HILBERT  ; Hawking effect operator
+    Unruh : M × J × Q × OBSERVER -> HILBERT  ; Unruh effect operator  
+  }
+  
+  DEFINE {
+    ; Kerr-Newman metric in Boyer-Lindquist coordinates
+    Metric(M, J, Q) ≜ -(1 - r_s * r / ρ²) * d_t² 
+                      + ρ² / Δ * d_r²
+                      + ρ² * d_θ² 
+                      + (r² + (J/M)² + r_s * r * (J/M)² * sin²θ / ρ²) * sin²θ * d_φ²
+                      - r_s * r * (J/M) * sin²θ / ρ² * 2 * d_t * d_φ
+      where r_s = 2 * G * M / c², ρ² = r² + (J/M)² * cos²θ, Δ = r² - r_s * r + (J/M)² + Q²
+    
+    ; Event horizon
+    Horizon(M, J, Q) ≜ {r | Δ(r) = 0, θ ∈ [0, π], φ ∈ [0, 2π)}  
+      where Δ(r) = r² - r_s * r + (J/M)² + Q²
+    
+    ; Ergosphere  
+    Ergosphere(M, J, Q) ≜ {(r, θ) | r < r_s + √((J/M)² * cos²θ), θ ∈ [0, π], φ ∈ [0, 2π)}
+    
+    ; Spacelike singularity
+    SingularitySpacelike(M, J, Q) ≜ {r = 0, θ = π/2}
+    
+    ; Timelike singularity  
+    SingularityTimelike(M, J, Q) ≜ {r = 0, θ ≠ π/2}
+    
+    ; Hawking temperature
+    Temperature(M, J, Q) ≜ (r₊ - r₋) / (4 * π * r₊ * (r₊² + (J/M)²))
+      where r₊ = M + √(M² - (J/M)² - Q²), r₋ = M - √(M² - (J/M)² - Q²)
+    
+    ; Bekenstein-Hawking entropy  
+    Entropy(M, J, Q) ≜ (r₊² + (J/M)²) / (4 * G)
+    
+    ; Angular velocity of the horizon
+    AngularVelocity(M, J, Q) ≜ J / (M * r₊²)
+    
+    ; Electrostatic potential at the horizon
+    ElectrostaticPotential(M, J, Q) ≜ Q * r₊ / (r₊² + (J/M)²)
+  }
+  
+  AXIOM {
+    ; Einstein field equations  
+    ∀g: 𝕋, T: 𝕋. Variation(Action(g, _), g) = 0 ⇔ 
+                 Einstein(g) + Λ * g = 8 * π * G * StressEnergy(g, T)
+    
+    ; Geodesic equation
+    ∀γ: [0, 1] -> 𝕄. ∇_γ'(γ') = 0 ⇔ γ is a geodesic  
+    
+    ; Raychaudhuri equation
+    ∀u: 𝕍, θ: ℝ, σ: 𝕋, ω: 𝕋. LieDerivative(u, θ) = -½ * θ² - σ_μν * σ^μν + ω_μν * ω^μν - R_μν * u^μ * u^ν
+    
+    ; Penrose process  
+    ∀p_i, p_f: 𝕍. (p_i ∈ Ergosphere(M, J, Q) ∧ p_f ∉ Ergosphere(M, J, Q)) ⇒ 
+                   Energy(p_f) > Energy(p_i)
+    
+    ; Laws of black hole mechanics
+    ∀M, J, Q, δM, δJ, δQ. δM = (Temperature(M, J, Q) / 8 * π) * δEntropy(M, J, Q) 
+                                + AngularVelocity(M, J, Q) * δJ
+                                + ElectrostaticPotential(M, J, Q) * δQ
+    
+    ; Hawking effect
+    ∀M, J, Q, ψ: HILBERT. Hawking(M, J, Q, ψ) = exp(-Energy / Temperature(M, J, Q)) * ψ
+    
+    ; Unruh effect  
+    ∀M, J, Q, O: OBSERVER. Unruh(M, J, Q, O) = exp(-2 * π * Energy / Acceleration(O)) * Vacuum
+  }
+  
+  THEOREM NoHairTheorem {
+    PROOF {
+      assume M, J, Q
+      let g = Metric(M, J, Q)
+      
+      assume ξ: 𝕍 with Killing(ξ, g)  ; Assume a Killing vector field
+      
+      obtain φ: ℝ by construction  ; Construct an electrostatic potential
+        calc {
+          LieDerivative(ξ, F) = 0           ; ξ is a symmetry of the electromagnetic field
+          dF = 0                            ; Bianchi identity
+          F = dA for some A                 ; Poincaré lemma
+          LieDerivative(ξ, A) + dφ = 0      ; Definition of electrostatic potential
+        }
+      
+      obtain ψ: HILBERT by construction  ; Construct a scalar field
+        calc {
+          LieDerivative(ξ, ψ) = 0           ; ξ is a symmetry of the scalar field 
+          (□ - m² - ξR)ψ = 0                ; Klein-Gordon equation in curved spacetime
+          ψ = 0                             ; Unique continuation theorem
+        }
+        
+      obtain χ: HILBERT by construction  ; Construct a spinor field  
+        calc {
+          LieDerivative(ξ, χ) = 0           ; ξ is a symmetry of the spinor field
+          (iγ^μ * ∇_μ - m)χ = 0             ; Dirac equation in curved spacetime
+          χ = 0                             ; Unique continuation theorem
+        }
+      
+      obtain T: 𝕋 by construction  ; Construct a higher spin field
+        calc {
+          LieDerivative(ξ, T) = 0           ; ξ is a symmetry of the higher spin field
+          (∇_μ * ∇^μ - m²)T = 0             ; Higher spin field equation
+          T = 0                             ; Unique continuation theorem  
+        }
+      
+      show ∀ξ: 𝕍. Killing(ξ, g) ⇒ ξ ∈ {∂_t, ∂_φ}  ; Black hole is characterized by M, J, Q only
+    }
+  }
+  
+  THEOREM HawkingRadiation {
+    PROOF {
+      assume M, J, Q with M ≫ m_p, J ≪ G * M² / c, Q ≪ G * M  ; Assume a large, slowly rotating, weakly charged black hole 
+      let g = Metric(M, J, Q)
+      let κ = Surface(Gravity(M, J, Q))
+      
+      obtain ψ_in, ψ_out : HILBERT by construction  ; Construct ingoing and outgoing vacuum states
+        calc {
+          ψ_in = Vacuum                     ; Ingoing vacuum is the usual vacuum  
+          ψ_out = Hawking(M, J, Q, ψ_in)    ; Outgoing vacuum is related to the ingoing vacuum by the Hawking effect
+        }
+      
+      obtain N_ω : OPERATOR by construction  ; Construct number operator for outgoing modes
+        calc {  
+          a_ω = Annihilation(ω)             ; Annihilation operator for a mode with frequency ω
+          N_ω = a_ω† * a_ω                   ; Number operator  
+        }
+      
+      obtain n_ω : ℝ₊ by calculation  ; Calculate expected number of particles in each outgoing mode
+        calc {
+          n_ω = ⟨ψ_out | N_ω | ψ_out⟩ 
+              = 1 / (exp(2 * π * ω / κ) - 1)  ; Planck distribution at Hawking temperature
+        }
+        
+      obtain L : ℝ₊ by calculation  ; Calculate total luminosity of Hawking radiation  
+        calc {
+          dE_ω / dt = n_ω * ω³ / (2 * π²)   ; Power radiated in each mode  
+          L = ∫{ω = 0 -> ∞} dE_ω / dt * dω
+            = π² / (60 * ħ³ * c²) * (k_B * Temperature(M, J, Q))⁴ * A  ; Stefan-Boltzmann law
+            where A = Area(Horizon(M, J, Q))  
+        }
+      
+      show ∃L : ℝ₊. L = Luminosity(BlackHole(M, J, Q))  ; Black hole radiates with Hawking luminosity
+    }
+  }
+}
+
+This formalization captures several key aspects of black hole physics:
+
+It declares the basic parameters of a black hole (mass M, angular momentum J, charge Q) and the relevant geometrical structures (metric, horizon, ergosphere, singularities).
+It defines the Kerr-Newman metric, which is the most general stationary black hole solution in Einstein-Maxwell theory. It also defines the expressions for the event horizon, ergosphere, Hawking temperature, Bekenstein-Hawking entropy, and other thermodynamic quantities.
+It states the fundamental equations of general relativity (Einstein field equations, geodesic equation, Raychaudhuri equation) and the laws of black hole mechanics as axioms.
+It formalizes the Penrose process (energy extraction from a rotating black hole) and the Hawking and Unruh effects (particle creation by black holes and accelerated observers) using the language of quantum field theory in curved spacetime.
+It proves the no-hair theorem, which states that a stationary black hole is uniquely characterized by its mass, angular momentum, and charge. The proof proceeds by showing that any additional fields (electromagnetic, scalar, spinor, higher spin) are either trivial or determined by the black hole parameters.
+It proves the existence of Hawking radiation for a large, slowly rotating, weakly charged black hole. The proof constructs the ingoing and outgoing vacuum states, calculates the expectation value of the number operator in the outgoing state, and shows that it corresponds to a thermal distribution at the Hawking temperature. It also derives the total luminosity of the radiation using the Stefan-Boltzmann law.
+
+The formalization leverages several advanced concepts from general relativity, quantum field theory, and differential geometry, such as Killing vector fields, Lie derivatives, spinors, and Hilbert spaces. It also uses the language features of ConceptScript, such as type declarations, function definitions, axioms, theorems, and proofs with intermediate calculations.

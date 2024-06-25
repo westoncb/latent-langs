@@ -1,0 +1,109 @@
+CONCEPT AbstractReasoningFramework {
+  LANGUAGE {
+    ; Reasoning system components
+    type S = L × I × T × P
+    type L    ; Language
+    type I    ; Inference rules
+    type T    ; Theorems
+    type P    ; Proofs
+    
+    ; Semantic interpretation, logical entailment, and proof checking
+    func ⟦_⟧ : L -> M
+    pred ⊢   ⊆ ℘(L) × L
+    pred ⊨   ⊆ P × L
+    
+    ; Abstraction, refinement, and interpretation functors
+    func α{S, A} : S -> A
+    func ρ{A, S} : A -> S  
+    func ι{S₁, S₂} : S₁ -> S₂
+    
+    ; Logical connectives and quantifiers
+    ∧ : L × L -> L
+    ∨ : L × L -> L 
+    ¬ : L -> L
+    ∀ : (A -> L) -> L
+    ∃ : (A -> L) -> L
+    
+    ; Proof tactics
+    Induction : (A -> (L -> L)) -> (L -> L)
+    By : L -> L -> L
+    Have : L -> L
+    
+    ; Hilbert-style proof rules
+    MP : L × L -> L
+    Gen : (A -> L) -> A -> L
+    
+    ; Natural deduction proof term constructors
+    Assume : L -> P -> P
+    Exact : L -> P
+    Apply : L -> L -> P -> P
+    Intro : (L -> P) -> P
+    Elim : P -> (L -> P) -> P
+    Rewrite : L -> P -> P
+    
+    ; Sequent calculus judgments and rules
+    ⊢_ : S × L
+    
+    AxiomRule : ∀Γ, A. A ∈ Γ -> (Γ ⊢ A)
+    WeakeningRule : ∀Γ, Δ, A. (Γ ⊢ A) -> (Γ ∪ Δ ⊢ A)
+    AndIntroRule : ∀Γ, A, B. (Γ ⊢ A) ∧ (Γ ⊢ B) -> (Γ ⊢ A ∧ B)
+    AndElimRule : ∀Γ, A, B. (Γ ⊢ A ∧ B) -> (Γ ⊢ A) ∧ (Γ ⊢ B)
+    OrIntroRule : ∀Γ, A, B. (Γ ⊢ A) ∨ (Γ ⊢ B) -> (Γ ⊢ A ∨ B)
+    OrElimRule : ∀Γ, A, B, C. (Γ ⊢ A ∨ B) ∧ (Γ, A ⊢ C) ∧ (Γ, B ⊢ C) -> (Γ ⊢ C)
+    ImpIntroRule : ∀Γ, A, B. (Γ, A ⊢ B) -> (Γ ⊢ A -> B)
+    ImpElimRule : ∀Γ, A, B. (Γ ⊢ A) ∧ (Γ ⊢ A -> B) -> (Γ ⊢ B)
+    ForallIntroRule : ∀Γ, φ, t. (∀x. Γ ⊢ φ(x)) -> (Γ ⊢ ∀x. φ(x))
+    ForallElimRule : ∀Γ, φ, t. (Γ ⊢ ∀x. φ(x)) -> (Γ ⊢ φ(t))
+    ExistsIntroRule : ∀Γ, φ, t. (Γ ⊢ φ(t)) -> (Γ ⊢ ∃x. φ(x))
+    ExistsElimRule : ∀Γ, φ, ψ. (Γ ⊢ ∃x. φ(x)) ∧ (∀x. Γ, φ(x) ⊢ ψ) -> (Γ ⊢ ψ)
+  }
+  
+  STRUCTURE {
+    ; Soundness and completeness of proof system wrt semantics
+    ∀Γ ⊆ L, A ∈ L. (Γ ⊢ A) <-> (∀M. (∀B ∈ Γ. M ⊨ B) -> M ⊨ A)
+    
+    ; Abstraction and refinement form a Galois connection
+    ∀S, A, s ∈ S, a ∈ A. α{S, A}(s) ≤ a <-> s ≤ ρ{A, S}(a)
+    
+    ; Interpretation preserves provability
+    ∀S₁, S₂, Γ ⊆ S₁, A ∈ S₁. (Γ ⊢ A) -> (ι{S₁, S₂}(Γ) ⊢ ι{S₁, S₂}(A))
+    
+    ; Proof terms encode natural deduction proofs
+    ∀p : P, A : L. p ⊨ A <-> ∃Γ. (Γ ⊢ p : A)
+  }
+  
+  PROOFS {
+    theorem Consistency: ∀S : S. ¬(∅ ⊢ ⊥) {
+      assume S : S
+      assume ∅ ⊢ ⊥
+      
+      obtain M by Completeness with ∀B ∈ ∅. M ⊨ B and M ⊨ ⊥
+      have ∀B ∈ ∅. M ⊨ B  ; trivial
+      hence M ⊨ ⊥         ; by above
+      contradiction       ; no model satisfies ⊥
+    }
+    
+    theorem CutElimination: ∀S, Γ, Δ, A, B. (Γ ⊢ A) ∧ (Δ, A ⊢ B) -> (Γ ∪ Δ ⊢ B) {
+      assume S : S, Γ, Δ, A, B
+      assume Γ ⊢ A and Δ, A ⊢ B
+      
+      by Induction on derivation of Δ, A ⊢ B {
+        case AxiomRule:
+          if B = A then Γ ⊢ B by assumption
+          if B ∈ Δ then Γ ∪ Δ ⊢ B by WeakeningRule
+          
+        case WeakeningRule:
+          have Δ ⊢ B by IH
+          Γ ∪ Δ ⊢ B by WeakeningRule
+          
+        case AndIntroRule:
+          obtain C, D where B = C ∧ D, Δ, A ⊢ C, and Δ, A ⊢ D
+          Γ ∪ Δ ⊢ C by IH
+          Γ ∪ Δ ⊢ D by IH
+          Γ ∪ Δ ⊢ C ∧ D by AndIntroRule
+          
+        ; other cases omitted
+      }
+    }
+  }
+}

@@ -1,0 +1,126 @@
+CONCEPT EmergentCooperativeProblemSolving {
+  LANGUAGE {
+    type Agent = {
+      policyNetwork: PolicyNetwork, 
+      valueFunction: ValueFunction,
+      observationHistory: Observation[],
+      actionHistory: JointAction[]
+    }
+
+    type PolicyNetwork = NeuralNetwork<Observation, ActionDistribution>  
+    type ValueFunction = NeuralNetwork<Observation, 𝕽>
+    type Observation = FiniteSet<Feature>
+    type Feature = Enum[Position, Velocity, LocalObservation, ...]
+    type ActionDistribution = Distribution<JointAction>
+    type JointAction = Action[]
+    type Action = Enum[Up, Down, Left, Right, Stay, Interact, ...]
+
+    type Reward = 𝕽
+    type ReturnFunction = (Observation[], JointAction[]) -> Reward
+    type Discount = 𝕽 // between 0 and 1
+
+    notation "π" = Policy
+    notation "𝔼" = ExpectedValue
+    notation "γ" = Discount 
+    notation "G" = Return
+    
+    func Policy(a: Agent): PolicyNetwork = a.policyNetwork
+    func Value(a: Agent): ValueFunction = a.valueFunction
+
+    func Return(τ: (Observation[], JointAction[]), t: ℕ): 𝕽 =
+      Σ[i ∈ {t,...,|τ.0|}] γ^(i-t) * Reward(τ.0[i], τ.1[i]) 
+    
+    pred OptimalPolicy(π, τ) ⇔ 
+      ∀π'. 𝔼[G(τ)|π] ≥ 𝔼[G(τ)|π']
+      
+    pred CooperativePolicy(π, τ) ⇔
+      ∃i, j. i ≠ j ∧ (π(τ.0[i]).Support ∩ π(τ.0[j]).Support ≠ ∅)
+      
+    axiom ValueConsistency(a: Agent):
+      ∀τ, t. Value(a)(τ.0[t]) = 𝔼[Σ[i ∈ {t,...,|τ.0|}] γ^(i-t) * Reward(τ.0[i], τ.1[i]) | π(a)]
+      
+    axiom PolicyImprovement(a: Agent):
+      π(a) := argmax[π] 𝔼[Value(a)(τ.0[t+1]) | π, τ.0[t]]
+  }
+  
+  STRUCTURE {
+    [Trajectory(α) = {(o, a) | o ∈ Observation[], a ∈ JointAction[]}
+      ↦ A trajectory is a sequence of observations and joint actions
+    ]
+  
+    [Cooperation(α, τ) ⇔ 
+      ∃t. CooperativePolicy(Σ[a ∈ α] π(a), τ[:t])
+      ↦ Cooperation occurs if agents jointly take mutually beneficial actions   
+    ]
+    
+    [Emergence(α, P) ⇔
+      ¬∃a ∈ α. P(a) ∧ P(α) 
+      ↦ A property P is emergent if it holds for the collective but not individuals
+    ]
+    
+    [OptimalCooperation(α, P) ⇔ 
+      ∀τ. (∀a ∈ α. π(a) = OptimalPolicy(π(a), τ)) ⇒ Cooperation(α, τ)  
+      ↦ Optimal policies lead to cooperative behavior
+    ]
+  }
+  
+  PROOFS {
+    theorem CooperationEmergence:
+      ∀α: Agent[], P. OptimalCooperation(α, P) ⇒ Emergence(α, P)  
+    {
+      assume α: Agent[], P  
+      assume OptimalCooperation(α, P)
+      
+      suppose ¬Emergence(α, P) 
+      hence ∃a ∈ α. P(a) ∧ P(α)
+      let a ∈ α such that P(a) ∧ P(α)
+      have π(a) = OptimalPolicy(π(a), τ)  ; for all τ, by assumption
+      have ∀τ. ¬CooperativePolicy(π(a), τ) ; since P holds for a individually
+      
+      let τ be arbitrary
+      have Cooperation(α, τ)     ; by OptimalCooperation
+      hence ∃t. CooperativePolicy(Σ[a' ∈ α] π(a'), τ[:t])  ; by definition
+      have π(a) ≠ Σ[a' ∈ α] π(a')  ; since π(a) is not cooperative
+      contradition                 ; since π(a) is optimal
+      
+      therefore Emergence(α, P)
+    }
+    
+    theorem AsymptoticConvergence:
+      ∀a: Agent. 
+        Reward = ReturnFunction(a.observationHistory, a.actionHistory) ∧
+        ValueConsistency(a) ∧ PolicyImprovement(a)
+      ⇒ lim[t -> ∞] Value(a)(a.observationHistory[t]) = max[π] 𝔼[G(τ)|π] 
+    {
+      assume a: Agent
+      assume Reward = ReturnFunction(a.observationHistory, a.actionHistory)
+      assume ValueConsistency(a) 
+      assume PolicyImprovement(a)
+      
+      {{ Proof by induction on t
+      
+        base case: t = 0
+          trivial since Value(a) is initialized arbitrarily
+          
+        inductive case: t > 0
+          assume Value(a)(a.observationHistory[t]) = max[π] 𝔼[G(τ)|π]
+            ; by inductive hypothesis
+            
+          let τ = (a.observationHistory, a.actionHistory)  
+          have π(a) = argmax[π] 𝔼[Value(a)(τ.0[t+1]) | π, τ.0[t]]
+            ; by PolicyImprovement
+          hence 𝔼[Value(a)(τ.0[t+1]) | π(a), τ.0[t]] ≥ 
+                𝔼[Value(a)(τ.0[t+1]) | π, τ.0[t]]   ; for any π
+          hence 𝔼[G(τ[t+1:]) | π(a)] ≥  𝔼[G(τ[t+1:]) | π]  
+            ; by ValueConsistency and linearity of expectation
+          hence 𝔼[G(τ) | π(a)] ≥ 𝔼[G(τ) | π]
+            ; since G(τ) = G(τ[:t+1]) + γ G(τ[t+1:])
+            
+          therefore Value(a)(τ.0[t+1]) = max[π] 𝔼[G(τ)|π]
+            ; by ValueConsistency
+      }}
+      
+      hence lim[t -> ∞] Value(a)(a.observationHistory[t]) = max[π] 𝔼[G(τ)|π]
+    }
+  }
+}

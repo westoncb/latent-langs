@@ -1,0 +1,99 @@
+CONCEPT HopfieldNetworkMemoryDynamics {
+  DECLARE {
+    Neuron : TYPE
+    State : TYPE = Neuron -> {-1, 1}
+    Weight : TYPE = Neuron × Neuron -> ℝ
+    Energy : TYPE = State -> ℝ
+    
+    HopfieldNetwork : TYPE = {
+      neurons : ℘(Neuron),
+      weights : Weight,
+      energy : Energy
+    }
+    
+    Dynamics : TYPE = State × ℕ -> State
+    Convergence : TYPE = State × ℕ -> 𝔹
+    Capacity : TYPE = HopfieldNetwork -> ℕ
+    
+    Hebbian : TYPE = [State] -> Weight
+    Storkey : TYPE = [State] -> Weight
+    Projection : TYPE = [State] -> [State]
+  }
+  
+  DEFINE {
+    ; Energy of a Hopfield network state
+    Energy(s, w) ≜ - ∑{i, j ∈ Neuron} w(i, j) * s(i) * s(j)
+    
+    ; Asynchronous dynamics of a Hopfield network
+    Dynamics(s, w, 0) ≜ s
+    Dynamics(s, w, t + 1) ≜ λi. Sign(∑{j ∈ Neuron} w(i, j) * Dynamics(s, w, t)(j))
+    
+    ; Convergence of Hopfield network dynamics
+    Convergence(s, w, t) ≜ ∀τ > t. Dynamics(s, w, τ) = Dynamics(s, w, t)
+    
+    ; Hebbian learning rule for weights
+    Hebbian(S) ≜ λ(i, j). ∑{s ∈ S} s(i) * s(j)
+    
+    ; Storkey learning rule for weights  
+    Storkey(S) ≜ λ(i, j). ∑{s ∈ S} (s(i) * s(j) - ∑{k ≠ i,j} (s(i) * w(i, k) * s(k) + s(j) * w(j, k) * s(k))) / |S|
+    
+    ; Projection rule for state sequences
+    Projection(S) ≜ {Dynamics(s, Hebbian(S), t) | s ∈ S, t ∈ ℕ, Convergence(s, Hebbian(S), t)}
+  }
+  
+  AXIOM {
+    ; Hopfield networks are symmetric
+    ∀i, j ∈ Neuron. w(i, j) = w(j, i)
+    
+    ; Hopfield networks have zero diagonal weights
+    ∀i ∈ Neuron. w(i, i) = 0
+    
+    ; Energy is non-increasing under dynamics  
+    ∀s ∈ State, w ∈ Weight, t ∈ ℕ. Energy(Dynamics(s, w, t + 1), w) ≤ Energy(Dynamics(s, w, t), w)
+    
+    ; Stored patterns are fixed points of the dynamics
+    ∀s ∈ State, w = Hebbian(S). s ∈ S ⇒ ∃t ∈ ℕ. Dynamics(s, w, t) = s ∧ Convergence(s, w, t)
+    
+    ; Storkey rule weights are optimal for storage capacity
+    ∀S ⊆ State, w = Storkey(S). |S| ≤ Capacity({neurons = Domain(w), weights = w, energy = Energy(_, w)})
+  }
+  
+  THEOREM ConvergenceTheorem {
+    PROOF {
+      assume s ∈ State, w ∈ Weight
+      
+      obtain t ∈ ℕ by induction on t {
+        base case t = 0:
+          have Dynamics(s, w, 0) = s by definition
+        
+        inductive case t → t + 1:
+          assume ∃τ ≤ t. Dynamics(s, w, τ) = Dynamics(s, w, t)
+          have Energy(Dynamics(s, w, t + 1), w) ≤ Energy(Dynamics(s, w, t), w) by Energy axiom
+          
+          assume Dynamics(s, w, t + 1) ≠ Dynamics(s, w, t) for contradiction
+          have Energy(Dynamics(s, w, t + 1), w) < Energy(Dynamics(s, w, t), w) by Energy axiom and assumption
+          
+          obtain τ ≤ t with Dynamics(s, w, τ) = Dynamics(s, w, t) by inductive hypothesis
+          have Energy(Dynamics(s, w, τ), w) = Energy(Dynamics(s, w, t), w) by assumption
+          have Energy(Dynamics(s, w, t + 1), w) < Energy(Dynamics(s, w, τ), w) by transitivity
+          contradiction
+      }
+      
+      show ∃t ∈ ℕ. Convergence(s, w, t) by definition and induction result
+    }
+  }
+  
+  THEOREM StorageCapacityTheorem {
+    PROOF {
+      assume S ⊆ State, |S| = n, w = Storkey(S)
+      let H = {neurons = Domain(w), weights = w, energy = Energy(_, w)}
+      
+      obtain S' ⊆ S with |S'| ≥ n / (2 * log(n)) by Storkey axiom and pigeonhole principle
+      
+      have ∀s ∈ S'. ∃t ∈ ℕ. Dynamics(s, w, t) = s ∧ Convergence(s, w, t) by fixed point axiom
+      hence |Projection(S')| ≥ |S'| ≥ n / (2 * log(n))
+      
+      show Capacity(H) ≥ n / (2 * log(n)) by definition of capacity
+    }
+  }
+}

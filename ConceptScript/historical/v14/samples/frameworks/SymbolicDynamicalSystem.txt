@@ -1,0 +1,115 @@
+CONCEPT SymbolicDynamicalSystem {
+  LANGUAGE {
+    type Sym = Const(ℝ) | Var(ℕ) | Binary(Sym, Sym) | Unary(Sym)
+    type Dyn = Flow | Map | Field
+    type Flow = Sym -> Sym
+    type Map = Sym -> Sym
+    type Field = Sym × Sym -> Sym
+    type Mfld = Manifold(ℝ^n) | Riemannian(Manifold) | Symplectic(Manifold)
+    
+    notation "S' t" = Evolve(S: Sym, t: Sym) 
+    notation "S [t ↦ T]" = Substitute(S: Sym, t: Sym, T: Sym)
+    notation "{S | C}" = SetBuilder(S: Sym, C: Sym)
+    
+    Evolve(S, t) = F(S, t) where F: Flow
+    Substitute(S, t, T) = S[Var(t) ≔ T]
+    SetBuilder(S, C) = {S | C(S)}
+
+    func GenSym: ℕ -> Sym
+    func Tangent: Mfld × Sym -> Sym
+    func Cotangent: Mfld × Sym -> Sym
+    func Bracket: Field -> Field
+    func SymExp: Map × Flow -> Flow
+    func SymLog: Flow -> Map
+    
+    SymExp(A, F)(S, t) = F(A(S), t)
+    SymLog(F) = InvCorrespond(F)
+    
+    pred Integrable: Flow -> 𝔹
+    pred Equivariant: Map × Field -> 𝔹
+    
+    Equivariant(A, X) ⟺ ∀ S: Sym. X(S, A(S)) = A(X(S))
+    
+    axiom CorrespondenceRule:  
+      ∀ A: Map, X: Field. Equivariant(A, X) ⟺ SymExp(A) ∘ X = X ∘ SymExp(A)
+      
+    axiom LieAlgebraHomomorphism:
+      ∀ X, Y: Field. Bracket(X, Y) = SymLog([SymExp(X), SymExp(Y)])
+        
+    axiom SymplecticStructure:  
+      ∀ H: Field. dH = SymLog(SymExp(H))
+  }
+
+  PROOFS {    
+    theorem Integrability(F: Flow):
+      (∀ S: Sym. ∃ A: Map. A' = F ∧ A(S(0)) = S) ⟺ Integrable(F)
+    {
+      forward {
+        assume ∀ S: Sym. ∃ A: Map. A' = F ∧ A(S(0)) = S
+        let A be such a Map
+        
+        have A'(S, t) = F(A(S, t), t) by {
+          A' = F
+          Substitution(A(S, t), S)
+        }
+        
+        have A(S, 0) = S by A(S(0)) = S
+        
+        hence Integrable(F) by definition
+      }
+      
+      backward {
+        assume Integrable(F)
+        let A: Map such that A' = F by definition of integrability
+        
+        have A(S, 0) = S since A is a flow of F
+        hence ∀ S: Sym. ∃ A: Map. A' = F ∧ A(S(0)) = S
+      }
+    }
+      
+    theorem HamiltonianFlow(H: Field):  
+      SymExp(H) is a Hamiltonian flow ⟺ dH = SymLog(SymExp(H))
+    {
+      have Hamiltonian(SymExp(H)) ⟺ Equivariant(SymExp(H), dH) by definition
+      
+      calc Equivariant(SymExp(H), dH)
+        ⟺ SymExp(SymExp(H)) ∘ dH = dH ∘ SymExp(SymExp(H)) by CorrespondenceRule  
+        ⟺ SymExp(H) ∘ SymLog(SymExp(H)) = SymLog(SymExp(H)) ∘ SymExp(H) by {
+             SymExp(SymExp(H)) = SymExp(H) 
+             dH = SymLog(SymExp(H)) by SymplecticStructure
+           }
+        ⟺ Id = Id  ; Obvious
+    }
+      
+    theorem LieAlgebraAction(X: Field, F: Flow):
+      ∀ S: Sym. SymExp(X)(F)(S) = F(SymExp(X)(S))
+    {
+      fix S: Sym
+      have SymExp(X)(F)(S) = F(SymExp(X)(S), 0) by definition of SymExp
+      also have F(SymExp(X)(S), 0) = F(SymExp(X)(S)) by F is autonomous
+    }
+
+    theorem DynamicalSymmetry(X, H: Field):  
+      Equivariant(SymExp(X), H) ⟺ [X, H] = 0
+    {
+      have Equivariant(SymExp(X), H) ⟺ SymExp(X) ∘ H = H ∘ SymExp(X) by CorrespondenceRule
+      also have 
+        calc SymExp(X) ∘ H = H ∘ SymExp(X)
+          ⟺ SymLog(SymExp(X) ∘ H) = SymLog(H ∘ SymExp(X)) by {
+               SymLog is a bijection between Maps and Fields
+             }
+          ⟺ [X, SymLog(H)] = 0 by LieAlgebraHomomorphism
+          ⟺ [X, H] = 0 by SymplecticStructure, SymLog(H) = dH
+    }
+  }
+}
+
+This Concept, called "SymbolicDynamicalSystem", combines ideas from symbolic computation, dynamical systems theory, and differential geometry. The key components are:
+
+A language for expressing dynamical systems using symbolic expressions (Sym), which can represent constants, variables, and compositions.
+Notions of flows (continuous time evolution), maps (discrete time evolution), and vector fields from dynamical systems theory.
+Manifolds as the phase spaces on which dynamical systems evolve, including symplectic manifolds which are the natural setting for Hamiltonian mechanics.
+Operations like Lie derivatives, Poisson brackets, symplectic structures from differential geometry, expressed symbolically.
+Proofs of key theorems relating symbolic expressions to dynamical and geometric properties, such as integrability conditions for flows, properties of Hamiltonian flows, infinitesimal symmetries and conserved quantities.
+
+The goal is to enable reasoning about dynamical systems and their symmetries/conserved quantities in a symbolic/algebraic way, unifying discrete and continuous, finite and infinite-dimensional dynamics. Potential applications could be in mathematical physics, control theory, and dynamical systems theory.

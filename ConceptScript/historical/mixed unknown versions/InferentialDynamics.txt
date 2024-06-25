@@ -1,0 +1,124 @@
+CONCEPT InferentialDynamics {
+  LANGUAGE {
+    type Sys<S, L>
+    type State<S>
+    type Language<L>
+    type Dynamics<S>
+    type Proof<L>
+    
+    func Entropy<S>(s: State<S>): ℝ
+    func Interpreter<S, L>(s: Sys<S, L>, l: Language<L>): State<S>
+    func Prover<S, L>(s: Sys<S, L>, h: State<S>): Proof<L>
+    func Lift<S, A>(f: A -> State<S>, a: A): State<S>
+
+    pred Entails<L>(p: Proof<L>, q: Proof<L>)
+    pred IsTheorem<L>(p: Proof<L>)
+    notation "H[s]" = Entropy(s)
+    notation "⟦l⟧" = Interpreter(s, l)
+    notation "s ⊢ p" = IsTheorem(Prover(s, p))
+    notation "p ⊩ q" = Entails(p, q)
+    notation "f † a" = Lift(f, a)
+
+    infer ProofEntropy<S, L>(s: Sys<S, L>, p: State<S>, q: State<S>):
+      (s ⊢ p) ∧ (s ⊢ q) ∧ (p ⊩ q) -> H[q] ≥ H[p] 
+
+    infer CanonicalRepresentation<S, L, A>(s: Sys<S, L>, a: A):
+      ∃f: A -> Language<L>. ⟦f(a)⟧ = Lift(Interpreter(s, -), a) 
+
+    infer EntropyDrivenDynamics<S, L>(s: Sys<S, L>, t: Sys<S, L>):
+      ∀p: State<S>. (s ⊢ p) ∧ (t ⊢ p) ∧ (H[p] ≤ H[Dynamics<S>(t)]) -> Dynamics<S>(t) ⊩ p
+  }
+
+  STRUCTURE {
+    ; Proof Irrelevance
+    ∀L, p: Proof<L>, q: Proof<L>. (p ⊩ q) ∧ (q ⊩ p) -> p = q
+
+    ; Entropy-Inference Duality
+    ∀S, L, (s: Sys<S, L>, l: Language<L>). H[⟦l⟧] = inf {H[q] | s ⊢ q ∧ q ⊩ ⟦l⟧}
+
+    ; Dynamical Proof Search
+    ∀S, L, (s: Sys<S, L>, p: State<S>). s ⊢ p <-> p = lim (λt. Prover(Dynamics<S>^t(s), p))
+
+    ; Galois Connection of Interpreter/Prover
+    ∀S, L, (s: Sys<S, L>, p: State<S>, l: Language<L>). 
+      ⟦l⟧ ⊩ p <-> l ⊩ Prover(s, p)
+  }
+
+  PROOFS {
+    theorem ProofIrrelevance<L>: 
+      ∀p: Proof<L>, q: Proof<L>. (p ⊩ q) ∧ (q ⊩ p) -> p = q
+    {
+      assume p: Proof<L>, q: Proof<L>
+      assume (p ⊩ q) ∧ (q ⊩ p)
+
+      have ∀r. (p ⊩ r) <-> (q ⊩ r)
+      proof {
+        assume r
+        have (p ⊩ q) ∧ (q ⊩ r) -> (p ⊩ r)  ; by transitivity
+        have (q ⊩ p) ∧ (p ⊩ r) -> (q ⊩ r)  ; by transitivity
+      }
+
+      let r = p
+      have (p ⊩ p) <-> (q ⊩ p)
+      have (q ⊩ p) <-> (q = p)   ; by reflexivity
+      have (p ⊩ p) <-> (p = p)   ; by reflexivity
+      hence p = q
+    }
+
+    theorem GaloisConnection<S, L>:
+      ∀(s: Sys<S, L>, p: State<S>, l: Language<L>).
+        ⟦l⟧ ⊩ p <-> l ⊩ Prover(s, p)  
+    {
+      assume (s: Sys<S, L>, p: State<S>, l: Language<L>)
+
+      have ⟦l⟧ = Interpreter(s, l)   ; by definition
+
+      ; Direction 1: ⟦l⟧ ⊩ p -> l ⊩ Prover(s, p)
+      assume ⟦l⟧ ⊩ p
+      have IsTheorem(Prover(s, ⟦l⟧))   ; by soundness of Prover 
+      have Prover(s, ⟦l⟧) ⊩ Prover(s, p)   ; by ⟦l⟧ ⊩ p
+      hence l ⊩ Prover(s, p)    ; by completeness of Prover
+
+      ; Direction 2: l ⊩ Prover(s, p) -> ⟦l⟧ ⊩ p  
+      assume l ⊩ Prover(s, p)
+      have ⟦l⟧ ⊩ ⟦Prover(s, p)⟧   ; by monotonicity of ⟦-⟧
+      have ⟦Prover(s, p)⟧ = p      ; by definition of Prover
+      hence ⟦l⟧ ⊩ p
+    }
+
+    theorem DynamicalProofConvergence<S, L>:
+      ∀(s: Sys<S, L>, p: State<S>). 
+        s ⊢ p <-> p = lim (λt. Prover(Dynamics<S>^t(s), p))
+    {
+      assume (s: Sys<S, L>, p: State<S>)
+
+      define P(t) := Prover(Dynamics<S>^t(s), p)
+      
+      ; Direction 1: s ⊢ p -> p = lim P(t)
+      assume s ⊢ p
+      have ∀t. P(t) ⊩ p   ; by soundness of Prover
+      have ∀ε > 0. ∃N. ∀t > N. dist(P(t), p) < ε   ; by definition of convergence
+      hence p = lim P(t) 
+
+      ; Direction 2: p = lim P(t) -> s ⊢ p
+      assume p = lim P(t)
+      have ∀ε > 0. ∃N. ∀t > N. dist(P(t), p) < ε   ; by assumption  
+      have ∃q. ∀t. P(t) ⊩ q ∧ q ⊩ p   ; by compactness
+      let q such that ∀t. P(t) ⊩ q ∧ q ⊩ p
+      have ∀t. Dynamics<S>^t(s) ⊢ q   ; by definition of P(t)
+      hence s ⊢ q   ; by induction on t
+      hence s ⊢ p   ; by q ⊩ p
+    }
+  }  
+}
+
+This InferentialDynamics Concept explores the interplay between dynamical systems, formal proof systems, and entropy. Some key ideas:
+
+Proofs are structured as a formal language L that can be interpreted into the state space S of a dynamical system.
+The entropy H[s] of a state s acts as a measure of the "information content" of that state.
+Proofs induce a partial order on states, where p ⊩ q means the proof p entails q. Entailment corresponds to entropy increase (ProofEntropy).
+There is a Galois connection between the proof-to-state interpretation ⟦-⟧ and the state-to-proof prover, analogous to the Galois connection between models and theories in logic.
+The dynamics on states can be lifted to a "proof search" dynamics on the space of proofs. Converging to a fixed point of the proof dynamics corresponds to finding a proof of the target theorem (DynamicalProofConvergence).
+The information content H[⟦l⟧] of an interpreted formula l is the infimum of the entropies of all the proofs of l (Entropy-Inference Duality). This is analogous to defining the Kolmogorov complexity of a string as the length of its shortest program.
+
+The ProofIrrelevance theorem shows that entailment induces an equivalence relation on proofs, allowing us to treat them as unique up to equivalence. The CanonicalRepresentation axiom postulates that every object has a canonical description in the language L, as interpreted by the system S.

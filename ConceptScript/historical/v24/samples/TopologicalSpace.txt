@@ -1,0 +1,244 @@
+CONCEPT TopologicalSpace {
+  LANGUAGE {
+    TYPE Point
+    TYPE OpenSet : Point -> Prop
+    
+    FUNC Interior(A : Point -> Prop) : Point -> Prop
+    Interior(A, x) = ∃ (U : OpenSet), ∀ (y : Point), U(y) -> A(y) ∧ U(x)
+    
+    FUNC Closure(A : Point -> Prop) : Point -> Prop  
+    Closure(A) = λ x. ∀ (U : OpenSet), U(x) -> ∃ (y : Point), U(y) ∧ A(y)
+
+    PRED OpenMap(f : Point -> Point) : Prop
+    OpenMap(f) = ∀ (U : OpenSet), Open(λ y. ∃ (x : Point), U(x) ∧ f(x) = y)
+
+    PRED Continuous(f : Point -> Point) : Prop
+    Continuous(f) = ∀ (U : OpenSet), Open(λ x. U(f(x)))
+    
+    AXIOM OpenSetAxioms {
+      THEN
+      (i)   ∀ (U V : OpenSet), ∃ (I : OpenSet), ∀ (x : Point), I(x) <-> U(x) ∧ V(x);
+      (ii)  ∀ (U V : OpenSet), ∃ (U : OpenSet), ∀ (x : Point), U(x) <-> U(x) ∨ V(x); 
+      (iii) ∀ (x : Point), ∃ (U : OpenSet), U(x);
+      (iv)  ∃ (U : OpenSet), ∀ (x : Point), U(x)
+    }
+    
+    NOTATION "A°" = Interior(A)  
+    NOTATION "Ā" = Closure(A)
+  }
+  
+  PROOFS {
+    THEOREM InteriorProperties {
+      STATEMENT: ∀ (A B : Point -> Prop),
+        (i)   (A ∩ B)° ⊆ A° ∩ B°;
+        (ii)  A ⊆ B -> A° ⊆ B°;
+        (iii) A° ⊆ A;
+        (iv)  (A°)° = A°
+      PROOF:
+        LET A B : Point -> Prop;
+        
+        (i) SHOW (A ∩ B)° ⊆ A° ∩ B° BY {
+          LET x : Point;
+          ASSUME (A ∩ B)°(x);
+          THEN ∃ (U : OpenSet), ∀ (y : Point), U(y) -> (A(y) ∧ B(y)) ∧ U(x);
+          LET U : OpenSet;
+          ASSUME ∀ (y : Point), U(y) -> (A(y) ∧ B(y)) ∧ U(x);
+          THEN ∀ (y : Point), U(y) -> A(y);
+            AND ∀ (y : Point), U(y) -> B(y);
+          SHOW A°(x) ∧ B°(x) BY Definition(Interior)
+        };
+        
+        (ii) SHOW A ⊆ B -> A° ⊆ B° BY {
+          ASSUME A ⊆ B;
+          LET x : Point;
+          ASSUME A°(x);
+          THEN ∃ (U : OpenSet), ∀ (y : Point), U(y) -> A(y) ∧ U(x);
+          LET U : OpenSet;
+          ASSUME ∀ (y : Point), U(y) -> A(y) ∧ U(x);
+          THEN ∀ (y : Point), U(y) -> B(y) BY ASSUMPTION;
+          SHOW B°(x) BY Definition(Interior)
+        };
+        
+        (iii) SHOW A° ⊆ A BY {
+          LET x : Point;
+          ASSUME A°(x);
+          THEN ∃ (U : OpenSet), ∀ (y : Point), U(y) -> A(y) ∧ U(x);
+          SHOW A(x) BY ASSUMPTION
+        };
+        
+        (iv) SHOW (A°)° = A° BY {
+          SUFFICES A° ⊆ (A°)° ∧ (A°)° ⊆ A°;
+          
+          SHOW A° ⊆ (A°)° BY (iii);
+          
+          SHOW (A°)° ⊆ A° BY {
+            LET x : Point;  
+            ASSUME (A°)°(x);
+            THEN ∃ (U : OpenSet), ∀ (y : Point), U(y) -> A°(y) ∧ U(x);
+            LET U : OpenSet;
+            ASSUME ∀ (y : Point), U(y) -> A°(y) ∧ U(x);
+            SUFFICES ∀ (y : Point), U(y) -> A(y);
+            LET y : Point;
+            ASSUME U(y);
+            THEN A°(y);
+            THEN ∃ (V : OpenSet), ∀ (z : Point), V(z) -> A(z) ∧ V(y);
+            SHOW A(y) BY ASSUMPTION
+          }  
+        }
+    }
+    
+    THEOREM ClosureProperties {
+      STATEMENT: ∀ (A B : Point -> Prop),
+        (i)   A ∪ B ⊆ A̅ ∪ B̅;
+        (ii)  A ⊆ B -> A̅ ⊆ B̅;
+        (iii) A ⊆ A̅;
+        (iv)  (A̅)̅ = A̅
+        
+      PROOF:
+        LET A B : Point -> Prop;
+        
+        (i) SHOW A ∪ B ⊆ A̅ ∪ B̅ BY { 
+          LET x : Point;
+          ASSUME (A ∪ B)(x);
+          THEN A(x) ∨ B(x);
+          CASE A(x) OF {
+            SHOW A̅(x) BY {
+              LET U : OpenSet; 
+              ASSUME U(x);
+              USE x
+            }
+          };
+          CASE B(x) OF {
+            SHOW B̅(x) BY {
+              LET U : OpenSet;
+              ASSUME U(x); 
+              USE x
+            }
+          };
+        };
+        
+        (ii) SHOW A ⊆ B -> A̅ ⊆ B̅ BY {
+          ASSUME A ⊆ B;
+          LET x : Point;
+          ASSUME A̅(x);
+          LET U : OpenSet; 
+          ASSUME U(x);
+          THEN ∃ (y : Point), U(y) ∧ A(y);
+          LET y : Point;
+          ASSUME U(y) ∧ A(y);
+          THEN B(y) BY ASSUMPTION;
+          SHOW B̅(x) BY Definition(Closure)
+        };
+        
+        (iii) SHOW A ⊆ A̅ BY {
+          LET x : Point;
+          ASSUME A(x);
+          LET U : OpenSet;
+          ASSUME U(x);
+          USE x
+        };
+        
+        (iv) SHOW (A̅)̅ = A̅ BY { 
+          SUFFICES A̅ ⊆ (A̅)̅ ∧ (A̅)̅ ⊆ A̅;
+          
+          SHOW A̅ ⊆ (A̅)̅ BY (iii);
+          
+          SHOW (A̅)̅ ⊆ A̅ BY {
+            LET x : Point;
+            ASSUME (A̅)̅(x);
+            LET U : OpenSet;
+            ASSUME U(x);
+            THEN ∃ (y : Point), U(y) ∧ A̅(y); 
+            LET y : Point;
+            ASSUME U(y) ∧ A̅(y);
+            LET V : OpenSet; 
+            ASSUME V(y);
+            THEN ∃ (z : Point), V(z) ∧ A(z);
+            LET z : Point;
+            ASSUME V(z) ∧ A(z);
+            HAVE U(z) BY OpenSetAxioms.(i);
+            SHOW A̅(x) BY {
+              USE z
+            }
+          }
+        }
+    }
+    
+    THEOREM OpenMapsPreserveOpenSets {
+      STATEMENT: ∀ (f : Point -> Point), OpenMap(f) <-> (∀ (U : OpenSet), Open(f⁻¹(U)))
+      PROOF:
+        LET f : Point -> Point;
+        SHOW OpenMap(f) -> (∀ (U : OpenSet), Open(f⁻¹(U))) BY {
+          ASSUME OpenMap(f);
+          LET U : OpenSet;
+          LET V = λ y. ∃ (x : Point), U(x) ∧ f(x) = y;
+          HAVE Open(V) BY ASSUMPTION;
+          SHOW Open(f⁻¹(U)) BY {
+            SUFFICES f⁻¹(U) = V;
+            LET x : Point;
+            x ∈ f⁻¹(U) <-> U(f(x))
+                        <-> ∃ (y : Point), U(y) ∧ f(y) = f(x) 
+                        <-> V(f(x))
+                        <-> x ∈ V
+          }
+        };
+        
+        SHOW (∀ (U : OpenSet), Open(f⁻¹(U))) -> OpenMap(f) BY {
+          ASSUME ∀ (U : OpenSet), Open(f⁻¹(U));
+          LET U : OpenSet;
+          LET V = λ y. ∃ (x : Point), U(x) ∧ f(x) = y;
+          SHOW Open(V) BY {
+            LET x : Point;
+            ASSUME V(x);
+            THEN ∃ (y : Point), U(y) ∧ f(y) = x;
+            LET y : Point;
+            ASSUME U(y) ∧ f(y) = x;
+            HAVE f⁻¹(U)(y) BY {
+              SHOW U(f(y))
+            };
+            THEN ∃ (W : OpenSet), ∀ (z : Point), W(z) -> f⁻¹(U)(z) ∧ W(y) BY ASSUMPTION; 
+            LET W : OpenSet;
+            ASSUME ∀ (z : Point), W(z) -> f⁻¹(U)(z) ∧ W(y);
+            SHOW ∃ (O : OpenSet), ∀ (z : Point), O(z) -> V(z) ∧ O(x) BY {
+              LET O = W;
+              LET z : Point;
+              ASSUME O(z);
+              THEN W(z);
+              THEN f⁻¹(U)(z) ∧ W(y);
+              THEN U(f(z)) ∧ W(y);
+              THEN V(f(z)) BY Definition(V);
+              SHOW V(z) ∧ O(x) BY {
+                SHOW V(z);
+                SHOW O(x) BY {
+                  SHOW W(x) BY {
+                    SHOW W(y) BY ASSUMPTION;
+                    SHOW f(y) = x BY ASSUMPTION
+                  }
+                }
+              }
+            }
+          }
+        }
+    }
+    
+    THEOREM ContinuousMapsPreserveOpenSets {
+      STATEMENT: ∀ (f : Point -> Point), Continuous(f) <-> (∀ (U : OpenSet), Open(f⁻¹(U)))
+      PROOF:
+        LET f : Point -> Point;
+        SHOW Continuous(f) -> (∀ (U : OpenSet), Open(f⁻¹(U))) BY {
+          ASSUME Continuous(f);
+          LET U : OpenSet;
+          HAVE Open(λ x. U(f(x))) BY ASSUMPTION;
+          SUFFICES f⁻¹(U) = λ x. U(f(x));
+          LET x : Point;
+          x ∈ f⁻¹(U) <-> U(f(x))
+        };
+        
+        SHOW (∀ (U : OpenSet), Open(f⁻¹(U))) -> Continuous(f) BY {
+          ASSUME ∀ (U : OpenSet), Open(f⁻¹(U));
+          LET U : OpenSet;  
+          SHOW Open(λ x. U(f(x))) BY ASSUMPTION
+        }
+    }
+  }
+}

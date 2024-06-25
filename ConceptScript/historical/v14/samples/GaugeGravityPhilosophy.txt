@@ -1,0 +1,88 @@
+CONCEPT GaugeGravityPhilosophy {
+  LANGUAGE {
+    type Theory = {
+      StateSpace: Space,
+      Quantities: Set(Quantity),
+      Dynamics: StateSpace -> StateSpace
+    }
+    
+    type Duality = {
+      T1: Theory,
+      T2: Theory,
+      StateMap: Bijection(T1.StateSpace, T2.StateSpace),
+      QuantityMap: Bijection(T1.Quantities, T2.Quantities)
+    } 
+      axiom CommuteDynamics(d: Duality):
+        d.StateMap(d.T1.Dynamics(s)) = d.T2.Dynamics(d.StateMap(s))
+      
+    type Emergence = {
+      Fine: Theory,
+      Coarse: Theory,
+      Approximation: Fine.StateSpace -> Coarse.StateSpace,
+      CoarseGraining: Fine.Quantities -> Coarse.Quantities,
+      Novel: Set(Coarse.Quantities),
+      Robust: Set(Fine.Quantities) -> Prop(Coarse.Quantities)    
+    }
+  }
+  
+  STRUCTURE {  
+    DualityDoesNotImplyEquivalence(T1, T2: Theory, d: Duality(T1, T2)):
+      IsomorphicStructure(T1, T2, d) ∧ ¬Equivalent(T1, T2)
+      if DisjointReferences(T1, T2)
+      
+    EmergenceIsAsymmetric(E: Emergence):
+      ¬Emergence(Coarse=E.Fine, Fine=E.Coarse)
+      
+    DualityPrecludesEmergence(T1, T2: Theory, d: Duality(T1, T2)):
+      ¬∃ E: Emergence. (E.Fine = T1) ∧ (E.Coarse = T2) 
+      
+    EmergenceAcrossDuality(E: Emergence):
+      d1: Duality(E.Fine, F1) and d2: Duality(F2, E.Coarse) 
+      s.t. Approximate(d1) ∨ Approximate(d2)
+       
+    EmergenceOnBothSides(E1, E2: Emergence):
+      d: Duality(E1.Coarse, E2.Coarse)
+      s.t. FundamentalTheory(E1.Fine, E2.Fine)
+      
+    StringTheoryUniversal(ST: StringTheory):
+      ∀ T: Theory. SubSystem(T, Universe(ST))         
+  }
+  
+  PROOFS {
+    AdSCFTDualityEmergence:
+      AdS: StringTheory, CFT: GaugeTheory
+      AdSCFTDuality(AdS, CFT)
+      E_CFT: Emergence(Fine=CFT', Coarse=CFT)
+      E_AdS: Emergence(Fine=AdS', Coarse=AdS) 
+      [SpacetimeAdS: Novel(E_AdS.Coarse.Quantities),  
+       GravityCFT: Novel(E_CFT.Coarse.Quantities)]
+         
+    deSitterCFTEmergence:
+      dS: StringTheory, CFT: GaugeTheory 
+      dSCFTDuality(dS, CFT)
+      E_CFT: Emergence(Fine=CFT', Coarse=CFT)
+      E_dS: Emergence(Fine=dS', Coarse=dS)
+      [GravityFlow: Correspond(CoarseGraining(E_CFT), TimeFlow(E_dS)),
+       TimeEmergent: Novel(E_dS.Coarse.Quantities)]     
+  }
+  
+  PHILOSOPHY {
+    StringTheoryUniverse ->
+      ∀ T1, T2: SubSystem(Universe). 
+        Duality(T1, T2) => Equivalent(T1, T2)
+    
+    GravityUnderdetermined(ST: StringTheory) <->
+      (GravityFundamental(ST) ∨ GravityEmergent(ST))
+      
+    GravityEmergent(AdSCFTDuality) ∧ SpacetimeNotEmergent(AdSCFTDuality)  
+      if EmergenceOnBothSides(AdSCFTDuality)
+      
+    SpacetimeEmergent(AdSCFTDuality) ∧ GravityEmergent(AdSCFTDuality)
+      if EmergenceAcrossDuality(AdSCFTDuality)
+        
+    Cosmology(dSCFTDuality) ->
+      [TimeEmergent(dSCFTDuality),
+       GravityEmergent(dSCFTDuality),
+       CosmologicalEvolution <~> RGFlow(CFT)]
+  }
+}

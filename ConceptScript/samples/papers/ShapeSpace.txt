@@ -1,0 +1,170 @@
+CONCEPT ShapeSpace {
+  PARAMETERS {
+    d : Nat -- Ambient dimension
+    𝕜 : Field -- Coefficient field
+  }
+
+  CONTEXT {
+    TYPES {
+      Shape := CS(ℝ^d)
+      DIR := 𝕊^(d-1)
+      Cover := {U_i ↪ M}
+      MPD := Multiset(Δ)
+      Δ := {(b, d) | b ≤ d}
+    }
+    
+    STRUCTURES {
+      STRUCTURE PHT {
+        FIELD Z_M ≔ {(x,v,t) ∈ M × DIR × ℝ | ⟨x, v⟩ ≤ t}
+        FIELD f_M : Z_M -> DIR × ℝ
+        FIELD PHT_M := R(f_M)_*𝕜_Z_M IN D^b(Shv(DIR × ℝ))
+        FIELD PHT^i_M := H^i(PHT_M) IN Shv(DIR × ℝ)
+        FIELD Dgm_M(i, v) -> MPD
+          WHERE ∃ p : ℝ -> MPD . Dgm_M(i, v) = p(v) AND p = Dgm(PHT^i_M|_{v}×ℝ)
+        AXIOM Naturality(f : M -> N) {
+          f^*(Z_N) ⊆ Z_M
+          f^*(PHT_N) ≃ PHT_M  
+        }
+      }
+      
+      STRUCTURE LS EXTENDS PHT {
+        FIELD ECT_M(v, t) := χ(f^(-1)_M(v, t))
+        FIELD BCT_M(v, t) := [β_i(f^(-1)_M(v, t))]_i
+        AXIOM ECT_BCT: ECT_M(v, t) = <BCT_M(v, t), 1>
+      }
+      
+      STRUCTURE Met {
+        FIELD d : Shape × Shape -> ℝ≥0
+        AXIOM ∀ M N. M ≃ N => d(M,N) = 0
+        AXIOM ∀ M N O. d(M,O) ≤ d(M,N) + d(N,O)
+      }
+    }
+    
+    ASSERTIONS {
+      AXIOM isManifold(M : Shape) => LS(M)
+      AXIOM Descent(M : Shape, 𝓤 : Cover) 
+        PHT_M ≃ holim[ ∏ PHT_U -> ∏ PHT_{U ∩ V} ⇉ ∏ PHT_{U ∩ V ∩ W} ⋯ ] 
+                         U         U,V             U,V,W            
+    }
+    
+    NOTATION {
+      ⟨_, _⟩ := InnerProduct
+      Shv := Shv(DIR × ℝ, 𝕜)
+      D^b := D^b(Shv)
+      "_|_A" := Restrict(_, A)
+      ≃ := WeakEquivalence  
+      ∫ := Integral
+      χ := EulerCharacteristic
+      β_i := BettiNumber(_, i)
+      R := DerivedDirectImage
+      H^i := CohomologyFunctor(_, i)
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE IntervalDecomp(M : Shape) {
+      Dgm_M(i, v) = ∐_{I ∈ π₀(BCT_M(v, ?))} GenDgm(β_i(M_I))
+        WHERE M_I := Sublevel(M, ⟨v, ?⟩, I)
+    }
+    
+    SIMPLIFY PartialI(i, v, t : ℝ | d(v, v') < ε AND |t-t'| < ε) -> ℝ≥0 {
+      |β_i(f^(-1)_M(v, t)) - β_i(f^(-1)_M(v', t'))| <= βᵀ_i(f^(-1)_M(v×[t-ε,t+ε])) 
+    }
+    
+    REWRITE InterpolatedPHT(M, i, v, t, ε) -> D^b {
+      LET F := Fun(p ↦ Σ_{|v'-v|<ε} (Res(PHT^i_M, v' × {p}) -> 𝕜), {t-ε≤p≤t+ε})
+      IN RΓ_c(F(?) -> 𝕜)
+    }
+  }
+  
+  PROOFS {
+    THEOREM Stability(𝓓 : Met) ∀ M N . dI(PHT_M, PHT_N) ≤ 𝓓(M, N) {
+      dI(PHT_M, PHT_N) 
+        ≤ inf {ε | ∃ (f : M ≃_ε N) . PHT_f : PHT_M =[ε]= PHT_N} -- Interpolation
+        ≤ inf {ε | ∃ (f : M ≃_ε N)} -- Stability of persistent homology
+        = 𝓓(M, N) -- By Met
+      QED
+    }
+    
+    THEOREM Approx ∀ (M : Shape, τ : ℝ>0, ε δ : ℝ>0)
+      ε < τ/4 ∧ Prob_{X~𝒰(M)} [Xᵉ ⊆ M ⊆ X^{√(2)ε} | |X| = O((1/ε)^d)] > 1-δ
+      => ∃ K. Prob[dI(PHT_M, PHT_K) ≤ Cε] > 1-δ {
+      GIVEN M : Shape, τ : ℝ>0, ε δ : ℝ>0 
+        WHERE ε < τ/4 ∧ Prob_{X~𝒰(M)} [Xᵉ ⊆ M ⊆ X^{√(2)ε} | |X| = O((1/ε)^d)] > 1-δ
+
+      X ≔ SAMPLE_(x ∈ M) |X| = O((1/ε)^d) 
+      LET U_x ≔ Ball(x, ε) ∀ x ∈ X
+      LET K ≔ NerveComplex({U_x}_x)
+
+      HAVE M ≃ ⋃ U_x w.p. > 1-δ -- Cech approximation 
+      HAVE ⋃ U_x ≃ K -- Nerve theorem
+      HENCE M ≃ K w.p. > 1-δ
+
+      Mᵉ ⊆ M ⊆ M^{√(2)ε} => dI(PHT_M, PHT_K) ≤ √(2)ε w.p. > 1-δ -- Sandwich theorem
+      TAKE C := √2  
+      QED
+    }
+
+    THEOREM PHTDeterminesShape ∀ M N : Shape . PHT_M ≃ PHT_N => M ≃ N {
+      PHT_M ≃ PHT_N 
+      => ∀ i. PHT^i_M ≃ PHT^i_N -- By definition
+      => BCT_M(v,t) = BCT_N(v,t) ∀ v t -- By definition
+      => ECT_M(v,t) = ECT_N(v,t) ∀ v t -- By LS.ECT_BCT
+      => M ≃ N -- By CurrySchapira
+      QED
+    }
+    
+    THEOREM PHTDescentTheorem ∀ (M : Shape, 𝓤 : Cover | FiniteCover(𝓤, M)) . 
+      PHT_M ≃ holim[ ∏ PHT_U -> ∏ PHT_{U ∩ V} ⇉ ∏ PHT_{U ∩ V ∩ W} ⋯ ] {
+      
+      SUFFICES_TO_SHOW PHT_M -> holim[⋯] is a quasi-isomorphism
+      
+      DEFINE 𝓖_• := GodementResolution(𝕜_Z_M)
+      
+      HAVE R(f_M)_*(𝓖_•) is a quasi-isomorphism:
+        PHT_M ≃ R(f_M)_* 𝕜_Z_M -- By definition
+              ≃ R(f_M)_* holim(𝓖_•) -- By 𝓖_• is a resolution 
+              ≃ holim R(f_M)_*(𝓖_•) -- By R ⊣ holim
+              ≃ holim[⋯] -- By Cech
+              
+      HAVE R(f_M)_*(𝓖_•) is a q.i. on stalks ∀ v t:
+        H^*(PHT_M_(v,t)) ≃ H^*(f^(-1)_M(v, t)) -- By definition 
+                         ≃ H^*(holim(𝓖_•)_(v,t)) -- By 𝓖_• is a resolution
+                         ≃ H^*(holim[⋯]_(v,t)) -- By Cech
+                         
+      QED
+    }
+  }
+  
+  EXAMPLES {
+    EXAMPLE Sphere(d, n) WHERE S^d_n ≔ {x ∈ ℝ^(d+1) | ‖x‖ = 1 ∧ ∀i>n. x_i=0} {
+      Dgm(S^d_n) = [
+        [],
+        [(0,∞)],
+        [],
+        ...,
+        [(0,∞)] IF d=n, [] o.w.
+      ]
+    }
+    
+    EXAMPLE KleinBottle {
+      Z := Z_𝕂² = {((x,y,z,w), (v,t)) | x^2v_1 + y^2(v_2 - 2zv_1) + zw = t} ⊆ ℝ⁴ × (𝕊² × ℝ)
+      Dgm(𝕂²) = [
+        [],
+        [(0,∞), (0,∞)],
+        [],
+        [(0,∞)]  
+      ]
+    }
+    
+    EXAMPLE Torus {
+      Z := Z_𝕋² = {((θ,φ), (v,t)) | (R+r·cosθ)·cosφ·v_1 + (R+r·cosθ)·sin φ·v_2 + r·sinθ·v_3 = t}
+      Dgm(𝕋²) = [
+        [],  
+        [(0,∞), (0,∞)],
+        [(0,∞)],
+        []
+      ]
+    }
+  }
+}

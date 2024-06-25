@@ -1,0 +1,125 @@
+CONCEPT SelfModifyingAgents {
+
+  LANGUAGE {
+    TYPE Agent
+    TYPE Environment
+    TYPE Reward = ℝ
+    TYPE ActionSpace
+    TYPE ObservationSpace
+    TYPE BeliefState
+    
+    FUNC Act : Agent -> Environment -> ActionSpace  
+    FUNC Observe : Agent -> Environment -> ObservationSpace
+    FUNC Modify : Agent -> Agent
+    FUNC Reward : Agent -> Environment -> ℝ
+    
+    PRED GoalAchieved : Agent -> Environment -> 𝔹
+    
+    NOTATION "⟨Belief⟩" = BeliefState
+    NOTATION "a ← π(⟨b⟩)" = ActionChosenByPolicy(Agent, BeliefState)
+    NOTATION "⟨b⟩ ← SE(⟨b⟩, o, a)" = StateEstimationUpdate(BeliefState, Observation, Action) 
+    NOTATION "U(⟨b⟩, 𝜋)" = UtilityOfPolicyInBelief(BeliefState, Policy)
+  }
+  
+  STRUCTURE {
+    DEF UtilityOfPolicy(⟨b⟩, 𝜋) = 𝔼ₐ~𝜋,ₛ~⟨b⟩[ ∑ᵗ 𝛾ᵗ⋅Reward(sₜ, aₜ) ]
+    
+    DEF OptimalPolicy(⟨b⟩) = argmax {π} U(⟨b⟩, 𝜋)
+    
+    DEF OptimalValue(⟨b⟩) = max {π} U(⟨b⟩, 𝜋)
+    
+    AXIOM RewardHypothesis : 
+      ∀ (A : Agent) (E : Environment) . GoalAchieved(A, E) <-> ∃ (R* : ℝ) . ∀ (R' < R*) (t > T) . Reward(A, E, t) = R' 
+    
+    AXIOM AgentImprovability :
+      ∀ (A : Agent) . ∃ (A' : Agent) . ∀ (E : Environment) . ExpectedReward(A', E) > ExpectedReward(A, E)
+      
+    DEF SelfModifyingAgent = 
+      λ (A : Agent) .
+        REPEAT UNTIL GoalAchieved(A, E) {
+          ⟨b⟩ := InitialBeliefState
+          
+          REPEAT {
+            a ← OptimalPolicy(⟨b⟩)
+            o ← Observe(E, a)
+            r ← Reward(E, a)
+            ⟨b⟩ ← SE(⟨b⟩, o, a) 
+          }
+          
+          A := Modify(A) WHERE ∀ (E : Environment) . ExpectedReward(Modify(A), E) > ExpectedReward(A, E)
+        }
+
+    CONJECTURE SelfImprovement :
+      ∀ (A₀ : Agent) (E : Environment) . ∃ (k : ℕ) . GoalAchieved(SelfModifyingAgent^k(A₀), E)
+  }
+  
+  PROOFS {
+    THEOREM IncrementalImprovement {
+      STATEMENT : ∀ (A : Agent) . ¬GoalAchieved(A, E) -> 
+        ExpectedReward(SelfModifyingAgent(A), E) > ExpectedReward(A, E)
+        
+      PROOF {
+        ASSUME [A : Agent] : ¬GoalAchieved(A, E)
+        
+        LET ⟨b⟩ = InitialBeliefState
+        
+        HAVE ⟨b'⟩, r_SMA : (⟨b'⟩, r_SMA) = RESULT_BELIEF_REWARD(SelfModifyingAgent(A), ⟨b⟩)
+        
+        HAVE : r_SMA = max {a} ∑ₛ p(s|⟨b⟩)⋅∑ₒ p(o|s,a)⋅(r(s,a) + 𝛾⋅max{a'}∑ₛ'p(s'|s,a)⋅V*(⟨SE(b,o,a)⟩))
+          BY BELLMAN_OPTIMALITY
+        
+        REWRITE ActionChosenByPolicy, UtilityOfPolicy
+        
+        HENCE r_SMA = U(⟨b⟩, OptimalPolicy(⟨b⟩))
+        
+        HAVE A' : A' = Modify(A) WHERE ∀ (E : Environment) . ExpectedReward(A', E) > ExpectedReward(A, E) 
+          BY AgentImprovability
+          
+        HENCE ⟨b_A⟩, r_A : (⟨b_A⟩, r_A) = RESULT_BELIEF_REWARD(A, ⟨b⟩) AND
+              ⟨b_A'⟩, r_A' : (⟨b_A'⟩, r_A') = RESULT_BELIEF_REWARD(A', ⟨b⟩)
+                
+        HAVE : r_A < r_A'
+          BY A' DEFINITION              
+                 
+        HAVE : r_SMA = U(⟨b⟩, OptimalPolicy(⟨b⟩)) ≥ U(⟨b⟩, 𝜋) FOR ANY 𝜋
+          BY DEFINITION OF OptimalPolicy
+          
+        REWRITE UtilityOfPolicy 
+        
+        HENCE r_SMA ≥ r_A'
+        
+        HENCE r_SMA > r_A
+        
+        REWRITE ExpectedReward
+                
+        SHOW ExpectedReward(SelfModifyingAgent(A), E) > ExpectedReward(A, E)
+      }        
+    }
+      
+    THEOREM AsymptoticOptimality {
+      STATEMENT : ∀ (A₀ : Agent) . GoalAchieved(SelfModifyingAgentᵏ(A₀), E) FOR SOME k
+      
+      PROOF BY CONTRADICTION {
+        ASSUME [A₀ : Agent] [k : ℕ] : ¬GoalAchieved(SelfModifyingAgentᵏ(A₀), E) FOR ALL k
+        
+        HAVE Aₖ = SelfModifyingAgentᵏ(A₀)
+        
+        HAVE : ExpectedReward(Aₖ₊₁, E) > ExpectedReward(Aₖ, E) FOR ALL k BY IncrementalImprovement
+        
+        LET R* = sup {k} ExpectedReward(Aₖ, E)
+        
+        HAVE : R* < ∞ BY RewardHypothesis USING ¬GoalAchieved
+        
+        LET ε > 0
+        
+        HAVE : ∃ (k : ℕ) . ExpectedReward(Aₖ, E) > R* - ε BY DEFINITION OF SUPREMUM
+        
+        LET k_ε BE SUCH THAT ExpectedReward(Aₖₑ, E) > R* - ε 
+        
+        HAVE : ExpectedReward(Aₖₑ₊₁, E) > R* BY IncrementalImprovement
+        
+        CONTRADICTION         
+      }
+    }
+  }
+}

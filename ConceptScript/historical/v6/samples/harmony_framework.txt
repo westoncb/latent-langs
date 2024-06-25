@@ -1,0 +1,99 @@
+// Harmony Framework Concept
+
+Harmony(
+    Pitches:_,
+    Intervals:_,
+    Chords:_,
+    Scales:_,
+    Progressions:_,
+    Modulations:_,
+    Cadences:_,
+    VoiceLeading:_
+) :: {
+    DEF[
+        ∈: In,
+        ∉: NotIn,
+        ⊆: Subset,
+        ∪: Union,
+        ∩: Intersection,
+        ⨿: CoProduct,
+        ×: Product,
+        ⊷: ProgressiveAbstraction,
+        ⋑: CrossModalMapping
+    ]
+
+    Pitch(Frequency:_, Octave:_) :: {
+        [Frequency ∈ Pitches]
+        [Octave ∈ PositiveIntegers]
+    }
+
+    Interval(PitchA:Pitch, PitchB:Pitch, Quality:_, Size:_) :: {
+        [Quality ∈ (Major, Minor, Perfect, Augmented, Diminished)]
+        [Size ∈ (Unison, Second, Third, Fourth, Fifth, Sixth, Seventh, Octave)]
+    }
+
+    Chord(Root:Pitch, Intervals:Interval{*}, Quality:_, Inversion:_) :: {
+        [Quality ∈ (Major, Minor, Diminished, Augmented, Dominant, HalfDiminished)]
+        [Inversion ∈ (RootPosition, FirstInversion, SecondInversion)]
+    }
+
+    Scale(Tonic:Pitch, Intervals:Interval{*}, Mode:_) :: {
+        [Mode ∈ (Ionian, Dorian, Phrygian, Lydian, Mixolydian, Aeolian, Locrian)]
+    }
+
+    Progression(Chords:Chord{*}, Key:Scale) :: {
+        [⊷ FunctionalHarmony]
+        [∀(c ∈ Chords) ∃(p ∈ Key.Pitches) [c.Root = p]]
+    }
+
+    Modulation(SourceKey:Scale, TargetKey:Scale, Pivot:Chord) :: {
+        [Pivot ∈ SourceKey.Chords ∩ TargetKey.Chords]
+    }
+
+    Cadence(Chords:Chord{*}, Type:_) :: {
+        [Type ∈ (Authentic, Plagal, Deceptive, HalfCadence)]
+    }
+
+    VoiceLeading(SourceChord:Chord, TargetChord:Chord, MotionType:_) :: {
+        [MotionType ∈ (Parallel, Similar, Contrary, Oblique)]
+        [⋑ VoiceLeadingRules]
+    }
+}
+
+// Specific Harmony Concept
+
+JazzHarmony := Harmony(
+    Pitches:ChromaticScale,
+    Intervals:DiatonicIntervals ∪ ChromaticIntervals,
+    Chords:TriadsWithExtensions ∪ Alterations ∪ Substitutions,
+    Scales:MajorModes ∪ MelodicMinorModes ∪ HarmonicMinorModes ∪ Exotics,
+    Progressions:ii-V-I ∪ TurnaroundProgressions,
+    Modulations:SecondaryDominants ∪ ModalInterchange,
+    Cadences:IntroTurnaround ∪ ExtroTurnaround,
+    VoiceLeading:JazzVoicings ∪ VoiceLeadingTechniques
+)
+
+// Example usage
+
+[CMajor7 ⨿ Am7 ⨿ Dm7 ⨿ G7 |>
+    JazzHarmony(
+        Key:CMajor,
+        Progression:[
+            Chord(Root:C, Quality:Major7),
+            Chord(Root:A, Quality:Minor7),
+            Chord(Root:D, Quality:Minor7),
+            Chord(Root:G, Quality:Dominant7)
+        ],
+        Modulation:[
+            SecondaryDominant(Target:Dm7, Pivot:A7)
+        ],
+        Cadence:[
+            IntroTurnaround(Chords:[Dm7, G7]),
+            ExtroTurnaround(Chords:[Fm7, Bb7, Em7, A7])
+        ],
+        VoiceLeading:[
+            DropVoicings,
+            UpperStructureTriads
+        ]
+    ) $ JazzProgression{Style:BeBop, Mood:Sophisticated}
+]

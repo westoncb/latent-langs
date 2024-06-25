@@ -1,0 +1,67 @@
+CONCEPT DiscreteSpatiotemporalLattice {
+  STRUCTURE {
+    [SpacetimeLattice := Regular lattice structure underlying spacetime]
+    [LatticeSpacing := Fundamental length scale of the spacetime lattice]
+    [LatticeSite := Point in the spacetime lattice]
+    [LatticeField(x) := Field value at lattice site x]
+    [LatticeAction[Φ] := Action functional on the lattice field configuration Φ]
+    [ContinuumLimit := Limit as LatticeSpacing → 0]
+    [RegularizedTheory := Quantum field theory defined on the spacetime lattice]
+    [FiniteResults := Observables computed in the regularized theory are finite]
+    [ContinuumTheory := Continuum limit of the regularized theory]
+  }
+
+  PROOFS {
+    tactic discretize_action(S) :
+      let Φ(x) := field in the continuum action S
+      let Φ_L(x) := LatticeField(x) approximating Φ(x) on the lattice
+      let S_L := S expressed in terms of Φ_L and lattice derivatives
+      have LatticeAction[Φ_L] = S_L by definition of lattice action
+    
+    tactic compute_lattice_observables(O) :
+      let ⟨O⟩_L := expectation value of observable O in the regularized theory
+      have ⟨O⟩_L = ∫ 𝒟Φ_L O[Φ_L] e^{i S_L[Φ_L]} / ∫ 𝒟Φ_L e^{i S_L[Φ_L]} by path integral on the lattice
+      conclude ⟨O⟩_L is finite by finiteness of the lattice path integral
+
+    tactic take_continuum_limit(O) :
+      let ⟨O⟩_L := expectation value of observable O in the regularized theory
+      let ⟨O⟩ := lim_{LatticeSpacing → 0} ⟨O⟩_L
+      have ContinuumTheory = lim_{LatticeSpacing → 0} RegularizedTheory by definition of continuum limit
+      conclude ⟨O⟩ = expectation value of O in the continuum theory by definition of continuum limit
+    
+    theorem finite_observables :
+      ∀O := observable in the regularized theory,
+        ⟨O⟩_L is finite
+    {
+      assume O := observable in the regularized theory by hypothesis
+      compute_lattice_observables(O);
+    }
+
+    theorem continuum_limit_exists :
+      ∀O := observable,
+        ∃⟨O⟩ := lim_{LatticeSpacing → 0} ⟨O⟩_L,
+          ⟨O⟩ = expectation value of O in the continuum theory
+    {
+      assume O := observable by hypothesis
+      let ⟨O⟩_L := expectation value of O in the regularized theory
+      take_continuum_limit(O);
+    }
+  }
+
+  LANGUAGE {
+    type SpacetimeLattice
+    type LatticeSpacing
+    type LatticeSite
+    type LatticeField(x : LatticeSite)
+    type LatticeAction[Φ : LatticeField]
+    type ContinuumLimit
+    type RegularizedTheory
+    type FiniteResults
+    type ContinuumTheory
+
+    func "∫" "𝒟" Φ "_" L (f : Function, Φ_L : LatticeField) : ℝ // Lattice path integral
+    func "lim_" "{" "_" "→" "_" "}" (x : Variable, x0 : Value) : Limit // Continuum limit
+
+    pred "→" (x : LatticeSpacing, y : ℝ) // Limit relation for lattice spacing
+  }
+}

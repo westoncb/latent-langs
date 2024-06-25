@@ -1,0 +1,86 @@
+CONCEPT UniversalInduction {
+
+  LANGUAGE {
+     type Sequence
+     type Program  
+     
+     pred Computable(p: Program)
+     pred Consistent(p: Program, s: Sequence)
+
+     op + : (Sequence, Sequence) -> Sequence
+     op ++ : (Program, Program) -> Program  
+
+     func Length(s: Sequence) -> Nat
+     func Eval(p: Program, i: Nat) -> Sequence
+     func Complexity(p: Program) -> Nat
+  }
+    
+  DEFINITION {
+     Let 𝒮 be the set of all finite binary sequences
+     Let ℳ be the set of all computable probability measures on 𝒮
+
+     [Universal prior M(s) := ∑_{p: Computable(p) ∧ Consistent(p, s)} 2^{-Complexity(p)}]
+     [Predictor π(s) := argmax_{a ∈ {0,1}} M(s + [a])]
+     [Env(μ) := {ν ∈ ℳ : ∀ s. KL(ν(⋅|s) || μ(⋅|s)) ≤ f(Length(s))}]
+     [Regret_n(π, μ) := 𝔼_{s ∼ μ} [∑_{t=1}^n 1{π(s_{<t}) ≠ s_t}] - min_{ρ} 𝔼_{s ∼ μ} [∑_{t=1}^n 1{ρ(s_{<t}) ≠ s_t}]]
+     [f(n) := O(log n)]
+  }
+
+  PROOFS {
+     theorem Convergence: 
+        ∀ μ ∈ ℳ. π → μ weakly as n → ∞
+     proof {
+       Assume μ ∈ ℳ. 
+       Let {s_i} be μ-random sequence.
+
+       Have: ∀ s. M(s) ≥ c_μ⋅μ(s), for some constant c_μ.  
+         By lower-semicomputability of M and dominance of μ.
+
+       Have: M(s) → μ(s) for μ-almost all s. 
+         By universality of M and Blackwell-Dubins theorem.
+
+       Have: π(s_{<t}) = argmax_{a} μ(s_{<t} + [a]) eventually. 
+         Since π consistent with M and M → μ.
+
+       Therefore π → μ weakly by definition.
+     }
+
+     theorem Optimality:
+        ∀ μ ∈ ℳ. Regret_n(π, μ) ≤ O(√n⋅KL(μ||M) + f(n))
+
+     proof {  
+       Assume μ ∈ ℳ.
+       Let {s_i} be μ-random sequence.
+
+       Have: μ ∈ Env(M). 
+         Since KL(μ(⋅|s) || M(⋅|s)) ≤ -log c_μ + f(Length(s)).
+
+       Have: Regret_n(π, ν) ≤ 2√n⋅KL(ν||M) + 2f(n), ∀ ν ∈ Env(M). 
+         By generic regret bound for KL-constrained domains.
+
+       Therefore Regret_n(π, μ) ≤ 2√n⋅KL(μ||M) + 2f(n).
+     }
+
+     theorem Universality:
+       ∀ ν ∈ ℳ. ∃ π_ν. ∀ μ ∈ ℳ. Regret_n(π_ν, μ) ≤ c_ν⋅Regret_n(π, μ) 
+
+     proof {
+       Let ν ∈ ℳ be given computable environment.
+
+       Let π_ν be ν-Bayes optimal policy:
+         π_ν(s) := argmax_{a} ν(s + [a]).
+
+       Have: Regret_n(π_ν, μ) ≤ O(√n⋅KL(μ||ν)), ∀ μ ∈ ℳ. 
+         By Bayes optimality of π_ν wrt ν.
+
+       Have: KL(μ||ν) ≤ KL(μ||M) + KL(M||ν).  
+         By chain rule of KL divergence.
+
+       Have: KL(M||ν) ≤ -log c_ν. 
+         By universality of M and lower-boundedness of ν.
+
+       Therefore ∃ c_ν. ∀ μ ∈ ℳ. Regret_n(π_ν, μ) ≤ c_ν⋅Regret_n(π, μ).
+     }
+  }
+
+}

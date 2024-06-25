@@ -1,0 +1,242 @@
+CONCEPT BlackHole {
+  PARAMETERS {
+    M : Mass -- The mass of the black hole
+    a : Length -- The angular momentum per unit mass (Kerr parameter)
+    Q : Charge -- The electric charge of the black hole
+  }
+
+  CONTEXT {
+    FIELDS {
+      Spacetime := (Event, Metric, CurvatureTensor, StressTensor)
+      
+      Event := (t : Time, r : Length, θ : Angle, φ : Angle)
+      
+      Metric := TENSOR(2, 0, Real) 
+        -- The metric tensor g_μν
+        -- Determines distances and angles in spacetime
+        
+      CurvatureTensor := (
+        Riemann : TENSOR(1, 3, Real),
+        Ricci : TENSOR(0, 2, Real),
+        Scalar : Real  
+      )
+        -- The Riemann curvature tensor R^μ_νρσ 
+        -- Measures the deviation of spacetime from flatness
+        -- The Ricci tensor R_μν and scalar R are contractions of Riemann
+      
+      StressTensor := TENSOR(0, 2, Real)
+        -- The stress-energy tensor T_μν 
+        -- Describes the density and flux of energy and momentum
+        
+      QuantumField(spin : HalfInteger) := INDUCTIVE {
+        CASE Scalar : Complex  -- Spin 0
+        CASE Spinor : TENSOR(1, 0, Complex)  -- Spin 1/2
+        CASE Vector : TENSOR(1, 1, Complex)  -- Spin 1
+        CASE Tensor : TENSOR(spin, spin, Complex)  -- Higher spins
+      }
+        -- Quantum fields of various spins
+        -- Scalar (Higgs), Spinor (Fermions), Vector (Gauge bosons)
+        
+      CONSTANTS {
+        c : Velocity := 299792458 m/s -- Speed of light
+        G : Real := 6.67430e-11 m^3/(kg s^2) -- Gravitational constant
+        h : Real := 1.054571817e-34 J s -- Reduced Planck's constant
+        𝜅 : Real := 8π G / c^4 -- Einstein's gravitational constant
+      }
+    }
+    
+    ASSERTIONS {
+      EinsteinEquation {
+        Ricci(g) - (1/2) * Scalar(g) * g = 𝜅 * T(matter, g)  
+      } 
+        -- Einstein's field equation relating curvature to matter
+        -- Fully describes the dynamics of spacetime
+      
+      KerrMetric(M, a) -> Metric {
+        -- The metric tensor for a rotating black hole
+        -- Reduces to Schwarzschild when a = 0
+        ds^2 = -(1 - r_s r / Σ) dt^2 
+               + Σ / Δ dr^2
+               + Σ dθ^2
+               + (r^2 + a^2 + r_s r a^2 sin(θ)^2 / Σ) sin(θ)^2 dφ^2
+               - 2 r_s r a sin(θ)^2 / Σ dt dφ
+        WHERE 
+          r_s = 2 G M / c^2     -- Schwarzschild radius
+          Σ = r^2 + a^2 cos(θ)^2  
+          Δ = r^2 - r_s r + a^2
+      }
+      
+      ReissnerNordstromMetric(M, Q) -> Metric {
+        -- The metric for a charged, non-rotating black hole
+        ds^2 = -(1 - r_s/r + r_Q^2/r^2) dt^2
+               + (1 - r_s/r + r_Q^2/r^2)^(-1) dr^2
+               + r^2 (dθ^2 + sin(θ)^2 dφ^2)
+        WHERE
+          r_s = 2 G M / c^2     -- Schwarzschild radius  
+          r_Q = sqrt(G) Q / c^2 -- Charge radius
+      }
+      
+      KerrNewmanMetric(M, a, Q) -> Metric {
+        -- The most general black hole metric
+        -- Describes a charged, rotating black hole
+        -- Reduces to Kerr when Q = 0
+        -- Reduces to Reissner-Nordstrom when a = 0
+        -- Highly complex expression omitted for brevity
+      }
+      
+      HawkingTemperature(M) -> Temperature {
+        -- The temperature of Hawking radiation from a black hole
+        T_H = h c^3 / (8π G M k)
+        WHERE
+          k : Real := 1.380649e-23 J/K -- Boltzmann constant  
+      }
+      
+      HawkingEntropy(A) -> Entropy {
+        -- The Bekenstein-Hawking entropy of a black hole 
+        S_BH = A c^3 / (4 h G)
+        WHERE 
+          A : Area := SurfaceArea(EventHorizon(M, a, Q))
+      }
+      
+      PlanckStarModel {
+        -- A model of what happens at the center of a black hole
+        -- Replaces the singularity with a Planck-scale core
+        
+        AXIOM CoreEntropy {
+          S_core ~ k A_Planck / l_Planck^2
+        }
+        
+        AXIOM CorePressure {
+          P_core ~ h c / l_Planck^4  
+        }
+        
+        WHERE
+          l_Planck : Length := sqrt(h G / c^3) -- Planck length
+          A_Planck : Area := 4π l_Planck^2 -- Planck area
+      }
+      
+      HawkingRadiationSpectrum(T_H) -> BlackbodySpectrum {
+        -- The spectrum of Hawking radiation
+        -- A nearly thermal blackbody spectrum with temperature T_H
+        u(ν, T) = 2 h ν^3 / (c^2 (exp(h ν / (k T)) - 1))
+        WHERE
+          u : SpectralRadianceDensity
+          ν : Frequency
+      }
+    }
+    
+    DOMAINS {
+      Time := Real
+      Length := Real
+      Angle := Real
+      Mass := Real
+      Charge := Real
+      Temperature := Real
+      Entropy := Real
+      Area := Real
+      Frequency := Real
+      SpectralRadianceDensity := Real
+    }
+    
+    THEOREMS {
+      THEOREM HawkingEntropyTheorem {
+        ∀ M, A . HawkingEntropy(A) = A / (4 l_Planck^2)
+      }  
+        -- The Bekenstein-Hawking entropy in Planck units
+        -- Suggests a deep connection between gravity, thermodynamics, and quantum mechanics
+        
+      THEOREM NoHairTheorem {  
+        BlackHole(M, a, Q) = BlackHole(M', a', Q') ⟺ M = M' ∧ a = a' ∧ Q = Q'
+      }
+        -- Black holes are fully characterized by their mass, spin, and charge
+        -- Implies that information is lost when objects fall into a black hole
+        
+      THEOREM WeakCosmicCensorshipTheorem {
+        ∀ M a Q . Δ(r=0) = a^2 + Q^2 - M^2 ≤ 0
+      }  
+        -- The singularity at r=0 is hidden behind an event horizon
+        -- Forbids the existence of "naked singularities"
+        -- Remains unproven in general
+    }
+  }
+
+  PROOFS {
+    PROOF HawkingEntropyTheorem {
+      ASSUME A : Area
+      HAVE S = A c^3 / (4 h G)
+           = A c^3 / (4 h G) * (l_Planck^2 c^3 / (l_Planck^2 c^3))  
+           = A / (4 l_Planck^2)
+      QED
+    }
+    
+    PROOF NoHairTheorem {
+      ASSUME M a Q : Real, M' a' Q' : Real
+      
+      SUPPOSE BlackHole(M, a, Q) = BlackHole(M', a', Q')
+      
+      SUFFICES_TO_SHOW M = M' AND a = a' AND Q = Q'
+      
+      HAVE KerrNewmanMetric(M, a, Q) = KerrNewmanMetric(M', a', Q')
+        BECAUSE BlackHole(M, a, Q) = BlackHole(M', a', Q') 
+      
+      CONSIDER KerrNewmanMetric(M, a, Q)
+      
+      ds^2 UNIQUELY_DETERMINES M, a, Q
+        BY InvertingKerrNewmanMetric
+      
+      M' a' Q' SATISFY ds^2
+        BECAUSE KerrNewmanMetric(M, a, Q) = KerrNewmanMetric(M', a', Q')
+      
+      THEREFORE M' = M AND a' = a AND Q' = Q
+        BY UniquenessSolution
+      QED  
+    }
+    
+    PROOF WeakCosmicCensorshipTheorem {
+      ASSUME M a Q : Real
+      
+      SUFFICES_TO_SHOW Δ(r=0) ≤ 0 WHERE Δ(r) = r^2 - 2 M r + a^2 + Q^2
+      
+      Δ = r^2 - 2 M r + a^2 + Q^2
+      
+      Δ(r=0) = a^2 + Q^2 - 0 + 0
+              = a^2 + Q^2
+              ≥ 0
+              
+      CASE a^2 + Q^2 = M^2
+        Δ(r=0) = M^2 - M^2 = 0
+        
+      CASE a^2 + Q^2 < M^2  
+        Δ(r=0) = a^2 + Q^2 - M^2 < 0
+        
+      THEREFORE Δ(r=0) ≤ 0 
+      
+      QED
+    }
+  }
+  
+  CONJECTURES {  
+    CONJECTURE Firewall {
+      -- The Hawking radiation from an old black hole is in a pure state
+      -- This contradicts the smoothness of the event horizon
+      -- Suggests that infalling observers encounter a "firewall" of high-energy quanta
+    }  
+    
+    CONJECTURE BlackHoleComplementarity {
+      -- The infalling and external descriptions of a black hole are complementary
+      -- No single observer can see both the infalling and Hawking radiation states
+      -- Aims to resolve the black hole information paradox
+    }
+    
+    CONJECTURE FuzzBall {  
+      -- Black holes are fuzzy balls of strings
+      -- The horizon is replaced by a fuzzy boundary
+      -- Different microstates correspond to different fuzzy configurations
+    }
+    
+    CONJECTURE MonogamyEntanglement {
+      -- The strong entanglement between Hawking pairs enforces monogamy 
+      -- This prevents the duplication of information and resolves the paradox
+    }
+  }
+}

@@ -1,0 +1,114 @@
+CONCEPT OptiGapSensor {
+  LANGUAGE {
+    TYPE LightPipe <: Material
+    TYPE AirGap <: Junction(LightPipe, LightPipe)
+    TYPE BendAngle <: Angle
+    TYPE BendPosition <: Position
+    TYPE OpticalSignal <: Signal
+    TYPE Attenuation <: Ratio
+    TYPE Encoding <: Mapping(BendPosition -> BitString)
+    TYPE Classifier <: Model
+
+    FUNC Transmit(s : OpticalSignal, p : LightPipe) -> OpticalSignal
+    FUNC Attenuate(s : OpticalSignal, g : AirGap, a : BendAngle) -> OpticalSignal
+    FUNC Merge(s1 s2 : OpticalSignal) -> OpticalSignal
+    FUNC Decode(s : OpticalSignal, c : Classifier) -> BendPosition
+    FUNC Train(c : Classifier, data : Dataset(OpticalSignal * BendPosition)) -> Classifier
+
+    AXIOM SignalAttenuation {
+      ∀ (s : OpticalSignal) (g : AirGap) (a : BendAngle) .
+        Intensity(Attenuate(s, g, a)) ≤ Intensity(s) ∧ 
+        Intensity(Attenuate(s, g, a)) ∝ Angle(a)
+    }
+  }
+
+  STRUCTURE SensorSystem {
+    pipes : List[LightPipe]
+    gaps : List[List[AirGap]]  -- gaps[i][j] is jth gap on ith pipe
+    encoding : Encoding
+    classifier : Classifier
+
+    INVARIANT ValidEncoding {
+      ∀ i j . IsInverseGrayCode(Map(encoding, (p) -> encoding(p)[i])) ∧
+              encoding(BendPosition(j))[i] = 1 <=> HasGapAt(pipes[i], j)
+    }
+
+    INVARIANT TrainedClassifier {
+      ∀ (p : BendPosition) (s : List[OpticalSignal]) .
+        s = Merge(Map(pipes, (pipe, i) -> Fold((s, g) -> Attenuate(s, g, BendAngle(p)), 
+                                               Transmit(SourceSignal, pipe), 
+                                               gaps[i]))) =>
+        Decode(s, classifier) = p        
+    }
+  }
+
+  PROOFS {
+    THEOREM BendLocalization {
+      STATEMENT:
+        ∀ (sys : SensorSystem) (p : BendPosition) (s : List[OpticalSignal]) .
+          s = Merge(Map(sys.pipes, (pipe, i) -> 
+                     Fold((s, g) -> Attenuate(s, g, BendAngle(p)),
+                          Transmit(SourceSignal, pipe), 
+                          sys.gaps[i]))) =>
+          Decode(s, sys.classifier) = p
+
+      PROOF:
+        BY TrainedClassifier        
+    }
+  }
+}
+
+CONCEPT NaiveBayesClassifier {
+  LANGUAGE {
+    TYPE Feature
+    TYPE Class
+    TYPE Probability <: Real
+    TYPE Prior <: Probability
+    TYPE Likelihood <: Probability
+    TYPE Evidence <: Probability
+    TYPE Posterior <: Probability
+
+    FUNC Prior(c : Class) -> Probability
+    FUNC Likelihood(f : Feature, c : Class) -> Probability
+    FUNC Evidence(f : Feature) -> Probability
+    FUNC Posterior(c : Class, f : Feature) -> Probability
+
+    AXIOM BayesTheorem {
+      ∀ (c : Class) (f : Feature) .
+        Posterior(c, f) = Prior(c) * Likelihood(f, c) / Evidence(f)
+    }
+  }
+
+  STRUCTURE Model {
+    priors : Class -> Probability
+    likelihoods : Feature -> Class -> Probability
+
+    INVARIANT ProbabilityAxioms {
+      (∀ c . 0 ≤ priors(c) ≤ 1) ∧
+      Sum(priors) = 1 ∧
+      (∀ f c . 0 ≤ likelihoods(f)(c) ≤ 1) ∧ 
+      (∀ f . Sum(likelihoods(f)) = 1)
+    }
+
+    FUNC Classify(f : Feature) -> Class = 
+      ArgMax((c) -> priors(c) * likelihoods(f)(c))
+  }
+
+  PROOFS {
+    THEOREM Optimality {
+      STATEMENT:
+        ∀ (m : Model) (f : Feature) .
+          m.Classify(f) = ArgMax((c) -> Posterior(c, f))
+
+      PROOF:
+        LET m : Model, f : Feature, c_map = m.Classify(f), c_bayes = ArgMax((c) -> Posterior(c, f))
+
+        m.Classify(f) 
+          = ArgMax((c) -> m.priors(c) * m.likelihoods(f)(c))  BY Model.Classify
+          = ArgMax((c) -> Prior(c) * Likelihood(f, c))       BY Model.ProbabilityAxioms
+          = ArgMax((c) -> Posterior(c, f) * Evidence(f))     BY BayesTheorem
+          = ArgMax((c) -> Posterior(c, f))                   BECAUSE Evidence(f) is constant w.r.t c
+          = c_bayes
+    }
+  }
+}

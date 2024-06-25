@@ -1,0 +1,66 @@
+CONCEPT SteenrodSquares {
+  EXTENDS AlgebraicTopology
+  
+  STRUCTURE {
+    Sq^i: H^n(X; 𝔽₂) -> H^(n+i)(X; 𝔽₂)  ; Steenrod square
+    
+    Axioms: {
+      Sq⁰ = id   
+      Sq^i = 0  for i < 0
+      Sq^i(x) = x^2  for |x| = i
+      Sq^i(x + y) = Σ_j Sq^j(x) ⌣ Sq^(i-j)(y)  ; Cartan formula
+      Sq^i Sq^j = Σ_k (i-k,k-j) Sq^(i+j-k) Sq^k  ; Adem relations
+        where (n,k) = C(n,k) mod 2, C(n,k) = binomial(n,k)
+    }
+  }
+
+  PROOFS {
+    theorem Instability():
+      Sq^i(x) = 0  for i > |x|
+    {
+      by induction on i:
+        case i = |x| + 1:
+          Sq^i(x) = Sq¹(Sq^|x|(x)) = Sq¹(x^2) 
+            = (Sq⁰x) ⌣ (Sq¹x) + (Sq¹x) ⌣ (Sq⁰x)  ; Cartan
+            = x ⌣ 0 + 0 ⌣ x = 0
+        
+        case i > |x| + 1:
+          Sq^i(x) = Sq^(i-|x|-1)(Sq^(|x|+1)(x))
+            = Sq^(i-|x|-1)(0) = 0  ; By inductive hypothesis
+    }
+    
+    theorem WuFormula(M^n: Manifold):
+      Sq^i(wu_j(M)) = Σ_k (j-k,i-k) wu_(i+j-k)(M) ⌣ wu_k(M)
+      where wu_i(M) ∈ H^i(M; 𝔽₂) are the Stiefel-Whitney classes 
+    {
+      ; Proof uses Adem relations and the definition of SW classes
+      ; as the unique classes satisfying 
+      ;   Sq(w(M)) = w(M) ⌣ w(M)  
+      ; where w(M) = 1 + wu₁(M) + wu₂(M) + ...
+      ; See Milnor-Stasheff "Characteristic Classes" for details
+    }
+      
+    theorem Thom(ξ: VectorBundle, U: ThomClass):  
+      Sq(U) = χ(ξ) ⌣ U  where χ(ξ) = 1 + wu₁(ξ) + wu₂(ξ) + ...
+    {
+      ; The Thom class U ∈ H^n(Th(ξ); 𝔽₂) satisfies
+      ;   H^*(Th(ξ); 𝔽₂) ≅ H^*(B; 𝔽₂) ⊗ 𝔽₂[U] / (U^2) 
+      ; so it suffices to show Sq(U) - χ(ξ) ⌣ U = 0
+      
+      let i: B ↪ E be the zero section, so i^*(U) = 0
+      consider Sq(i^*(U)) = i^*(Sq(U))
+        = i^*(χ(ξ)) ⌣ i^*(U)   ; By naturality of ⌣
+        = wu(ξ) ⌣ 0 = 0
+      hence Sq(U) - χ(ξ) ⌣ U is in the kernel of i^*
+        
+      have U ⌣: Ker i^* ≅ H^*(B; 𝔽₂)  ; Thom isomorphism
+      let κ ∈ H^*(B; 𝔽₂) be the unique class with Sq(U) - χ(ξ) ⌣ U = κ ⌣ U
+      WuFormula(κ ⌣ U) and Instability(U)
+      ; Implied relations force κ = 0
+      so Sq(U) = χ(ξ) ⌣ U
+    }
+  }  
+}
+
+Here, the Steenrod squares are defined axiomatically using the Cartan and Adem relations, and some of their key properties like instability and behavior on Thom classes are proved. The Wu formula is stated but its proof is only sketched, as it requires more elaborate machinery.
+Expressing and proving these results in a traditional setting would require introducing a significant amount of background material on cohomology operations, Postnikov towers, Eilenberg-MacLane spaces, and more. The AlgebraicTopology Concept provides a streamlined context where the key structures are already available and the proofs can focus on the essential ideas.

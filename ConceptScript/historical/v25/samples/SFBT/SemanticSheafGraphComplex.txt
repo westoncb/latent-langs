@@ -1,0 +1,728 @@
+CONCEPT SemanticSheafGraphComplex {
+  LANGUAGE {
+    TYPE SemanticUnit
+    TYPE SemanticRelation(r : Nat)
+    TYPE SemanticGraph = (
+      Nodes : SET(SemanticUnit),
+      Edges : SET((SemanticUnit, SemanticRelation, SemanticUnit))
+    )
+    TYPE GraphRewriteRule = (
+      LHS : SemanticGraph,
+      RHS : SemanticGraph,
+      Condition : SemanticGraph -> Boolean
+    )
+    TYPE GraphRewriteSystem = SET(GraphRewriteRule)
+    TYPE SemanticSpace = (
+      Points : SET(SemanticUnit),
+      Topology : SET(SET(SemanticUnit))
+    )
+    TYPE PossibilitySubset(G : SemanticGraph) = {H : SemanticGraph | H ⊆ G}
+
+    FUNC 𝒢 : SemanticSpace -> (OpenSet -> GraphRewriteSystem)
+    FUNC ℛ : SemanticSpace -> (OpenSet -> PossibilitySubset)
+    FUNC 𝒢(U ⊆ V) : 𝒢(V)(U) -> 𝒢(U)(U)
+    FUNC ℛ(U ⊆ V) : ℛ(V)(U) -> ℛ(U)(U)
+
+    FUNC Encode(s : SemanticUnit) : SemanticGraph = (
+      Nodes = {s},
+      Edges = {}
+    )
+    FUNC Decode(G : SemanticGraph) : SemanticUnit =
+      CHOOSE (s : SemanticUnit). s ∈ G.Nodes  -- Assumes semantic graphs are connected
+
+    AXIOM SheafCondition {
+      ∀ (X : SemanticSpace) (𝒰 : OpenCover(X)) (𝒢|𝒰 : (U ∈ 𝒰) -> 𝒢(X)(U)).
+        (∀ (Uᵢ, Uⱼ ∈ 𝒰) (x ∈ Uᵢ ∩ Uⱼ). 𝒢(Uᵢ ∩ Uⱼ ⊆ Uᵢ)(𝒢|𝒰(Uᵢ))(x) = 𝒢(Uᵢ ∩ Uⱼ ⊆ Uⱼ)(𝒢|𝒰(Uⱼ))(x))
+          <=> ∃! (𝒢|X : 𝒢(X)(X)). ∀ (U ∈ 𝒰). 𝒢(U ⊆ X)(𝒢|X) = 𝒢|𝒰(U)
+    }
+
+    AXIOM PossibilitySheafCondition {
+      ∀ (X : SemanticSpace) (𝒰 : OpenCover(X)) (ℛ|𝒰 : (U ∈ 𝒰) -> ℛ(X)(U)).
+        (∀ (Uᵢ, Uⱼ ∈ 𝒰) (x ∈ Uᵢ ∩ Uⱼ). ℛ(Uᵢ ∩ Uⱼ ⊆ Uᵢ)(ℛ|𝒰(Uᵢ))(x) = ℛ(Uᵢ ∩ Uⱼ ⊆ Uⱼ)(ℛ|𝒰(Uⱼ))(x))
+          <=> ∃! (ℛ|X : ℛ(X)(X)). ∀ (U ∈ 𝒰). ℛ(U ⊆ X)(ℛ|X) = ℛ|𝒰(U)
+    }
+
+    AXIOM EncodingConsistency {
+      ∀ (s : SemanticUnit). Decode(Encode(s)) = s
+    }
+  }
+
+  STRUCTURE LocalSemantics {
+    LET X : SemanticSpace
+    LET U ⊆ X.Points  -- An open set in the semantic space
+    LET 𝒢|U : GraphRewriteSystem = 𝒢(X)(U)
+    LET ℛ|U : PossibilitySubset = ℛ(X)(U)
+
+    FUNC ApplyRules(G : SemanticGraph) : SemanticGraph = {
+      VAR H : SemanticGraph = G
+      WHILE ∃ (r : GraphRewriteRule) FROM 𝒢|U. r.Condition(H) DO
+        VAR (L, R, _) = CHOOSE (r : GraphRewriteRule) FROM 𝒢|U. r.Condition(H)
+        H := H - L + R  -- Graph rewrite
+      RETURN H
+    }
+
+    FUNC FilterPossibilities(G : SemanticGraph) : SemanticGraph = {
+      RETURN CHOOSE (H : SemanticGraph) FROM ℛ|U. H ⊆ G
+    }
+  }
+
+  STRUCTURE GlobalSemantics {
+    LET X : SemanticSpace
+
+    FUNC InterpretLocal(s : SemanticUnit, U : OpenSet) : SemanticGraph = {
+      LET localSemantics = LocalSemantics WITH {X := X, U := U}
+      RETURN localSemantics.FilterPossibilities(localSemantics.ApplyRules(Encode(s)))
+    }
+
+    FUNC InterpretGlobal(s : SemanticUnit) : SemanticGraph = {
+      LET 𝒰 = {U ∈ X.Topology | s ∈ U}  -- Open cover of the semantic space
+      LET localInterpretations = (U ∈ 𝒰) ↦ InterpretLocal(s, U)
+      RETURN THE (G : SemanticGraph). ∀ (U ∈ 𝒰). G|U = localInterpretations(U)
+    }
+
+    FUNC GenerateLocal(G : SemanticGraph, U : OpenSet) : SemanticUnit = {
+      LET localSemantics = LocalSemantics WITH {X := X, U := U}
+      RETURN Decode(localSemantics.FilterPossibilities(localSemantics.ApplyRules(G)))
+    }
+
+    FUNC GenerateGlobal(G : SemanticGraph) : SemanticUnit = {
+      LET 𝒰 = {U ∈ X.Topology | ∃ (s : SemanticUnit) FROM G.Nodes. s ∈ U}
+      LET localGenerations = (U ∈ 𝒰) ↦ GenerateLocal(G, U)
+      RETURN CHOOSE (s : SemanticUnit). ∀ (U ∈ 𝒰). s ∈ localGenerations(U)
+    }
+  }
+
+  PROOFS {
+    THEOREM LocalSoundness {
+      STATEMENT:
+        ∀ (X : SemanticSpace) (U ⊆ X.Points) (s : SemanticUnit).
+          s ∈ U => GenerateLocal(InterpretLocal(s, U), U) = s
+
+      PROOF:
+        LET X : SemanticSpace, U ⊆ X.Points, s : SemanticUnit
+        ASSUME (H) : s ∈ U
+        LET G = InterpretLocal(s, U)
+        LET localSemantics = LocalSemantics WITH {X := X, U := U}
+        
+        GenerateLocal(G, U)
+          = Decode(localSemantics.FilterPossibilities(localSemantics.ApplyRules(G))) 
+            BY definition of GenerateLocal
+          = Decode(localSemantics.FilterPossibilities(G))
+            BY {
+              localSemantics.ApplyRules(G)
+                = localSemantics.ApplyRules(localSemantics.FilterPossibilities(localSemantics.ApplyRules(Encode(s))))
+                  BY definition of G and InterpretLocal
+                = localSemantics.FilterPossibilities(localSemantics.ApplyRules(Encode(s)))
+                  BY idempotence of ApplyRules and FilterPossibilities
+                = G BY definition of G and InterpretLocal
+            }
+          = Decode(G) BY G ∈ ℛ|U, definition of FilterPossibilities
+          = s BY {
+              G = InterpretLocal(s, U)
+                = localSemantics.FilterPossibilities(localSemantics.ApplyRules(Encode(s)))
+                  BY definition of InterpretLocal
+              HENCE, s ∈ G.Nodes BY definition of Encode and ApplyRules preserving nodes
+              HENCE, Decode(G) = s BY definition of Decode and H
+            }
+    }
+
+    THEOREM GlobalSoundness {
+      STATEMENT:
+        ∀ (X : SemanticSpace) (s : SemanticUnit).
+          GenerateGlobal(InterpretGlobal(s)) = s
+
+      PROOF:
+        LET X : SemanticSpace, s : SemanticUnit
+        LET 𝒰 = {U ∈ X.Topology | s ∈ U}  -- Open cover of the semantic space
+        LET G = InterpretGlobal(s)
+
+        GenerateGlobal(G) 
+          = CHOOSE (t : SemanticUnit). ∀ (U ∈ 𝒰). t ∈ GenerateLocal(G, U)
+            BY definition of GenerateGlobal and 𝒰
+          = CHOOSE (t : SemanticUnit). ∀ (U ∈ 𝒰). t = GenerateLocal(G|U, U)
+            BY LocalSoundness and G|U = InterpretLocal(s, U) by definition of InterpretGlobal
+          = CHOOSE (t : SemanticUnit). ∀ (U ∈ 𝒰). t = s
+            BY definition of 𝒰 and LocalSoundness
+          = s BY uniqueness of s
+    }
+
+    THEOREM LocalCompleteness {
+      STATEMENT:
+        ∀ (X : SemanticSpace) (U ⊆ X.Points) (s : SemanticUnit) (G : SemanticGraph).
+          (s ∈ U ∧ Decode(G) = s) => InterpretLocal(s, U) = G|U
+
+      PROOF:
+        -- Omitted for brevity, but would follow from the properties of graph rewriting and possibility filtering.
+    }
+
+    THEOREM GlobalCompleteness {
+      STATEMENT:  
+        ∀ (X : SemanticSpace) (s : SemanticUnit) (G : SemanticGraph).
+          (Decode(G) = s) => InterpretGlobal(s) = G
+
+      PROOF:
+        -- Omitted for brevity, but would follow from LocalCompleteness and the sheaf conditions.
+    }
+  }
+}
+
+
+
+
+
+
+
+
+CONCEPT SemanticSheafGraphComplex {
+  LANGUAGE {
+    TYPE SemanticUnit
+    TYPE SemanticRelation(r : Nat)  -- r is the arity of the relation
+    TYPE SemanticGraph <: GRAPH(SemanticUnit, SemanticRelation)
+    TYPE GraphRewriteRule <: RULE(SemanticGraph, SemanticGraph)
+    TYPE GraphRewriteSystem <: SET(GraphRewriteRule)
+    TYPE SemanticSpace <: TopologicalSpace
+    TYPE PossibilitySubset(G : SemanticGraph) <: SUBSET(G)
+
+    FUNC 𝒢 : SemanticSpace -> CATEGORY(GraphRewriteSystem)  -- The semantic sheaf
+    FUNC ℛ : SemanticSpace -> CATEGORY(PossibilitySubset)   -- The possibility sheaf
+    FUNC 𝒢(U ⊆ V) : 𝒢(V) -> 𝒢(U)                        -- Restriction map for semantic sheaf
+    FUNC ℛ(U ⊆ V) : ℛ(V) -> ℛ(U)                        -- Restriction map for possibility sheaf
+
+    FUNC Encode : SemanticUnit -> SemanticGraph
+    FUNC Decode : SemanticGraph -> SemanticUnit
+
+    AXIOM SheafCondition {
+      ∀ (U ⊆ SemanticSpace) (𝒰 : OpenCover(U)) (s : SECTION(𝒰, 𝒢)).
+        (∀ (Uᵢ, Uⱼ ∈ 𝒰) (x ∈ Uᵢ ∩ Uⱼ). 𝒢(Uᵢ ∩ Uⱼ ⊆ Uᵢ)(s(Uᵢ))(x) = 𝒢(Uᵢ ∩ Uⱼ ⊆ Uⱼ)(s(Uⱼ))(x)) 
+          <=> ∃! (t : SECTION(U, 𝒢)). ∀ (Uᵢ ∈ 𝒰). t|Uᵢ = s(Uᵢ)
+    }
+
+    AXIOM PossibilitySheafCondition {
+      ∀ (U ⊆ SemanticSpace) (𝒰 : OpenCover(U)) (s : SECTION(𝒰, ℛ)).
+        (∀ (Uᵢ, Uⱼ ∈ 𝒰) (x ∈ Uᵢ ∩ Uⱼ). ℛ(Uᵢ ∩ Uⱼ ⊆ Uᵢ)(s(Uᵢ))(x) = ℛ(Uᵢ ∩ Uⱼ ⊆ Uⱼ)(s(Uⱼ))(x)) 
+          <=> ∃! (t : SECTION(U, ℛ)). ∀ (Uᵢ ∈ 𝒰). t|Uᵢ = s(Uᵢ)
+    }
+
+    AXIOM EncodingConsistency {
+      ∀ (s : SemanticUnit). Decode(Encode(s)) = s
+    }
+  }
+
+  STRUCTURE LocalSemantics {
+    LET U ⊆ SemanticSpace  -- An open set in the semantic space
+    LET 𝒢|U : GraphRewriteSystem    -- The local graph rewrite system over U
+    LET ℛ|U : PossibilitySubset     -- The local possibility subset over U
+
+    FUNC ApplyRules(G : SemanticGraph) : SemanticGraph = {
+      WHILE ∃ (r : GraphRewriteRule) FROM 𝒢|U. r.Applies(G) DO
+        G := CHOOSE (r : GraphRewriteRule) FROM 𝒢|U. r.Apply(G)
+      RETURN G  
+    }
+
+    FUNC FilterPossibilities(G : SemanticGraph) : SemanticGraph = {
+      RETURN CHOOSE (H : SemanticGraph) FROM ℛ|U. H ⊆ G
+    }
+  }
+
+  STRUCTURE GlobalSemantics {
+    FUNC InterpretLocal(s : SemanticUnit, U : OpenSet) : SemanticGraph = {
+      LET G = Encode(s)
+      LET 𝒢|U = 𝒢(U)
+      LET ℛ|U = ℛ(U)
+      RETURN FilterPossibilities(ApplyRules(G))
+    }
+
+    FUNC InterpretGlobal(s : SemanticUnit) : SemanticGraph = {
+      LET 𝒰 = {U ⊆ SemanticSpace | s ∈ U}  -- Open cover of the semantic space
+      LET localInterpretations = (U ∈ 𝒰) ↦ InterpretLocal(s, U)
+      RETURN THE (G : SemanticGraph). ∀ (U ∈ 𝒰). G|U = localInterpretations(U)
+    }
+
+    FUNC GenerateLocal(G : SemanticGraph, U : OpenSet) : SemanticUnit = {
+      LET 𝒢|U = 𝒢(U)
+      LET ℛ|U = ℛ(U)
+      LET H = FilterPossibilities(ApplyRules(G))
+      RETURN Decode(H)
+    }
+
+    FUNC GenerateGlobal(G : SemanticGraph) : SemanticUnit = {
+      LET 𝒰 = {U ⊆ SemanticSpace | G ∈ U}  -- Open cover of the semantic space
+      LET localGenerations = (U ∈ 𝒰) ↦ GenerateLocal(G, U)
+      RETURN CHOOSE (s : SemanticUnit). ∀ (U ∈ 𝒰). s ∈ localGenerations(U)
+    }
+  }
+
+  PROOFS {
+    THEOREM Soundness {
+      STATEMENT:
+        ∀ (s : SemanticUnit). GenerateGlobal(InterpretGlobal(s)) = s
+
+      PROOF:
+        -- Omitted for brevity, but would follow from the sheaf conditions and the consistency of encoding/decoding.
+    }
+    
+    THEOREM Completeness {
+      STATEMENT:
+        ∀ (s : SemanticUnit) (G : SemanticGraph).
+          (Decode(G) = s) => InterpretGlobal(s) = G
+
+      PROOF:
+        -- Omitted for brevity, but would follow from the sheaf conditions and the completeness of the graph rewrite systems.
+    }
+  }
+}
+
+
+
+
+
+
+CONCEPT SemanticGraphComplex {
+  LANGUAGE {
+    TYPE SemanticUnit
+    TYPE SemanticRelation(r : Nat)  -- r is the arity of the relation
+    TYPE SemanticGraph <: GRAPH(SemanticUnit, SemanticRelation)
+    TYPE GraphRewriteRule <: RULE(SemanticGraph, SemanticGraph)
+    TYPE GraphComplex <: COMPLEX(SemanticGraph)
+
+    FUNC Encode : SemanticUnit -> SemanticGraph
+    FUNC Decode : SemanticGraph -> SemanticUnit
+
+    AXIOM EncodingConsistency {
+      ∀ (s : SemanticUnit). Decode(Encode(s)) = s
+    }
+  }
+
+  STRUCTURE SemanticSpace {
+    LET C : GraphComplex
+
+    FUNC Boundary(G : SemanticGraph) : LIST(SemanticGraph) = {
+      RETURN [G' | (G, G') ∈ C.Edges]
+    }
+
+    FUNC Coboundary(G : SemanticGraph) : LIST(SemanticGraph) = {
+      RETURN [G' | (G', G) ∈ C.Edges]
+    }
+
+    FUNC Navigate(start : SemanticGraph, goal : SemanticGraph) : LIST(SemanticGraph) = {
+      -- Find a path from start to goal in the 1-skeleton of C
+      -- Return the list of graphs along this path
+    }
+  }
+
+  STRUCTURE CognitiveOperation {
+    LET R : GraphRewriteRule
+
+    FUNC Apply(G : SemanticGraph) : SemanticGraph = {
+      -- Find a subgraph of G that matches the left-hand side of R
+      -- Replace this subgraph with the right-hand side of R
+    }
+
+    FUNC Compose(R' : GraphRewriteRule) : GraphRewriteRule = {
+      -- Find the pullback (i.e., common subgraph) of the right-hand side of R and the left-hand side of R'
+      -- Glue the remainders of R and R' along this common subgraph
+    }
+  }
+
+  STRUCTURE ParsingProcess {
+    FUNC Parse(s : SemanticUnit) : SemanticGraph = {
+      LET G = Encode(s)
+      WHILE ∃ (R : GraphRewriteRule). R.Apply(G) ≠ G DO
+        G := R.Apply(G)
+      RETURN G
+    }
+  }
+
+  STRUCTURE GenerationProcess {
+    FUNC Generate(G : SemanticGraph) : SemanticUnit = {
+      WHILE ∃ (R : GraphRewriteRule). R.Apply(G) ≠ G DO
+        G := R.Apply(G)
+      RETURN Decode(G)
+    }
+  }
+
+  PROOFS {
+    THEOREM Soundness {
+      STATEMENT:
+        ∀ (s : SemanticUnit). Generate(Parse(s)) = s
+
+      PROOF:
+        LET s : SemanticUnit
+        LET G = Encode(s)
+        HAVE: Parse(s) = G' WHERE G' is a normal form of G under rewriting BY definition of Parse
+        HAVE: Generate(G') = Decode(G'') WHERE G'' is a normal form of G' under rewriting BY definition of Generate
+        HAVE: G'' = G BY Newman's Lemma and confluence of rewriting
+        HENCE: Generate(Parse(s)) = Decode(G) = s BY EncodingConsistency
+    }
+
+    THEOREM Completeness {
+      STATEMENT:
+        ∀ (s : SemanticUnit) (G : SemanticGraph).
+          (Decode(G) = s) => ∃ (path : LIST(SemanticGraph)). 
+            path[0] = Encode(s) ∧ path[-1] = G ∧ 
+            ∀ (i : Nat). i < Length(path) - 1 => ∃ (R : GraphRewriteRule). R.Apply(path[i]) = path[i+1]
+
+      PROOF:
+        LET s : SemanticUnit, G : SemanticGraph
+        ASSUME: Decode(G) = s
+        LET G₀ = Encode(s)
+        HAVE: G₀ and G are in the same connected component of SemanticSpace.C BY EncodingConsistency and ASSUME
+        LET path = SemanticSpace.Navigate(G₀, G)
+        HAVE: path[0] = G₀ = Encode(s) ∧ path[-1] = G BY definition of Navigate
+        HAVE: ∀ (i : Nat). i < Length(path) - 1 => path[i+1] ∈ SemanticSpace.Coboundary(path[i])
+          BY definition of Navigate and GraphComplex
+        HENCE: ∀ (i : Nat). i < Length(path) - 1 => ∃ (R : GraphRewriteRule). R.Apply(path[i]) = path[i+1]
+          BY definition of GraphComplex and CognitiveOperation
+    }
+  }
+}
+
+
+
+
+
+CONCEPT SemanticSheafOperad {
+  LANGUAGE {
+    TYPE SemanticSpace <: TopologicalSpace
+    TYPE SemanticUnit
+    TYPE LocalOperad <: Operad(SemanticUnit)
+    TYPE GlobalOperad <: Operad(LocalOperad)
+
+    FUNC 𝒪 : SemanticSpace -> CATEGORY(LocalOperad)  -- The sheaf
+    FUNC 𝒪(U ⊆ V) : 𝒪(V) -> 𝒪(U)  -- Restriction map
+
+    FUNC Encode : SemanticUnit -> SemanticSpace
+    FUNC Decode : SemanticSpace -> SemanticUnit
+
+    AXIOM SheafCondition {
+      ∀ (U ⊆ SemanticSpace) (𝒰 : OpenCover(U)) (s : SECTION(𝒰, 𝒪)).
+        (∀ (Uᵢ, Uⱼ ∈ 𝒰) (x ∈ Uᵢ ∩ Uⱼ). 𝒪(Uᵢ ∩ Uⱼ ⊆ Uᵢ)(s(Uᵢ))(x) = 𝒪(Uᵢ ∩ Uⱼ ⊆ Uⱼ)(s(Uⱼ))(x)) 
+          <=> ∃! (t : SECTION(U, 𝒪)). ∀ (Uᵢ ∈ 𝒰). t|Uᵢ = s(Uᵢ)
+    }
+
+    AXIOM EncodingConsistency {
+      ∀ (s : SemanticUnit). Decode(Encode(s)) = s
+    }
+  }
+
+  STRUCTURE LocalStructure {
+    LET U ⊆ SemanticSpace  -- An open set in the semantic space
+    LET 𝒪|U : LocalOperad   -- The local operad over U
+
+    FUNC Content(s : SemanticUnit) : 𝒪|U  -- Mapping from semantic units to their local content
+    FUNC Structure(ω : Operation(𝒪|U)) : GlobalOperad  -- Mapping from local operations to global structure
+
+    FUNC Interpret(ω : LIST(SemanticUnit)) : {
+      LET 𝒰 : OpenCover(U) = {Encode(s) | s ∈ ω}
+      LET s : SECTION(𝒰, 𝒪|U) = (V ∈ 𝒰) ↦ Content(Decode(V))
+      RETURN THE t : SECTION(U, 𝒪|U) SUCH THAT ∀ (V ∈ 𝒰). t|V = s(V)
+    }
+  }
+
+  STRUCTURE GlobalStructure {
+    LET 𝒪 : SemanticSpace -> CATEGORY(LocalOperad)  -- The sheaf of local operads
+
+    FUNC LiftStructure(ω : Operation(LocalOperad), U ⊆ SemanticSpace) : GlobalOperad = {
+      LET V ⊇ U
+      RETURN Structure(𝒪(U ⊆ V)(ω))
+    }
+
+    FUNC LowerContent(Ω : GlobalOperad, U ⊆ SemanticSpace) : LIST(SemanticUnit) = {
+      LET 𝒰 : OpenCover(U)
+      LET σ : SECTION(U, 𝒪) = (V ∈ 𝒰) ↦ THE ω : 𝒪(V) SUCH THAT Structure(ω) = Ω|V
+      RETURN [Decode(V) | V ∈ 𝒰]
+    }
+  }
+
+  STRUCTURE CognitiveProcess {
+    FUNC Analogy(Ω₁, Ω₂ : GlobalOperad) : GlobalOperad = {
+      -- Find the pullback (i.e., common substructure) of Ω₁ and Ω₂ in the category of global operads
+      -- Construct the pushout (i.e., blended structure) of this common substructure
+    }
+
+    FUNC Generalization(Ω : LIST(GlobalOperad)) : GlobalOperad = {
+      -- Find the limit (i.e., universal substructure) of the Ωs in the category of global operads
+    }
+
+    FUNC Categorization(s : SemanticUnit) : GlobalOperad = {
+      -- Find the initial object in the category of global operads that admit a morphism from Structure(Content(s))
+    }
+
+    FUNC Instantiation(Ω : GlobalOperad) : SemanticUnit = {
+      -- Find the terminal object in the category of semantic units that admit a morphism to LowerContent(Ω, U) for some U
+    }
+
+    FUNC SemanticBlend(s₁, s₂ : SemanticUnit) : SemanticUnit = {
+      LET Ω₁ = Categorization(s₁)
+      LET Ω₂ = Categorization(s₂)
+      LET Ω = Analogy(Ω₁, Ω₂)
+      RETURN Instantiation(Ω)
+    }
+  }
+
+  PROOFS {
+    THEOREM SheafConsistency {
+      STATEMENT:
+        ∀ (U ⊆ SemanticSpace) (𝒰₁, 𝒰₂ : OpenCover(U)). 
+          LET t₁ = THE t : SECTION(U, 𝒪) SUCH THAT ∀ (V ∈ 𝒰₁). t|V = Interpret([Decode(V)])
+          LET t₂ = THE t : SECTION(U, 𝒪) SUCH THAT ∀ (V ∈ 𝒰₂). t|V = Interpret([Decode(V)])
+          SHOW t₁ = t₂  
+
+      PROOF:
+        LET 𝒰 = 𝒰₁ ∪ 𝒰₂
+        HAVE: 𝒰 : OpenCover(U)
+        HAVE: ∀ (V ∈ 𝒰). t₁|V = Interpret([Decode(V)]) ∧ t₂|V = Interpret([Decode(V)])
+          BY {
+            CASE V ∈ 𝒰₁: 
+              HAVE: t₁|V = Interpret([Decode(V)]) BY definition of t₁
+              HAVE: t₂|V = Interpret([Decode(V)]) BY {
+                LET W ∈ 𝒰₂ SUCH THAT V ⊆ W  -- Such a W exists because 𝒰₂ is a cover
+                HAVE: t₂|W = Interpret([Decode(W)]) BY definition of t₂
+                HAVE: t₂|V = (t₂|W)|V = Interpret([Decode(W)])|V = Interpret([Decode(V)]) 
+                  BY restriction and locality
+              }
+            CASE V ∈ 𝒰₂: Symmetric argument
+          }
+        HENCE: ∃! (t : SECTION(U, 𝒪)). ∀ (V ∈ 𝒰). t|V = Interpret([Decode(V)]) 
+          BY SheafCondition
+        HENCE: t₁ = t₂ BY uniqueness
+    }
+  }
+}
+
+
+
+
+
+
+
+CONCEPT SemanticFiberBundleTower {
+  LANGUAGE {
+    TYPE Tensor
+    TYPE StructuralTensor <: Tensor
+    TYPE ContentTensor <: Tensor
+    TYPE Embedding <: Tensor
+    TYPE Manifold
+    TYPE TangentVector[M : Manifold, p : M]
+    TYPE TangentBundle[M : Manifold] = Bundle(M, (p : M) ↦ TangentSpace(M, p))
+    TYPE CotangentVector[M : Manifold, p : M]
+    TYPE CotangentBundle[M : Manifold] = Bundle(M, (p : M) ↦ CotangentSpace(M, p)) 
+    TYPE Fiber[B : Manifold, F : Manifold, p : B] <: Manifold
+    TYPE FiberBundle(B : Manifold, F : Manifold) <: Manifold
+    TYPE SemanticFrequency <: Real
+    TYPE PartialConfig[F : Manifold](f : F)
+    
+    FUNC Decode : Embedding -> String
+    FUNC Encode(s : String) : Embedding
+    FUNC π[B : Manifold, F : Manifold](E : FiberBundle(B, F)) : E -> B
+    FUNC ι[B : Manifold, F : Manifold, p : B](E : FiberBundle(B, F)) : Fiber(B, F, p) -> E
+    FUNC PullbackBundle[B : Manifold, E : FiberBundle(_, _), f : _ -> B]
+         (E : FiberBundle(B, F))(f : C -> B) : FiberBundle(C, F)
+    FUNC PushforwardBundle[B : Manifold, E : FiberBundle(_, _), f : B -> _]  
+         (E : FiberBundle(B, F))(f : B -> C) : FiberBundle(C, F)
+    FUNC ParallelTransport[B : Manifold, F : Manifold, γ : Curve[B]]
+         (E : FiberBundle(B, F))(e : E, γ : Curve[B], t : Real) : E
+    FUNC HorizontalLift[B : Manifold, F : Manifold]
+         (E : FiberBundle(B, F))(v : TangentVector[B, π(e)]) : TangentVector[E, e]  
+    FUNC PossibilityCone[B : Manifold, F : Manifold]
+         (E : FiberBundle(B, F))(e : E) : SubManifold(E)
+
+    AXIOM Projection {
+      ∀ (B : Manifold) (F : Manifold) (E : FiberBundle(B, F)) (p : B). π(ι(E)(Fiber(B, F, p))) = p  
+    }
+
+    AXIOM Embedding {
+      ∀ (s : String). Decode(Encode(s)) = s  
+    }
+  }
+
+  STRUCTURE EmbeddingSpace {
+    LET E : Manifold
+    REQUIRE ∀ (e : E). e : Embedding
+    
+    FUNC Distance : E × E -> Real
+    
+    REQUIRE ∀ (e1 e2 : E). Distance(e1, e2) ≥ 0
+    REQUIRE ∀ (e : E). Distance(e, e) = 0
+    REQUIRE ∀ (e1 e2 : E). Distance(e1, e2) = Distance(e2, e1)
+    REQUIRE ∀ (e1 e2 e3 : E). Distance(e1, e3) ≤ Distance(e1, e2) + Distance(e2, e3)
+    
+    FUNC Neighbor(e : E, r : Real) -> Set(E) = {e' : E | Distance(e, e') < r}
+    
+    REQUIRE ∀ (e : E) (ε : Real). ∃ (δ : Real). 
+      ∀ (e' : E). e' ∈ Neighbor(e, δ) => Decode(e') ∈ Neighbor(Decode(e), ε)  
+  }
+
+  STRUCTURE SemanticFiber[B : EmbeddingSpace, F : Manifold, p : B] {
+    REQUIRE F : EmbeddingSpace
+    DEF Content(f : Fiber(B, F, p)) : ContentTensor = f
+    DEF Structure(f : Fiber(B, F, p)) : StructuralTensor = π(f)
+  }
+
+  STRUCTURE SemanticBundle[B : EmbeddingSpace, F : Manifold] EXTENDS FiberBundle(B, F) {
+    REQUIRE ∀ (p : B). SemanticFiber(B, F, p)
+    LET freq : SemanticFrequency
+
+    FUNC ConfigureFiber[p : B](pc : PartialConfig[Fiber(B, F, p)], f : Fiber(B, F, p)) : Fiber(B, F, p)
+  
+    REQUIRE ∀ (e : E) (v : TangentVector[B, π(e)]) (ε : Real). ∃ (δ : Real).
+      ∀ (w : TangentVector[E, e]).
+        Magnitude(w) < δ =>  
+        Distance(e, ParallelTransport(E)(e, ExpGeodesic(π(e), v), ε)) < ε
+        
+    REQUIRE ∀ (e : E). PossibilityCone(E)(e) ⊆ E
+  }
+
+  STRUCTURE TowerLevel[n : Nat] {
+    CASE n == 0 : 
+      LET Base : EmbeddingSpace
+    CASE n > 0 : 
+      LET Below : TowerLevel[n-1]
+      LET E : SemanticBundle[Below.Base, Manifold]
+
+    REQUIRE ∀ (e : E).
+      LET struct_content_ratio = Complexity(Structure(e)) / Complexity(Content(e))
+      REQUIRE struct_content_ratio > 1
+      REQUIRE struct_content_ratio > 
+        IF n == 1 THEN 1 ELSE Below.struct_content_ratio
+        
+    REQUIRE ∀ (e : E).
+      LET sparsity = Sparsity(Structure(e))
+      REQUIRE sparsity > 0
+      REQUIRE sparsity > IF n == 1 THEN 0 ELSE Below.sparsity
+  }
+
+  STRUCTURE SemanticFiberBundleTower {
+    LET N : Nat  -- height of the tower
+    REQUIRE ∀ (n : Nat). n < N => TowerLevel[n]
+
+    DEF Levels : List(TowerLevel) = [TowerLevel[n] | n ∈ [0..N)]
+    DEF Base : EmbeddingSpace = Levels[0].Base
+    DEF Top : SemanticBundle = Levels[N-1].E
+
+    -- Navigation and Processing Operations
+
+    FUNC FollowFiber(start : Base, fiberSeq : List(Fiber)) : Top = 
+      MATCH fiberSeq WITH
+      | [] -> ι(Top)(Fiber(Levels[N-2].E, Top, start))
+      | f :: fs -> 
+          LET level = Levels[Length(fiberSeq) - 1]
+          IN FollowFiber(π(ConfigureFiber(level.E)(f, ι(level.E)(f))), fs)
+
+    FUNC TraceBack(e : Top) : List(Fiber) =
+      MATCH Levels WITH
+      | [] -> []
+      | l :: ls -> 
+          LET f = Fiber(l.Below.E, l.E, π(e))
+          IN f :: TraceBack(π(ConfigureFiber(l.E)(f, e)))  
+
+    FUNC Parse(input : String) : Top =
+      LET fibers : List(Fiber) = []
+      IN FOREACH (chunk, rest) IN Chunk(input) DO
+           LET embedding = Encode(chunk)
+           LET fiber = FIND (f : Fiber) 
+                         FROM (b : Base) IN Neighbor(embedding, δ)
+                         WHERE ∃ (pc : PartialConfig(f)). 
+                                 π(ConfigureFiber(Levels[Length(fibers)].E)(pc, ι(f))) = b  
+           IN fibers := fibers + [fiber]
+      IN FollowFiber(Encode(input), fibers)
+           
+    FUNC Generate(e : Top, length : Nat) : String =  
+      LET fibers = TraceBack(e)
+      IN FOREACH (i, fiberTail) IN Enum(fibers) DO
+           LET level = Levels[Length(fibers) - 1 - i]
+           LET pc = FIND (pc : PartialConfig(level.E))
+                       WHERE π(ConfigureFiber(level.E)(pc, ι(level.Base)(π(e)))) 
+                               ∈ PossibilityCone(level.E)(e)
+           IN e := ConfigureFiber(level.E)(pc, e)
+      IN Decode(π(e))
+      
+    -- Cognitive Operation Skeletons  
+
+    FUNC Analogy(t1 : StructuralTensor, t2 : StructuralTensor) : StructuralTensor =
+      -- Find shared abstract structure between t1 and t2
+      -- Construct new StructuralTensor that captures the shared structure
+      -- ... 
+
+    FUNC Generalization(ts : List(StructuralTensor)) : StructuralTensor =
+      -- Find common structural patterns across all ts 
+      -- Construct a new StructuralTensor that captures these patterns
+      -- ...
+      
+    FUNC Categorization(e : Embedding) : StructuralTensor = 
+      -- Navigate up the tower from e until a sufficiently abstract StructuralTensor is found
+      -- ...
+
+    FUNC Instantiation(t : StructuralTensor) : Embedding =
+      -- Navigate down the tower from t, making choices in PossibilityCones, until Base is reached
+      -- ...
+      
+    FUNC SemanticBlend(c1 : ContentTensor, c2 : ContentTensor) : ContentTensor = 
+      -- Construct a new ContentTensor that blends the semantic content of c1 and c2
+      -- ...
+  }
+}
+
+
+
+
+
+CONCEPT SemanticFiberBundleTower {
+  LANGUAGE {
+    TYPE Embedding
+    TYPE Manifold
+    TYPE TangentSpace[M : Manifold, p : M]
+    TYPE Fiber[B : Manifold, p : B]
+    TYPE FiberBundle(B : Manifold, F : Manifold)
+
+    FUNC Encode : String -> Embedding
+    FUNC Decode : Embedding -> String
+    FUNC π[B : Manifold, F : Manifold](E : FiberBundle(B, F)) : E -> B  -- bundle projection
+    FUNC LocTriv[B : Manifold, F : Manifold](E : FiberBundle(B, F), U : OpenSet[B]) : 
+      π^(-1)[U] -> U × F  -- local trivialization
+
+    AXIOM FiberIsManifold {
+      ∀ (B : Manifold) (F : Manifold) (E : FiberBundle(B, F)) (p : B).
+        Fiber(E, p) : Manifold
+    }
+
+    AXIOM ConnectionPreservesManifoldStructure {
+      ∀ (B : Manifold) (F : Manifold) (E : FiberBundle(B, F))
+        (γ : B -> B) (e : E) (v : TangentSpace(B, π(e))).
+      REQUIRE IS_CURVE(γ)
+      REQUIRE γ(0) = π(e)
+      REQUIRE D(γ)(0) = v
+      REQUIRE ∀ (t : Real). π(ParallelTransport(e, γ, t)) = γ(t)
+    }
+  }
+
+  STRUCTURE EmbeddingSpace {
+    LET E : Manifold
+    REQUIRE ∀ (p : E). Encode(Decode(p)) = p  -- embedding invertibility
+
+    FUNC Neighbor(p : E, r : Real) : Set[E] = {q : E | Distance(p, q) < r}
+
+    REQUIRE ∀ (p : E) (ε : Real). ∃ (δ : Real).
+      ∀ (q : E). q ∈ Neighbor(p, δ) => Decode(q) ∈ Neighbor(Decode(p), ε)  -- embedding continuity
+  }
+
+  STRUCTURE SemanticFiber[B : EmbeddingSpace, p : B] {
+    LET F : Manifold
+    DEF SemEmbed(x : Fiber(F, p)) : Embedding = Encode(Decode(p) + Decode(x))
+  }
+
+  STRUCTURE SemanticBundle[B : EmbeddingSpace] EXTENDS FiberBundle(B, SemanticFiber[p : B]) {
+    REQUIRE ∀ (e : E) (v : TangentSpace(B, π(e))) (ε : Real). ∃ (δ : Real).
+      ∀ (w : TangentSpace(Fiber(E, π(e)), e)). 
+        Magnitude(w) < δ => 
+        Distance(SemEmbed(e), SemEmbed(ParallelTransport(e, ExpGeodesic(π(e), v), ε))) < ε
+  }
+
+  STRUCTURE TowerLevel[n : Nat, B : IF n = 0 THEN EmbeddingSpace ELSE TowerLevel[n-1, _]] {
+    LET E : SemanticBundle[B]
+  }
+
+  STRUCTURE SemanticFiberBundleTower[N : Nat] {
+    REQUIRE ∀ (n : Nat). n < N => TowerLevel[n, IF n = 0 THEN BaseSpace ELSE SELF[n-1].E]
+  }
+}

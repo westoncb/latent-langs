@@ -1,0 +1,78 @@
+CONCEPT TensorAlgebra {
+  LANGUAGE {
+    TYPE Tensor[I : Nat, J : Nat, S : Type] = Vector[S]^(I * J)
+
+    NOTATION "T[" i "," j "]" = Tensor[i, j, Real]
+    NOTATION "T[" i "]" = T[i, 1]
+    NOTATION "⨂" = TensorProduct
+    NOTATION "⊗" = KroneckerProduct
+    NOTATION "×" = MatrixMultiplication
+    NOTATION "⋅" = DotProduct
+    NOTATION "∇" = Gradient
+    NOTATION "∂" = PartialDerivative
+
+    FUNC TensorProduct[I J K L](t1 : T[I, J], t2 : T[K, L]) -> T[I * K, J * L]
+    FUNC KroneckerProduct[M N](A : Matrix[Real, M, M], B : Matrix[Real, N, N]) -> Matrix[Real, M * N, M * N]
+    FUNC Transpose[I J](t : T[I, J]) -> T[J, I]
+    FUNC Reshape[I J K L](t : T[I * J, K * L]) -> T[I, J, K, L]
+    FUNC Trace[N](A : Matrix[Real, N, N]) -> Real
+    FUNC InnerProduct[I J](t1 : T[I, J], t2 : T[I, J]) -> Real
+    FUNC Norm[I J](t : T[I, J]) -> Real
+    
+    AXIOM TensorProductAssociativity {
+      ∀ (t1 : T[I, J]) (t2 : T[K, L]) (t3 : T[M, N]).
+        (t1 ⨂ t2) ⨂ t3 = t1 ⨂ (t2 ⨂ t3)
+    }
+    
+    AXIOM KroneckerProductMixed {
+      ∀ (A : Matrix[Real, M1, N1]) (B : Matrix[Real, M2, N2]) 
+        (C : Matrix[Real, M1, N1]) (D : Matrix[Real, M2, N2]).
+        (A ⊗ B) × (C ⊗ D) = (A × C) ⊗ (B × D)
+    }
+    
+    AXIOM TensorInnerProductEquivalence {
+      ∀ (t1 : T[I, J]) (t2 : T[I, J]).
+        InnerProduct(t1, t2) = Trace(Reshape(t1 ⨂ Transpose(t2)))
+    }
+  }
+
+  PROOFS {
+    THEOREM MatrixTraceInvariance {
+      STATEMENT: ∀ (A : Matrix[Real, N, N]) (U : Matrix[Real, N, N]) (IsUnitary(U)).
+        Trace(A) = Trace(U × A × Transpose(U))
+        
+      PROOF:
+        LET A : Matrix[Real, N, N], U : Matrix[Real, N, N]
+        ASSUME IsUnitary(U)
+        
+        REWRITE Trace(U × A × Transpose(U))
+          = Trace(U × A × Inverse(U))     BY {IsUnitary(U) => Transpose(U) = Inverse(U)}
+          = Trace(U × A × (U^(-1)))       BY NOTATION
+          = Trace((U × A) × (U^(-1)))     BY MatrixMultiplicationAssociativity
+          = Trace(U × (A × (U^(-1))))     BY MatrixMultiplicationAssociativity
+          = Trace(A × (U^(-1) × U))       BY {IsUnitary(U) => U × (U^(-1)) = I}
+          = Trace(A × I)                  BY MatrixMultiplicationIdentity
+          = Trace(A)                      BY MatrixTraceLinearity
+    }
+      
+    THEOREM TensorNormInequality {
+      STATEMENT: ∀ (t1 : T[I, J]) (t2 : T[I, J]).
+        Norm(t1 ⨂ t2) <= Norm(t1) * Norm(t2)
+        
+      PROOF:
+        LET t1 : T[I, J], t2 : T[I, J]
+        
+        REWRITE Norm(t1 ⨂ t2)^2
+          = InnerProduct(t1 ⨂ t2, t1 ⨂ t2)                   BY DEFINITION
+          = Trace(Reshape((t1 ⨂ t2) ⨂ Transpose(t1 ⨂ t2)))   BY TensorInnerProductEquivalence
+          = Trace(Reshape((t1 ⨂ t2) ⨂ (Transpose(t2) ⨂ Transpose(t1))))  BY TensorProductAssociativity, Transpose
+          = Trace((Reshape(t1 ⨂ Transpose(t2))) ⊗ (Reshape(t2 ⨂ Transpose(t1))))  BY KroneckerProductMixed, Reshape
+          <= Trace((Reshape(t1 ⨂ Transpose(t1))) ⊗ (Reshape(t2 ⨂ Transpose(t2))))  BY MatrixTraceInequality, KroneckerProduct
+          = Trace(Reshape(t1 ⨂ Transpose(t1))) * Trace(Reshape(t2 ⨂ Transpose(t2)))  BY KroneckerProductTrace
+          = InnerProduct(t1, t1) * InnerProduct(t2, t2)      BY TensorInnerProductEquivalence
+          = Norm(t1)^2 * Norm(t2)^2                          BY DEFINITION
+          
+        SHOW Norm(t1 ⨂ t2) <= Norm(t1) * Norm(t2) BY REAL_INEQUALITY
+    }
+  }
+}

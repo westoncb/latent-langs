@@ -1,0 +1,356 @@
+ConceptScript v23
+
+<Concept> ::= "CONCEPT" <ConceptName> ["[" <Params> "]"] [":" <ParentConcept>] "{"
+               <Language>
+               <Structure>
+               <Proofs>
+             "}"
+
+<Language> ::= "LANGUAGE" "{"
+                 (<TypeDecl> | <ConstDecl> | <FuncDecl> | <PredDecl> |
+                  <RewriteDecl> | <InferDecl> | <NotationDecl>)*
+               "}"
+
+<TypeDecl> ::= "TYPE" <TypeName> ["[" <Params> "]"] [":" <Kind>]
+
+<ConstDecl> ::= "CONST" <ConstantName> ":" <Type>
+
+<FuncDecl> ::= "FUNC" <FuncName> ["[" <Params> "]"] ":" <Type>
+
+<PredDecl> ::= "PRED" <PredName> ["[" <Params> "]"] ":" <Type>
+
+<RewriteDecl> ::= "REWRITE" <RewriteName> ["[" <Params> "]"] ":" <Expression> "=>" <Expression>
+
+<InferDecl> ::= "INFER" <InferName> ["[" <Params> "]"] ":" <Formula>
+
+<NotationDecl> ::= "NOTATION" <NotationName> "=" <Expression>
+
+<Structure> ::= "STRUCTURE" "{"
+                  (<LetDecl> | <DefDecl> | <AxiomDecl>)*
+                "}"
+
+<LetDecl> ::= "LET" <LetName> ["[" <Params> "]"] "=" <Expression>
+
+<DefDecl> ::= "DEF" <DefName> ["[" <Params> "]"] ":" <Formula> | <Syntax>
+
+<AxiomDecl> ::= "AXIOM" <AxiomName> ["[" <Params> "]"] ":" <Formula>
+
+<Proofs> ::= "PROOFS" "{"
+               (<TacticDecl> | <TheoremDecl>)*
+             "}"
+
+<TacticDecl> ::= "TACTIC" <TacticName> ["[" <Params> "]"] "{" <TacticDef> "}"
+
+<TheoremDecl> ::= "THEOREM" <TheoremName> ["[" <Params> "]"] "{"
+                    "STATEMENT" ":" <Formula>
+                    "PROOF" "{"
+                      (<AssumptionStep> | <LetStep> | <HaveStep> | <ShowStep> | 
+                       <CaseStep> | <InduceStep> | <RewriteStep> | <ApplyStep> |
+                       <ByStep> | <HenceStep>)*
+                    "}"
+                  "}"
+
+<AssumptionStep> ::= "ASSUME" ["[" <HypName> "]"] ":" <Formula>
+
+<LetStep> ::= "LET" <LetName> ["[" <Params> "]"] "=" <Expression>
+
+<HaveStep> ::= "HAVE" <HaveName> ":" <Formula> ["BY" <TacticName> ["[" <Args> "]"]]
+
+<ShowStep> ::= "SHOW" <ShowName> ":" <Formula>
+
+<CaseStep> ::= "CASE" <CaseName> ":" <Formula>
+
+<InduceStep> ::= "INDUCE" <InductionName> ":" <Expression>
+
+<RewriteStep> ::= "REWRITE" <RewriteName> ["[" <Args> "]"] ["IN" <ProofName>]
+
+<ApplyStep> ::= "APPLY" <TacticName> ["[" <Args> "]"]
+
+<ByStep> ::= "BY" <ReasonName> ["[" <Args> "]"]
+
+<HenceStep> ::= "HENCE" <ConclusionName> ":" <Formula>
+
+
+Here are a a couple (you generated these in a prior context):
+
+CONCEPT TypedLambdaCalculus {
+
+  LANGUAGE {
+    TYPE Term
+    TYPE Type
+    TYPE Context = List(Binding)
+    TYPE Binding = (Variable, Type)
+    
+    FUNC Var : Variable -> Term
+    FUNC Abs : Variable -> Type -> Term -> Term
+    FUNC App : Term -> Term -> Term
+    FUNC TyVar : TypeVariable -> Type  
+    FUNC TyArr : Type -> Type -> Type
+    
+    PRED InContext : Context -> Variable -> Type -> 𝔹
+    PRED HasType : Context -> Term -> Type -> 𝔹
+    
+    NOTATION Γ ⊢ t : τ = HasType(Γ, t, τ)
+    NOTATION Γ, x:τ = Extend(Γ, (x, τ))
+    NOTATION λx:τ.t = Abs(x, τ, t)
+    NOTATION s t = App(s, t)
+    NOTATION τ₁ → τ₂ = TyArr(τ₁, τ₂)
+  }
+  
+  STRUCTURE {
+    DEF InContext(Γ, x, τ) <-> (x, τ) ∈ Γ
+    
+    DEF HasType(Γ, t, τ) <-> CASE t OF
+      | Var(x) -> InContext(Γ, x, τ)
+      | Abs(x, τ₁, t₁) -> τ = τ₁ → τ₂ ∧ HasType(Γ, x:τ₁, t₁, τ₂)  
+      | App(t₁, t₂) -> ∃τ₁. HasType(Γ, t₁, τ₁ → τ) ∧ HasType(Γ, t₂, τ₁)
+      
+    AXIOM TypesUnique {
+      ∀Γ t τ₁ τ₂. Γ ⊢ t : τ₁ ∧ Γ ⊢ t : τ₂ -> τ₁ = τ₂
+    }
+  }
+  
+  PROOFS {
+    THEOREM Progress {
+      STATEMENT : ∀t τ. ∅ ⊢ t : τ -> Value(t) ∨ ∃t'. t ↦ t'
+        WHERE Value(Abs(_, _, _))
+        NOTATION t ↦ t' = StepsTo(t, t') 
+        
+      PROOF BY INDUCTION ON HasType(∅, t, τ)
+       CASE Var : CONTRADICTION SINCE ¬InContext(∅, x, τ) FOR ANY x
+       
+       CASE Abs : 
+         HAVE Value(Abs(x, τ₁, t₁)) BY DEF
+       
+       CASE App :
+         ASSUME ∅ ⊢ t₁ : τ₁ → τ, 
+                ∅ ⊢ t₂ : τ₁
+         ASSUME IH₁: Value(t₁) ∨ ∃t₁'. t₁ ↦ t₁'
+         ASSUME IH₂: Value(t₂) ∨ ∃t₂'. t₂ ↦ t₂'
+         CASE Value(t₁) :
+           LET Abs(x, τ₁, t₁') = t₁
+           CASE Value(t₂) :  
+             SHOW (λx:τ₁.t₁') t₂ ↦ [x ↦ t₂]t₁'
+           CASE ∃t₂'. t₂ ↦ t₂' :
+             SHOW t₁ t₂ ↦ t₁ t₂'
+         CASE ∃t₁'. t₁ ↦ t₁' :
+           SHOW t₁ t₂ ↦ t₁' t₂
+    }
+      
+    THEOREM Preservation {
+      STATEMENT : ∀Γ t t' τ. Γ ⊢ t : τ ∧ t ↦ t' -> Γ ⊢ t' : τ
+      
+      PROOF BY INDUCTION ON Γ ⊢ t : τ
+        CASE Var : VACUOUS SINCE Var(x) ↦ t' NEVER HOLDS
+        
+        CASE Abs : VACUOUS SINCE Abs(x, τ₁, t₁) ↦ t' NEVER HOLDS
+        
+        CASE App : 
+          ASSUME Γ ⊢ t₁ : τ₁ → τ,
+                 Γ ⊢ t₂ : τ₁,
+                 t₁ t₂ ↦ t'
+          CASE t₁ = Abs(x, τ₁, t₁') ∧ t' = [x ↦ t₂]t₁' :
+            SUFFICES TO SHOW Γ ⊢ [x ↦ t₂]t₁' : τ
+            HAVE Γ, x:τ₁ ⊢ t₁' : τ BY INV OF Abs 
+            SHOW Γ ⊢ [x ↦ t₂]t₁' : τ BY SubstitutionLemma
+          CASE t₁ ↦ t₁' ∧ t' = t₁' t₂ :
+            HAVE Γ ⊢ t₁' : τ₁ → τ BY IH
+            HENCE Γ ⊢ t₁' t₂ : τ USING Γ ⊢ t₂ : τ₁ 
+          CASE t₂ ↦ t₂' ∧ t' = t₁ t₂' : 
+            HAVE Γ ⊢ t₂' : τ₁ BY IH  
+            HENCE Γ ⊢ t₁ t₂' : τ USING Γ ⊢ t₁ : τ₁ → τ
+            
+      THEOREM SubstitutionLemma {
+        STATEMENT : ∀Γ x t₁ t₂ τ₁ τ₂. Γ, x:τ₁ ⊢ t₁ : τ₂ ∧ Γ ⊢ t₂ : τ₁ -> Γ ⊢ [x ↦ t₂]t₁ : τ₂
+        
+        PROOF BY INDUCTION ON Γ, x:τ₁ ⊢ t₁ : τ₂
+          CASE Var :
+            CASE t₁ = x : 
+              HAVE τ₂ = τ₁
+              SHOW Γ ⊢ [x ↦ t₂]x : τ₁ SINCE [x ↦ t₂]x = t₂ 
+            CASE t₁ = y ≠ x :
+              HAVE InContext(Γ, y, τ₂)  
+              SHOW Γ ⊢ [x ↦ t₂]y : τ₂ SINCE [x ↦ t₂]y = y
+          CASE Abs :
+            CASE t₁ = λy:τ₁₁.t₁₂ : 
+              ASSUME Γ, x:τ₁, y:τ₁₁ ⊢ t₁₂ : τ₂₁
+              ASSUME τ₂ = τ₁₁ → τ₂₁
+              ASSUME IH: Γ, y:τ₁₁ ⊢ [x ↦ t₂]t₁₂ : τ₂₁  
+              SHOW Γ ⊢ (λy:τ₁₁.[x ↦ t₂]t₁₂) : τ₁₁ → τ₂₁ BY Abs
+          CASE App : 
+            CASE t₁ = t₁₁ t₁₂ :
+              ASSUME Γ, x:τ₁ ⊢ t₁₁ : τ₁₁ → τ₂
+              ASSUME Γ, x:τ₁ ⊢ t₁₂ : τ₁₁
+              ASSUME IH₁: Γ ⊢ [x ↦ t₂]t₁₁ : τ₁₁ → τ₂
+              ASSUME IH₂: Γ ⊢ [x ↦ t₂]t₁₂ : τ₁₁
+              SHOW Γ ⊢ ([x ↦ t₂]t₁₁) ([x ↦ t₂]t₁₂) : τ₂ BY App
+      }
+    }
+  }
+}
+
+CONCEPT IncrementalLearning {
+
+  LANGUAGE {
+    TYPE Example = ⟨x: Vector[n], y: Label⟩
+    TYPE Hypothesis = Vector[n] -> Label
+    TYPE Loss = Label -> Label -> ℝ⁺
+    TYPE Regret = ℝ⁺
+    
+    FUNC Predict(h: Hypothesis, x: Vector[n]) -> Label
+    FUNC Update(h: Hypothesis, 𝒟: 𝒫(Example)) -> Hypothesis
+    FUNC EmpiricalRisk(h: Hypothesis, 𝒟: 𝒫(Example), L: Loss) -> ℝ⁺
+    
+    PRED Realizable(𝒟: 𝒫(Example), 𝓗: 𝒫(Hypothesis)) <->
+      ∃ h* ∈ 𝓗: ∀ ⟨x, y⟩ ∈ 𝒟. Predict(h*, x) = y
+      
+    NOTATION "𝒪(·)" = AsymptoticUpperBound
+    NOTATION "⌈x⌉" = Ceil(x)
+  }
+  
+  STRUCTURE {
+    DEF Realizable(𝒟: 𝒫(Example), 𝓗: 𝒫(Hypothesis)) =
+      ∃ h* ∈ 𝓗: ∀ ⟨x, y⟩ ∈ 𝒟. h*(x) = y
+      
+    DEF EmpiricalRisk(h: Hypothesis, 𝒟: 𝒫(Example), L: Loss) = 
+      ∑ ⟨x, y⟩ ∈ 𝒟: L(h(x), y) / |𝒟|
+      
+    DEF Mistake[L](h: Hypothesis, ⟨x, y⟩: Example) <->
+      L(h(x), y) > 0
+      
+    DEF WeightedMajority(𝓗: 𝒫(Hypothesis), w: Vector[|𝓗|], x: Vector[n]) =
+      LET p = ∑ i ∈ 𝓗. wᵢ · 𝟙[Predict(hᵢ, x) = 1] / ∑ i ∈ 𝓗. wᵢ IN 
+        IF p ≥ 1/2 THEN 1 ELSE 0
+        
+    DEF UpdateWeights(𝓗: 𝒫(Hypothesis), w: Vector[|𝓗|], ⟨x, y⟩: Example, η: ℝ⁺) =
+      [IF Mistake[ZeroOneLoss](hᵢ, ⟨x, y⟩) THEN wᵢ · e^(-η) ELSE wᵢ for i ∈ 𝓗]
+  }
+  
+  PROOFS {
+    THEOREM WMRegretBound[n] {
+      STATEMENT:
+        ∀ (𝒟: [Example]^T) (𝓗: 𝒫(Hypothesis)[n]) (η : ℝ⁺).
+          Realizable(𝒟, 𝓗) ->
+          ∑ t ≤ T: Mistake[ZeroOneLoss](WeightedMajority(𝓗, wᵗ, xᵗ), ⟨xᵗ, yᵗ⟩)
+            ≤ ⌈(η + ln(n))/η⌉ · OPT(𝒟, 𝓗)
+        WHERE 
+          wᵗ = [1 / n for i ∈ 𝓗] for t = 1,
+          wᵗ = UpdateWeights(𝓗, wᵗ⁻¹, ⟨xᵗ⁻¹, yᵗ⁻¹⟩, η) for t > 1,
+          OPT(𝒟, 𝓗) = min h ∈ 𝓗: ∑ t ≤ T: Mistake[ZeroOneLoss](h, ⟨xᵗ, yᵗ⟩)
+          
+      PROOF {
+        ASSUME [𝒟: [Example]^T] [𝓗: 𝒫(Hypothesis)[n]] [η: ℝ⁺]:
+          Realizable(𝒟, 𝓗)
+          
+        LET h* ∈ 𝓗 SUCH THAT ∀ ⟨x, y⟩ ∈ 𝒟. h*(x) = y
+        LET M = ∑ t ≤ T: Mistake[ZeroOneLoss](WeightedMajority(𝓗, wᵗ, xᵗ), ⟨xᵗ, yᵗ⟩)
+        
+        HAVE Bound1: ∀ t ≤ T. ∑ i ∈ 𝓗. wᵗ⁽ⁱ⁾ ≤ n · e^(η · M - η · ∑ i ∈ 𝓗: Mistake[ZeroOneLoss](hᵢ, ⟨xᵗ, yᵗ⟩)) BY {
+          INDUCE ON t:
+            BASE CASE t = 1:
+              ∑ i ∈ 𝓗. w¹⁽ⁱ⁾ = n · (1/n) = 1 ≤ n · e^(η · 0 - η · 0) = n
+            INDUCTIVE CASE t > 1:
+              ASSUME: ∑ i ∈ 𝓗. wᵗ⁻¹⁽ⁱ⁾ ≤ n · e^(η · Mᵗ⁻¹ - η · ∑ i ∈ 𝓗: Mistake[ZeroOneLoss](hᵢ, ⟨xᵗ⁻¹, yᵗ⁻¹⟩))
+              LET mᵗ = ∑ i ∈ 𝓗: Mistake[ZeroOneLoss](hᵢ, ⟨xᵗ, yᵗ⟩)
+              HAVE: ∑ i ∈ 𝓗. wᵗ⁽ⁱ⁾ 
+                = ∑ i ∈ 𝓗. IF Mistake[ZeroOneLoss](hᵢ, ⟨xᵗ, yᵗ⟩) THEN wᵗ⁻¹⁽ⁱ⁾ · e^(-η) ELSE wᵗ⁻¹⁽ⁱ⁾ 
+                = e^(-η) · ∑ i ∈ 𝓗: Mistake[ZeroOneLoss](hᵢ, ⟨xᵗ, yᵗ⟩). wᵗ⁻¹⁽ⁱ⁾ + ∑ i ∈ 𝓗: ¬Mistake[ZeroOneLoss](hᵢ, ⟨xᵗ, yᵗ⟩). wᵗ⁻¹⁽ⁱ⁾
+                ≤ e^(-η) · ∑ i ∈ 𝓗. wᵗ⁻¹⁽ⁱ⁾
+                ≤ e^(-η) · n · e^(η · Mᵗ⁻¹ - η · ∑ i ∈ 𝓗: Mistake[ZeroOneLoss](hᵢ, ⟨xᵗ⁻¹, yᵗ⁻¹⟩)) BY ASSUMPTION  
+                = n · e^(η · (Mᵗ⁻¹ + 1 - mᵗ) - η · ∑ i ∈ 𝓗: Mistake[ZeroOneLoss](hᵢ, ⟨xᵗ⁻¹, yᵗ⁻¹⟩))
+                = n · e^(η · Mᵗ - η · ∑ i ∈ 𝓗: Mistake[ZeroOneLoss](hᵢ, ⟨xᵗ, yᵗ⟩))
+        }
+        
+        HAVE Bound2: ∀ t ≤ T. wᵗ⁽*⁾ ≥ e^(-η · ∑ t' ≤ t: Mistake[ZeroOneLoss](h*, ⟨xᵗ', yᵗ'⟩)) / n BY {
+          INDUCE ON t:
+            BASE CASE t = 1:
+              w¹⁽*⁾ = 1/n = e^(0) / n ≥ e^(-η · 0) / n
+            INDUCTIVE CASE t > 1:
+              ASSUME: wᵗ⁻¹⁽*⁾ ≥ e^(-η · ∑ t' ≤ t-1: Mistake[ZeroOneLoss](h*, ⟨xᵗ', yᵗ'⟩)) / n
+              HAVE: wᵗ⁽*⁾ = IF Mistake[ZeroOneLoss](h*, ⟨xᵗ, yᵗ⟩) THEN wᵗ⁻¹⁽*⁾ · e^(-η) ELSE wᵗ⁻¹⁽*⁾
+                ≥ e^(-η · ∑ t' ≤ t-1: Mistake[ZeroOneLoss](h*, ⟨xᵗ', yᵗ'⟩)) / n · e^(-η · Mistake[ZeroOneLoss](h*, ⟨xᵗ, yᵗ⟩))
+                = e^(-η · ∑ t' ≤ t: Mistake[ZeroOneLoss](h*, ⟨xᵗ', yᵗ'⟩)) / n
+        }
+        
+        HAVE: ∀ t ≤ T. e^(-η · ∑ t' ≤ t: Mistake[ZeroOneLoss](h*, ⟨xᵗ', yᵗ'⟩)) / n ≤ n · e^(η · M - η · ∑ i ∈ 𝓗: Mistake[ZeroOneLoss](hᵢ, ⟨xᵗ, yᵗ⟩)) BY {
+          Bound2, Bound1, wᵗ⁽*⁾ ≤ ∑ i ∈ 𝓗. wᵗ⁽ⁱ⁾
+        }
+        
+        HENCE: e^(-η · OPT(𝒟, 𝓗)) / n ≤ n · e^(η · M - η · OPT(𝒟, 𝓗))
+        
+        HENCE: ln(n) - η · OPT(𝒟, 𝓗) ≤ ln(n) + η · M - η · OPT(𝒟, 𝓗)
+        
+        HENCE: η · M ≤ η · OPT(𝒟, 𝓗) + ln(n)
+        
+        HENCE: M ≤ ⌈(η · OPT(𝒟, 𝓗) + ln(n)) / η⌉
+               ≤ ⌈(η + ln(n)) / η⌉ · OPT(𝒟, 𝓗) 
+               
+        SHOW: ∑ t ≤ T: Mistake[ZeroOneLoss](WeightedMajority(𝓗, wᵗ, xᵗ), ⟨xᵗ, yᵗ⟩) ≤ ⌈(η + ln(n)) / η⌉ · OPT(𝒟, 𝓗)
+      }
+    }
+    
+    THEOREM OnlineToBatchConversion[n] {
+      STATEMENT:
+        ∀ (𝒟: 𝒫(Example)) (𝓗: 𝒫(Hypothesis)[n]) (A: IncrementalLearner) (m : ℕ) (δ : ℝ⁺).
+          Realizable(𝒟, 𝓗) ∧ RegretBound(A, 𝒟, 𝓗, m) ≤ α·m + β ->
+          ℙ_{S ∼ 𝒟^m} [EmpiricalRisk(A(S), 𝒟, ZeroOneLoss) ≤ α + √(ln(2/δ)/(2m))] ≥ 1 - δ
+        WHERE
+          A(S) = LAST (MAP (A.Update, SCAN (A.Predict, A.h₀, S)))
+          RegretBound(A, 𝒟, 𝓗, m) = max S ∈ 𝒟^m: ∑ t ≤ m: Mistake[ZeroOneLoss](A.Predict(Sᵗ₋₁), Sᵗ) - OPT(S, 𝓗)
+          
+      PROOF {
+        ASSUME [𝒟: 𝒫(Example)] [𝓗: 𝒫(Hypothesis)[n]] [A: IncrementalLearner] [m: ℕ] [δ: ℝ⁺]:
+          Realizable(𝒟, 𝓗),
+          RegretBound(A, 𝒟, 𝓗, m) ≤ α·m + β
+        
+        LET S ∼ 𝒟^m  
+        LET h = A(S)
+        LET M(S) = ∑ t ≤ m: Mistake[ZeroOneLoss](A.Predict(Sᵗ₋₁), Sᵗ)
+        
+        HAVE: 𝔼[M(S)] ≤ α·m + β BY {
+          𝔼[M(S)] 
+            = 𝔼[∑ t ≤ m: Mistake[ZeroOneLoss](A.Predict(Sᵗ₋₁), Sᵗ)
+            ]
+            ≤ 𝔼[OPT(S, 𝓗) + α·m + β] BY RegretBound
+            = 𝔼[OPT(S, 𝓗)] + α·m + β
+            ≤ α·m + β BECAUSE 𝔼[OPT(S, 𝓗)] = 0 BY Realizable
+        }
+
+        HAVE: ℙ[M(S) ≥ 𝔼[M(S)] + m·ε] ≤ e^(-2·m·ε²) BY Hoeffding {
+          M(S) = ∑ t ≤ m: Mistake[ZeroOneLoss](A.Predict(Sᵗ₋₁), Sᵗ) ∈ [0, m]
+        }
+
+        CHOOSE ε = √(ln(2/δ)/(2m))
+
+        HENCE: ℙ[M(S) ≥ α·m + β + m·√(ln(2/δ)/(2m))] ≤ δ/2
+
+        HAVE: EmpiricalRisk(h, 𝒟, ZeroOneLoss) = 𝔼_{⟨x, y⟩ ∼ 𝒟}[ZeroOneLoss(h(x), y)]
+          = 𝔼_{⟨x, y⟩ ∼ 𝒟}[Mistake[ZeroOneLoss](h, ⟨x, y⟩)]
+          ≤ 𝔼_{S' ∼ 𝒟^m}[M(S')/m] + √(ln(2/δ)/(2m)) BY {
+            Hoeffding {
+              ℙ_{⟨x, y⟩ ∼ 𝒟}[Mistake[ZeroOneLoss](h, ⟨x, y⟩)] ∈ [0, 1]  
+            },
+            M(S')/m IS AN UNBIASED ESTIMATE OF ℙ_{⟨x, y⟩ ∼ 𝒟}[Mistake[ZeroOneLoss](h, ⟨x, y⟩)]
+          }
+          ≤ α + √(ln(2/δ)/(2m)) + √(ln(2/δ)/(2m))
+          = α + √(2·ln(2/δ)/m)
+
+        SHOW: ℙ[EmpiricalRisk(h, 𝒟, ZeroOneLoss) ≤ α + √(2·ln(2/δ)/m)] ≥ 1 - δ BY {
+          ℙ[EmpiricalRisk(h, 𝒟, ZeroOneLoss) > α + √(2·ln(2/δ)/m)]
+            ≤ ℙ[M(S)/m > α + √(ln(2/δ)/(2m))] + ℙ[𝔼_{S' ∼ 𝒟^m}[M(S')/m] > M(S)/m + √(ln(2/δ)/(2m))]
+            ≤ δ/2 + δ/2 = δ
+        }
+      }
+    }
+  }
+}
+
+ConceptScript is a language of a new type: it's sole intended purpose is to be used in accordance with the following methodology:
+
+1. I paste the spec and a couple example Concepts into your context (as is happening now), thus teaching you the language.
+2. I request that you express various concepts as Concepts; these Concepts come with detailed proofs of their own various claims; they serve as justifications of the selected structuring.
+3. We iterate, precisely and efficiently exploring your latent space to solve a wide variety of problems.
+
+Please always output ConceptScript in a code block otherwise formatting gets lost :/ And feel free to liberally invent notation, tactics, etc. as needed—it's zero cost in our particular usage context and this kind of abstraction can help to keep things "compressed", which is a design ideal of ours.
+
+To test the depth of your understanding of the language's capabilities, please generate a Concept of your choosing that's somewhat in the realm of the example concepts or ConceptScript itself, be it near or distantly connected.

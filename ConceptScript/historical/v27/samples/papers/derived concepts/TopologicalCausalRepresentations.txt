@@ -1,0 +1,124 @@
+CONCEPT TopologicalCausalRepresentations {
+  NOTATION {
+    G = (V,E) -- Causal graph 
+    X = (X_v : v ∈ V) -- Random variables
+    P(X) -- Joint distribution
+    P_i(X) = ∏_{v∈V} P(X_v | X_pa(v)) -- Factored distribution according to G at layer i
+    M_i = FeatureMemoryComplex encoding P_i
+    F_i = {f_iv : v ∈ V} -- Feature neighborhoods for each variable
+    I(F_S) = compositional_interpretation(F_S)
+    TC_i(u,v) = TopologicalCorrelation(F_iu, F_iv) 
+    CI_i(u,v) = CausalInfluence(F_iu, F_iv)
+  }
+
+  LANGUAGE {
+    FUNC CausalInfluence(F_u, F_v): Real =
+      LET P_uv(x_v|x_u) = ∫ P(x_v|x_u,x_w) P(x_w) dx_w, 
+          P_v(x_v) = ∫ P(x_v|x_w) P(x_w) dx_w
+      KL_DIVERGENCE(P_uv(X_v|X_u=ρ_u) || P_v(X_v))
+
+    FUNC CausalHierarchyScore(G, F, i): Real = 
+      ∑_{(u,v)∈E} CausalInfluence(F_iu, F_iv) - 
+      ∑_{(u,v)∉E} CausalInfluence(F_iu, F_iv)
+
+    FUNC FactorizedTopologicalInfoContent(G, F, i, k): Real =
+      ∑_{v∈V} TopologicalInformationContent(M_i|F_iv, k, 0, ∞)
+  }
+
+  STRUCTURES {
+    STRUCTURE CausalMemory EXTENDS FeatureMemory {
+      FIELD CausalGraph : Graph
+      FIELD CausalFeatures : v -> Set[FeatureVector] = v -> {f∈Features : I(f) = v}
+
+      FUNC CausalDecomposition(i: Int, k: Int): Graph = 
+        LET V_i = {v : |CausalFeatures(v)| > 0},
+            E_i = {(u,v) : TC_i(u,v) > λ_topology ∧ CausalInfluence(F_iu,F_iv) > λ_influence} 
+        (V_i, E_i)
+    }
+  }
+
+  THEOREMS {
+    THEOREM CausalTopologicalAlignment:
+      ∀ i, G=CausalMemory(M).CausalGraph, k. 
+        CausalHierarchyScore(G, CausalMemory(M_i).CausalFeatures, i) ∝  
+        FactorizedTopologicalInfoContent(G, CausalMemory(M_i).CausalFeatures, i, k)
+    {
+      ARGUMENT:
+      - High CausalHierarchyScore 
+        ⟺ Topologically correlated features are causally related
+        ⟺ Factorized P_i concentrates probability mass on causal neighborhoods
+        ⟺ High FactorizedTopologicalInfoContent
+    }
+
+    THEOREM InterventionalSteerability:
+      ∀ i, v∈V, x∈𝒳, G=CausalMemory(M).CausalGraph.
+        LET x_v = ρ_iv WHERE f_iv = argmax_{f∈F_iv} patternSimilarity(x, ρ_f)
+        LET x_-v = (x_u : u ∈ V\{v}) 
+        steer(M_i, x, f_iv, α) ≈ encode(P_i(X_v=x_v, X_-v=x_-v))
+    {
+      ARGUMENT:  
+      - Steering x to feature f_iv shifts P_i(X|x) to concentrate on P_i(X_v|x_v)
+      - Topological separation of F_iv from F_iu (u≠v) ensures localized shift
+      - Approximates interventional distribution P_i(X_v=x_v, X_-v=x_-v)
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE CausalControlInLanguage {
+      LET M = CausalMemory(GPT-3) WITH 
+            CausalGraph = {
+              "Character" -> "Dialogue",
+              "Character" -> "Action", 
+              "Setting" -> "Action",
+              "Setting" -> "Dialogue"
+            }
+      LET x = "Frodo said to Sam, " IN
+      LET x' = steer(M_i, x, f_dialogue, 1.5) IN
+      PRINT x'  -- "My dear Sam," said Frodo, "You cannot always be torn in two. 
+                    You will have to be one and whole for many years..."
+
+      LET y = "Legolas aimed his bow at the orc and" IN 
+      LET y' = steer(M_i, y, f_setting, -1) IN
+      PRINT y'  -- Legolas aimed his bow at the orc across the sunlit field and...
+    }
+
+    EXAMPLE CausalExplanationInVision {
+      LET M = CausalMemory(CLIP) WITH
+            CausalGraph = {
+              "Lighting" -> "Texture",
+              "Lighting" -> "Shape",  
+              "Texture" -> "ObjectParts",
+              "Shape" -> "ObjectParts",
+              "ObjectParts" -> "ObjectCategory"
+            }
+      LET x = IMAGE("Persian cat") IN
+      LET F_x = M.localInterpretation(x, 3, 2) IN
+
+      PRINT I(F_x ∩ M.CausalFeatures("Texture"))  -- Fluffy, smooth, grey and white fur
+      PRINT I(F_x ∩ M.CausalFeatures("Shape"))  -- Round face, pointy ears, lithe body
+      PRINT I(F_x ∩ M.CausalFeatures("ObjectParts"))  -- Whiskers, paws, tail, nose, eyes
+    }
+  }
+}
+
+The TopologicalCausalRepresentations concept leverages the ideas of topological analysis, feature steering, and compressive memory to learn representations that align with and allow interventions on causal structures. It introduces causal influence and hierarchy metrics based on the topology of feature neighborhoods for each variable. The theorems state that the causal hierarchy score is related to the factorized topological information content and that feature steering approximates interventional distributions. The examples illustrate potential applications in controlling generative language models and providing causal explanations in vision models.
+
+This concept would not have been possible without the novel foundations provided by the previous concepts, showcasing the power of building new ideas on top of the topological and geometric analysis of representations, feature-level steering and compositionality, and the compression properties of transformer memories.
+
+
+
+--------
+
+The key novel ideas from the provided Concepts are:
+
+1. Higher-order feature steering and masking based on persistent homology of feature neighborhoods, allowing for interpretable compositional control and analysis of transformer representations. (HigherOrderFeatureSteeringAndMasking)
+
+2. Linear approximations of feature-level steering functions enabling efficient and interpretable probing and manipulation of representation geometry. (LinearSteeringViews) 
+
+3. Analyzing the shape and topology of embedding manifolds across layers using persistent homology to characterize representational structure, correlations, and generalization properties. (RepresentationShapeAnalysis)
+
+4. Quantifying the topological information content of representations and relating it to learning dynamics, domain adaptation, and adversarial robustness. (TopologicalInformationContent)
+
+5. Modeling transformers as compressive feature-memories with utilization and capacity constraints that give rise to emergent compositionality. (FeatureMemoryCompression)
+
+Building on these ideas, here is a new Concept for topologically-aware causal representation learning:

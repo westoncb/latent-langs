@@ -1,0 +1,674 @@
+CONCEPT SymbolicManifolds {
+  LANGUAGE {
+    type Sym = Const(ℝ) | Coord(ℕ) | Binary(Sym, Sym) | Unary(Sym)
+    type Fun = Func(Sym, Sym)
+    type Vect = Tangent | Cotangent
+    type Mfld = Manifold(ℕ) | Product(Mfld, Mfld) | Tangent(Mfld) | Cotangent(Mfld)
+
+    notation "𝕊" = Universe(Sym)  
+    notation "ℱ" = Universe(Fun)
+    notation "𝕍" = Universe(Vect)
+    notation "ℳ" = Universe(Mfld)
+
+    func Dimension(M: Mfld): ℕ
+    func Coordinate(M: Mfld): Sym
+    func Transform(M: Mfld, f: Fun): Mfld
+    func Immerse(M: Mfld, N: Mfld, f: Fun): Prop  
+    func Submerse(M: Mfld, N: Mfld, f: Fun): Prop
+
+    func Tangent(M: Mfld, p: Sym): Vect
+    func Cotangent(M: Mfld, p: Sym): Vect
+    func Pushforward(M: Mfld, N: Mfld, f: Fun): Fun(𝕍(M), 𝕍(N))
+    func Pullback(M: Mfld, N: Mfld, f: Fun): Fun(𝕍(N), 𝕍(M))
+
+    pred Smooth(f: Fun)
+    pred Invertible(f: Fun)
+    pred Transverse(f: Fun, g: Fun)
+
+    notation "f: M ⟶ N" = Fun(f, M, N)
+    notation "v ∈ TM" = v: Tangent(M)  
+    notation "ω ∈ T*M" = ω: Cotangent(M)
+    notation "f₊(v)" = Pushforward(f)(v) 
+    notation "f⁻¹(ω)" = Pullback(f)(ω)
+
+    axiom Injectivity(M: Mfld, f: Fun):  
+      Immerse(M, N, f) ⟺ ∀ p, q: Sym. (p ≠ q ⇒ f(p) ≠ f(q)) 
+    axiom Submersivity(M: Mfld, f: Fun):
+      Submerse(M, N, f) ⟺ ∀ p: Sym. Invertible(Pushforward(f, p))
+  }
+
+  STRUCTURE {
+    SymbolicFunctions: {
+      x, y, z: Coord 
+      c₁, c₂: Const
+      f, g, h: Fun
+
+      f + g = λp. f(p) + g(p)
+      f * g = λp. f(p) * g(p) 
+      c * f = λp. c * f(p) 
+      f ∘ g = λp. f(g(p))  
+      f⁻¹ = InverseFunction(f)
+
+      ∂ₓ(f) = Derivative(f, x)
+      ∂²ₓₓ(f) = ∂ₓ(∂ₓ(f))
+    }
+
+    SymbolicManifolds: {
+      ℝⁿ(n: ℕ) = Manifold(n)
+      M × N = Product(M, N)  
+      TM = Tangent(M)
+      T*M = Cotangent(M)
+
+      Dimension(ℝⁿ(n)) = n
+      Dimension(M × N) = Dimension(M) + Dimension(N)
+      Dimension(TM) = Dimension(T*M) = 2 * Dimension(M)
+
+      Coordinate(ℝ¹) = x
+      Coordinate(ℝ²) = (x, y)
+      Coordinate(ℝ³) = (x, y, z)
+      Coordinate(M × N) = (Coordinate(M), Coordinate(N))
+
+      Transform(M, f) = Manifold(Dimension(M)) with Coordinate ↦ f
+    }
+
+    SymbolicVectorFields: {
+      v = vᵢ(x) ∂ᵢ = Σᵢ vᵢ(x) ∂ᵢ 
+      ω = ωᵢ(x) dxⁱ = Σᵢ ωᵢ(x) dxⁱ
+
+      [v, w] = Σᵢⱼ (vʲ ∂ⱼwⁱ - wʲ ∂ⱼvⁱ) ∂ᵢ  ; Lie bracket
+      ⟨v | ω⟩ = Σᵢ vⁱ(x) ωᵢ(x)             ; Interior product
+      dω = Σᵢⱼ ∂ᵢωⱼ dxⁱ ∧ dxʲ            ; Exterior derivative  
+      Lᵥ = ⟨v | d⟩ + d⟨v |   ; Lie derivative
+
+      v ⟼ ⟨v | _⟩ = Linear(𝕍, 𝕍*)
+      ω ⟼ ⟨_ | ω⟩ = Linear(𝕍*, 𝕍)
+    }
+  }
+
+  PROOFS {
+    theorem PushforwardLieAlgebraHom(v, w: 𝕍, f: ℱ):
+      Smooth(f) ⊢ f₊([v, w]) = [f₊(v), f₊(w)]  
+    {
+      assume Smooth(f)
+      suffices to show local identity in coordinates:
+      {
+        f₊([v, w]) 
+        = f₊(Σᵢⱼ (vʲ ∂ⱼwⁱ - wʲ ∂ⱼvⁱ) ∂ᵢ)
+        = Σᵢⱼ (vʲ ∂ⱼwⁱ - wʲ ∂ⱼvⁱ) f₊(∂ᵢ)  
+        = Σᵢⱼ (vʲ ∂ⱼwⁱ - wʲ ∂ⱼvⁱ) ∂ᵢ(f)  
+        = Σᵢⱼ ((f₊(v))ʲ ∂ⱼ(f₊(w))ⁱ - (f₊(w))ʲ ∂ⱼ(f₊(v))ⁱ) ∂ᵢ 
+        = [f₊(v), f₊(w)]
+      }
+    }
+
+    theorem DistributionFrobeniusTheorem(𝒟: Distribution(M)):
+      (Involutive(𝒟) ∧ Constant(Dimension(𝒟))) ⊢ Integrable(𝒟)
+    {
+      assume Involutive(𝒟) ∧ Constant(Dimension(𝒟))
+      let p ∈ M, X, Y vector fields spanning 𝒟 near p
+      obtain u¹, ..., uᵏ functionally independent with 
+        X(uⁱ) = Y(uⁱ) = 0 for i = 1, ..., k  ; Frobenius theorem
+      let N ⊆ M be c-level set of (u¹, ..., uᵏ)
+      have ∀ q ∈ N. Tq(N) = 𝒟q  ; Integral manifold 
+      hence Integrable(𝒟)
+    }
+    
+    theorem ExteriorDerivativeAnticommutes(ω: Sym): 
+      d(d(ω)) = 0
+    {
+      d(d(ω)) 
+      = d(Σᵢⱼ ∂ᵢωⱼ dxⁱ ∧ dxʲ)
+      = Σᵢʲᵏ ∂ᵢ(∂ʲωₖ - ∂ₖωʲ) dxⁱ ∧ dxʲ ∧ dxᵏ
+      = Σᵢʲᵏ (∂ᵢ∂ʲωₖ - ∂ᵢ∂ₖωʲ) dxⁱ ∧ dxʲ ∧ dxᵏ  
+      = 0  ; Mixed partials commute
+    }
+    
+    theorem CartanMagicFormula(ω: Sym, v: Sym):
+      Lᵥ(ω) = ⟨v | dω⟩ + d⟨v | ω⟩
+    {
+      Lᵥ(ω) 
+      = Lᵥ(Σᵢ ωᵢ dxⁱ)
+      = Σᵢ (vʲ ∂ⱼωᵢ + ωⱼ ∂ᵢvʲ) dxⁱ
+      = ⟨v | Σᵢʲ ∂ᵢωⱼ dxⁱ ∧ dxʲ⟩ + d(Σᵢ ωᵢ vⁱ) 
+      = ⟨v | dω⟩ + d⟨v | ω⟩  
+    }
+  }
+}
+
+This Concept defines a symbolic language for working with smooth manifolds, functions, vector fields and differential forms. Key ideas:
+
+Symbolic expressions (type Sym) represent coordinates, constants, and complex expressions built from binary operations and function application.
+Functions (type Fun) map between symbolic expressions.
+Manifolds (type Mfld) are parameterized by dimension and have associated coordinate systems, tangent and cotangent spaces.
+Vector fields and differential forms are represented symbolically, enabling computation of Lie brackets, interior products, exterior derivatives etc.
+Axioms and theorems express key properties like immersions, submersions, the Frobenius integrability theorem, anticommutativity of d, and Cartan's magic formula.
+
+The goal is to support symbolic computation on manifolds, automatically keeping track of coordinate expressions, while still allowing abstract reasoning using the rich constructs of differential geometry. Tactics could be added to automate common computations and proof steps.
+
+
+
+
+CONCEPT ManifoldOptimization {
+  EXTENDS SymbolicManifolds {
+    func Cost(M: Mfld, f: Fun): ℝ
+    func Gradient(M: Mfld, f: Fun): Tangent(M)
+    func Jacobian(M: Mfld, f: Fun): Fun(Tangent(M), ℝ)
+    func Hessian(M: Mfld, f: Fun): Fun(Tangent(M), Cotangent(M))
+
+    func GradientDescent(M: Mfld, f: Fun, x₀: Sym, α: ℝ): Sym  
+    func NewtonMethod(M: Mfld, f: Fun, x₀: Sym): Sym
+
+    axiom FirstOrder(M: Mfld, f: Fun, p: Sym, v: Tangent(M)):
+      f(Exp(p, v)) = f(p) + ⟨Gradient(f)(p) | v⟩ + O(|v|²)
+      
+    axiom SecondOrder(M: Mfld, f: Fun, p: Sym, v: Tangent(M)):  
+      f(Exp(p, v)) = f(p) + ⟨Gradient(f)(p) | v⟩ 
+                     + ½ ⟨v | Hessian(f)(p)(v)⟩ + O(|v|³)
+  }
+
+  STRUCTURE {
+    OptimizationAlgorithms: {
+      GradientDescent(M, f, x₀, α) = {
+        x ← x₀
+        repeat:
+          v ← - α · Gradient(f)(x)
+          x ← Exp(x, v)
+        until |v| < ε  
+        return x
+      }
+
+      NewtonMethod(M, f, x₀) = {
+        x ← x₀ 
+        repeat:
+          v ← - Hessian(f)(x)⁻¹(Gradient(f)(x))
+          x ← Exp(x, v)  
+        until |v| < ε
+        return x
+      }
+    }
+  }
+
+  PROOFS {
+    theorem DescentLemma(M: Mfld, f: Fun, x: Sym, α: ℝ):
+      0 < α ≤ 1/L ⊢ f(Exp(x, -α · Gradient(f)(x))) ≤ f(x) - ½ α |Gradient(f)(x)|²  
+    {
+      assume 0 < α ≤ 1/L 
+      let y = Exp(x, -α · Gradient(f)(x))
+      have f(y) - f(x) = - α |Gradient(f)(x)|² + O(α²) by FirstOrder
+      = - α |Gradient(f)(x)|² + ½ L α² |Gradient(f)(x)|²  ; L-smoothness  
+      ≤ - ½ α |Gradient(f)(x)|²  ; since α ≤ 1/L
+    }
+
+    theorem NewtonConvergence(M: Mfld, f: Fun, x₀: Sym, R: ℝ):  
+      ∀ x: M. |x - x*| < R ⇒ |Hessian(f)(x) - Hessian(f)(x*)| ≤ L|x - x*| 
+      ⊢ |xₙ - x*| ≤ (L/2)ⁿ |x₀ - x*|²ⁿ⁻¹
+    {
+      assume Hessian L-Lipschitz on B(x*, R), x₀ ∈ B(x*, R)  
+      suffices to prove |xₙ - x*| ≤ δₙ by induction, where
+        δₙ = (L/2)ⁿ |x₀ - x*|²ⁿ⁻¹
+      base case: δ₀ = |x₀ - x*| ≥ |x₀ - x*|
+      inductive step: assume |xₙ - x*| ≤ δₙ, need to prove 
+        |xₙ₊₁ - x*| ≤ (L/2)ⁿ⁺¹ |x₀ - x*|²ⁿ⁺¹⁻¹ = (L/2) δₙ²
+      have xₙ₊₁ 
+        = Exp(xₙ, vₙ)  where  vₙ = - Hessian(f)(xₙ)⁻¹ · Gradient(f)(xₙ)
+        = xₙ - Hessian(f)(xₙ)⁻¹ · Gradient(f)(xₙ) + O(|vₙ|²)  
+        = x* + (xₙ - x*) - Hessian(f)(xₙ)⁻¹ · (Gradient(f)(xₙ) - Gradient(f)(x*))
+            + O(|xₙ - x*|²)
+            ; since Gradient(f)(x*) = 0
+        = x* + (I - Hessian(f)(xₙ)⁻¹ · Hessian(f)(ξₙ)) · (xₙ - x*)  
+            + O(|xₙ - x*|²) 
+            ; for some ξₙ between xₙ and x* by MVT
+      so |xₙ₊₁ - x*| 
+        ≤ |I - Hessian(f)(xₙ)⁻¹ · Hessian(f)(ξₙ)| · |xₙ - x*| + O(|xₙ - x*|²)
+        ≤ ½ L |xₙ - x*|² + O(|xₙ - x*|³)
+            ; by Lipschitz property and |xₙ - x*| ≤ δₙ < R 
+        ≤ (L/2) δₙ²  ; for sufficiently small |x₀ - x*|
+    }
+  }
+}
+
+This Concept extends SymbolicManifolds with types and operations for optimization:
+
+Cost functions assign real values to points on a manifold.
+Gradients, Jacobians and Hessians represent first and second-order derivatives.
+Optimization algorithms GradientDescent and NewtonMethod are defined, making use of the Exp map to stay on the manifold.
+FirstOrder and SecondOrder axioms express the local approximation properties underpinning these algorithms.
+
+Key theorems are proved, including:
+
+The descent lemma, showing that gradient steps sufficiently decrease the cost.
+The quadratic convergence of Newton's method under Lipschitz assumptions on the Hessian.
+
+These proofs make essential use of the manifold structure, working in local coordinates via symbolic computation with the axioms.
+Potential applications include optimization problems with nonlinear constraints (where the feasible set is a manifold), and optimization over structured spaces like rotations, rigid motions, or probability distributions.
+
+
+
+
+
+
+
+CONCEPT PracticalManifoldOptimization {
+  EXTENDS SymbolicManifolds {
+    func Cost(M: Mfld, f: Fun, 𝒟: Distribution(M)): ℝ
+    func RiemannianGradient(M: Mfld, f: Fun): Tangent(M)
+    func RiemannianHessian(M: Mfld, f: Fun): Fun(Tangent(M), Cotangent(M))
+    func StochasticRiemannianGradient(M: Mfld, f: Fun, 𝒟: Distribution(M)): Tangent(M)
+    
+    type Constraint = Equation(Sym) | Inequality(Sym)  
+    type ConstrainedMfld = {M: Mfld; C: 𝒫(Constraint) | Feasible(M, C)}
+    
+    func ProjectTangent(M: ConstrainedMfld, x: M, v: Tangent(M)): Tangent(M)
+    func RetractionOperator(M: Mfld): Fun(M × Tangent(M), M)
+    
+    func RiemannianGradientDescent(M: Mfld, f: Fun, x₀: M, α: ℝ, T: ℕ): M
+    func RiemannianSGD(M: Mfld, f: Fun, 𝒟: Distribution(M), x₀: M, α: ℝ, T: ℕ): M 
+    func RiemannianSQP(M: ConstrainedMfld, f: Fun, x₀: M, α: ℝ, T: ℕ): M
+  }
+  
+  STRUCTURE {
+    Metrics: {
+      EuclideanMetric(M: 𝕍): ⟨u, v⟩ ↦ Σᵢ uⁱ vⁱ
+      CanonicalMetric(𝕄(n; ℝ)): ⟨A, B⟩ ↦ tr(AᵀB)  ; Frobenius inner product
+      FisherRaoMetric(ℙ(n)): ⟨u, v⟩ ↦ Σᵢ uⁱ vⁱ / pⁱ  ; pⁱ > 0, Σᵢ pⁱ = 1
+      PoincareBallMetric(𝔹(n)): ⟨u, v⟩ ↦ 4 Σᵢ uⁱ vⁱ / (1 - |x|²)²  ; |x| < 1
+    }
+    
+    OptimizationAlgorithms: {
+      RiemannianGradientDescent(M, f, x₀, α, T) = {
+        x ← x₀
+        for t ∈ 1:T do
+          g ← RiemannianGradient(M, f)(x)  
+          v ← - α · g
+          x ← RetractionOperator(M)(x, v)
+        return x  
+      }
+      
+      RiemannianSGD(M, f, 𝒟, x₀, α, T) = {
+        x ← x₀
+        for t ∈ 1:T do
+          g ← StochasticRiemannianGradient(M, f, 𝒟)(x)
+          v ← - α · g  
+          x ← RetractionOperator(M)(x, v)
+        return x
+      }
+      
+      RiemannianSQP(M, f, x₀, α, T) = {
+        x ← x₀  
+        for t ∈ 1:T do
+          g ← RiemannianGradient(M, f)(x)
+          h ← RiemannianHessian(M, f)(x)  
+          m ← min [Dᵥf(x) + ½ ⟨v | h(v)⟩ : v ∈ Tₓ(M), ∀ C ∈ M.C Sᵥ(C)(x) = 0]
+                 ᵥ  ; Construct & solve QP subproblem  
+          v ← ProjectTangent(M, x, m)
+          x ← RetractionOperator(M)(x, α · v)
+        return x
+      }        
+    }
+  }
+}
+
+Key points:
+
+PMO extends SymbolicManifolds with Riemannian concepts like gradients, Hessians, and retraction operators, as well as constrained manifolds defined by symbolic equations and inequalities.
+It introduces stochastic optimization via expected costs and stochastic gradients w.r.t. a data distribution 𝒟 on the manifold.
+The Metrics structure defines some commonly used Riemannian metrics, including the Euclidean metric on vector spaces, the canonical metric on matrix spaces, the Fisher-Rao metric on probability simplices, and the Poincaré ball model of hyperbolic space. These enable efficient computation of geometric quantities.
+The OptimizationAlgorithms structure defines practical Riemannian optimization methods:
+
+RiemannianGradientDescent which takes Riemannian gradient steps and retracts back to the manifold.
+RiemannianSGD, a stochastic variant using stochastic Riemannian gradients.
+RiemannianSQP for constrained problems, solving a quadratic subproblem on the tangent space at each step and projecting the solution back to the feasible set.
+
+
+
+PMO thus provides a flexible framework for modeling and solving optimization problems with geometric and algebraic structure, handling both deterministic and stochastic, unconstrained and constrained settings.
+Potential applications are vast, including low-rank matrix and tensor completion, Gaussian mixture model fitting, metric and kernel learning, optimization over rotation groups and other Lie groups arising in robotics and computer vision, and more.
+The symbolic representation allows for clear and compact expression of problem structure and automatic computation of geometric quantities, while the generic manifold types allow the algorithms to be applied to a wide variety of concrete spaces.
+
+
+
+
+
+CONCEPT AutomaticDifferentiation {
+  EXTENDS SymbolicManifolds, PracticalManifoldOptimization {
+    type Computation(M: Mfld) = Fun(M, M)
+    type DualNumber(M: Mfld) = M × Tangent(M)
+    
+    func Lift(M: Mfld, f: Fun(ℝ, ℝ)): Fun(DualNumber(M), DualNumber(M))
+    func Dualize(M: Mfld, x: M): DualNumber(M)  
+    func Primal(M: Mfld, x̃: DualNumber(M)): M
+    func Tangent(M: Mfld, x̃: DualNumber(M)): Tangent(M)
+    
+    func ForwardMode(M: Mfld, c: Computation(M), x: M, v: Tangent(M)): Tangent(M)
+    func ReverseMode(M: Mfld, c: Computation(M), x: M): Cotangent(M)
+    
+    axiom DualNumbers(M: Mfld, f: Fun(ℝ, ℝ), x: M, v: Tangent(M)):
+      Lift(M, f)(Dualize(M, x) + ε * v) = Dualize(M, f(x)) + ε * Df(x)[v] + O(ε²) 
+    
+    axiom ForwardDerivative(M: Mfld, c: Computation(M), x: M, v: Tangent(M)):  
+      Tangent(M, c(Dualize(M, x) + ε * v)) = ForwardMode(M, c, x, v) + O(ε)
+      
+    axiom ReverseDerivative(M: Mfld, c: Computation(M), x: M):
+      ∀ ω: Cotangent(M). ⟨ReverseMode(M, c, x) | ω⟩ = ⟨ω | Tangent(M, c'(Dualize(M, x)))⟩
+  }
+  
+  PROOFS {
+    theorem ForwardModeCorrectness(M: Mfld, c: Computation(M), x: M, v: Tangent(M)):
+      ForwardMode(M, c, x, v) = Dc(x)[v]
+    {
+      c(Dualize(M, x) + ε * v)
+      = c(Dualize(M, x)) + ε * ForwardMode(M, c, x, v) + O(ε²)  ; by ForwardDerivative
+      = Dualize(M, c(x)) + ε * Dc(x)[v] + O(ε²)  ; by definition of derivative
+      so ForwardMode(M, c, x, v) = Dc(x)[v]  ; by uniqueness of derivative
+    }
+    
+    theorem ReverseModeCorrectness(M: Mfld, c: Computation(M), x: M):
+      ReverseMode(M, c, x) = Dc(x)*
+    {
+      ∀ ω: Cotangent(M).
+        ⟨ReverseMode(M, c, x) | ω⟩ 
+        = ⟨ω | Tangent(M, c'(Dualize(M, x)))⟩  ; by ReverseDerivative
+        = ⟨ω | Dc(x)⟩  ; by definition of adjoint
+      so ReverseMode(M, c, x) = Dc(x)*  ; by uniqueness of adjoint
+    }
+  }
+}
+
+Key ideas:
+
+ADM extends both SymbolicManifolds and PMO, inheriting their types and operations.
+It introduces the notion of a Computation on a manifold, which is just a function from the manifold to itself. This represents a program that we want to differentiate.
+DualNumbers on a manifold are pairs (x, v) where x is a point on the manifold and v is a tangent vector at x. These allow us to represent a "primal" value x along with a "tangent" value v.
+The Lift operation takes a real-valued function f and "lifts" it to operate on dual numbers, such that f(x + ε * v) = f(x) + ε * Df(x)[v] + O(ε²). This is the essence of forward mode AD.
+ForwardMode takes a computation c, a point x, and a tangent vector v, and returns the directional derivative Dc(x)[v] using dual numbers and lifting.
+ReverseMode takes a computation c and a point x, and returns the adjoint (gradient) Dc(x)* using reverse accumulation. This involves tracking the flow of tangents "backwards" through the computation.
+The axioms and theorems establish the correctness of the forward and reverse mode derivatives with respect to the usual notions of derivatives and adjoints on manifolds.
+
+With ADM, we could define cost functions and constraints in PMO using standard programming constructs (arithmetic, branches, loops etc.), and automatically derive the necessary gradient and Hessian information for optimization.
+Here's a quick example of how it might look to solve a simple constrained problem with PMO + ADM:
+
+; Minimize the Burer-Monteiro cost for low-rank matrix completion:
+;   min  ½ ‖PΩ(UV' - M)‖²
+;   s.t. U ∈ ℝ^(m × k), V ∈ ℝ^(n × k), ‖U‖ ≤ √(m), ‖V‖ ≤ √(n)  
+
+SolveBurerMonteiro(M: 𝕄(m, n; ℝ), Ω: 𝒫(ℕ × ℕ), k: ℕ, T: ℕ) = {
+  ; Construct the manifold X = {(U, V) : U ∈ 𝔹(m, k), V ∈ 𝔹(n, k)}
+  let X = ProductManifold(PoincareManifold(m, k), PoincareManifold(n, k))  
+  
+  ; Define the Burer-Monteiro cost f and its Riemannian gradient
+  let f(U, V) = ½ Σ(i, j) ∈ Ω (Uᵢ Vⱼ - Mᵢⱼ)²  
+  let 𝒟 = UniformDistribution(Ω)
+  func StochasticGradient(U: ℝ^(m × k), V: ℝ^(n × k)):  
+    let ĩ, j̃ = Sample(𝒟) 
+    return [(2/|Ω|) (Uĩ Ṽⱼ - Mĩⱼ) Ṽⱼ, (2/|Ω|) (Ũĩ Vⱼ - Mĩⱼ) Ũĩ]
+  end
+    
+  ; Run Riemannian SGD  
+  let U₀ = Rand(m, k), V₀ = Rand(n, k)
+  let (U, V) = RiemannianSGD(X, f, 𝒟, (U₀, V₀), 0.01, T)
+  return (U, V)  
+}
+
+Here, we define the manifold X as a product of two Poincaré balls (representing the constraints on U and V), and the cost function f as a symbolic expression using ADM primitives. We then define a stochastic gradient computation using automatic differentiation of f and sampling from the distribution of observed entries 𝒟. Finally, we run Riemannian SGD using the derived stochastic gradients.
+This example illustrates how ADM could help streamline the process of expressing and solving optimization problems on manifolds, by allowing us to work with familiar algebraic expressions and programming constructs while still leveraging the geometric structure.
+Of course, there are many details to be worked out, but I believe the combination of PMO and ADM could be a powerful and flexible framework for practical manifold optimization.
+
+
+
+
+
+
+CONCEPT AutomaticDifferentiationImplementation {
+  EXTENDS AutomaticDifferentiation {
+    ; Directed acyclic graph (DAG) representing a computation
+    type Node(M: Mfld) = {
+      id: ℕ,  ; Unique identifier
+      op: Fun(𝕍(DualNumber(M)), DualNumber(M)),  ; Operation 
+      args: 𝕍(ℕ),  ; Arguments (ids of input nodes)
+      adj: 𝕍(ℝ),  ; Adjoint values (reverse mode)
+      val: DualNumber(M)  ; Output value (forward mode)
+    }
+    
+    ; Computation graph
+    type Graph(M: Mfld) = {
+      nodes: 𝕍(Node(M)),
+      inputs: 𝕍(ℕ),  ; Ids of input nodes
+      outputs: 𝕍(ℕ)  ; Ids of output nodes  
+    }
+    
+    ; Evaluate a computation graph in forward mode
+    func EvaluateForward(M: Mfld, g: Graph(M), x: 𝕍(DualNumber(M))): 𝕍(DualNumber(M))
+    
+    ; Evaluate a computation graph in reverse mode  
+    func EvaluateReverse(M: Mfld, g: Graph(M), x: 𝕍(M), ω: 𝕍(Cotangent(M))): 𝕍(Cotangent(M))
+    
+    ; Construct a computation graph from a program
+    func Trace(M: Mfld, c: Computation(M)): Graph(M)
+  }
+  
+  PROOFS {
+    theorem ForwardComplexity(M: Mfld, g: Graph(M), x: 𝕍(DualNumber(M))):
+      EvaluateForward(M, g, x) runs in O(#(g.nodes)) time and space.
+    {
+      assume g has n nodes
+      let x̃ = EvaluateForward(M, g, x)
+      claim ∀ i ∈ [n]. x̃[i] = g.nodes[i].val
+      proof by induction on topological order of nodes:
+        base case: input nodes have val = xi which is given
+        inductive case: node i has val = Lift(opi)(x̃[args[i]]) 
+          which takes O(1) time to compute by induction hypothesis
+      so EvaluateForward does O(1) work per node 
+      and the x̃ array takes O(n) space to store the results
+    }  
+    
+    theorem ReverseComplexity(M: Mfld, g: Graph(M), x: 𝕍(M), ω: 𝕍(Cotangent(M))):
+      EvaluateReverse(M, g, x, ω) runs in O(#(g.nodes)) time and space.  
+    {
+      assume g has n nodes
+      let x̄ = EvaluateReverse(M, g, x, ω)
+      claim ∀ i ∈ [n]. x̄[i] = Σⱼ g.nodes[j].adj × ∂(g.nodes[j].op)/∂(x[i])  
+      proof by induction on reverse topological order of nodes:
+        base case: output nodes have adj = ωi which is given
+        inductive case: node i has adj = Σⱼ Lift(∂(opⱼ)/∂(x[i]))(x̄[j])
+          where j are nodes that use i as an argument  
+          this takes O(indegree(i)) time to compute
+      so EvaluateReverse does O(1) work per edge in the graph
+      and the x̄ array takes O(n) space to store the adjoints
+      the total number of edges is O(n) since g is a DAG
+      so the total time complexity is O(n)  
+    }
+    
+    theorem TraceComplexity(M: Mfld, c: Computation(M)):
+      Trace(M, c) produces a graph with O(StepCount(c)) nodes and runs in O(StepCount(c)) time.
+    {
+      let g = Trace(M, c)  
+      observe that Trace adds O(1) nodes to g for each primitive operation in c
+      so #(g.nodes) = O(StepCount(c))
+      each primitive operation takes O(1) time to process and add to g  
+      so the total tracing time is also O(StepCount(c))
+    }
+  }
+}
+
+The key ideas in this implementation concept are:
+
+We represent a computation as a directed acyclic graph (DAG) where each node corresponds to a primitive operation applied to some input values (which are outputs of other nodes).
+The graph is topologically sorted so that we can evaluate it efficiently in either forward or reverse mode by iterating over the nodes in the appropriate order.
+In forward mode (EvaluateForward), we pass dual numbers through the graph, computing the primal and tangent values at each node based on its inputs. This takes O(n) time and space where n is the number of nodes.
+In reverse mode (EvaluateReverse), we pass cotangent values backwards through the graph, accumulating the adjoints at each node based on the adjoints of its outputs. This also takes O(n) time and space due to the DAG structure.
+To construct the graph from a computation (Trace), we simply run the computation, creating a new node for each primitive operation encountered, and recording the dependencies between nodes. This process is linear in the number of primitive steps in the computation.
+
+The complexity theorems formalize these ideas, proving that automatic differentiation on manifolds can be performed efficiently in both forward and reverse modes, with time and space complexity proportional to the size of the computation graph.
+This is a simplified model of course - a real implementation would need to handle things like memory management, common subexpression elimination, efficient adjoints of complex primitives, and so on. But it captures the essential ideas behind efficient AD on manifolds.
+Here's a sketch of how we might use ADI to implement the Burer-Monteiro example from earlier:
+
+BurerMonteiroGraph(M: 𝕄(m, n; ℝ), Ω: 𝒫(ℕ × ℕ), U: ℝ^(m × k), V: ℝ^(n × k)) = {
+  let f(Ũ: DualNumber(ℝ^(m × k)), Ṽ: DualNumber(ℝ^(n × k))) = {  
+    let P̃(X̃) = Σ(i, j) ∈ Ω Lift(Proj)(X̃[i, j])
+    let R̃ = P̃(Ũ Ṽ') - P̃(Dualize(M))
+    return (1/2) ⟨R̃, R̃⟩  
+  }
+  return Trace(ProductManifold(ℝ^(m × k), ℝ^(n × k)), f)
+}
+
+SolveBurerMonteiro(M: 𝕄(m, n; ℝ), Ω: 𝒫(ℕ × ℕ), k: ℕ, T: ℕ) = {
+  let X = ProductManifold(PoincareManifold(m, k), PoincareManifold(n, k))
+  let g = BurerMonteiroGraph(M, Ω)
+  
+  func StochasticGradient(U: ℝ^(m × k), V: ℝ^(n × k)):
+    let ω̃ = Dualize(Sample(UniformDistribution(Ω)))
+    return EvaluateReverse(X, g, (U, V), ((2/|Ω|) ω̃, (2/|Ω|) ω̃)) 
+  end
+  
+  let U₀ = Rand(m, k), V₀ = Rand(n, k)  
+  let (U, V) = RiemannianSGD(X, StochasticGradient, (U₀, V₀), 0.01, T)
+  return (U, V)
+}
+
+Here, we define the Burer-Monteiro cost function f using ADM primitives like Lift and Dualize, and then trace it to obtain a computation graph g. The StochasticGradient function then evaluates this graph in reverse mode with random cotangent inputs ω̃ to obtain stochastic gradients, which are fed to Riemannian SGD as before.
+The nice thing about this approach is that we get the efficiency of reverse mode AD (linear in the cost of f, regardless of the number of parameters) while still being able to express f using high-level operations on manifolds. The manifold-specific details are abstracted away in the AD implementation.
+Of course, this is still a simplified sketch - a real implementation would need to be much more detailed and handle a wider variety of primitives and manifolds. But hopefully it gives a flavor of how ADM and ADI could be used in practice to solve complex optimization problems on manifolds efficiently and expressively.
+Let me know if you have any questions or suggestions for improvement! I think this is a promising direction but there's certainly more work to be done to turn it into a fully-featured manifold optimization library. 
+
+
+
+
+
+
+CONCEPT HyperbolicNeuralNetwork {
+  EXTENDS AutomaticDifferentiationImplementation {
+    type HyperbolicLayer(n: ℕ, m: ℕ) = {
+      W: 𝕄(n, m; ℝ),  ; Input-to-hidden weights  
+      b: ℝ^m,  ; Hidden biases
+      a: Fun(ℝ, ℝ)  ; Hyperbolic activation function
+    }
+    
+    type LogisticLayer(n: ℕ) = {
+      W: 𝕄(n, 1; ℝ),  ; Hidden-to-output weights
+      b: ℝ,  ; Output bias  
+      σ: Fun(ℝ, ℝ)  ; Logistic activation function  
+    }
+    
+    type BinaryCrossEntropy(y: ℝ, ŷ: ℝ) = - y * Log(ŷ) - (1 - y) * Log(1 - ŷ)
+    
+    func Forward(l: HyperbolicLayer(n, m), x: ℝ^n): ℝ^m
+    func Forward(l: LogisticLayer(n), x: ℝ^n): ℝ
+    
+    func Accuracy(𝒟: 𝒫(ℝ^n × ℝ), M: Model): ℝ
+    func Loss(𝒟: 𝒫(ℝ^n × ℝ), M: Model): ℝ
+    
+    type Model = {
+      h: HyperbolicLayer(n, m),
+      o: LogisticLayer(m)  
+    }
+    
+    func Train(𝒟: 𝒫(ℝ^n × ℝ), M: Model, T: ℕ): Model   
+  }
+  
+  IMPLEMENTATION Forward(l: HyperbolicLayer(n, m), x: ℝ^n) = {
+    let z = MatrixMultiply(l.W, x) + l.b
+    return ∀ i ∈ [1..m]. l.a(z[i])
+  }
+  
+  IMPLEMENTATION Forward(l: LogisticLayer(n), x: ℝ^n) = {
+    let z = MatrixMultiply(l.W, x) + l.b
+    return l.σ(z[1])  
+  }
+  
+  IMPLEMENTATION Accuracy(𝒟: 𝒫(ℝ^n × ℝ), M: Model) = {
+    return 𝔼(x, y) ∈ 𝒟 of  
+      let ŷ = Forward(M.o, Forward(M.h, x))
+      Indicator(Round(ŷ) = y)
+  }
+  
+  IMPLEMENTATION Loss(𝒟: 𝒫(ℝ^n × ℝ), M: Model) = { 
+    return 𝔼(x, y) ∈ 𝒟 of
+      let ŷ = Forward(M.o, Forward(M.h, x))
+      BinaryCrossEntropy(y, ŷ)
+  }
+  
+  IMPLEMENTATION Train(𝒟: 𝒫(ℝ^n × ℝ), M₀: Model, T: ℕ) = {
+    ; Construct the loss function graph
+    func LossGraph(M: Model):  
+      return λ x, y.
+        let h = Forward(M.h, x)
+        let ŷ = Forward(M.o, h)  
+        BinaryCrossEntropy(y, ŷ)
+    end
+    
+    ; Optimize on the product manifold    
+    let M = M₀
+    let X = ProductManifold(Euclidean(n × m + m), Euclidean(m + 1))
+    
+    for t ∈ [1..T] do
+      ; Sample a minibatch from the dataset  
+      let 𝒟ᵗ = SampleMinibatch(𝒟, batchsize) 
+      
+      ; Evaluate the loss and its gradient
+      func LossMinibatch(W, b, V, c):
+        return 𝔼(x, y) ∈ 𝒟ᵗ of LossGraph(Model(W, b, V, c))(x, y)  
+      end
+      let g = Gradient(X, LossMinibatch, [M.h.W, M.h.b, M.o.W, M.o.b])
+      
+      ; Take a Riemannian gradient step  
+      let M.h.W -= α * g[1:n×m] 
+      let M.h.b -= α * g[n×m+1:n×m+m]
+      let M.o.W -= α * g[n×m+m+1:n×m+m+m]
+      let M.o.b -= α * g[n×m+m+m+1]
+    end
+    
+    return M
+  }
+}
+
+In this concept, we define a simple two-layer hyperbolic neural network model for binary classification, consisting of:
+
+A HyperbolicLayer with a weight matrix W, bias vector b, and (hyperbolic) activation function a.
+A LogisticLayer with a weight matrix W, bias scalar b, and logistic activation function σ.
+
+The Forward functions compute the layer-wise forward passes, applying the weights, biases, and activations.
+The Accuracy function computes the classification accuracy of the model on a dataset 𝒟, by averaging the indicator of whether the rounded prediction equals the true label.
+The Loss function computes the average binary cross-entropy loss of the model on the dataset.
+The Train function is where the manifold optimization happens:
+
+We construct a LossGraph representing the composition of the model layers and loss function. This is a computation graph that can be traced by ADI.
+We initialize the model parameters M₀ and define the parameter space X as a product manifold of Euclidean spaces (one for each layer's parameters).
+For T iterations, we:
+
+Sample a minibatch 𝒟ᵗ from the dataset
+Define a minibatch loss function LossMinibatch in terms of the LossGraph
+Use ADI's Gradient operator to compute the Euclidean gradient of LossMinibatch with respect to the model parameters [M.h.W, M.h.b, M.o.W, M.o.b]
+Take a gradient step in the negative direction, updating the parameters
+
+
+
+Note that this is still a Euclidean gradient descent, just computed automatically via ADI. To make it a true Riemannian optimization, we would need to:
+
+Define the hyperbolic activation function a and its derivatives.
+Implement the exponential and logarithm maps (Exp and Log) for the hyperbolic space, to map between points and tangent vectors.
+Replace the Euclidean parameter update with a Riemannian update:
+
+Map the gradient to the tangent space at the current parameter point using Log
+Take a step in the negative tangent direction
+Map the updated tangent vector back to the parameter space using Exp
+
+
+
+These modifications would allow us to optimize the hyperbolic network parameters while respecting the hyperbolic geometry of the activations.
+Furthermore, to handle the product manifold structure of the full parameter space X, we would need to implement parallel transport (Parallel) to move tangent vectors between the component manifolds.
+I haven't spelled out all the details here to keep the sketch concise, but hopefully this conveys the main ideas of how ADI could be used to optimize a non-trivial model involving manifold-valued parameters and activations. The key points are:
+
+Expressing the model and loss in terms of reusable layer functions and primitives
+Tracing the composed model/loss into an automatically differentiable graph
+Using the Exp, Log, and Parallel primitives to perform Riemannian (as opposed to Euclidean) gradient-based optimization
+
+Of course, there are many improvements and extensions possible, such as:
+
+Adding more layers and activation functions
+Using advanced optimizers like Adam or conjugate gradients
+Implementing other loss functions and metrics
+Distributing the minibatch computation across multiple devices
+Checkpointing and early stopping based on a validation set
+Tuning hyperparameters like the learning rate and batch size
+
+But I think this example demonstrates the potential of ADI to simplify the implementation of complex manifold optimization problems, by abstracting away the details of gradient computation and Riemannian geometry behind a set of high-level primitives and automatic differentiation rules.

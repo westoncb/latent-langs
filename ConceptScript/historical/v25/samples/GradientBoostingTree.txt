@@ -1,0 +1,112 @@
+CONCEPT GradientBoostingTree {
+  LANGUAGE {
+    TYPE Feature
+    TYPE Sample = List[Feature]
+    TYPE Label
+    TYPE WeakLearner = Sample -> Label
+    TYPE Loss = (Label, Label) -> Real
+    TYPE GradientStep = (WeakLearner, Real) 
+
+    FUNC Entropy(p : Real) : Real
+    FUNC TreeSplit(X : List[Sample], y : List[Label]) : (Feature, Real)
+    FUNC TreeLeaf(y : List[Label]) : Label
+    FUNC GradientDescent(steps : List[GradientStep], loss : Loss, 
+                         X : List[Sample], y : List[Label]) : List[WeakLearner]
+
+    AXIOM EntropyBounds {
+      ∀ (p : Real). 0 ≤ p ≤ 1 ⇒ 0 ≤ Entropy(p) ≤ 1
+    }
+
+    AXIOM StepSizeConvergence {
+      ∀ (steps : List[GradientStep]) (loss : Loss) (X : List[Sample]) (y : List[Label]).
+        LET h_opt = GradientDescent(steps, loss, X, y),
+            L(h) = Mean(Map((x, y) -> loss(h(x), y), Zip(X, y)))  
+        IN ConvergesTo(Map(L, Prefixes(Map(Fst, steps))), L(h_opt))
+    }
+
+    NOTATION "H(p)" = Entropy(p)
+    NOTATION "I(x ; y)" = Mutual(Marginal(x), Marginal(y))  
+    NOTATION "𝔼[f(x)]" = Expectation(x -> f(x), Marginal(x))
+    NOTATION "x ∈ 𝒳" = Sample(x)
+    NOTATION "y ∈ 𝒴" = Label(y)
+    NOTATION "ℋ" = Hypothesis
+  }
+
+  STRUCTURE DecisionStump(X : List[Sample], y : List[Label]) : WeakLearner {
+    DEF SplitCriterion(feature : Feature, threshold : Real) : Real =
+      LET (Xl, yl) = Filter((x, y) -> x[feature] ≤ threshold, Zip(X, y)),  
+          (Xr, yr) = Filter((x, y) -> x[feature] > threshold, Zip(X, y))
+      IN I(y ; y | feature > threshold)
+
+    DEF (feature, threshold) : (Feature, Real) = 
+      ArgMax((f, t) -> SplitCriterion(f, t), Cartesian(Features(X), Thresholds(X)))
+
+    REQUIRE ∀ (x : Sample). x[feature] ≤ threshold ⇒ Classify(x) = TreeLeaf(yl)  
+    REQUIRE ∀ (x : Sample). x[feature] > threshold ⇒ Classify(x) = TreeLeaf(yr)
+  }
+
+  STRUCTURE GradientBoostedTrees(X : List[Sample], y : List[Label], 
+                                 T : Nat, η : Real, loss : Loss) : List[WeakLearner] {
+    DEF h_0 : WeakLearner = (x : Sample) -> TreeLeaf(y)
+
+    DEF Residuals(h : WeakLearner) : List[Label] = 
+      MapThread((y, y_h) -> -∇loss(y, y_h), Zip(y, Map(h, X)))
+
+    DEF GradientStep(h : WeakLearner, i : Nat) : GradientStep =
+      LET r = Residuals(h),  
+          d = DecisionStump(X, r)
+      IN (d, η)
+
+    REQUIRE GradientBoostedTrees(X, y, T, η, loss) =
+      GradientDescent(Map(GradientStep(_, i), Range(T)), loss, X, y)
+  }
+
+  PROOFS {
+    THEOREM GradientBoostingConvergence {
+      STATEMENT:
+        ∀ (X : List[Sample]) (y : List[Label]) (loss : Loss) (T : Nat) (η : Real).
+          LET h_opt = GradientBoostedTrees(X, y, T, η, loss),  
+              L(h) = 𝔼[loss(h(x), y) | (x, y) ∈ Zip(𝒳, 𝒴)]
+          IN ConvergesTo(L(h_opt), Inf(h ∈ ℋ, L(h)))
+
+      PROOF:
+        LET X : List[Sample], y : List[Label], loss : Loss, T : Nat, η : Real
+        LET h_opt = GradientBoostedTrees(X, y, T, η, loss)
+        
+        REWRITE L(h_opt)  
+          = 𝔼[loss(h_opt(x), y) | (x, y) ∈ Zip(𝒳, 𝒴)]                      BY DEFINITION L
+          = 𝔼[loss(GradientDescent(...)(x), y) | (x, y) ∈ Zip(𝒳, 𝒴)]       BY DEFINITION h_opt
+          ≤ Inf(h ∈ ℋ, 𝔼[loss(h(x), y) | (x, y) ∈ Zip(𝒳, 𝒴)])              BY StepSizeConvergence
+          = Inf(h ∈ ℋ, L(h))                                              BY DEFINITION L
+
+        SHOW ConvergesTo(L(h_opt), Inf(h ∈ ℋ, L(h))) BY REWRITE  
+    }
+
+    THEOREM StumpBoundedError {  
+      STATEMENT:
+        ∀ (X : List[Sample]) (y : List[Label]).
+          LET stump = DecisionStump(X, y)  
+          IN 𝔼[stump(x) ≠ y | (x, y) ∈ Zip(𝒳, 𝒴)] ≤ 1 - Max(p, 1-p)  
+             WHERE p = 𝔼[y = 1 | y ∈ 𝒴]
+
+      PROOF:
+        LET X : List[Sample], y : List[Label]  
+        LET stump = DecisionStump(X, y)
+        LET p = 𝔼[y = 1 | y ∈ 𝒴]
+        
+        REWRITE 𝔼[stump(x) ≠ y | (x, y) ∈ Zip(𝒳, 𝒴)]
+          = 𝔼[IF stump(x) = y THEN 0 ELSE 1 | (x, y) ∈ Zip(𝒳, 𝒴)]         BY INDICATOR
+          = p * 𝔼[IF stump(x) = 1 THEN 0 ELSE 1 | y = 1] 
+            + (1-p) * 𝔼[IF stump(x) = 0 THEN 0 ELSE 1 | y = 0]           BY TOTAL_EXPECTATION
+          = p * 𝔼[stump(x) ≠ 1 | y = 1] + (1-p) * 𝔼[stump(x) ≠ 0 | y = 0] BY INDICATOR
+          ≤ p * (1 - Max(𝔼[stump(x) = 1 | y = 1], 𝔼[stump(x) = 0 | y = 1]))  
+            + (1-p) * (1 - Max(𝔼[stump(x) = 1 | y = 0], 𝔼[stump(x) = 0 | y = 0])) 
+                                                                        BY STUMP_MAX_CORRECT
+          = p * (1 - 𝔼[stump(x) = 1 | y = 1]) 
+            + (1-p) * (1 - 𝔼[stump(x) = 0 | y = 0])                      BY STUMP_OPTIMAL_SPLIT
+          ≤ p * (1 - p) + (1-p) * p                                     BY ARITHMETIC  
+          = 2p(1-p)
+          ≤ 1 - Max(p, 1-p)                                             BY MAX_ENTROPY_BOUND
+    }
+  }
+}

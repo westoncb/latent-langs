@@ -1,0 +1,219 @@
+CONCEPT CategoricalCombinators {
+  LANGUAGE {
+    TYPE Obj 
+    TYPE Mor[A B : Obj] <: Obj
+    TYPE Cat = (Obj, Mor, ∘, id)
+    TYPE Functor[C D : Cat] = (F0 : C.Obj -> D.Obj, F1 : C.Mor -> D.Mor)
+    TYPE NaturalTransformation[C D : Cat, F G : Functor[C, D]] = 
+      (α : (x : C.Obj) -> D.Mor[F.F0(x), G.F0(x)])
+    
+    FUNC ∘[A B C : Obj] : Mor[B, C] × Mor[A, B] -> Mor[A, C] 
+    FUNC id[A : Obj] : Mor[A, A]
+    PRED Commutes[F : Functor[C, D], f : C.Mor[A, B]] = 
+      F.F1(f) = F.F1(C.id[A]) ∘ f ∘ F.F1(C.id[B])
+    PRED Associative[C : Cat, A B C D : C.Obj, f : C.Mor[A, B], g : C.Mor[B, C], h : C.Mor[C, D]] =
+      h ∘ (g ∘ f) = (h ∘ g) ∘ f
+      
+    AXIOM UnitLaw[C : Cat, A B : C.Obj, f : C.Mor[A, B]] {
+      C.id[B] ∘ f = f = f ∘ C.id[A] 
+    }
+  }
+  
+  NOTATION {
+    "A ~> B" = Mor[A, B]
+    "F : C -> D" = Functor[C, D]
+    "α : F -> G" = NaturalTransformation[C, D, F, G]
+    "α.x" = α(x) where α : NaturalTransformation, x : C.Obj
+    "1_C" = (F where F : Functor[C, C], ∀ (X : C.Obj) . F.F0(X) = X, 
+                                            ∀ (f : C.Mor) . F.F1(f) = f)
+  }
+  
+  TRANSFORMERS {
+    REWRITE (h ∘ g) ∘ f = h ∘ (g ∘ f) WHERE Associative(?, ?, ?, ?, f, g, h)
+    
+    TACTIC FunctorComposition[C D E : Cat, F : C -> D, G : D -> E] -> (C -> E) = {
+      LET H0 : C.Obj -> E.Obj = X => G.F0(F.F0(X))
+      LET H1 : C.Mor -> E.Mor = f => G.F1(F.F1(f))
+      DEFINE Commutes(H, f) BY {
+        G.F1(F.F1(f)) = G.F1(F.F1(C.id[f.dom])) ∘ G.F1(F.F1(f)) ∘ G.F1(F.F1(C.id[f.cod])) 
+                      = G.F1(F.F1(C.id[f.dom]) ∘ F.F1(f) ∘ F.F1(C.id[f.cod]))
+                      = G.F1(F.F1(C.id[f.dom] ∘ f ∘ C.id[f.cod]))
+                      = G.F1(F.F1(f))
+      }
+      CONCLUDE H = (H0, H1)  
+    }
+      
+    TACTIC WhiskerLeft[C D : Cat, F G H : C -> D, α : G -> H] -> (F ∘ G -> F ∘ H) = {
+      DEFINE (F ∘ α) : (x : C.Obj) -> D.Mor[F.F0(G.F0(x)), F.F0(H.F0(x))] = x => F.F1(α.x)
+      SHOW NaturalTransformation(F ∘ α)
+    }
+      
+    TACTIC WhiskerRight[C D : Cat, F G H : C -> D, α : F -> G] -> (F ∘ H -> G ∘ H) = {
+      DEFINE (α ∘ H) : (x : C.Obj) -> D.Mor[F.F0(H.F0(x)), G.F0(H.F0(x))] = x => α.(H.F0(x))
+      SHOW NaturalTransformation(α ∘ H)  
+    }
+  }
+    
+  STRUCTURE MonoidalCategory {
+    LET C : Cat
+      
+    DEF ⊗ : C.Obj × C.Obj -> C.Obj 
+    DEF I : C.Obj
+    DEF α[A B C : C.Obj] : C.Mor[(A ⊗ B) ⊗ C, A ⊗ (B ⊗ C)]
+    DEF λ[A : C.Obj] : C.Mor[I ⊗ A, A]  
+    DEF ρ[A : C.Obj] : C.Mor[A ⊗ I, A]
+      
+    REQUIRE Bifunctor(⊗)
+    REQUIRE NaturalIsomorphism(α), NaturalIsomorphism(λ), NaturalIsomorphism(ρ)
+    REQUIRE PentagonIdentity(α)
+    REQUIRE TriangleIdentity(α, λ, ρ)
+  }
+    
+  STRUCTURE MonoidalFunctor[M N : MonoidalCategory] {
+    LET F : Functor[M.C, N.C]  
+      
+    DEF φ0 : N.I ~> F.F0(M.I)
+    DEF φ2[A B : M.C.Obj] : F.F0(A) ⊗ F.F0(B) ~> F.F0(A ⊗ B)
+      
+    REQUIRE NaturalIsomorphism(φ2)
+    REQUIRE MonoidalFunctorIdentity(F, φ0, φ2)
+    REQUIRE MonoidalFunctorComposition(F, φ0, φ2, α)
+  }
+    
+  PROOFS {
+    THEOREM MacLane'sCoherence {
+      STATEMENT:
+        ∀ (M : MonoidalCategory) . 
+          ∃! (F : MonoidalFunctor[M, M]) . (∀ X : M.C.Obj . F.F0(X) = X) ∧ 
+                                            (∀ f : M.C.Mor . F.F1(f) = f) ∧
+                                            (F.φ0 = M.λ[I]) ∧ 
+                                            (∀ A B : M.C.Obj . F.φ2[A, B] = M.α[A, I, B] ∘ (M.ρ[A] ⊗ id[B]))
+                                              
+      PROOF:
+        LET M : MonoidalCategory
+        LET I = M.I
+        
+        DEFINE F : MonoidalFunctor[M, M] {
+          DEF F0 : M.C.Obj -> M.C.Obj = X => X
+          DEF F1 : M.C.Mor -> M.C.Mor = f => f
+          DEF φ0 : I ~> I = M.λ[I]
+          DEF φ2[A B : M.C.Obj] : A ⊗ B ~> A ⊗ B = M.α[A, I, B] ∘ (M.ρ[A] ⊗ id[B])
+        }
+        
+        SHOW Functor(F) BY {
+          LET A B : M.C.Obj, f : A ~> B
+          SHOW F.F1(id[A]) = id[F.F0(A)] BY Definitions
+          SHOW F.F1(f ∘ g) = F.F1(f) ∘ F.F1(g) BY Definitions
+        }
+        
+        SHOW NaturalIsomorphism(F.φ2) BY {
+          LET A B : M.C.Obj
+          SHOW Isomorphism(F.φ2[A, B]) USING Isomorphism(M.α), Isomorphism(M.ρ)
+          LET X Y : M.C.Obj, f : X ~> A, g : Y ~> B
+          SHOW (F.φ2[A, B] ∘ (F.F1(f) ⊗ F.F1(g))) = (F.F1(f ⊗ g) ∘ F.φ2[X, Y]) BY {
+            F.φ2[A, B] ∘ (F.F1(f) ⊗ F.F1(g))
+            = (M.α[A, I, B] ∘ (M.ρ[A] ⊗ id[B])) ∘ (f ⊗ g)  [BY Naturality(M.α), Naturality(M.ρ)]
+            = M.α[A, I, B] ∘ ((M.ρ[A] ∘ f) ⊗ g)            [BY Bifunctor(⊗)]
+            = M.α[A, I, B] ∘ (M.ρ[A] ⊗ id[B]) ∘ (f ⊗ g)    [BY Functoriality(⊗)]  
+            = F.φ2[X, Y] ∘ (f ⊗ g)                         [BY Definitions]
+            = (f ⊗ g) ∘ F.φ2[X, Y]                         [BY Naturality(F.φ2)]
+            = F.F1(f ⊗ g) ∘ F.φ2[X, Y]                     [BY Definitions]
+          }
+        }
+
+        SHOW MonoidalFunctorIdentity(F) BY {
+          F.φ2[I, X] ∘ (φ0 ⊗ id[F.F0(X)])  
+          = F.φ2[I, X] ∘ (M.λ[I] ⊗ id[X])         [BY Definition(φ0)]
+          = (M.α[I, I, X] ∘ (M.ρ[I] ⊗ id[X])) ∘ (M.λ[I] ⊗ id[X])  [BY Definition(F.φ2)]
+          = M.α[I, I, X] ∘ ((M.ρ[I] ∘ M.λ[I]) ⊗ id[X])            [BY Bifunctor(⊗)]
+          = M.α[I, I, X] ∘ (id[I] ⊗ id[X])                       [BY TriangleIdentity]
+          = M.λ[X]                                               [BY Coherence(α)]
+
+          F.φ2[X, I] ∘ (id[F.F0(X)] ⊗ φ0)
+          = F.φ2[X, I] ∘ (id[X] ⊗ M.λ[I])                        [BY Definition(φ0)]  
+          = (M.α[X, I, I] ∘ (M.ρ[X] ⊗ id[I])) ∘ (id[X] ⊗ M.λ[I])  [BY Definition(F.φ2)]
+          = M.α[X, I, I] ∘ (M.ρ[X] ⊗ M.λ[I])                      [BY Bifunctor(⊗)]
+          = M.α[X, I, I] ∘ (M.ρ[X] ⊗ id[I]) ∘ (id[X] ⊗ M.λ[I])    [BY Naturality(λ)]
+          = M.ρ[X]                                               [BY TriangleIdentity]
+        }
+
+        SHOW MonoidalFunctorComposition(F) BY {
+          LET X Y Z : M.C.Obj
+          F.φ2[X, Y ⊗ Z] ∘ (id[F.F0(X)] ⊗ F.φ2[Y, Z]) 
+          = F.φ2[X, Y ⊗ Z] ∘ (id[X] ⊗ ((M.α[Y, I, Z] ∘ (M.ρ[Y] ⊗ id[Z]))))   [BY Definition(F.φ2)]
+          = (M.α[X, I, Y ⊗ Z] ∘ (M.ρ[X] ⊗ id[Y ⊗ Z])) ∘ (id[X] ⊗ ((M.α[Y, I, Z] ∘ (M.ρ[Y] ⊗ id[Z]))))  [BY Definition(F.φ2)]
+          = M.α[X, I, Y ⊗ Z] ∘ (M.ρ[X] ⊗ (M.α[Y, I, Z] ∘ (M.ρ[Y] ⊗ id[Z])))   [BY Bifunctor(⊗)]
+          = M.α[X, I, Y ⊗ Z] ∘ (id[X] ⊗ M.α[Y, I, Z]) ∘ ((M.ρ[X] ∘ id[X]) ⊗ (M.ρ[Y] ⊗ id[Z]))           [BY Naturality(ρ)]
+          = (M.α[X, Y, Z] ∘ M.α[X ⊗ Y, I, Z]) ∘ ((M.ρ[X] ∘ id[X]) ⊗ (M.ρ[Y] ⊗ id[Z]))                   [BY PentagonIdentity]  
+          = M.α[X, Y, Z] ∘ (M.α[X, I, Y] ∘ (M.ρ[X] ⊗ id[Y]) ⊗ id[Z]) ∘ (id[X] ⊗ (M.ρ[Y] ⊗ id[Z]))        [BY Naturality(α)]
+          = M.α[X, Y, Z] ∘ (F.φ2[X, Y] ⊗ id[Z]) ∘ (id[X] ⊗ F.φ2[Y, Z])       [BY Definition(F.φ2)]
+        }
+
+        SHOW ∀ (G : MonoidalFunctor[M, M]) . 
+               ((∀ X : M.C.Obj . G.F0(X) = X) ∧ 
+                (∀ f : M.C.Mor . G.F1(f) = f) ∧
+                (G.φ0 = M.λ[I]) ∧
+                (∀ A B : M.C.Obj . G.φ2[A, B] = M.α[A, I, B] ∘ (M.ρ[A] ⊗ id[B]))) 
+               => G = F   
+        {
+          LET G : MonoidalFunctor[M, M]
+          ASSUME (h1 : ∀ X : M.C.Obj . G.F0(X) = X),  
+                 (h2 : ∀ f : M.C.Mor . G.F1(f) = f),
+                 (h3 : G.φ0 = M.λ[I]), 
+                 (h4 : ∀ A B : M.C.Obj . G.φ2[A, B] = M.α[A, I, B] ∘ (M.ρ[A] ⊗ id[B]))
+          
+          SHOW G.F0 = F.F0 BY h1
+          SHOW G.F1 = F.F1 BY h2
+          SHOW G.φ0 = F.φ0 BY h3  
+          SHOW G.φ2 = F.φ2 BY h4
+        }
+        
+        QED
+      }
+    }
+
+    THEOREM CoherenceForBraidedMonoidalCategories {
+      STATEMENT:
+        ∀ (B : BraidedMonoidalCategory) (X Y Z : B.C.Obj) .
+          (B.α[X, Y, Z] ∘ (B.σ[X, Y] ⊗ id[Z])) ∘ B.α[Y, X, Z] 
+            = (id[X] ⊗ B.σ[Y, Z]) ∘ B.α[X, Z, Y] ∘ (B.σ[X, Z] ⊗ id[Y]) ∘ B.α[Z, X, Y]
+
+      PROOF:
+        LET B : BraidedMonoidalCategory, X Y Z : B.C.Obj
+          
+        (B.α[X, Y, Z] ∘ (B.σ[X, Y] ⊗ id[Z])) ∘ B.α[Y, X, Z]
+        = B.α[X, Y, Z] ∘ ((B.σ[X, Y] ∘ B.σ[Y, X]) ⊗ id[Z]) ∘ B.α[Y, X, Z]   [BY Isomorphism(B.σ)]  
+        = B.α[X, Y, Z] ∘ (B.σ[X ⊗ Y, Z] ∘ (B.α[Y, X, Z] ⊗ id[Z])) ∘ (id[Y] ⊗ B.σ[X, Z])     [BY HexagonIdentity1]
+        = (B.σ[X, Y ⊗ Z] ∘ B.α[X, Y, Z]) ∘ (B.α[Y, X, Z] ⊗ id[Z]) ∘ (id[Y] ⊗ B.σ[X, Z])     [BY Naturality(B.σ)]
+        = B.σ[X, Y ⊗ Z] ∘ (B.α[X, Y, Z] ∘ B.α[Y, X, Z]) ∘ (id[Y] ⊗ B.σ[X, Z])               [BY Bifunctor(⊗)]
+        = B.σ[X, Y ⊗ Z] ∘ ((id[X] ⊗ B.α[Y, Z, X]) ∘ B.α[X, Y ⊗ Z, X] ∘ (B.α[X, Y, Z] ⊗ id[X])) ∘ (id[Y] ⊗ B.σ[X, Z])  [BY PentagonIdentity]
+        = (id[X] ⊗ B.σ[Y, Z]) ∘ (B.α[X, Z, Y] ∘ B.σ[X, Y ⊗ Z]) ∘ B.α[X, Y ⊗ Z, X] ∘ (B.α[X, Y, Z] ⊗ id[X]) ∘ (id[Y] ⊗ B.σ[X, Z])   [BY Naturality(B.σ), ReAssociativity]
+        = (id[X] ⊗ B.σ[Y, Z]) ∘ B.α[X, Z, Y] ∘ ((B.σ[X, Z] ⊗ id[Y]) ∘ (id[X] ⊗ B.σ[Y, Z]) ∘ B.α[X, Y, Z]) ∘ (B.α[X, Y, Z] ⊗ id[X]) ∘ (id[Y] ⊗ B.σ[X, Z])   [BY HexagonIdentity2]
+        = (id[X] ⊗ B.σ[Y, Z]) ∘ B.α[X, Z, Y] ∘ (B.σ[X, Z] ⊗ id[Y]) ∘ ((id[X] ⊗ B.σ[Y, Z]) ∘ B.α[X, Y, Z] ∘ (id[Y] ⊗ B.σ[X, Z])) ∘ B.α[Y, X, Z]        [BY ReAssociativity]
+        = (id[X] ⊗ B.σ[Y, Z]) ∘ B.α[X, Z, Y] ∘ (B.σ[X, Z] ⊗ id[Y]) ∘ B.α[Z, X, Y]        [BY prev equality]
+             
+        QED  
+      }
+    }
+  }
+}
+
+This `CategoricalCombinators` Concept combines ideas from category theory, specifically monoidal categories and functors between them, with the syntactic structure of interaction combinators from the first example.
+
+Key ideas synthesized:
+
+- Categorical objects and morphisms form the basis of the language, like cells and nets in interaction combinators.
+
+- Axioms and properties are expressed for these categorical constructs, analogous to port count, symmetry, etc. axioms for combinators.
+
+- Functors between categories are defined, similar to translations between interaction nets. 
+
+- Proofs are given for major categorical theorems, just as proofs were given for properties of interaction combinators.
+
+- Tactics and rewrite rules aid in manipulating categorical expressions, inspired by the substitution transformers for interaction nets.
+
+The notation and language also draws heavily from the type theoretic style of the second example. 
+
+This concept explores how combinatory, computational, and proof-theoretic ideas can be developed in an abstract categorical setting. The coherence theorems in particular demonstrate the power of category theory to express general laws.
+
+Of course, this just scratches the surface, and much more could be elaborated both in breadth and depth. But hopefully it illustrates one fruitful way the core concepts could be creatively remixed and extended. Let me know if you would like me to expand on any part of this!

@@ -1,0 +1,74 @@
+CONCEPT EvolvingCategories {
+  LANGUAGE {
+    TYPE DynCategory {
+      C : Category
+      R : ∀(A B : C.Obj). C(A, B) -> C(A, B)
+    }
+
+    FUNC Evolve(D : DynCategory, n : Nat) : Category
+    FUNC LimitCategory(D : DynCategory) : Category
+
+    FUNC EvolvingFunctor[D E : DynCategory] {
+      F : Functor[D.C, E.C]
+      Commutes : ∀(A B : D.C.Obj). F.ArrowMap ∘ D.R = E.R ∘ F.ArrowMap  
+    } 
+
+    FUNC ColimitCategory(J : DynCategory -> Category) : Category
+
+    TYPE Topos {
+      C : Category
+      Ω : C.Obj
+      ∀(A : C.Obj). Power(A) : C.Obj
+      ∀(A B : C.Obj). Exp(A, B) : C.Obj
+    }
+
+    FUNC Tripos(T : Topos) : Topos
+    FUNC EvolvingTopos(T : Topos, L : Language) : DynCategory
+    
+    AXIOM Colimits {
+      ∀(J : DynCategory -> Category). 
+        ∃!(C : Category) (F : Functor[ColimitCategory(J), C]).
+          Univ((D : DynCategory) ↦ ∃!(G : Functor[J(D), C]). F ∘ InJ(D) = G)  
+    }
+
+    AXIOM LimitAgreement {
+      ∀(D : DynCategory). LimitCategory(D) = ColimitCategory((n : Nat) ↦ Evolve(D, n))
+    }
+  }
+
+  PROOFS {
+    TACTIC DynUnfold(D : DynCategory, n : Nat, X : Evolve(D,n).Obj) = 
+      MATCH n WITH
+      | 0 => X
+      | k+1 => DynUnfold(D, k, R(X))
+
+    TACTIC Grothendieck(J : DynCategory -> Category, F : Functor[ColimitCategory(J), C]) = {
+      LET ΔC : DynCategory = {
+        C = C
+        R = λ(A B : C.Obj). λ(f : C(A, B)). 𝟙_B
+      }
+
+      DEFINE ε_C : Nat(F ∘ InJ(ΔC), 𝟙_C) = 
+        λ(X : C.Obj). 𝟙_X
+
+      SHOW Univ((D : DynCategory) (G : Functor[J(D), C]) ↦ 
+        ∃!(α : Nat(G, F ∘ InJ(D))). ε_C ∘ α = 𝟙_G)
+    }
+
+    THEOREM EvolutionaryLogic {
+      STATEMENT:
+        ∀(T : Topos) (L : Language) (φ : Formula[L]). 
+          (⊢_L φ) <=> (⊢_{Tripos(EvolvingTopos(T, L))} φ)
+      
+      PROOF {
+        LET T : Topos, L : Language, φ : Formula[L]
+        
+        ⊢_L φ
+          <=> ∃(n : Nat). ⊢_{Evolve(EvolvingTopos(T, L), n)} φ   BY LimitAgreement
+          <=> ∃(n : Nat). ⊢_{Evolve(Tripos(EvolvingTopos(T, L)), n)} φ   BY naturality of Tripos
+          <=> ⊢_{ColimitCategory((n : Nat) ↦ Evolve(Tripos(EvolvingTopos(T, L)), n))} φ   BY Colimits  
+          <=> ⊢_{Tripos(EvolvingTopos(T, L))} φ   BY LimitAgreement
+      }
+    }
+  }
+}

@@ -1,0 +1,131 @@
+CONCEPT ApolloLunarLandingTrajectoryReconstruction {
+  LANGUAGE {
+    TYPE Time = ℝ  -- seconds
+    TYPE Altitude = ℝ  -- feet  
+    TYPE Range = ℝ  -- feet
+    TYPE Pitch = ℝ  -- radians
+    TYPE Velocity = ℝ  -- feet/second
+    TYPE Acceleration = ℝ  -- feet/second^2
+
+    FUNC Digitize(plot : Image) : List[(Number, Number)]
+    FUNC Interpolate(data : List[(Number, Number)], t : Time) : Number
+    FUNC Differentiate(data : List[(Time, Number)]) : List[(Time, Number)]
+
+    FUNC Integrate(data : List[(Time, Number)], t0 : Time, y0 : Number) : List[(Time, Number)]
+    FUNC KalmanFilter(data : List[(Time, Number)], 
+                      stateEqn : List[Time] -> Matrix, 
+                      outputEqn : List[Time] -> Matrix,
+                      Q : Matrix, R : Matrix, P0 : Matrix) : List[(Time, Number)]
+                      
+    CONST g = 5.315  -- lunar gravity, feet/second^2                  
+  }
+
+  STRUCTURE ApolloTrajectory {
+    LET altitudeProfile : List[(Time, Altitude)]
+    LET altitudeRateProfile : List[(Time, Velocity)]
+    LET altitudeAccelProfile : List[(Time, Acceleration)]  
+    LET rangeProfile : List[(Time, Range)]
+    LET rangeRateProfile : List[(Time, Velocity)]
+    LET rangeAccelProfile : List[(Time, Acceleration)]
+    LET pitchProfile : List[(Time, Pitch)]
+    LET pitchRateProfile : List[(Time, Velocity)]
+    LET pitchAccelProfile : List[(Time, Acceleration)]
+
+    REQUIRE ∀ t . altitudeRateProfile[t].2 = Differentiate(altitudeProfile)[t].2
+    REQUIRE ∀ t . altitudeAccelProfile[t].2 = Differentiate(altitudeRateProfile)[t].2
+    REQUIRE ∀ t . rangeRateProfile[t].2 = Differentiate(rangeProfile)[t].2
+    REQUIRE ∀ t . rangeAccelProfile[t].2 = -(altitudeAccelProfile[t].2 + g) / Tan(pitchProfile[t].2)
+    REQUIRE ∀ t . pitchRateProfile[t].2 = Differentiate(pitchProfile)[t].2
+    REQUIRE ∀ t . pitchAccelProfile[t].2 = Differentiate(pitchRateProfile)[t].2
+  }
+
+  PROOFS {
+    TACTIC ReconstructAltitude(altRateData : Image) -> (List[(Time, Altitude)], List[(Time, Velocity)]) {
+      LET (altData, rateData) = Digitize(altRateData)
+      LET stateEqn(t) = [[1, t[k+1]-t[k]]; [0, 1]]
+      LET outputEqn(t) = [[1, 0]]
+      LET rateInput = rateData.map((t, r) -> [[0]; [r * (t[k+1]-t[k])]])
+      LET timeStamps = SOLVE t WITH InitialGuess(LinSpace(0, 140, 194)) FOR EACH k in 0..Len(altData)-1 {
+        MINIMIZE LogLikelihood(KalmanFilter(altData, stateEqn, outputEqn, 4, 5, 1, rateInput).map(([a], _) -> a), 
+                               altData.map(fst))
+        SUBJECT TO  
+          t[0] = 0
+          t[-1] = 140
+          t[k+1] > t[k]
+      }
+      LET altProfile = KalmanFilter(altData, stateEqn, outputEqn, 4, 5, 1, rateInput).map(([a], _) -> (timeStamps[k], a)) 
+      LET rateProfile = rateData.map((_, r) -> (timeStamps[k], r))
+      RETURN (altProfile, rateProfile)
+    }
+
+    TACTIC ReconstructRange(rangeData : Image, altProfile : List[(Time, Altitude)]) -> List[(Time, Range)] {
+      LET rangeAltData = Digitize(rangeData)
+      LET timeStamps = SOLVE t FOR EACH k in 0..Len(rangeAltData)-1 {
+        MINIMIZE Σ (Interpolate(altProfile, t[k]) - rangeAltData[k].2)^2
+        SUBJECT TO
+          t[0] = 0  
+          t[k+1] > t[k]
+      }
+      RETURN rangeAltData.map((r, _) -> (timeStamps[k], r))
+    }
+
+    TACTIC ReconstructTrajectory(altRateData : Image, rangeData : Image, pitchData : Image) -> ApolloTrajectory {
+      LET (altProfile, altRateProfile) = ReconstructAltitude(altRateData)
+      LET altAccelProfile = Differentiate(altRateProfile)
+      LET rangeProfile = ReconstructRange(rangeData, altProfile)
+      LET pitchProfile = Digitize(pitchData).map((t, p) -> (Interpolate(altProfile, t).1, p))
+
+      LET stateEqn(t) = [[1, t[k+1]-t[k]]; [0, 1]]   
+      LET outputEqn(t) = [[1, 0]]
+      LET accelInput = altAccelProfile.map((t, a) -> [[0]; [-(a + g) / Tan(Interpolate(pitchProfile, t).2) * (t[k+1]-t[k])]])
+      LET (rangeProfile2, rangeRateProfile) = 
+        KalmanFilter(rangeProfile, stateEqn, outputEqn, 0.001, 1, 1, accelInput).map(([r], [_, v]) -> ((t[k], r), (t[k], v)))
+
+      LET pitchRateProfile = Differentiate(pitchProfile)  
+      LET pitchAccelProfile = Differentiate(pitchRateProfile)
+      LET rangeAccelProfile = accelInput.map((t, [[_]; [a]]) -> (t, a / (t[k+1]-t[k])))
+
+      RETURN ApolloTrajectory {
+        altitudeProfile = altProfile
+        altitudeRateProfile = altRateProfile
+        altitudeAccelProfile = altAccelProfile
+        rangeProfile = rangeProfile2
+        rangeRateProfile = rangeRateProfile
+        rangeAccelProfile = rangeAccelProfile
+        pitchProfile = pitchProfile
+        pitchRateProfile = pitchRateProfile  
+        pitchAccelProfile = pitchAccelProfile
+      }
+    }
+
+    THEOREM ReconstructedTrajectoryIsValid {
+      STATEMENT:
+        LET traj = ReconstructTrajectory(altRateDataFig3c, rangeDataFig3a, pitchDataFig3b)
+        ASSERT traj : ApolloTrajectory
+
+      PROOF:
+        LET traj = ReconstructTrajectory(altRateDataFig3c, rangeDataFig3a, pitchDataFig3b)
+        
+        HAVE ∀ t . traj.altitudeRateProfile[t].2 = Differentiate(traj.altitudeProfile)[t].2
+          BY construction in ReconstructAltitude
+        
+        HAVE ∀ t . traj.altitudeAccelProfile[t].2 = Differentiate(traj.altitudeRateProfile)[t].2
+          BY construction in ReconstructTrajectory
+        
+        HAVE ∀ t . traj.rangeRateProfile[t].2 = Differentiate(traj.rangeProfile)[t].2
+          BY Kalman filter output equation in ReconstructTrajectory
+        
+        HAVE ∀ t . traj.rangeAccelProfile[t].2 = -(traj.altitudeAccelProfile[t].2 + g) / Tan(traj.pitchProfile[t].2)
+          BY Kalman filter input equation in ReconstructTrajectory
+        
+        HAVE ∀ t . traj.pitchRateProfile[t].2 = Differentiate(traj.pitchProfile)[t].2
+          BY construction in ReconstructTrajectory
+        
+        HAVE ∀ t . traj.pitchAccelProfile[t].2 = Differentiate(traj.pitchRateProfile)[t].2
+          BY construction in ReconstructTrajectory
+        
+        HENCE traj : ApolloTrajectory
+          BY definition of ApolloTrajectory
+    }
+  }
+}

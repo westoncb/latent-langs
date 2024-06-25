@@ -1,0 +1,81 @@
+CONCEPT AbstractReasoning {
+  
+  STRUCTURE {
+    [AbstractConcept := Mental representation of a general idea or category]
+    [ConcreteInstance := Specific example or instantiation of an AbstractConcept]
+    [Abstraction := Process of identifying common features among ConcreteInstances to form AbstractConcepts]
+    [Reasoning := Process of deriving conclusions or inferences from premises]
+    [AbstractReasoning := Reasoning using AbstractConcepts]
+    [Π(c₁, c₂) := Mapping between AbstractConcepts c₁ and c₂ based on structural similarity]
+    [∀c₁, c₂ : AbstractConcept, ∀P : Property, P(c₁) ∧ Π(c₁, c₂) → P(c₂) ↦ Knowledge transfer via analogical reasoning]
+    [A : ConcreteInstance ↦ α(A) ↦ B : ConcreteInstance ↦ Analogical mapping between instances]
+    [T : Task ↦ ⟨T, S: Situation⟩ ↦ Solution ↦ Generalized problem-solving schema]
+  }
+  
+  PROOFS {
+    tactic analyze_instances(C: AbstractConcept) :
+      let I := {i₁, i₂, ..., iₙ} be a set of ConcreteInstances of C
+      for each i ∈ I:
+        identify common features F(i) := {f₁(i), f₂(i), ..., fₘ(i)} 
+        define Abstraction α: ConcreteInstance → AbstractConcept 
+        such that α(i) = C := {f₁, f₂, ..., fₘ} 
+      conclude C := {f₁, f₂, ..., fₘ} by Abstraction over I
+    
+    tactic transfer_property(P: Property, c₁, c₂: AbstractConcept) :
+      assume P(c₁) 
+      assume Π(c₁, c₂) := structural similarity between c₁ and c₂
+      conclude P(c₂) by knowledge transfer via analogical reasoning
+    
+    tactic solve_by_analogy(T: Task, S: Situation) :
+      let ⟨T₀, S₀⟩ ↦ Solution₀ be a previously solved problem
+      assume ∃α: S₀ → S, an analogical mapping between situations
+      infer ∃T′ := α(T₀) ≈ T, an analogous task in S
+      let Solution := α(Solution₀) be the analogous solution in S
+      conclude ⟨T, S⟩ ↦ Solution by analogical problem-solving
+    
+    theorem abstract_reasoning_enables_knowledge_transfer:
+      ∀c₁, c₂ : AbstractConcept, ∀P : Property,
+      P(c₁) ∧ Π(c₁, c₂) → P(c₂)
+      {
+        assume c₁, c₂ : AbstractConcept
+        assume P : Property
+        assume P(c₁)
+        assume Π(c₁, c₂) := structural similarity between c₁ and c₂
+        transfer_property(P, c₁, c₂);
+      }
+    
+    theorem abstract_reasoning_enables_analogical_problem_solving:
+      ∀T : Task, ∀S : Situation,
+      ∃⟨T₀, S₀⟩ ↦ Solution₀ ∧ ∃α: S₀ → S
+      → ∃Solution : ⟨T, S⟩ ↦ Solution
+      {
+        assume T : Task 
+        assume S : Situation
+        assume ∃⟨T₀, S₀⟩ ↦ Solution₀ := a previously solved problem
+        assume ∃α: S₀ → S := an analogical mapping between situations
+        solve_by_analogy(T, S);
+      }
+  }
+  
+  LANGUAGE {
+    type AbstractConcept
+    type ConcreteInstance
+    type Property
+    type Task
+    type Situation
+    
+    func Abstraction(I : Set(ConcreteInstance)) : AbstractConcept =
+      {f : Feature | ∀i ∈ I, f ∈ F(i)} 
+    
+    pred Π(c₁ : AbstractConcept, c₂ : AbstractConcept) := 
+      ∃ϕ : Structure(c₁) → Structure(c₂), ϕ is a structure-preserving map
+    
+    func Analogize(α : ConcreteInstance → ConcreteInstance, T : Task) : Task =
+      α(T)
+    
+    func Solve(⟨T, S⟩ : (Task, Situation), ⟨T₀, S₀⟩ ↦ Solution₀) : Solution =
+      let α : S₀ → S = AnalogicalMapping(S₀, S) in
+      α(Solution₀)
+  }
+  
+}

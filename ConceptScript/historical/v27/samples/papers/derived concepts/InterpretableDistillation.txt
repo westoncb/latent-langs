@@ -1,0 +1,93 @@
+CONCEPT InterpretableDistillation {
+  LANGUAGE {
+    TYPE Model = LanguageModel | VisionModel | ...
+    TYPE ActivationTensor = Tensor[Example, Layer, Neuron]
+    TYPE FeatureVector = Vector[Neuron]
+    TYPE Concept = String
+
+    FUNC Distill(model: Model, concepts: [Concept], compute: Real) -> Model
+    FUNC FeatureSet(model: Model, layer: Int, compute: Real) -> [FeatureVector]
+    FUNC Amplify(model: Model, feature: FeatureVector, gain: Real) -> Model
+    FUNC Interpret(feature: FeatureVector, model: Model, dataset: Dataset) -> Concept
+  }
+
+  STRUCTURES {
+    STRUCTURE ActivationLattice {
+      S: Model
+      D(S): PowersetLattice(S.Layers × S.Neurons)
+      Q(S): ActivationTensor
+      q(t): FeatureVector
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE DistillationScaling:
+      Distill(model, concepts, α * compute) ->
+        LET model' = Distill(model, concepts, compute)
+        IN Amplify(model', features, α)
+      WHERE features = FeatureSet(model', layer, compute)
+  }
+
+  PROOFS {
+    THEOREM InterpretableDistillation:
+      FORALL model: Model, concepts: [Concept], compute: Real .
+        LET model' = Distill(model, concepts, compute)
+        IN AllInterpretable(FeatureSet(model', layer, compute), concepts)
+    {
+      LET features = FeatureSet(model', layer, compute)
+      FORALL f in features . 
+        LET c = Interpret(f, model', dataset)
+        ASSERT c in concepts BY FeatureCompleteness.PROOF(model', dataset, concepts, |features|)
+        ASSERT Interpretable(f) AND Specific(f, c) BY
+          DownstreamEffects.PROOF(model', prompt, f, multiplier) AND
+          FeatureOrthogonality.PROOF(model', layer, features)
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE DistillGPT3ToConceptSet {
+      LET model = GPT3 WITH params = 175B
+      LET concepts = ["science", "history", "politics", "sports", "arts", ...]
+      LET compute = 1e18
+      LET model' = Distill(model, concepts, compute)
+
+      ASSERT 
+        FORALL c in concepts .
+          EXISTS f in FeatureSet(model', layer=24, compute) .
+            Interpret(f, model', dataset) == c AND
+            Interpretable(f) AND
+            Specific(f, c)
+      BY InterpretableDistillation.PROOF
+    }
+  }
+}
+
+The key idea is to use the Mobius inversion framework, with the activation lattice as the decomposition, to extract a complete set of interpretable features that cover a given set of target concepts. The distilled model amplifies these features to align with the concepts.
+
+The scaling law transformers allow the compute parameter to control the fidelity of the distillation. The interpretability theorem formalizes the desired properties of the distilled features in terms of downstream effects, orthogonality and completeness.
+
+This concept integrates ideas from representation learning, interpretability, and scaling laws in a novel way to formalize the extraction of complete, compact and interpretable distilled models.
+
+
+
+----- 
+
+Here are some of the key novel ideas found in the provided Concepts:
+
+1. Mobius inversion formula generalized to a decomposition of a system S into a lattice D(S) with an associated local property q, allowing the global property Q(S) to be expressed as a sum of local contributions q(t).
+
+2. Numerous examples across diverse fields (statistics, information theory, biology, physics, chemistry, game theory, machine learning) of higher-order structures that can be analyzed using this Mobius inversion framework.
+
+3. The Persistent Homology Transform (PHT) which represents the topology of a shape M as a sheaf over the space of directions and filtration values. Key results include:
+- PHT determines the shape up to homotopy 
+- PHT satisfies a descent/Mayer-Vietoris property for coverings of M
+- PHT is stable to perturbations of the shape
+- PHT can be approximated from finite samples with high probability
+
+4. Interpretability of neural network features formalized in terms of downstream effects of feature amplification, orthogonality between features, and completeness of a feature set in covering human-interpretable concepts.
+
+5. Empirical examples of interpretable features (Golden Gate Bridge, code errors) derived from a language model's activations using sparse autoencoders.
+
+6. Scaling laws relating compute to properties of learned features like interpretability and specificity.
+
+Building on these ideas, here is a new Concept for a framework to derive interpretable model distillations:

@@ -1,0 +1,168 @@
+CONCEPT PragmaticLanguageModel {
+  PARAMETERS {
+    Vocab : TYPE
+    EmbeddingDim : Nat
+    HiddenDim : Nat
+    NumLayers : Nat
+    NumHeads : Nat
+    ActionOntology : TYPE
+    GoalOntology : TYPE
+  }
+  
+  CONTEXT {
+    TYPES {
+      Token := Nat
+      Embedding := Vector[EmbeddingDim]
+      
+      ActionType := ENUM {
+        Inform,
+        Request,
+        Suggest,
+        Confirm,
+        ...
+      }
+      
+      Action := (Type : ActionType, Content : Embedding)
+      
+      GoalType := ENUM {
+        Understand,
+        Decide,
+        Plan,
+        Execute,  
+        ...
+      }
+      
+      Goal := (Type : GoalType, Params : List(Embedding))
+      
+      Situation := (Context : List(Embedding), Goals : List(Goal))
+      
+      INDUCTIVE TransformerLayer(Dim) {
+        CASE Attention(Q : Matrix[Dim, Dim], K : Matrix[Dim, Dim], V : Matrix[Dim, Dim])
+        CASE FeedForward(W1 : Matrix[Dim, Dim], B1 : Vector[Dim], W2 : Matrix[Dim, Dim], B2 : Vector[Dim]) 
+      }
+
+      Transformer := RECURSIVE (Dim, Layers) => {
+        IF Layers = 0 THEN Identity[Dim]
+        ELSE TransformerLayer(Dim) >> Transformer(Dim, Layers - 1)  
+      }
+    }
+    
+    STRUCTURES {
+      STRUCTURE PragmaticAttention {
+        Query : Matrix[EmbeddingDim, HiddenDim]
+        Key : Matrix[EmbeddingDim, HiddenDim]  
+        Value : Matrix[EmbeddingDim, HiddenDim]
+        ActionEmbedding : Matrix[LENGTH(ActionOntology), HiddenDim]
+        GoalEmbedding : Matrix[LENGTH(GoalOntology), HiddenDim]
+        OutputProjection : Matrix[HiddenDim, EmbeddingDim]
+        
+        FUNC Attend(context : List(Embedding), action : Action, goals : List(Goal)) -> Embedding {
+          LET keys := MAP(context, LAMBDA(c) => c * Key)
+          LET values := MAP(context, LAMBDA(c) => c * Value)
+          LET queries := CONCAT(action.Content * Query, ActionEmbedding[action.Type], MAP(goals, LAMBDA(g) => GoalEmbedding[g.Type]))
+          
+          LET scores := SoftMax(MATMUL(queries, TRANSPOSE(keys)) / SQRT(HiddenDim))
+          LET attended := MATMUL(scores, values)
+          
+          RETURN MEAN(attended) * OutputProjection
+        }
+      }
+      
+      STRUCTURE PragmaticDecoder {
+        EmbeddingLayer : Matrix[LENGTH(Vocab), EmbeddingDim] 
+        PositionalEncoding : FUNC(Int, Int) -> Matrix[MaxLength, EmbeddingDim]
+        TransformerLayers : Transformer(HiddenDim, NumLayers)
+        AttentionLayer : PragmaticAttention
+        OutputLayer : Matrix[HiddenDim, LENGTH(Vocab)]
+        ActionClassifier : Matrix[HiddenDim, LENGTH(ActionOntology)]
+        
+        FUNC Decode(situation : Situation, tokens : List(Token)) -> (List(Vector[LENGTH(Vocab)]), List(ActionType)) {
+          LET inputEmbeddings := MAP(tokens, LAMBDA(t) => EmbeddingLayer[t]) + PositionalEncoding(LENGTH(tokens), EmbeddingDim)
+          LET contextEmbeddings := MAP(situation.Context, LAMBDA(c) => c)
+          
+          LET hiddenStates := TransformerLayers(inputEmbeddings)
+          LET attended := MAP(ENUMERATE(hiddenStates), LAMBDA((i, h)) => AttentionLayer.Attend(contextEmbeddings, (TYPE(tokens[i]), h), situation.Goals))
+          
+          LET tokenProbs := MAP(attended, LAMBDA(a) => Softmax(a * OutputLayer))
+          LET actionProbs := MAP(attended, LAMBDA(a) => Softmax(a * ActionClassifier))
+          
+          RETURN (tokenProbs, MAP(actionProbs, LAMBDA(p) => ARGMAX(p)))
+        }
+      }
+    }
+    
+    CONSTANTS {
+      MaxLength : Nat := 512
+    }
+    
+    PARAMETERS {
+      Temperature : Real := 1.0
+      TrainableLayers : Nat := NumLayers - 4
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE TrainObjective(situation : Situation, tokens : List(Token), nextTokens : List(Token), actions : List(ActionType)) {
+      EXPOSE (PragmaticDecoder.EmbeddingLayer, 
+              PragmaticDecoder.TransformerLayers[0:TrainableLayers], 
+              PragmaticDecoder.AttentionLayer, 
+              PragmaticDecoder.OutputLayer, 
+              PragmaticDecoder.ActionClassifier)
+
+      LET (tokenProbs, actionProbs) := PragmaticDecoder.Decode(situation, tokens)
+      
+      LET tokenLoss := CrossEntropy(tokenProbs, nextTokens, Temperature)
+      LET actionLoss := CrossEntropy(actionProbs, actions)
+      
+      LOSS tokenLoss + actionLoss
+    }
+  }
+
+  PROOFS {
+    THEOREM ContextRelevance {
+      FORALL (situation : Situation) (tokens : List(Token)) (i : Nat) (token : Token) .
+        LET (tokenProbs, _) := PragmaticDecoder.Decode(situation, tokens)
+        PROB(tokenProbs[i][token]) > PROB(tokenProbs[i][token] GIVEN EMPTY(situation.Context))
+    }
+    
+    THEOREM GoalDirectedness {
+      FORALL (situation : Situation) (tokens : List(Token)) (action : ActionType) .
+        LET (_, actionProbs) := PragmaticDecoder.Decode(situation, tokens)
+        EXPECT LAST(actionProbs) = action GIVEN (LAST(situation.Goals).Type IMPLIES action)
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE AssistantExample {
+      LET userInput := "I'm looking for a new job in the tech industry. What skills should I focus on developing?"
+      LET userAction := Request
+      LET userGoal := (Plan, [EMBED("JobSearch"), EMBED("TechIndustry"), EMBED("Skills")])
+      
+      LET context := [
+        EMBED("The tech industry values skills in programming, data analysis, and machine learning."),
+        EMBED("Soft skills like communication and teamwork are also important for many tech jobs.") 
+      ]
+      
+      LET situation := Situation[context, [userGoal]]
+      
+      LET response := GENERATE(PragmaticDecoder.Decode, situation, userInput, 
+                                numTokens := 50, temperature := 0.7, 
+                                scheduler := LinearSchedule[0.7, 0.9])
+                                
+      EXPECT response SATISFIES (
+        "programming" IN response AND
+        "data analysis" IN response AND 
+        "communication skills" IN response AND
+        "portfolio" IN response
+      )
+      
+      LET responseActions := PragmaticDecoder.Decode(situation, TOKENIZE(response))[1]
+      
+      EXPECT responseActions SATISFIES (
+        responseActions[0] = Suggest AND
+        responseActions[1] = Inform AND  
+        ANY(responseActions[2:], LAMBDA(a) => a = Confirm)
+      )
+    }
+  }
+}

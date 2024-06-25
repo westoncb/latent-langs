@@ -1,0 +1,388 @@
+CONCEPT NeuralNetworkFramework {
+  LANGUAGE {
+    TYPE Tensor[n : ℕ] -- n-dimensional real-valued tensor
+    TYPE InputTensor[n d] <: Tensor[n × d]  
+    TYPE HiddenTensor[n d] <: Tensor[n × d]
+    TYPE OutputTensor[n d] <: Tensor[n × d]
+    TYPE Parameter[s] <: Tensor[s] -- learnable parameter tensor
+
+    TYPE Layer = Tensor -> Tensor
+    TYPE Activation = Tensor -> Tensor
+    TYPE Loss = (Tensor, Tensor) -> ℝ  
+    TYPE Optimizer = (Tensor, ℝ) -> Tensor
+
+    FUNC MatMul(A : Tensor[n × d], B : Tensor[d × m]) : Tensor[n × m]
+    FUNC Hadamard(A : Tensor[d], B : Tensor[d]) : Tensor[d] -- elementwise product
+    FUNC Sum(A : Tensor[n], dim : ℕ) : Tensor[n-1]  
+    FUNC Softmax(X : Tensor[n]) : Tensor[n]
+    FUNC ReLU(X : Tensor[n]) : Tensor[n]  
+    FUNC Sigmoid(X : Tensor[n]) : Tensor[n]
+    FUNC Tanh(X : Tensor[n]) : Tensor[n]
+    FUNC Conv(X : Tensor[n × d], K : Tensor[k × k × d × m]) : Tensor[n × m]
+
+    AXIOM MatMulAssoc: ∀ (A : Tensor[n × p]) (B : Tensor[p × q]) (C: Tensor[q × m]) .
+      MatMul(MatMul(A, B), C) = MatMul(A, MatMul(B, C))
+
+    AXIOM DistributeHadamard: ∀ (A B : Tensor[n × d]) (c : Tensor[d]) .  
+      MatMul(A, Hadamard(B, c)) = Hadamard(MatMul(A, B), c)
+
+    NOTATION "X◎ : [n d]" = InputTensor[n, d]
+    NOTATION "H◉ : [n d]" = HiddenTensor[n, d]
+    NOTATION "Y◉ : [n d]" = OutputTensor[n, d]
+    NOTATION "W◈ : [s]" = Parameter[s]  
+
+    NOTATION "A · B" = MatMul(A, B)
+    NOTATION "A ∘ B" = Hadamard(A, B)  
+    NOTATION "Σ_d A" = Sum(A, d)
+    NOTATION "σ(X)" = Softmax(X)  
+    NOTATION "ρ(X)" = ReLU(X)
+    NOTATION "ς(X)" = Sigmoid(X)  
+    NOTATION "τ(X)" = Tanh(X)
+    NOTATION "X *◦ K" = Conv(X, K)
+
+    NOTATION "∑(Y◉ - Y◇)²" = MeanSquaredError  
+    NOTATION "-∑ Y◇ log(Y◉)" = CrossEntropy
+    NOTATION "∇" = GradientDescent
+  }
+
+  PROOFS {
+    TACTIC DistributeMatMul(A, B, c) = REWRITE MatMul(A, Hadamard(B, c))
+      BY DistributeHadamard 
+      TO Hadamard(MatMul(A, B), c)  
+
+    TACTIC UnrollHadamard(A, B, C) = REWRITE Hadamard(Hadamard(A, B), C)
+      TO Hadamard(A, Hadamard(B, C))
+
+    TACTIC AssocMatMul(A, B, C) = REWRITE MatMul(MatMul(A, B), C)  
+      BY MatMulAssoc
+      TO MatMul(A, MatMul(B, C))
+  }
+}
+
+
+CONCEPT TransformerLayer EXTENDS NeuralNetworkFramework {
+  LANGUAGE {
+    FUNC MultiHeadAttention(Q H◉ : [n d], K H◉ : [n d], V H◉ : [n d]) -> H◉ : [n d] = ...
+    FUNC LayerNorm(X H◉ : [n d]) -> H◉ : [n d] = ...
+    FUNC FeedForward(X H◉ : [n d]) -> H◉ : [n d] = X H◉ · W◈:[d m] -> ρ(H◉) · W◈:[m d] 
+    FUNC Residual(F : H◉ -> H◉, X H◉) = F(X H◉) + X
+
+    NOTATION "β(Q, K, V)" = MultiHeadAttention(Q, K, V)  
+    NOTATION "γ(X)" = LayerNorm(X)
+    NOTATION "δ(X)" = FeedForward(X) 
+    NOTATION "ε[F](X)" = Residual(F, X)
+  }
+
+  STRUCTURE Layer {
+    DEF Forward(X H◉ : [n d]) -> H◉ : [n d] = ε[
+      H◉ -> ε[
+        H◉ -> β(H◉, H◉, H◉) -> γ(H◉)  
+      ](H◉) -> δ(H◉) -> γ(H◉)
+    ](X)
+  }
+}
+
+
+
+CONCEPT NeuralNetworkFramework {
+  LANGUAGE {
+    -- Tensor types
+    TYPE Tensor[n : ℕ] -- n-dimensional real-valued tensor
+    TYPE InputTensor[n : ℕ, d : ℕ] <: Tensor[n × d]  
+    TYPE HiddenTensor[n : ℕ, d : ℕ] <: Tensor[n × d]
+    TYPE OutputTensor[n : ℕ, d : ℕ] <: Tensor[n × d]
+
+    -- Layer types  
+    TYPE Layer = Tensor[n] -> Tensor[m]
+    TYPE FullyConnected <: Layer
+    TYPE Convolutional <: Layer
+    TYPE Recurrent <: Layer
+
+    -- Activation functions
+    TYPE Activation = Tensor[n] -> Tensor[n]
+    FUNC ReLU : Activation
+    FUNC Sigmoid : Activation  
+    FUNC Tanh : Activation
+    FUNC Softmax : Activation
+
+    -- Loss and optimization  
+    TYPE Loss = (OutputTensor[n, d], OutputTensor[n, d]) -> ℝ
+    FUNC MeanSquaredError : Loss
+    FUNC CrossEntropy : Loss  
+    TYPE Optimizer = (∇ : Tensor[n], η : ℝ) -> Tensor[n]
+    FUNC GradientDescent : Optimizer
+
+    -- Foundational notation  
+    NOTATION "X◎" = InputTensor[_, _]  
+    NOTATION "H◉" = HiddenTensor[_, _]
+    NOTATION "Y◉" = OutputTensor[_, _]
+    NOTATION "[" <Expr> "]" = FullyConnected(<Expr>)
+    NOTATION "{{" <Expr> "}}" = Convolutional(<Expr>)
+    NOTATION "((" <Expr> "))" = Recurrent(<Expr>) 
+    NOTATION "─▶" = ReLU
+    NOTATION "─▷" = Sigmoid
+    NOTATION "─▶─" = Tanh  
+    NOTATION "─◠─" = Softmax
+    NOTATION "∑(□ - ◇)²" = MeanSquaredError
+    NOTATION "-∑□log(◇)" = CrossEntropy  
+    NOTATION "∇" = GradientDescent
+  }
+
+  PROOFS {
+    AXIOM UniversalApproximation {
+      ∀ (ε : ℝ) (K : 𝒦 ⊂ ℝ^n) (f : C(K, ℝ^m)) .
+        ∃ (𝒩 : [HiddenTensor[_, _]] -> OutputTensor[_, _]) . 
+          ∀ (X◎ : InputTensor[_, _]) . |𝒩(X◎) - f(X◎)| < ε  
+    }
+
+    AXIOM BackpropagationConvergence {
+      ∀ (𝒩 : [Layer]) (𝓛 : Loss) (𝓞 : Optimizer) (ε : ℝ) .
+        ∃ (t : ℕ) . LossValue(𝒩, 𝓛, 𝓞, t) < ε
+    }
+
+    TACTIC LayerComposition {
+      GIVEN f : Tensor[n] -> Tensor[m]
+            g : Tensor[m] -> Tensor[k]
+      SHOW  g ∘ f : Tensor[n] -> Tensor[k]
+    }  
+
+    TACTIC ChainRule {
+      GIVEN 𝒩₁ : [Layer]
+            𝒩₂ : [Layer] 
+            X◎ : InputTensor[_, _]
+      HAVE  ∇(𝓛(𝒩₂(𝒩₁(X◎)))) = 
+              ∇(𝓛(𝒩₂(H◉))) · ∇(𝒩₂(H◉)) · ∇(𝒩₁(X◎))
+    }
+  }
+}
+
+
+
+
+Let's call this system "Neural Network Visual Notation" (NNVN). The goal is to create a concise and intuitive way to represent the components, connections, and operations in a neural network.
+Here are some key elements of the NNVN:
+
+Nodes:
+
+Input nodes: ◎
+Hidden nodes: ◉
+Output nodes: ◉ (with a thicker border)
+
+
+Layers:
+
+Fully connected layer: [◉◉◉]
+Convolutional layer: {{◉◉◉}}
+Recurrent layer: ((◉◉◉))
+Residual connection: [◉◉◉] --↑
+|
+↓
+[◉◉◉]
+
+
+Activation functions:
+
+ReLU: ─▶
+Sigmoid: ─▷
+Tanh: ─▶─
+Softmax: ─◠─
+
+
+Pooling and normalization:
+
+Max pooling: ▽
+Average pooling: ▼
+Batch normalization: ◗
+
+
+Loss functions:
+
+Mean Squared Error (MSE): ∑(□ - ◇)²
+Cross-entropy: -∑□log(◇)
+
+
+Optimization:
+
+Gradient descent: ∇
+Learning rate: η
+
+
+
+
+
+CONCEPT CNNImageClassifier {
+  EXAMPLES {
+    EXAMPLE Architecture {
+      INPUT: [32x32x3] 
+      
+      ARCHITECTURE:
+      
+      [32x32x3] 
+        ─▶ {{◉◉◉}} : [16x3x3 Convolution]
+        ─▶ ─▶ ▽ ─▶ : [Max Pooling 2x2]
+        ─▶ {{◉◉◉}} : [32x3x3 Convolution]
+        ─▶ ─▶ ▽ ─▶ : [Max Pooling 2x2]
+        ─▶ [[◉◉◉]] : [Flatten]
+        ─▶ [◉◉◉] ─▶ [128 Fully Connected]
+        ─▶ [◉◉◉] ─◠─ [10 Fully Connected, Softmax]
+      
+      OUTPUT: [10] 
+      
+      LOSS: -∑□log(◇)  -- Cross-entropy loss
+      
+      OPTIMIZATION:
+        ∇: Gradient Descent
+        η: 0.01
+    }
+  }
+}
+
+
+
+
+
+CONCEPT FeedforwardNeuralNetwork {
+  LANGUAGE {
+    TYPE Tensor[shape : List[ℕ]] -- Multidimensional array
+    TYPE Layer = Tensor[] -> Tensor[]
+    TYPE Activation = Tensor[] -> Tensor[]
+    TYPE Loss = (Tensor[], Tensor[]) -> ℝ
+    TYPE Optimizer = (Tensor[] -> ℝ) -> (Tensor[] -> Tensor[])
+
+    FUNC Linear[in_dim, out_dim : ℕ] : Layer
+    FUNC ReLU : Activation
+    FUNC Sigmoid : Activation
+    FUNC MSE : Loss
+    FUNC SGD[learning_rate : ℝ] : Optimizer
+
+    NOTATION "─△─" = Linear
+    NOTATION "─◇─" = ReLU
+    NOTATION "─◯─" = Sigmoid
+    NOTATION "╒═" = InputNode
+    NOTATION "═╕" = OutputNode
+  }
+
+  PROOFS {
+    THEOREM UniversalApproximation {
+      STATEMENT:
+        ∀ (f : ℝ[] -> ℝ) (ε : ℝ) (a b : ℝ).
+          ∃ (nn : FeedforwardNeuralNetwork).
+            ∀ (x : ℝ[]).
+              a ≤ x ≤ b => |nn(x) - f(x)| < ε
+
+      PROOF:
+        -- A feedforward neural network with at least one hidden layer
+        -- and a non-polynomial activation function can approximate
+        -- any continuous function on a closed and bounded subset of ℝ^n
+        
+        DEFINE nn =
+          ╒═╗      ╒═════════╕
+          ║x║─△─◇─△─◇─ ... ─△─◯─═╕
+          ╘═╝││    │         │    ║
+             ││    │         │    ║
+             ││    ╘═════════╛    ║
+             ││                   ║
+             ││    ╒═════════╕    ║
+             ││─△─◇─◇─ ... ─△─◯─═╕║
+             ││    │         │    ║
+             ││    │         │    ║
+             ││    ╘═════════╛    ║
+             ││                   ║
+             ⋮⋮                   ⋮
+             ││    ╒═════════╕    ║
+             ╰╰─△─◇─◇─ ... ─△─◯─═╛
+                   │         │     
+                   │         │     
+                   ╘═════════╛     
+
+        -- The network has an input layer, one or more hidden layers with ReLU activation,
+        -- and an output layer with sigmoid activation
+
+        -- By the Universal Approximation Theorem, there exist weights and biases
+        -- for the network such that it can approximate the function f
+        -- to within the given error ε on the interval [a, b]
+
+        -- The details of the proof are omitted for brevity
+    }
+  }
+}
+
+
+
+
+
+
+
+CONCEPT RecurrentNeuralNetwork {
+  LANGUAGE {
+    TYPE Tensor[Shape]
+    TYPE RNNCell[InputSize, HiddenSize, OutputSize]
+    TYPE RNN[InputSize, HiddenSize, OutputSize, Steps]
+
+    FUNC Sigmoid(x : Tensor) -> Tensor
+    FUNC Tanh(x : Tensor) -> Tensor
+    FUNC Linear(x : Tensor, weights : Tensor, bias : Tensor) -> Tensor
+
+    NOTATION "─╮" "╭─" = Concatenate
+    NOTATION "──" w "──" = Linear with weights w
+    NOTATION "─σ─" = Sigmoid activation
+    NOTATION "─τ─" = Tanh activation
+  }
+
+  STRUCTURE RNNCell[InputSize, HiddenSize, OutputSize] {
+    weights : (InputWeights  : Tensor[HiddenSize, InputSize],
+               HiddenWeights : Tensor[HiddenSize, HiddenSize],
+               OutputWeights : Tensor[OutputSize, HiddenSize])
+    biases  : (HiddenBias : Tensor[HiddenSize], OutputBias : Tensor[OutputSize])
+
+    DEF Forward(input : Tensor[InputSize], prevState : Tensor[HiddenSize]) -> (Tensor[HiddenSize], Tensor[OutputSize]) {
+      LET x, h_prev = input, prevState
+      ╭───────────╮
+      │    x      │─────────────────────────────────────────╮               
+      ╰────╮  ╭───╯                                         │                 
+           │  │                                             ╰─────╮          
+      ╭────╰──╰───╮   ╭──InputWeights──╮   ╭───────╮   ╭─τ─╮      │          
+      │   h_prev  │───│Linear          │───│       │───│   │──────╯          
+      ╰───────────╯   ╰────────────────╯   │       │   ╰─══╯                  
+                      ╭─HiddenWeights─╮    │   +   │     │                    
+                      │Linear         │────│       │     ╰────╮               
+                      ╰───────────────╯    ╰───────╯          │               
+                                                │              │
+                                           ╭────╯              ╰───╮          
+                                           │                       │          
+                                           ╰───╮  ╭─HiddenBias─╮   │          
+                                               │  │   Bias     │───╯          
+                                               │  ╰────────────╯              
+                                               ╰────────╮                     
+                                                        │                     
+                                                        ╰────╮ h_next         
+                                                             │                
+                                                   ╭─OutputWeights─╮         
+                                                   │   Linear      │         
+                                                   ╰───────────────╯         
+                                                             │                
+                                                             ╰───╮            
+                                                                 │            
+                                                        ╭─OutputBias─╮       
+                                                        │   Bias     │       
+                                                        ╰────────────╯       
+                                                                 │            
+                                                                 ╰──╮ output  
+                                                                    │         
+                                                                    ↓         
+    }
+  }
+
+  STRUCTURE RNN[InputSize, HiddenSize, OutputSize, Steps] {
+    cell : RNNCell[InputSize, HiddenSize, OutputSize]
+    DEF Forward(input : Tensor[Steps, InputSize], initialState : Tensor[HiddenSize]) -> Tensor[Steps, OutputSize] {
+      LET RECURSIVE Unroll(t, prevState) = 
+        IF t = Steps THEN []
+        ELSE 
+          LET (nextState, output) = cell.Forward(input[t], prevState)
+          output :: Unroll(t + 1, nextState)
+
+      Unroll(0, initialState)  
+    }
+  }
+}

@@ -1,0 +1,169 @@
+CONCEPT SocialNetworkDynamics {
+  PARAMETERS {
+    N : INT  -- Number of nodes in the network
+    T : INT  -- Number of time steps to simulate
+  }
+
+  CONTEXT {
+    TYPES {
+      NodeID := INT
+      Edge := TUPLE(NodeID, NodeID)
+      Graph := TUPLE(SET(NodeID), SET(Edge))
+      
+      State := ENUM { Susceptible, Informed, Resistant }
+      
+      NodeAttributes := STRUCTURE {
+        influence : REAL     -- How influential the node is (0 to 1)
+        skepticism : REAL    -- How resistant to information the node is (0 to 1)
+      }
+      
+      NetworkState := MAP(NodeID, State)
+      
+      Information := STRUCTURE {
+        content : STRING
+        virality : REAL      -- How inherently viral the information is (0 to 1)
+      }
+      
+      SimulationResult := STRUCTURE {
+        final_state : NetworkState
+        spread_over_time : List(REAL)  -- Fraction of informed nodes at each time step
+      }
+    }
+
+    STRUCTURES {
+      STRUCTURE NetworkGenerator {
+        FUNC generate_small_world(n: INT, k: INT, p: REAL) -> Graph
+        FUNC generate_scale_free(n: INT, m: INT) -> Graph
+
+        AXIOM ConnectedNetwork {
+          ∀ g: Graph . IS_CONNECTED(g)
+        }
+      }
+
+      STRUCTURE InformationSpread {
+        FUNC simulate(g: Graph, initial_state: NetworkState, info: Information, 
+                      attributes: MAP(NodeID, NodeAttributes), steps: INT) -> SimulationResult
+
+        AXIOM MonotonicSpread {
+          ∀ t1, t2: INT, t1 < t2 .
+            COUNT_INFORMED(simulate(...).final_state@t1) ≤ 
+            COUNT_INFORMED(simulate(...).final_state@t2)
+        }
+      }
+
+      STRUCTURE NetworkAnalysis {
+        FUNC compute_centrality(g: Graph) -> MAP(NodeID, REAL)
+        FUNC find_communities(g: Graph) -> List(SET(NodeID))
+
+        AXIOM CentralityPositivity {
+          ∀ g: Graph, centrality = compute_centrality(g) .
+            ∀ node ∈ g.nodes . centrality[node] ≥ 0
+        }
+      }
+    }
+
+    NOTATION {
+      |S| := Cardinality of set S
+      x ~ D := x is sampled from distribution D
+      P(A) := Probability of event A
+    }
+
+    ASSERTIONS {
+      AXIOM InformationConservation {
+        ∀ g: Graph, initial: NetworkState, info: Information, attrs: MAP(NodeID, NodeAttributes) .
+          LET result = InformationSpread().simulate(g, initial, info, attrs, T)
+          IN |{n | n ∈ g.nodes, result.final_state[n] ≠ State.Susceptible}| ≥
+             |{n | n ∈ g.nodes, initial[n] ≠ State.Susceptible}|
+      }
+
+      AXIOM InfluenceEffect {
+        ∀ n1, n2: NodeID, g: Graph, info: Information, attrs: MAP(NodeID, NodeAttributes) .
+          attrs[n1].influence > attrs[n2].influence ⇒
+            P(n1 informs neighbors) > P(n2 informs neighbors)
+      }
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE OptimizeSeeding(g: Graph, k: INT, info: Information, 
+                            attrs: MAP(NodeID, NodeAttributes)) -> SET(NodeID) :=
+      LET centrality = NetworkAnalysis().compute_centrality(g)
+      LET candidates = SORT(g.nodes, BY = λ n. centrality[n] * attrs[n].influence)
+      TAKE(candidates, k)
+
+    SIMPLIFY ComputeViralityThreshold(g: Graph, attrs: MAP(NodeID, NodeAttributes)) -> REAL :=
+      LET avg_influence = AVG([attrs[n].influence for n in g.nodes])
+      LET avg_skepticism = AVG([attrs[n].skepticism for n in g.nodes])
+      1 - (avg_influence / avg_skepticism)
+  }
+
+  PROOFS {
+    THEOREM ViralityThresholdEffect {
+      ∀ g: Graph, info: Information, attrs: MAP(NodeID, NodeAttributes) .
+        LET threshold = ComputeViralityThreshold(g, attrs)
+        IN info.virality > threshold ⇒
+           ∃ t: INT . 
+             COUNT_INFORMED(InformationSpread().simulate(g, INIT_STATE, info, attrs, t).final_state) 
+             > 0.5 * |g.nodes|
+    }
+    PROOF {
+      GIVEN g: Graph, info: Information, attrs: MAP(NodeID, NodeAttributes)
+      LET threshold = ComputeViralityThreshold(g, attrs)
+      ASSUME info.virality > threshold
+      <1> threshold represents the point where influence overcomes skepticism
+      <2> When virality > threshold, information spread is more likely than resistance
+      <3> In a connected network (by ConnectedNetwork axiom), this leads to >50% spread
+      <4> ∃ t: INT where >50% of nodes become informed (by simulation and <3>)
+      ∴ The theorem holds
+      □
+    }
+
+    THEOREM CentralityAndSpreadCorrelation {
+      ∀ g: Graph, info: Information, attrs: MAP(NodeID, NodeAttributes) .
+        LET centrality = NetworkAnalysis().compute_centrality(g)
+            result = InformationSpread().simulate(g, INIT_STATE, info, attrs, T)
+        IN CORR(centrality.values(), 
+                [1 if result.final_state[n] == State.Informed else 0 for n in g.nodes]) > 0
+    }
+    PROOF {
+      // Proof sketch (full proof omitted for brevity):
+      // 1. Higher centrality nodes have more connections (by definition)
+      // 2. More connections increase probability of receiving information
+      // 3. Show that this leads to positive correlation with informed state
+      □
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE ViralMarketing {
+      LET network = NetworkGenerator().generate_scale_free(1000, 3)
+      LET product_info = Information { content = "New Gadget", virality = 0.7 }
+      LET attributes = {n: NodeAttributes { influence = RANDOM(), skepticism = RANDOM() } 
+                        for n in network.nodes}
+      
+      LET seed_set = OptimizeSeeding(network, 10, product_info, attributes)
+      LET init_state = {n: State.Informed if n in seed_set else State.Susceptible 
+                        for n in network.nodes}
+      
+      LET result = InformationSpread().simulate(network, init_state, product_info, attributes, 100)
+      
+      ASSERT result.spread_over_time[-1] > 0.6  // Over 60% of network informed
+      ASSERT IS_MONOTONIC_INCREASING(result.spread_over_time)
+    }
+
+    EXAMPLE MisinformationContainment {
+      LET network = NetworkGenerator().generate_small_world(10000, 6, 0.1)
+      LET misinfo = Information { content = "False Claim", virality = 0.8 }
+      LET attributes = {n: NodeAttributes { influence = RANDOM(), skepticism = 0.7 + 0.3 * RANDOM() }
+                        for n in network.nodes}  // Higher baseline skepticism
+      
+      LET init_state = {n: State.Informed if RANDOM() < 0.01 else State.Susceptible 
+                        for n in network.nodes}  // 1% initial exposure
+      
+      LET result = InformationSpread().simulate(network, init_state, misinfo, attributes, 50)
+      
+      ASSERT result.spread_over_time[-1] < 0.3  // Less than 30% of network misinformed
+      ASSERT MAX(result.spread_over_time) < 0.5  // Never reached majority
+    }
+  }
+}

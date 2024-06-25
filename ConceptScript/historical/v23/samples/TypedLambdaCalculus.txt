@@ -1,0 +1,115 @@
+CONCEPT TypedLambdaCalculus {
+
+  LANGUAGE {
+    TYPE Term
+    TYPE Type
+    TYPE Context = List(Binding)
+    TYPE Binding = (Variable, Type)
+    
+    FUNC Var : Variable -> Term
+    FUNC Abs : Variable -> Type -> Term -> Term
+    FUNC App : Term -> Term -> Term
+    FUNC TyVar : TypeVariable -> Type  
+    FUNC TyArr : Type -> Type -> Type
+    
+    PRED InContext : Context -> Variable -> Type -> 𝔹
+    PRED HasType : Context -> Term -> Type -> 𝔹
+    
+    NOTATION Γ ⊢ t : τ = HasType(Γ, t, τ)
+    NOTATION Γ, x:τ = Extend(Γ, (x, τ))
+    NOTATION λx:τ.t = Abs(x, τ, t)
+    NOTATION s t = App(s, t)
+    NOTATION τ₁ → τ₂ = TyArr(τ₁, τ₂)
+  }
+  
+  STRUCTURE {
+    DEF InContext(Γ, x, τ) <-> (x, τ) ∈ Γ
+    
+    DEF HasType(Γ, t, τ) <-> CASE t OF
+      | Var(x) -> InContext(Γ, x, τ)
+      | Abs(x, τ₁, t₁) -> τ = τ₁ → τ₂ ∧ HasType(Γ, x:τ₁, t₁, τ₂)  
+      | App(t₁, t₂) -> ∃τ₁. HasType(Γ, t₁, τ₁ → τ) ∧ HasType(Γ, t₂, τ₁)
+      
+    AXIOM TypesUnique {
+      ∀Γ t τ₁ τ₂. Γ ⊢ t : τ₁ ∧ Γ ⊢ t : τ₂ -> τ₁ = τ₂
+    }
+  }
+  
+  PROOFS {
+    THEOREM Progress {
+      STATEMENT : ∀t τ. ∅ ⊢ t : τ -> Value(t) ∨ ∃t'. t ↦ t'
+        WHERE Value(Abs(_, _, _))
+        NOTATION t ↦ t' = StepsTo(t, t') 
+        
+      PROOF BY INDUCTION ON HasType(∅, t, τ)
+       CASE Var : CONTRADICTION SINCE ¬InContext(∅, x, τ) FOR ANY x
+       
+       CASE Abs : 
+         HAVE Value(Abs(x, τ₁, t₁)) BY DEF
+       
+       CASE App :
+         ASSUME ∅ ⊢ t₁ : τ₁ → τ, 
+                ∅ ⊢ t₂ : τ₁
+         ASSUME IH₁: Value(t₁) ∨ ∃t₁'. t₁ ↦ t₁'
+         ASSUME IH₂: Value(t₂) ∨ ∃t₂'. t₂ ↦ t₂'
+         CASE Value(t₁) :
+           LET Abs(x, τ₁, t₁') = t₁
+           CASE Value(t₂) :  
+             SHOW (λx:τ₁.t₁') t₂ ↦ [x ↦ t₂]t₁'
+           CASE ∃t₂'. t₂ ↦ t₂' :
+             SHOW t₁ t₂ ↦ t₁ t₂'
+         CASE ∃t₁'. t₁ ↦ t₁' :
+           SHOW t₁ t₂ ↦ t₁' t₂
+    }
+      
+    THEOREM Preservation {
+      STATEMENT : ∀Γ t t' τ. Γ ⊢ t : τ ∧ t ↦ t' -> Γ ⊢ t' : τ
+      
+      PROOF BY INDUCTION ON Γ ⊢ t : τ
+        CASE Var : VACUOUS SINCE Var(x) ↦ t' NEVER HOLDS
+        
+        CASE Abs : VACUOUS SINCE Abs(x, τ₁, t₁) ↦ t' NEVER HOLDS
+        
+        CASE App : 
+          ASSUME Γ ⊢ t₁ : τ₁ → τ,
+                 Γ ⊢ t₂ : τ₁,
+                 t₁ t₂ ↦ t'
+          CASE t₁ = Abs(x, τ₁, t₁') ∧ t' = [x ↦ t₂]t₁' :
+            SUFFICES TO SHOW Γ ⊢ [x ↦ t₂]t₁' : τ
+            HAVE Γ, x:τ₁ ⊢ t₁' : τ BY INV OF Abs 
+            SHOW Γ ⊢ [x ↦ t₂]t₁' : τ BY SubstitutionLemma
+          CASE t₁ ↦ t₁' ∧ t' = t₁' t₂ :
+            HAVE Γ ⊢ t₁' : τ₁ → τ BY IH
+            HENCE Γ ⊢ t₁' t₂ : τ USING Γ ⊢ t₂ : τ₁ 
+          CASE t₂ ↦ t₂' ∧ t' = t₁ t₂' : 
+            HAVE Γ ⊢ t₂' : τ₁ BY IH  
+            HENCE Γ ⊢ t₁ t₂' : τ USING Γ ⊢ t₁ : τ₁ → τ
+            
+      THEOREM SubstitutionLemma {
+        STATEMENT : ∀Γ x t₁ t₂ τ₁ τ₂. Γ, x:τ₁ ⊢ t₁ : τ₂ ∧ Γ ⊢ t₂ : τ₁ -> Γ ⊢ [x ↦ t₂]t₁ : τ₂
+        
+        PROOF BY INDUCTION ON Γ, x:τ₁ ⊢ t₁ : τ₂
+          CASE Var :
+            CASE t₁ = x : 
+              HAVE τ₂ = τ₁
+              SHOW Γ ⊢ [x ↦ t₂]x : τ₁ SINCE [x ↦ t₂]x = t₂ 
+            CASE t₁ = y ≠ x :
+              HAVE InContext(Γ, y, τ₂)  
+              SHOW Γ ⊢ [x ↦ t₂]y : τ₂ SINCE [x ↦ t₂]y = y
+          CASE Abs :
+            CASE t₁ = λy:τ₁₁.t₁₂ : 
+              ASSUME Γ, x:τ₁, y:τ₁₁ ⊢ t₁₂ : τ₂₁
+              ASSUME τ₂ = τ₁₁ → τ₂₁
+              ASSUME IH: Γ, y:τ₁₁ ⊢ [x ↦ t₂]t₁₂ : τ₂₁  
+              SHOW Γ ⊢ (λy:τ₁₁.[x ↦ t₂]t₁₂) : τ₁₁ → τ₂₁ BY Abs
+          CASE App : 
+            CASE t₁ = t₁₁ t₁₂ :
+              ASSUME Γ, x:τ₁ ⊢ t₁₁ : τ₁₁ → τ₂
+              ASSUME Γ, x:τ₁ ⊢ t₁₂ : τ₁₁
+              ASSUME IH₁: Γ ⊢ [x ↦ t₂]t₁₁ : τ₁₁ → τ₂
+              ASSUME IH₂: Γ ⊢ [x ↦ t₂]t₁₂ : τ₁₁
+              SHOW Γ ⊢ ([x ↦ t₂]t₁₁) ([x ↦ t₂]t₁₂) : τ₂ BY App
+      }
+    }
+  }
+}

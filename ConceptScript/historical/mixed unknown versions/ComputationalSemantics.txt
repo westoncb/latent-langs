@@ -1,0 +1,114 @@
+CONCEPT ComputationalSemantics {
+  DECLARE {
+    Expression : TYPE
+    Variable : TYPE <: Expression
+    Abstraction : TYPE = Variable × Expression -> Expression 
+    Application : TYPE = Expression × Expression -> Expression
+    
+    Environment : TYPE = Variable -> Expression
+    
+    Value : TYPE
+    Closure : TYPE = Environment × Abstraction -> Value
+    
+    Meaning : TYPE = Expression × Environment -> Value
+    
+    Action : TYPE
+    Statement : TYPE = Environment -> Action  
+    Program : TYPE = [Statement]
+    
+    Denotation : TYPE = Program -> Action
+    
+    Entailment : TYPE = Expression × Expression -> 𝔹
+    KnowledgeBase : TYPE = [Expression]
+    
+    Model : TYPE
+    Truth : TYPE = Expression × Model -> 𝔹
+    
+    Embedding : TYPE = Expression -> Model
+    Homomorphism : TYPE = Expression × Expression × (Model -> Model) -> 𝔹
+  }
+  
+  DEFINE {
+    (λ v . e) ≜ Abstraction(v, e)
+    (e₁ e₂) ≜ Application(e₁, e₂)
+    
+    Meaning(v, ρ) = ρ(v)
+    Meaning(λ v . e, ρ) = Closure(ρ, λ v . e) 
+    Meaning(e₁ e₂, ρ) = 
+      let v₁ = Meaning(e₁, ρ)
+      let v₂ = Meaning(e₂, ρ)
+      match v₁ {
+        case Closure(ρ', λ v . e) => Meaning(e, ρ'[v ↦ v₂])
+        case _ => undefined
+      }
+      
+    Denotation(p) = 
+      let ρ = EmptyEnvironment
+      for s in p {
+        ρ = ρ >> s  ; Monadic bind, i.e. action sequencing
+      }
+      return ρ
+      
+    Entailment(e₁, e₂) ⇔ ∀ρ. Meaning(e₁, ρ) ≠ undefined -> Meaning(e₂, ρ) ≠ undefined
+    
+    Truth(e, m) ⇔ Meaning(e, Embedding(m)) ≠ undefined
+    
+    Homomorphism(e₁, e₂, h) ⇔ ∀m. Truth(e₁, m) = Truth(e₂, h(m)) 
+  }
+  
+  AXIOM {
+    ; Meaning is compositional
+    ∀e, ρ, v, e'. Meaning((λ v . e) e', ρ) = Meaning(e, ρ[v ↦ Meaning(e', ρ)])
+    
+    ; Denotation is compositional
+    ∀p, p'. Denotation(p ++ p') = Denotation(p) >> Denotation(p') 
+    
+    ; Entailment corresponds to valid inference  
+    ∀e₁, e₂. (∀e ∈ KnowledgeBase. Entailment(e, e₁)) -> Entailment(KnowledgeBase, e₂) -> Entailment(e₁, e₂)
+    
+    ; Truth is preserved under homomorphism
+    ∀e, m, h. Truth(e, m) <-> Truth(h(e), h(m))
+  }
+  
+  THEOREM SoundnessOfEntailment {
+    PROOF {
+      assume e₁, e₂ : Expression, KB : KnowledgeBase
+      assume ∀e ∈ KB. Entailment(e, e₁)
+      
+      let ρ : Environment
+      assume Meaning(e₁, ρ) ≠ undefined
+      
+      have ∀e ∈ KB. Meaning(e, ρ) ≠ undefined by {
+        fix e ∈ KB
+        have Entailment(e, e₁) by assumption
+        hence Meaning(e, ρ) ≠ undefined by definition of Entailment and Meaning(e₁, ρ) ≠ undefined
+      }
+      
+      assume Entailment(KB, e₂)  
+      hence Meaning(e₂, ρ) ≠ undefined by {
+        have ∀e. (e ∈ KB -> Meaning(e, ρ) ≠ undefined) -> Meaning(e₂, ρ) ≠ undefined by definition of Entailment
+        hence Meaning(e₂, ρ) ≠ undefined by above
+      }
+      
+      show Entailment(e₁, e₂) by definition of Entailment and Meaning(e₂, ρ) ≠ undefined
+    }
+  }
+  
+  THEOREM CompletenessOfEntailment {
+    PROOF {
+      assume e₁, e₂ : Expression
+      assume ∀ρ. Meaning(e₁, ρ) ≠ undefined -> Meaning(e₂, ρ) ≠ undefined
+      
+      let KB = {e₁}
+      
+      have ∀e ∈ KB. Entailment(e, e₁) trivially
+      
+      show Entailment(KB, e₂) by {
+        assume ρ, Meaning(e₁, ρ) ≠ undefined
+        hence Meaning(e₂, ρ) ≠ undefined by assumption
+      }
+        
+      hence Entailment(e₁, e₂) by definition of Entailment
+    }
+  }
+}

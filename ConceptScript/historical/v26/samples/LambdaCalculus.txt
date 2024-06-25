@@ -1,0 +1,360 @@
+CONCEPT LambdaCalculus {
+  LANGUAGE {
+    TYPE Term
+    TYPE Variable <: Term
+    TYPE Abstraction <: Term
+    TYPE Application <: Term
+
+    FUNC Var(name: String): Variable
+    FUNC Abs(v: Variable, body: Term): Abstraction
+    FUNC App(func: Term, arg: Term): Application
+
+    FUNC FreeVars(t: Term): Set[Variable]
+    FUNC BoundVars(t: Term): Set[Variable]
+    FUNC Subterms(t: Term): Set[Term]
+    FUNC Subst(t: Term, v: Variable, s: Term): Term
+
+    PRED FreeFor(v: Variable, t: Term, s: Term) = ¬∃ (u: FreeVars(s)) . u ∈ BoundVars(t)
+    PRED Reduces(t: Term, s: Term)
+    PRED Equivalent(t: Term, s: Term) = Reduces(t, s) ∧ Reduces(s, t)
+  }
+
+  NOTATION {
+    λ v . t = Abs(Var(v), t)
+    t s = App(t, s)
+    t [v := s] = Subst(t, v, s)
+    t ->β s = BetaReduces(t, s)
+    t =β s = BetaEquivalent(t, s)
+  }
+
+  TRANSFORMERS {
+    REWRITE FreeVars(Var(x)) = {Var(x)}
+    REWRITE FreeVars(Abs(v, t)) = FreeVars(t) \ {v}
+    REWRITE FreeVars(App(t, s)) = FreeVars(t) ∪ FreeVars(s)
+
+    REWRITE BoundVars(Var(x)) = {}
+    REWRITE BoundVars(Abs(v, t)) = {v} ∪ BoundVars(t)
+    REWRITE BoundVars(App(t, s)) = BoundVars(t) ∪ BoundVars(s)
+
+    REWRITE Subterms(Var(x)) = {Var(x)}
+    REWRITE Subterms(Abs(v, t)) = {Abs(v, t)} ∪ Subterms(t)
+    REWRITE Subterms(App(t, s)) = {App(t, s)} ∪ Subterms(t) ∪ Subterms(s)
+
+    REWRITE Subst(Var(x), v, s) = IF v = Var(x) THEN s ELSE Var(x)
+    REWRITE Subst(Abs(v, t), u, s) = IF v = u THEN Abs(v, t)
+                                     ELSE IF FreeFor(v, t, s) THEN Abs(v, Subst(t, u, s))
+                                     ELSE LET w = FreshVar(v, t, s) IN
+                                       Abs(w, Subst(Subst(t, v, Var(w)), u, s))
+    REWRITE Subst(App(t1, t2), v, s) = App(Subst(t1, v, s), Subst(t2, v, s))
+
+    FUNC FreshVar(v: Variable, t: Term, s: Term) -> Variable {
+      LET used = FreeVars(t) ∪ FreeVars(s)
+      LET x = v.name
+      LET x' = x
+      WHILE Var(x') ∈ used:
+        x' := x + "'"
+      RETURN Var(x')
+    }
+
+    TACTIC BetaReduces(t: Term, s: Term) -> Bool {
+      MATCH t WITH
+      | App(Abs(v, t1), t2) -> IF FreeFor(v, t1, t2) THEN
+                                 s = Subst(t1, v, t2)
+                               ELSE
+                                 LET w = FreshVar(v, t1, t2),
+                                     t1' = Subst(t1, v, Var(w))
+                                 IN s = Subst(t1', w, t2)
+      | _ -> ∃ (t': Subterms(t)) . t' ->β s' ∧ Replace(t, t', s') = s
+    }
+
+    TACTIC BetaEquivalent(t: Term, s: Term) -> Bool {
+      ∃ (r: Term) . t ->β* r ∧ s ->β* r
+    }
+  }
+
+  STRUCTURE Church {
+    DEF I = λ x . x
+    DEF K = λ x . λ y . x
+    DEF S = λ x . λ y . λ z . x z (y z)
+    DEF Zero = λ f . λ x . x
+    DEF Succ = λ n . λ f . λ x . f (n f x)
+    DEF Plus = λ m . λ n . λ f . λ x . m f (n f x)
+    DEF Mult = λ m . λ n . λ f . m (n f)
+    DEF Pow = λ m . λ n . n m
+    DEF True = λ t . λ f . t
+    DEF False = λ t . λ f . f
+    DEF And = λ p . λ q . p q p
+    DEF Or = λ p . λ q . p p q
+    DEF Not = λ p . p False True
+    DEF IfThenElse = λ p . λ a . λ b . p a b
+    DEF Pair = λ f . λ s . λ b . b f s
+    DEF Fst = λ p . p True
+    DEF Snd = λ p . p False
+    DEF Pred = λ n . λ f . λ x . n (λ g . λ h . h (g f)) (λ u . x) I
+    DEF Sub = λ m . λ n . n Pred m
+    DEF IsZero = λ n . n (λ x . False) True
+    DEF UnsignedLess = λ m . λ n . IsZero (Sub m n)
+    DEF SignedLess = λ m . λ n . Or (And (IsNeg m) (Not (IsNeg n)))
+                                    (And (Not (IsNeg m))
+                                         (Not (IsNeg n))
+                                         (UnsignedLess m n))
+    DEF IsNeg = λ n . Fst n
+    DEF Neg = λ n . Pair True n
+    DEF UnsignedMinus = λ m . λ n . IF IsNeg m THEN
+                                      IF IsNeg n THEN
+                                        Sub (Snd n) (Snd m)
+                                      ELSE
+                                        Neg (Add (Snd m) n)
+                                    ELSE
+                                      IF IsNeg n THEN
+                                        Add m (Snd n)
+                                      ELSE
+                                        Sub m n
+  }
+
+  PROOFS {
+    THEOREM ChurchRosser {
+      STATEMENT:
+        ∀ (t s1 s2: Term) . t ->β s1 ∧ t ->β s2 => ∃ (r: Term) . s1 ->β* r ∧ s2 ->β* r
+
+      PROOF:
+        ASSUME (A): ∀ (t t1 t2: Term) . t ->β t1 ∧ t ->β t2
+                       => ∃ (s: Term) . t1 ->β* s ∧ t2 ->β* s
+
+        LET t: Term, s1: Term, s2: Term
+        ASSUME (B): t ->β s1, (C): t ->β s2
+
+        SHOW ∃ (r: Term) . s1 ->β* r ∧ s2 ->β* r:
+          MATCH t WITH
+          | Var(x):
+            REWRITE ->β = =β
+            HENCE s1 = t = s2
+            LET r = t
+
+          | Abs(v, t'):
+            LET FV = FreeVars(t')
+            MATCH v ∈ FV WITH
+            | True:
+              REWRITE ->β = =β
+              HENCE s1 = t = s2
+              LET r = t
+
+            | False:
+              REWRITE B: t ->β s1 = Abs(v, t') ->β Abs(v, s1')
+              REWRITE C: t ->β s2 = Abs(v, t') ->β Abs(v, s2')
+              HAVE t' ->β s1' ∧ t' ->β s2' BY Inversion
+              HAVE ∃ (r': Term) . s1' ->β* r' ∧ s2' ->β* r' BY A
+              LET r = Abs(v, r')
+
+          | App(t1, t2):
+            MATCH (t1, t2) WITH
+            | (Abs(v, t'), s):
+              REWRITE B: t ->β s1 = App(Abs(v, t'), s) ->β Subst(t', v, s)
+              REWRITE C: t ->β s2 = App(Abs(v, t'), s) ->β Subst(t', v, s)
+              LET r = Subst(t', v, s)
+
+            | _:
+              HAVE ∃ (r1 r2: Term) . t1 ->β* r1 ∧ t2 ->β* r2 BY A
+              LET r = App(r1, r2)
+
+        QED
+    }
+
+    THEOREM FixedPointCombinator {
+      STATEMENT:
+        ∃ (Y: Term) . ∀ (f: Term) . (Y f) =β (f (Y f))
+
+      PROOF:
+        LET A = λ x . f (x x)
+        LET Y = λ f . (λ x . f (x x)) (λ x . f (x x))
+          = λ f . A A
+
+        SHOW (Y f) =β (f (Y f)):
+          (Y f)
+            = (λ f . A A) f
+            ->β (A A) [f := f]
+            = (λ x . f (x x)) (λ x . f (x x))
+            ->β f ((λ x . f (x x)) (λ x . f (x x)))
+            = f (Y f)
+
+        QED
+    }
+
+    THEOREM ChurchNumeralCorrect {
+      STATEMENT:
+        ∀ (n: ℕ) (f: Term -> Term) (x: Term) . (ToChurch(n) f x) =β (f^n x)
+
+      PROOF:
+        BY Induction on n
+        BASE CASE: n = 0
+          REWRITE ToChurch(0) = λ f . λ x . x
+          SHOW (ToChurch(0) f x) = ((λ f . λ x . x) f x) ->β x = (f^0 x)
+
+        INDUCTIVE CASE:
+          IH: (ToChurch(n) f x) =β (f^n x)
+          SHOW (ToChurch(n+1) f x) =β (f^(n+1) x):
+            REWRITE ToChurch(n+1) = λ f . λ x . f (ToChurch(n) f x)
+            (ToChurch(n+1) f x)
+              = ((λ f . λ x . f (ToChurch(n) f x)) f x)
+              ->β f (ToChurch(n) f x)
+              =β f (f^n x) BY IH
+              = (f^(n+1) x)
+
+        QED
+    }
+  }
+}
+
+
+
+
+
+
+
+
+
+CONCEPT LambdaCalculus {
+  LANGUAGE {
+    TYPE Term
+    TYPE Variable <: Term
+    TYPE Abstraction(var: Variable, body: Term) <: Term
+    TYPE Application(func: Term, arg: Term) <: Term
+    
+    FUNC Var(name: String): Variable
+    FUNC Abs(v: Variable, t: Term): Abstraction
+    FUNC App(t1: Term, t2: Term): Application
+    
+    PRED FreeIn(v: Variable, t: Term)
+    PRED Alpha(t1: Term, t2: Term)
+    PRED Beta(t1: Term, t2: Term)
+    PRED Eta(t1: Term, t2: Term)
+    
+    AXIOM FreeIn_Var: 
+      ∀ (x: String) . FreeIn(Var(x), Var(x))
+    AXIOM FreeIn_Abs: 
+      ∀ (x: String, v: Variable, t: Term) . 
+        (FreeIn(Var(x), Abs(v, t)) <-> (Var(x) != v ∧ FreeIn(Var(x), t)))
+    AXIOM FreeIn_App: 
+      ∀ (x: String, t1: Term, t2: Term) . 
+        (FreeIn(Var(x), App(t1, t2)) <-> (FreeIn(Var(x), t1) ∨ FreeIn(Var(x), t2)))
+  }
+  
+  NOTATION {
+    "λ v . t" := Abs(Var(v), t)
+    "t1 t2" := App(t1, t2)
+    "t1 ≡α t2" := Alpha(t1, t2)
+    "t1 →β t2" := Beta(t1, t2)  
+    "t1 →η t2" := Eta(t1, t2)
+  }
+  
+  TRANSFORMERS {
+    TACTIC Subst(t: Term, x: Variable, s: Term): Term = {
+      MATCH t WITH
+      | Var(y) => IF x = Var(y) THEN s ELSE t
+      | Abs(y, t1) => IF x = y THEN t 
+                      ELSE IF FreeIn(y, s) THEN
+                        LET z = Var(FreshName(y, t1, s))
+                        IN Abs(z, Subst(Subst(t1, y, z), x, s))
+                      ELSE Abs(y, Subst(t1, x, s))
+      | App(t1, t2) => App(Subst(t1, x, s), Subst(t2, x, s))
+    }
+
+    FUNC FreshName(v: Variable, t: Term, s: Term): String = {
+      LET used = {x | ∃ (Var(x) <: Term) . FreeIn(Var(x), t) ∨ FreeIn(Var(x), s)}
+      LET x = v.name
+      WHILE x ∈ used:
+        x := x + "'"      
+      RETURN x
+    }
+    
+    REWRITE Alpha_Rename:
+      ∀ (x y: String, t1 t2: Term) .
+        Alpha(λ x . t1, λ y . t2) = Alpha(t1, Subst(t2, Var(y), Var(x)))
+    
+    REWRITE Beta_Reduce:
+      ∀ (v: Variable, t1 t2: Term) . 
+        Beta((λ v . t1) t2, Subst(t1, v, t2))
+        
+    REWRITE Eta_Reduce:  
+      ∀ (v: Variable, t: Term) .
+        (∀ (x: String) . x != v.name => ¬FreeIn(Var(x), t))
+        => Eta(λ v . (t Var(v)), t)
+  }
+
+  STRUCTURE Terms {
+    LET I = λ "x" . Var("x")
+    LET K = λ "x" . λ "y" . Var("x")
+    LET S = λ "x" . λ "y" . λ "z" . App(App(Var("x"), Var("z")), App(Var("y"), Var("z")))
+    LET Ω = App(λ "x" . App(Var("x"), Var("x")), λ "x" . App(Var("x"), Var("x")))
+    
+    REQUIRE NotFree_I: ∀ (x: String) . ¬FreeIn(Var(x), I)
+    REQUIRE NotFree_K: ∀ (x: String) . (x != "x" => ¬FreeIn(Var(x), K))
+    REQUIRE NotFree_S: ∀ (x: String) . (x != "x" ∧ x != "y" ∧ x != "z" => ¬FreeIn(Var(x), S))
+    REQUIRE FreeIn_Ω: FreeIn(Var("x"), Ω)
+
+    DEF [t: Term] IsValue(t) = 
+        (∃ (v: Variable, t1: Term) . t = Abs(v, t1)) 
+      ∨ (∃ (x: String) . t = Var(x))
+        
+    REQUIRE Value_I: IsValue(I)
+    REQUIRE Value_K: IsValue(K)
+    REQUIRE Value_S: IsValue(S)  
+    REQUIRE NotValue_Ω: ¬IsValue(Ω)
+  }
+  
+  PROOFS {
+    THEOREM FreeVar_Subst {
+      STATEMENT:
+        ∀ (t: Term, x y: Variable, s: Term) .
+          ¬FreeIn(y, s) => (FreeIn(x, Subst(t, y, s)) <-> (x = y ∨ FreeIn(x, t)))
+      PROOF:
+        LET t: Term, x y: Variable, s: Term
+        ASSUME (A) : ¬FreeIn(y, s)
+        SHOW FreeIn(x, Subst(t, y, s)) <-> (x = y ∨ FreeIn(x, t)) {
+          CASES t
+          CASE Var(z):
+            HAVE x = Var(z) <-> (x = y ∨ FreeIn(x, Var(z))) BY AXIOM FreeIn_Var {}
+            HENCE FreeIn(x, IF y = Var(z) THEN s ELSE t) <-> (x = y ∨ FreeIn(x, t))
+          CASE Abs(z, t1):  
+            ASSUME (B) : x ≠ z
+            HAVE FreeIn(x, Abs(z, Subst(t1, y, s))) <-> FreeIn(x, Subst(t1, y, s)) BY AXIOM FreeIn_Abs {B}
+            HAVE FreeIn(x, Subst(t1, y, s)) <-> (x = y ∨ FreeIn(x, t1)) BY Inductive Hypothesis {A}
+            HENCE FreeIn(x, Abs(z, Subst(t1, y, s))) <-> (x = y ∨ FreeIn(x, Abs(z, t1))) BY AXIOM FreeIn_Abs {B}
+          CASE App(t1, t2):
+            HAVE FreeIn(x, App(Subst(t1, y, s), Subst(t2, y, s))) <-> 
+                 (FreeIn(x, Subst(t1, y, s)) ∨ FreeIn(x, Subst(t2, y, s))) BY AXIOM FreeIn_App
+            HAVE FreeIn(x, Subst(t1, y, s)) <-> (x = y ∨ FreeIn(x, t1)) BY Inductive Hypothesis {A}
+            HAVE FreeIn(x, Subst(t2, y, s)) <-> (x = y ∨ FreeIn(x, t2)) BY Inductive Hypothesis {A} 
+            HAVE (x = y ∨ FreeIn(x, t1)) ∨ (x = y ∨ FreeIn(x, t2)) <-> (x = y ∨ (FreeIn(x, t1) ∨ FreeIn(x, t2))) BY Propositional Logic
+            HENCE FreeIn(x, App(Subst(t1, y, s), Subst(t2, y, s))) <-> (x = y ∨ FreeIn(x, App(t1, t2))) BY AXIOM FreeIn_App
+        }
+        QED
+    }
+    
+    THEOREM AlphaEquivalence {
+      STATEMENT:  
+        ∀ (t1 t2: Term) . Alpha(t1, t2) => 
+          ∀ (s1 s2: Term) . Beta(t1, s1) ∧ Beta(t2, s2) => Alpha(s1, s2)
+      PROOF:
+        LET t1 t2: Term
+        ASSUME (A) : Alpha(t1, t2)
+        LET s1 s2: Term
+        ASSUME (B) : Beta(t1, s1), (C) : Beta(t2, s2)
+        SHOW Alpha(s1, s2) BY Induction on (A) {
+          CASE Alpha_Rename:
+            LET x y: String, t1' t2': Term
+            ASSUME (D) : t1 = λ x . t1', (E) : t2 = λ y . t2'
+            ASSUME (F) : Alpha(t1', Subst(t2', Var(y), Var(x)))
+            REWRITE s1 = Subst(t1', Var(x), s1') USING Beta_Reduce {D, B}
+            REWRITE s2 = Subst(Subst(t2', Var(y), Var(x)), Var(x), s2') USING Beta_Reduce {E, C}
+            ASSUME (G) : Alpha(s1', s2') BY Inductive Hypothesis {F}
+            SHOW Alpha(Subst(t1', Var(x), s1'), Subst(Subst(t2', Var(y), Var(x)), Var(x), s2')) {
+              REWRITE Subst(Subst(t2', Var(y), Var(x)), Var(x), s2')
+                    = Subst(t2', Var(y), s2') BY FreeVar_Subst
+              SHOW Alpha(Subst(t1', Var(x), s1'), Subst(t2', Var(y), s2')) BY Alpha_Rename {G}  
+            }
+        }
+        QED
+    }
+  }
+}

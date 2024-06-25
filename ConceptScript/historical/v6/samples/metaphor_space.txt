@@ -1,0 +1,27 @@
+MetaphorSpace := (
+  TopicSpace(ObjectT+, MorphismT+), 
+  VehicleSpace(ObjectV+, MorphismV+),
+  Functor(Mapping)
+) :: {
+  TopicSpace, VehicleSpace ∈ ConceptualSpace
+  ConceptualSpace := (Objects, Morphisms)
+    Objects := Concept+
+    Morphisms := Relation+
+    [Morphisms ⊆ Objects × Objects]
+    [∀o ∈ Objects, ∃!id_o ∈ Morphisms: id_o: o -> o]
+    [∀f: a -> b, g: b -> c ∈ Morphisms, ∃!h: a -> c ∈ Morphisms]
+  
+  Mapping := (ObjectMap, MorphismMap)
+    ObjectMap: ObjectT -> ObjectV
+    MorphismMap: MorphismT -> MorphismV
+    [∀f: a -> b ∈ MorphismT, 
+     ObjectMap(a) -> ObjectMap(b) = MorphismMap(f)]
+  
+  MetaphoricBlend := ColimitCone(Mapping)
+    [MetaphoricBlend.Objects ⊆ (ObjectT + ObjectV)] 
+    [MetaphoricBlend.Morphisms ⊆ (MorphismT + MorphismV)]
+    [∀o_t ∈ ObjectT, o_v ∈ ObjectV:
+      o_t ⟗ o_v => ∃!o_b ∈ MetaphoricBlend.Objects: 
+        (o_t -> o_b) ∈ MetaphoricBlend.Morphisms ∧
+        (o_v -> o_b) ∈ MetaphoricBlend.Morphisms]
+}

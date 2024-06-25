@@ -1,0 +1,157 @@
+CONCEPT HVMNet {
+  LANGUAGE {
+    TYPE Neuron = {
+      id : NeuronID,
+      bias : ℝ,
+      activation : ActivationFunction
+    }
+    
+    TYPE Synapse = {
+      pre : NeuronID,
+      post : NeuronID,
+      weight : ℝ
+    }
+    
+    TYPE NeuronID = U64 -- Unique identifier for neurons
+    TYPE ActivationFunction = ℝ -> ℝ
+    
+    TYPE Layer = {
+      neurons : Set[Neuron],
+      synapses : Set[Synapse]
+    }
+    
+    TYPE HVMNet = {
+      layers : List[Layer],
+      inputShape : List[Nat],
+      outputShape : List[Nat]
+    }
+
+    FUNC Interact(pre : Neuron, post : Neuron, synapse : Synapse) : (Neuron, Neuron)
+    FUNC Activate(neuron : Neuron, input : ℝ) : ℝ
+    FUNC Forward(layer : Layer, input : List[ℝ]) : List[ℝ]
+    FUNC Backward(layer : Layer, input : List[ℝ], output : List[ℝ], error : List[ℝ]) : Layer
+    
+    AXIOM NeuronUniqueness {
+      ∀ (n m : Neuron) . n.id = m.id => n = m
+    }
+
+    AXIOM SynapseUniqueness {
+      ∀ (s t : Synapse) . s.pre = t.pre ∧ s.post = t.post => s = t
+    }
+  }
+  
+  TRANSFORMERS {
+    REWRITE Interact(pre, post, synapse) =
+      LET preAct = Activate(pre, 0.0)
+      LET postAct = Activate(post, preAct * synapse.weight)
+      (pre with activation := postAct, post)
+      
+    REWRITE Activate(neuron, input) =
+      neuron.activation(input + neuron.bias)
+      
+    REWRITE Forward(layer, input) =
+      LET inputNeurons = Map((i, v) => Neuron{i, 0.0, Id}, Zip(Iota(0, Len(input)), input))
+      LET neurons = layer.neurons ++ inputNeurons
+      LET synapses = layer.synapses
+      LET outputNeurons =
+        Fixpoint(neurons, synapses, (neurons, synapses) =>
+          ParallelMap((s : Synapse) =>
+            LET pre = Find(neurons, (n) => n.id = s.pre)
+            LET post = Find(neurons, (n) => n.id = s.post)
+            LET (pre', post') = Interact(pre, post, s)
+            (Replace(neurons, pre', post'), synapses),
+          synapses))
+      Map((n : Neuron) => n.activation, outputNeurons)
+      
+    TACTIC BackwardStep(layer, input, output, error) =
+      LET δ = Zip(error, output).Map((e, o) => e * Derive(o))
+      LET dW = OuterProduct(input, δ)
+      LET dB = δ
+      LET synapses' = 
+        ParallelMap((s : Synapse) =>
+          s with weight := s.weight - γ * dW[s.pre, s.post],
+        layer.synapses)
+      LET neurons' =
+        ParallelMap((n : Neuron) =>
+          n with bias := n.bias - γ * dB[n.id],
+        layer.neurons)  
+      RETURN Layer{neurons', synapses'}
+
+    REWRITE Backward(layer, input, output, error) =
+      Fixpoint(layer, (layer) => BackwardStep(layer, input, output, error))
+  }
+
+  STRUCTURE HVMLayer {
+    FUNC Create(inputSize : Nat, outputSize : Nat) -> Layer = {
+      LET inputNeurons = 
+        Map((i) => Neuron{i, 0.0, Id}, Iota(0, inputSize))
+      LET outputNeurons =
+        Map((i) => Neuron{inputSize + i, 0.0, Sigmoid}, Iota(0, outputSize))
+      LET neurons = inputNeurons ++ outputNeurons
+      LET synapses =
+        FlatMap(
+          (pre : Neuron) => Map((post : Neuron) => Synapse{pre.id, post.id, 0.0}, outputNeurons),
+          inputNeurons)
+      RETURN Layer{neurons, synapses}
+    }
+  }
+
+  STRUCTURE HVM {
+    FUNC CompileNeuron(neuron : Neuron) -> Net =
+      LET id = REF(neuron.id)
+      LET bias = NUM(neuron.bias)
+      LET act = CompileActivation(neuron.activation)
+      LET net =
+        CON -- constructor for the neuron
+          (VAR("bias") -- bias port
+          (CON -- constructor for the activation function
+            (VAR("act") -- activation function port
+            (VAR("out"))))) -- output port     
+      LET biasLink = Link(bias, Port(1, VAR("bias")))
+      LET actLink = Link(act, Port(1, VAR("act")))
+      LET compiled = Link(id, Port(1, net))
+      RETURN compiled ++ biasLink ++ actLink
+      
+    FUNC CompileSynapse(synapse : Synapse) -> Net =
+      LET pre = REF(synapse.pre)
+      LET post = REF(synapse.post)
+      LET weight = NUM(synapse.weight)
+      LET weightedInput = 
+        OP2 -- binary operator for weighted input
+          (VAR("weight") -- weight port
+          (VAR("input"))) -- input port
+      LET net = Link(pre, Port(3, post)) -- link pre to post.out
+      LET weightLink = Link(weight, Port(1, VAR("weight")))
+      LET inputLink = Link(Port(3, pre), Port(2, VAR("input")))
+      RETURN net ++ weightLink ++ inputLink
+      
+    FUNC CompileLayer(layer : Layer) -> Net =
+      LET neuronNets = ParallelMap(CompileNeuron, layer.neurons)
+      LET synapseNets = ParallelMap(CompileSynapse, layer.synapses)
+      RETURN Concat(neuronNets ++ synapseNets)
+      
+    FUNC CompileHVMNet(net : HVMNet) -> Net =
+      LET inputNet = CompileInput(net.inputShape)
+      LET layerNets = Map(CompileLayer, net.layers)
+      LET outputNet = CompileOutput(net.outputShape)
+      RETURN inputNet ++ Concat(layerNets) ++ outputNet
+  }
+  
+  PROOFS {
+    THEOREM Universal {
+      ASSUME f : List[ℝ] -> List[ℝ]
+      PROVE
+        ∃ (net : HVMNet) .
+        ∀ (input : List[ℝ]) .
+        Eval(Forward(net, input)) = f(input)
+      STRATEGY ExistentialIntro, Universal
+    }
+    
+    THEOREM Efficient {
+      ASSUME net : HVMNet, input : List[ℝ]
+      PROVE
+        Depth(CompileHVMNet(net)) = O(Depth(net))
+      STRATEGY InductionOnStructure, AsympoticAnalysis
+    }
+  }
+}

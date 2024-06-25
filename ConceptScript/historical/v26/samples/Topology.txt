@@ -1,0 +1,109 @@
+CONCEPT Topology {
+  LANGUAGE { 
+    TYPE Point
+    TYPE Set[T] = Point -> Bool
+    TYPE Topology = Set[Set[Point]]
+    TYPE Metric(X : Set[Point]) = (Point, Point) -> ℝ
+    
+    PRED Open[X](S : Set[Point], τ : Topology[X]) = S ∈ τ
+    PRED Closed[X](S : Set[Point], τ : Topology[X]) = X \ S ∈ τ  
+    PRED Dense[X](S : Set[Point], τ : Topology[X]) = ∀ (U : Set[Point]) . Open[X](U, τ) => (U ∩ S ≠ ∅)
+    PRED Connected[X](τ : Topology[X]) = ∀ (U V : Set[Point]) . 
+      (Open[X](U, τ) ∧ Open[X](V, τ) ∧ (U ∪ V = X) ∧ (U ∩ V = ∅)) => (U = ∅ ∨ V = ∅)
+    PRED Compact[X](K : Set[Point], τ : Topology[X]) = 
+      ∀ (𝓤 : Set[Set[Point]]) . 
+        (∀ (U : Set[Point]) . U ∈ 𝓤 => Open[X](U, τ)) => 
+          (∀ (x : Point) . x ∈ K => (∃ (U : 𝓤) . x ∈ U)) =>
+            (∃ (𝓤' : FiniteSubset(𝓤)) . ∀ (x : Point) . x ∈ K => (∃ (U : 𝓤') . x ∈ U))
+  }
+
+  TRANSFORMERS {
+    FUNC DiscreteTopology[X](X : Set[Point]) : Topology[X] = Powerset(X)
+    FUNC FiniteComplement[X](τ : Topology[X]) : Topology[X] = {U : Set[Point] | X \ U ∈ τ}  
+    FUNC TopologyFromBasis[X](𝓑 : Set[Set[Point]]) : Topology[X] = 
+      {U : Set[Point] | ∀ (x : Point) . x ∈ U => (∃ (B : 𝓑) . x ∈ B ⊆ U)}
+    FUNC TopologyFromSubbasis[X](𝓢 : Set[Set[Point]]) : Topology[X] =
+      TopologyFromBasis({⋂ 𝓕 | 𝓕 : FiniteSubset(𝓢)})
+    FUNC MetricTopology[X](d : Metric[X]) : Topology[X] =  
+      {U : Set[Point] | ∀ (x : U) . ∃ (ε : ℝ⁺) . ∀ (y : Point) . d(x,y) < ε => y ∈ U}
+  }
+    
+  PROOFS { 
+    THEOREM OpenSetsUnionIsOpen {
+      STATEMENT:
+        ∀ (X : Set[Point])  
+          (τ : Topology[X])
+          (𝓤 : Set[Set[Point]]) .
+        (∀ (U : Set[Point]) . U ∈ 𝓤 => Open[X](U, τ)) => Open[X](⋃ 𝓤, τ)
+        
+      PROOF:
+        ASSUME (𝓤 : Set[Set[Point]]), (∀ (U : 𝓤) . Open[X](U, τ))
+        
+        Open[X](⋃ 𝓤, τ)
+          <=> ⋃ 𝓤 ∈ τ  
+          <=> (* By definition of topology *)
+              ∀ (A B : 𝓤) . A ∪ B ∈ τ
+          <=> (* By inductive generalization *)  
+              ∀ (𝓕 : FiniteSubset(𝓤)) . ⋃ 𝓕 ∈ τ
+          <== (* By assumed antecedent *)
+              TRUE
+              
+        QED
+    }
+      
+    THEOREM ClosedSetsFiniteIntersectionIsClosed {
+      STATEMENT:  
+        ∀ (X : Set[Point])
+          (τ : Topology[X])
+          (A B : Set[Point]) .
+        Closed[X](A, τ) ∧ Closed[X](B, τ) => Closed[X](A ∩ B, τ)
+        
+      PROOF:
+        ASSUME Closed[X](A, τ), Closed[X](B, τ)
+        
+        HAVE X \ A ∈ τ, X \ B ∈ τ  by definition of Closed
+        
+        (X \ A) ∪ (X \ B) 
+          = X \ (A ∩ B)
+          ∈ τ            by OpenSetsUnionIsOpen
+          
+        THEREFORE Closed[X](A ∩ B, τ) 
+        
+        QED
+    }
+      
+    THEOREM CompactImpliesClosed {
+      STATEMENT:
+        ∀ (X : Set[Point])
+          (τ : Topology[X]) 
+          (K : Set[Point]) .
+        Compact[X](K, τ) => Closed[X](K, τ)
+        
+      PROOF:
+        ASSUME Compact[X](K, τ)
+        SUFFICES Open[X](X \ K, τ)
+        
+        LET 𝓤 = {X \ {x} | x ∈ K}
+        
+        ∀ (U : 𝓤) {
+          U = X \ {x}   for some x ∈ K
+            ∈ τ         since {x} is closed
+        }
+        
+        ∀ (x : Point) . x ∈ K => (∃ (U : 𝓤) . x ∈ U)
+          TAKE U = X \ {x}
+          
+        HAVE ∃ (𝓤' : FiniteSubset(𝓤)) . ∀ (x : Point) . x ∈ K => (∃ (U : 𝓤') . x ∈ U)
+          by Compact[X](K, τ)
+        
+        TAKE 𝓤' = {U₁, ..., Uₙ} 
+        
+        X \ K 
+          = X \ ⋂ {X \ U | U ∈ 𝓤'}  
+          = ⋃ 𝓤'
+          ∈ τ by OpenSetsUnionIsOpen
+        
+        QED
+    }
+  }
+}

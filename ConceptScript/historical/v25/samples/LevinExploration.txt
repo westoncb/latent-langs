@@ -1,0 +1,615 @@
+CONCEPT BiologicalInformationTransfer {
+  LANGUAGE {
+    TYPE Organism <: Entity {
+      genome : Genome
+      epigenome : Epigenome
+      connectome : Connectome
+      cells : List[Cell]
+    }
+    
+    TYPE Cell <: Entity {
+      genome : Genome
+      epigenome : Epigenome
+      transcriptome : Transcriptome
+      proteome : Proteome
+      metabolome : Metabolome
+    }
+    
+    TYPE Genome = List[Gene]
+    TYPE Epigenome = List[EpigeneticMarker]
+    TYPE Connectome = List[SynapticConnection]
+    TYPE Transcriptome = List[Transcript]
+    TYPE Proteome = List[Protein]  
+    TYPE Metabolome = List[Metabolite]
+    
+    TYPE EpigeneticMarker = DNAMethylation | HistoneModification
+    TYPE SynapticConnection = {presynaptic : Neuron, postsynaptic : Neuron, strength : Real}
+    TYPE Transcript = {gene : Gene, abundance : Real}
+    TYPE Protein = {transcript : Transcript, abundance : Real, activity : Real}
+    TYPE Metabolite = {name : String, abundance : Real}
+    
+    FUNC Die : Organism -> Organism
+    FUNC Disperse : List[Cell] -> List[Cell]
+    FUNC Reaggregate : List[Cell] -> Organism
+    FUNC Inherit : Cell -> Organism -> Cell
+    FUNC Influence : Cell -> Cell -> Cell
+    
+    PRED Methylated : Gene -> Bool
+    PRED Acetylated : Gene -> Bool
+    PRED Phosphorylated : Protein -> Bool
+    PRED Activated : Protein -> Bool
+  }
+
+  STRUCTURE InformationPropagation {
+    AXIOM GenomicInheritance {
+      ∀ (o : Organism) (c : Cell).
+        c ∈ o.cells => c.genome = o.genome
+    }
+    
+    AXIOM EpigeneticInheritance {
+      ∀ (o : Organism) (c : Cell) (g : Gene).
+        c ∈ o.cells ∧ Methylated(g) ∈ o.epigenome =>
+          Methylated(g) ∈ Inherit(c, o).epigenome
+    }
+        
+    AXIOM TranscriptionalMemory {
+      ∀ (o : Organism) (c : Cell) (t : Transcript).
+        c ∈ o.cells ∧ t ∈ o.transcriptome =>
+          ∃ (t' : Transcript). t'.gene = t.gene ∧ t' ∈ Inherit(c, o).transcriptome
+    }
+    
+    AXIOM MetabolicStateTransfer {
+      ∀ (c1 c2 : Cell) (m : Metabolite).
+        c2 = Influence(c1, c2) ∧ m ∈ c1.metabolome => 
+          ∃ (m' : Metabolite). m'.name = m.name ∧ m' ∈ c2.metabolome
+    }
+    
+    AXIOM ProteinActivityPropagation {
+      ∀ (c1 c2 : Cell) (p : Protein).
+        c2 = Influence(c1, c2) ∧ p ∈ c1.proteome ∧ Activated(p) =>
+          ∃ (p' : Protein). p'.transcript = p.transcript ∧ Activated(p') ∧ p' ∈ c2.proteome
+    }
+    
+    AXIOM ConnectomeRegeneration {
+      ∀ (o : Organism) (c1 c2 : Cell) (s : SynapticConnection).
+        c1 ∈ o.cells ∧ c2 ∈ o.cells ∧ s ∈ o.connectome ∧ Die(o) ∧ 
+        c1 ∈ Disperse(o.cells) ∧ c2 ∈ Disperse(o.cells) =>
+          ∃ (s' : SynapticConnection). 
+            s'.presynaptic = s.presynaptic ∧ s'.postsynaptic = s.postsynaptic ∧
+            s' ∈ Reaggregate([c1, c2]).connectome
+    }
+  }
+  
+  PROOFS {
+    THEOREM EpigeneticMemoryRetention {
+      STATEMENT:
+        ∀ (o : Organism) (c : Cell) (g : Gene).
+          Methylated(g) ∈ o.epigenome ∧ Die(o) ∧ c ∈ Disperse(o.cells) =>
+            Methylated(g) ∈ c.epigenome
+
+      PROOF:
+        LET o : Organism, c : Cell, g : Gene
+        ASSUME Methylated(g) ∈ o.epigenome, Die(o), c ∈ Disperse(o.cells)
+        LET c' = Inherit(c, o)
+        SHOW Methylated(g) ∈ c'.epigenome BY EpigeneticInheritance
+    }
+
+    THEOREM ConnectomeReestablishment {
+      STATEMENT:
+        ∀ (o : Organism) (c1 c2 : Cell) (s : SynapticConnection).
+          c1 ∈ o.cells ∧ c2 ∈ o.cells ∧ s ∈ o.connectome ∧ Die(o) ∧
+          c1 ∈ Disperse(o.cells) ∧ c2 ∈ Disperse(o.cells) =>
+            ∃ (s' : SynapticConnection).
+              s'.presynaptic = s.presynaptic ∧ s'.postsynaptic = s.postsynaptic ∧
+              s' ∈ Reaggregate([c1, c2]).connectome
+
+      PROOF:
+        LET o : Organism, c1 c2 : Cell, s : SynapticConnection
+        ASSUME c1 ∈ o.cells, c2 ∈ o.cells, s ∈ o.connectome, Die(o),
+               c1 ∈ Disperse(o.cells), c2 ∈ Disperse(o.cells)
+        SHOW ∃ (s' : SynapticConnection).
+               s'.presynaptic = s.presynaptic ∧ s'.postsynaptic = s.postsynaptic ∧
+               s' ∈ Reaggregate([c1, c2]).connectome
+          BY ConnectomeRegeneration
+    }
+  }
+}
+
+
+
+
+
+
+CONCEPT PostmortemInformationTransfer {
+  LANGUAGE {
+    TYPE Organism <: Entity {
+      genome : Genome
+      cells : List[Cell]
+      memories : List[Memory]
+    }
+    
+    TYPE Cell <: Entity {
+      genome : Genome
+      memories : List[Memory]
+    }
+    
+    TYPE Memory {
+      content : Information
+      valence : Valence
+    }
+    
+    TYPE Information = Morphological | Behavioral
+    
+    TYPE Valence = Positive | Negative
+    
+    FUNC Die : Organism -> Organism
+    FUNC Disperse : List[Cell] -> List[Cell]
+    FUNC Reaggregate : List[Cell] -> Organism
+    FUNC Train : Organism -> Stimulus -> Valence -> Organism
+    FUNC Transplant : Organism -> Organism -> Tissue -> Organism
+    FUNC Inherit : Cell -> Organism -> Cell
+    FUNC Synthesize : List[Memory] -> Memory
+    
+    PRED Regenerative : Organism -> Bool
+    PRED Trainable : Cell -> Bool
+  }
+  
+  STRUCTURE MemoryTransference {
+    AXIOM CellularMemoryRetention {
+      ∀ (o : Organism) (c : Cell) (m : Memory).
+        c ∈ o.cells ∧ m ∈ o.memories ∧ Die(o) =>
+          m ∈ Inherit(c, o).memories
+    }
+    
+    AXIOM ReaggregateMemorySynthesis {
+      ∀ (cs : List[Cell]) (m : Memory).
+        (∀ (c : Cell). c ∈ cs => ∃ (m' : Memory). Similar(m', m) ∧ m' ∈ c.memories) =>  
+          Synthesize(Map((c) -> SelectOne(c.memories, (m') -> Similar(m', m)), cs)) ∈ Reaggregate(cs).memories
+    }
+        
+    AXIOM TransplantMemoryInheritance {
+      ∀ (d r : Organism) (t : Tissue) (m : Memory).
+        Regenerative(r) ∧ m ∈ d.memories ∧ t ∈ d.tissues => 
+          m ∈ Transplant(d, r, t).memories
+    }
+    
+    AXIOM ConflictingMemoryResolution {
+      ∀ (o : Organism) (m1 m2 : Memory).
+        {m1, m2} ⊆ o.memories ∧ Conflict(m1, m2) =>
+          ∃ (m3 : Memory). Resolve(m1, m2, m3) ∧ m3 ∈ o.memories
+    }
+  }
+  
+  PROOFS {
+    THEOREM MemoryRetentionPostDeath {
+      STATEMENT:
+        ∀ (o : Organism) (c : Cell) (m : Memory).
+          m ∈ o.memories ∧ Die(o) ∧ c ∈ Disperse(o.cells) => m ∈ c.memories
+
+      PROOF:
+        LET o : Organism, c : Cell, m : Memory
+        ASSUME m ∈ o.memories, Die(o), c ∈ Disperse(o.cells)
+        LET c' = Inherit(c, o)
+        SHOW m ∈ c'.memories BY CellularMemoryRetention
+    }
+    
+    THEOREM AggregateMemorySynthesis {
+      STATEMENT:
+        ∀ (cs : List[Cell]) (m : Memory).
+          (∀ (c : Cell). c ∈ cs => Trainable(c)) ∧
+          (∀ (c : Cell). c ∈ cs => ∃ (m' : Memory). Similar(m', m) ∧ m' ∈ c.memories) =>
+            ∃ (m'' : Memory). m'' ∈ Reaggregate(cs).memories ∧ Similar(m'', m)
+
+      PROOF:
+        LET cs : List[Cell], m : Memory
+        ASSUME (∀ (c : Cell). c ∈ cs => Trainable(c)),
+               (∀ (c : Cell). c ∈ cs => ∃ (m' : Memory). Similar(m', m) ∧ m' ∈ c.memories)
+        LET ms = Map((c) -> SelectOne(c.memories, (m') -> Similar(m', m)), cs),
+            m'' = Synthesize(ms)
+        SHOW m'' ∈ Reaggregate(cs).memories BY ReaggregateMemorySynthesis
+        SHOW Similar(m'', m) BY {
+          ASSUME Trainable(Reaggregate(cs)),
+                 m ∈ Train(Reaggregate(cs), SomeStimulus, SomeValence).memories  
+          SHOW ∀ (c : Cell). c ∈ Disperse(Reaggregate(cs)).cells => 
+                 ∃ (m' : Memory). Similar(m', m) ∧ m' ∈ c.memories   
+            BY MemoryRetentionPostDeath
+        }
+    }
+  }
+}
+
+
+
+
+
+CONCEPT PostmortemCellularLife {
+  LANGUAGE {
+    TYPE Organism <: Entity {
+      genome : Genome
+      cells : List[Cell]
+      environment : Environment
+      lifecycle : Lifecycle
+    }
+    
+    TYPE Cell <: Entity {
+      genome : Genome
+      state : CellState
+      capabilities : List[Capability]
+    }
+    
+    TYPE CellState = Cooperating | Solitary | Reprogramming
+    
+    TYPE Capability = Motility | Adhesion | GapJunction | UnlimitedProliferation
+    
+    TYPE Environment = Aquatic | Terrestrial
+    
+    TYPE Lifecycle = EggFertilization | Embryogenesis | AdultLife | 
+                     BodyDeath | CellularDispersal | Reaggregation
+                     
+    FUNC Die : Organism -> Organism
+    FUNC Disperse : List[Cell] -> List[Cell]  
+    FUNC Reaggregate : List[Cell] -> Organism
+    FUNC Reprogram : Cell -> CellState -> Cell
+    
+    PRED Amphibian : Organism -> Bool
+    PRED Mammal : Organism -> Bool
+  }
+  
+  STRUCTURE AlternateLifeHistory {
+    AXIOM Dispersal {
+      ∀ (o : Organism) (c : Cell).
+        c ∈ o.cells ∧ Die(o) => 
+          c ∈ Disperse(o.cells) ∧ Reprogram(c, Solitary)  
+    }
+    
+    AXIOM Reaggregation {
+      ∀ (cs : List[Cell]).
+        ∀ (c : Cell). c ∈ cs => c.state = Solitary =>
+          ∃ (o : Organism). Reaggregate(cs) = o
+    }
+    
+    AXIOM Reprogramming {
+      ∀ (c : Cell).   
+        c.state = Reprogramming =>
+          (UnlimitedProliferation ∈ c.capabilities ∧ 
+           Adhesion ∉ c.capabilities ∧
+           GapJunction ∉ c.capabilities)
+    }
+    
+    AXIOM EnvironmentalConstraints {
+      ∀ (o : Organism) (c : Cell).
+        c ∈ o.cells ∧ Die(o) ∧ Mammal(o) ∧ o.environment = Terrestrial =>
+          ¬Survive(c)
+    }
+           
+    AXIOM SyntheticLife {
+      ∃ (mkSynthetic : List[Cell] -> Organism).
+        ∀ (cs : List[Cell]).
+          ∀ (c : Cell). c ∈ cs => c.state = Solitary =>
+            mkSynthetic(cs).lifecycle = Reaggregation
+    }
+  }
+  
+  PROOFS {
+    THEOREM PostmortemSurvival {
+      STATEMENT:
+        ∀ (o : Organism) (c : Cell).
+          c ∈ o.cells ∧ Die(o) ∧ Amphibian(o) ∧ o.environment = Aquatic =>
+            ∃ (o' : Organism). c ∈ o'.cells
+      
+      PROOF:
+        LET o : Organism, c : Cell
+        ASSUME c ∈ o.cells, Die(o), Amphibian(o), o.environment = Aquatic  
+        LET cs = Disperse(o.cells)
+        HAVE c ∈ cs, c.state = Solitary BY Dispersal
+        LET o' = Reaggregate(cs)  
+        SHOW c ∈ o'.cells BY Reaggregation
+    }
+    
+    THEOREM SyntheticPostmortemLife {
+      STATEMENT:
+        ∀ (o : Organism) (c : Cell).  
+          c ∈ o.cells ∧ Die(o) ∧ Mammal(o) =>
+            ∃ (o' : Organism) (mkSynthetic : List[Cell] -> Organism).
+              c ∈ o'.cells ∧ o' = mkSynthetic(Disperse(o.cells))
+
+      PROOF:
+        LET o : Organism, c : Cell
+        ASSUME c ∈ o.cells, Die(o), Mammal(o)
+        LET cs = Disperse(o.cells)
+        HAVE ∀ (c' : Cell). c' ∈ cs => ¬Survive(c') BY EnvironmentalConstraints
+        LET mkSynthetic : List[Cell] -> Organism, o' = mkSynthetic(cs)          
+        SHOW o'.lifecycle = Reaggregation BY SyntheticLife
+        SHOW c ∈ o'.cells BY Reaggregation, SyntheticLife
+    } 
+  }
+}
+
+
+
+CONCEPT Thanatotranscriptome {
+  LANGUAGE {
+    TYPE Organism <: Entity {
+      components : List[Cell]
+      scale : Scale
+    }
+    
+    TYPE Cell <: Entity {
+      genes : List[Gene]
+      pathways : List[Pathway]
+      state : CellState
+    }
+    
+    TYPE CellState = Living | Dying | Dead
+    
+    TYPE Gene <: Process {
+      expression : Expression  
+    }
+    
+    TYPE Expression = On | Off
+    
+    TYPE Pathway <: Process {
+      genes : List[Gene]
+      state : PathwayState
+    }
+    
+    TYPE PathwayState = Active | Inactive
+    
+    TYPE Scale = Multicellular | Unicellular
+    
+    FUNC Die : Organism -> Organism
+    FUNC Adapt : Cell -> Context -> Cell
+    
+    PRED Thanatosis : Gene -> Bool
+    PRED Adaptive : Pathway -> Bool 
+  }
+  
+  STRUCTURE ThanatotranscriptomicResponse {
+    AXIOM CellDeath {
+      ∀ (o : Organism) (c : Cell).
+        c ∈ o.components ∧ Die(o) => c.state = Dying
+    }
+    
+    AXIOM ThanatosisActivation {
+      ∀ (c : Cell) (g : Gene). 
+        c.state = Dying ∧ Thanatosis(g) => 
+          Adapt(c, Dying).genes = c.genes ∪ {g}
+    }
+        
+    AXIOM PathwayModulation {
+      ∀ (c : Cell) (p : Pathway).
+        c.state = Dying ∧ p ∈ c.pathways ∧ Adaptive(p) =>
+          p ∈ Adapt(c, Dying).pathways ∧ p.state = Active
+    }
+    
+    AXIOM EvolutionaryRole {
+      ∃ (benefit : CellState -> Real). 
+        ∀ (c : Cell). 
+          benefit(Adapt(c, Dying).state) >= benefit(c.state)
+    }
+    
+    AXIOM ScaleTransition {
+      ∀ (o : Organism).
+        Die(o) ∧ o.scale = Multicellular => 
+          ∀ (c : Cell). c ∈ o.components => c.scale = Unicellular
+    }
+  }
+
+  PROOFS {
+    THEOREM ThanatosisIsAdaptive {
+      STATEMENT:
+        ∀ (g : Gene). Thanatosis(g) => 
+          ∃ (p : Pathway). g ∈ p.genes ∧ Adaptive(p)
+
+      PROOF:
+        LET g : Gene
+        ASSUME Thanatosis(g)
+        LET c : Cell, c' = Adapt(c, Dying)
+        HAVE g ∈ c'.genes BY ThanatosisActivation        
+        LET p : Pathway = SomeSuch(p. g ∈ p.genes ∧ 
+                                      p ∈ c'.pathways ∧ 
+                                      p.state = Active)
+        WITNESS p
+        SHOW p BY PathwayModulation, EvolutionaryRole
+    }
+  }
+}
+
+
+
+CONCEPT PostmortemSkinAdaptation {
+  LANGUAGE {
+    TYPE Cell <: Entity  
+    TYPE Pathway <: Process
+    TYPE Fibroblast <: Cell
+    TYPE Endothelial <: Cell
+    
+    FUNC Activate : Cell -> Pathway -> Cell
+    FUNC Upregulate : Cell -> Gene -> Cell
+    FUNC Downregulate : Cell -> Gene -> Cell
+    FUNC Resilience : Cell -> Real
+    
+    PRED SlowDeath : Death -> Bool
+    PRED IncreasedResilience : Cell -> Cell -> Bool
+    PRED ReducedFunctionality : Cell -> Cell -> Bool
+  }
+
+  STRUCTURE SkinPostmortemResponse {
+    DEF Skin : Entity = Organ(Epidermis, Dermis)
+    DEF Epidermis : Entity = TissueCompartment(Keratinocyte)
+    DEF Dermis : Entity = TissueCompartment(Fibroblast, Endothelial)
+
+    DEF PI3K_Akt : Pathway
+    DEF Angiogenesis : Pathway
+    DEF Melanogenesis : Pathway
+    DEF CollagenMetabolism : Pathway
+
+    DEF Death : Event
+    
+    REQUIRE ∀ (c : Cell) (p : Pathway). 
+      Resilience(Activate(c, p)) >= Resilience(c)
+    
+    REQUIRE ∀ (d : Death). SlowDeath(d) => 
+      ∀ (f : Fibroblast) (pre post : f).
+        pre = BeforeDeath(f, d) ∧ post = AfterDeath(f, d) => 
+          IncreasedResilience(pre, post) ∧
+          post = Activate(Upregulate(Upregulate(Upregulate(Upregulate(
+            pre, FOXO1), FOXO3), ATF4), CEBPD), PI3K_Akt)
+            
+    REQUIRE ∀ (d : Death). SlowDeath(d) =>
+      ∀ (e : Endothelial) (pre post : e).
+        pre = BeforeDeath(e, d) ∧ post = AfterDeath(e, d) =>
+          post = Activate(pre, Angiogenesis)
+          
+    REQUIRE ∀ (d : Death). SlowDeath(d) =>  
+      ∀ (s : Skin) (pre post : s).
+        pre = BeforeDeath(s, d) ∧ post = AfterDeath(s, d) =>
+          ReducedFunctionality(pre, post) ∧
+          post = Downregulate(Downregulate(pre, Melanogenesis), CollagenMetabolism)
+  }
+
+  PROOFS {
+    THEOREM FibroblastResilienceInSlowDeath {
+      STATEMENT:
+        ∀ (d : Death) (f : Fibroblast). 
+          SlowDeath(d) => 
+            IncreasedResilience(BeforeDeath(f, d), AfterDeath(f, d))
+      
+      PROOF:
+        LET d : Death, f : Fibroblast
+        ASSUME SlowDeath(d)
+        LET pre = BeforeDeath(f, d), post = AfterDeath(f, d)
+        SHOW IncreasedResilience(pre, post) BY SkinPostmortemResponse
+    }
+      
+    THEOREM SkinFunctionalityReducedInSlowDeath {
+      STATEMENT:
+        ∀ (d : Death) (s : Skin).
+          SlowDeath(d) => 
+            ReducedFunctionality(BeforeDeath(s, d), AfterDeath(s, d))
+
+      PROOF:  
+        LET d : Death, s : Skin
+        ASSUME SlowDeath(d)
+        LET pre = BeforeDeath(s, d), post = AfterDeath(s, d)
+        SHOW ReducedFunctionality(pre, post) BY SkinPostmortemResponse
+    }
+  }
+}
+
+
+
+CONCEPT LevinFunctionalOntology {
+  LANGUAGE {
+    TYPE Entity  
+    TYPE Process
+    TYPE Goal
+    TYPE Context
+    TYPE Interaction = Process -> (Entity, Entity) -> Context -> Goal
+
+    FUNC Regulate : (Entity, Context, Goal) -> Process
+    FUNC Sense : Entity -> Context -> Information
+    FUNC Decide : (Entity, Context, Information, Goal) -> Process  
+    FUNC Act : (Entity, Context, Process) -> Entity
+
+    PRED Homeostasis : (Entity, Context, Goal) -> Bool
+    PRED Plasticity : Entity -> Bool
+    PRED Modularity : Entity -> Bool
+    PRED Memory : Entity -> Bool
+
+    AXIOM AdaptiveRegulation {
+      ∀ (e : Entity) (c : Context) (g : Goal).
+        ¬Homeostasis(e, c, g) => 
+          ∃ (p : Process). Regulate(e, c, g) = p ∧ 
+                            Homeostasis(Act(e, c, p), c, g)
+    }
+
+    AXIOM PlasticityModularity {
+      ∀ (e : Entity). Plasticity(e) ⇔ Modularity(e)  
+    }
+
+    AXIOM MemoryPrediction {
+      ∀ (e : Entity) (c : Context) (i : Information).
+        Memory(e) => ∃ (g : Goal). Decide(e, c, i, g)
+    }
+  }
+
+  STRUCTURE BioelectricNetwork {
+    DEF Cell : Entity
+    DEF Ion : Entity  
+    DEF GapJunction : Interaction = λ p (c1, c2) ctx g.
+      LET v1 = Sense(c1)(ctx), v2 = Sense(c2)(ctx)  
+      IN IF Abs(v1 - v2) > Threshold THEN Diffuse(p, c1, c2) ELSE NoOp
+
+    DEF Morphogen : Entity
+    DEF MorphogenGradient : Interaction = λ p (e1, e2) ctx g.
+      LET m = Sense(e1)(ctx), loc = Sense(e2)(ctx)
+      IN IF m > 0 THEN Secrete(p, e1, m, loc) ELSE NoOp
+
+    DEF Bioelectric : Context = λ (e : Entity). 
+      LET v = MembraneVoltage(e) IN (v, SpatialGradient(v))
+  }
+
+  STRUCTURE Regeneration {
+    EXTEND BioelectricNetwork
+
+    DEF Wound : Context
+    DEF Heal : Goal = λ (e : Entity) (ctx : Context). 
+      Normal(Morphology(e))
+
+    DEF RegenerationProgram : Entity -> Context -> Goal -> Process =
+      λ e ctx g. 
+        MATCH (ctx, g) WITH
+        | (Wound, Heal) -> 
+            LET v = Sense(e)(ctx) 
+            IN Decide(e, ctx, v, Heal) 
+        | _ -> NoOp
+
+    REQUIRE Memory(Cell)
+    REQUIRE Plasticity(Cell)
+  }
+
+  PROOFS {
+    THEOREM RegenerationPlasticity {
+      STATEMENT:
+        ∀ (c : Cell). Plasticity(c)
+
+      PROOF:
+        LET c : Cell
+        SUFFICES SHOW Modularity(c) BY PlasticityModularity
+        LET net : BioelectricNetwork
+        SHOW ∀ (p : Part(c)). ∃ (i : Interaction). 
+          i ∈ {GapJunction, MorphogenGradient} BY {
+            MATCH p WITH
+            | Membrane => WITNESS GapJunction
+            | Cytoplasm => WITNESS MorphogenGradient            
+          }
+        HENCE Modularity(c)
+    }
+
+    THEOREM RegenerationMemory {
+      STATEMENT:  
+        ∀ (c : Cell). Memory(c)
+
+      PROOF:
+        LET c : Cell, ctx = Wound, info = Sense(c)(ctx)
+        SUFFICES SHOW ∃ (g : Goal). Decide(c, ctx, info, g) BY MemoryPrediction
+        WITNESS Heal
+        LET p = RegenerationProgram(c, ctx, Heal)
+        SHOW p : Process BY RegenerationProgram
+        SHOW Decide(c, ctx, info, Heal) = p BY RegenerationProgram
+    }
+    
+    THEOREM WoundHealing {
+      STATEMENT:
+        ∀ (e : Entity) (c : Context).
+          Wound(c) => ∃ (p : Process). 
+            Homeostasis(Act(e, c, p), c, Heal)
+            
+      PROOF:
+        LET e : Entity, c = Wound
+        LET p = Regulate(e, c, Heal) 
+        SHOW Homeostasis(Act(e, c, p), c, Heal) BY AdaptiveRegulation
+    }
+  }
+}

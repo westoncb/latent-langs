@@ -1,0 +1,97 @@
+CONCEPT InstructiveHVM2 {
+  LANGUAGE {
+    -- The core elements of the HVM2 architecture are Ports, Pairs, and Nets.
+    -- Ports represent directed edges in the interaction graph.
+    -- Pairs represent nodes (with two Ports) in the graph.
+    -- Nets represent a collection of Pairs connected by Ports.
+    TYPE Tag = U3 -- Tags identify the node type using 3 bits
+    TYPE Val = U29 -- Values are 29-bit unsigned integers
+    TYPE Port = Tag × Val -- Ports are a combination of a Tag and a Value
+    TYPE Pair = Port × Port -- Pairs are two connected Ports
+    TYPE Net = List[Pair] × List[Port] -- Nets are a list of Pairs and a list of Ports
+
+    -- HVM2 has 8 basic node types, each with a unique Tag:
+    FUNC VAR(name: Val) : Tag -- Variable nodes represent connections
+    FUNC REF(addr: Val) : Tag -- Reference nodes represent global definitions
+    FUNC ERA(era: Val) : Tag -- Eraser nodes delete other nodes
+    FUNC CON(con: Val) : Tag -- Constructor nodes build data structures
+    FUNC DUP(dup: Val) : Tag -- Duplicator nodes copy other nodes
+    FUNC NUM(num: Val) : Tag -- Number nodes represent numeric values
+    FUNC OP1(op1: Val) : Tag -- Unary operator nodes
+    FUNC OP2(op2: Val) : Tag -- Binary operator nodes
+
+    -- The Alloc function manages memory allocation for the interaction graph.
+    -- It returns the number of nodes, variables, and redexes that can be allocated.
+    FUNC Alloc(nodes: Nat, vars: Nat, redexes: Nat) : Nat × Nat × Nat
+
+    -- The Link function connects two Ports in the interaction graph.
+    -- It performs the actual rewriting based on the node types.
+    FUNC Link(src: Port, tgt: Port) : Net
+
+    -- The Eval function evaluates a Net by iteratively rewriting it.
+    -- It continues until no more redexes can be applied.
+    FUNC Eval(net: Net) : Net
+  }
+
+  TRANSFORMERS {
+    -- The Alloc function is implemented using a lock-free allocator.
+    -- This allows for efficient parallel allocation without contention.
+    REWRITE Alloc(nodes, vars, redexes) = LockFreeAlloc(nodes, vars, redexes)
+
+    -- The Link function performs pattern matching on the node types (Tags).
+    -- It applies the appropriate rewrite rule based on the combination of Tags.
+    REWRITE Link((t1, v1), (t2, v2)) = 
+      MATCH (t1, t2) WITH
+      | (VAR, _) => Subst(v1, (t2, v2))
+      | (_, VAR) => Subst(v2, (t1, v1))
+      | (REF, _) => Expand(v1, (t2, v2))
+      | (ERA, CON) => Erase((t2, v2))
+      | (ERA, DUP) => Erase((t2, v2))
+      | (ERA, OP1) => Erase((t2, v2))
+      | (ERA, OP2) => Erase((t2, v2))
+      | (NUM, OP1) => ApplyUnaryOp(v1, v2)
+      | (NUM, OP2) => ApplyBinaryOp(v1, v2)
+      | (CON, CON) => Annihilate((t1, v1), (t2, v2))
+      | (DUP, DUP) => Annihilate((t1, v1), (t2, v2))
+      | (OP1, OP1) => Annihilate((t1, v1), (t2, v2))
+      | (OP2, OP2) => Annihilate((t1, v1), (t2, v2))
+      | _ => Commute((t1, v1), (t2, v2))
+
+    -- The Eval function repeatedly applies the Link function to the Net.
+    -- It uses a parallel reduction strategy to maximize concurrency.
+    REWRITE Eval(net) =
+      LET pairs = ParallelMap(Link, Redexes(net))
+      LET net' = ParallelReduce(Concat, pairs, net)
+      IF Reducible(net') THEN Eval(net') ELSE net'
+  }
+
+  PROOFS {
+    -- HVM2 enjoys several desirable theoretical properties.
+
+    THEOREM ChurchRosser {
+      -- The Church-Rosser property ensures that the final result of evaluation
+      -- is independent of the order in which the rewrite rules are applied.
+      ASSUME net : Net, net1 : Net, net2 : Net
+      ASSUME Eval(net) = net1 ∧ Eval(net) = net2
+      PROVE ∃ net' : Net . Eval(net1) = net' ∧ Eval(net2) = net'
+      STRATEGY IndOnEval, CaseAnalysis
+    }
+
+    THEOREM StrongNormalization {
+      -- Strong normalization guarantees that evaluation always terminates.
+      -- This is ensured by the absence of cyclic rewrites in the interaction rules.
+      ASSUME net : Net
+      PROVE ∃ net' : Net . Eval(net) = net' ∧ Irreducible(net')
+      STRATEGY IndOnEval, CaseAnalysis
+    }
+
+    THEOREM Confluence {
+      -- Confluence is a consequence of the Church-Rosser property and
+      -- strong normalization. It means that the evaluation order does not affect
+      -- the final result, and the result is unique.
+      ASSUME net : Net
+      PROVE ∃! net' : Net . Eval(net) = net'
+      STRATEGY ChurchRosser, StrongNormalization
+    }
+  }
+}

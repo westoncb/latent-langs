@@ -1,0 +1,127 @@
+CONCEPT SimpleTypeTheory {
+  LANGUAGE {
+    type Type = BaseType(String) | FuncType(Type, Type)
+
+    type Term = Var(String, Type) | Abs(String, Type, Term) | App(Term, Term)
+
+    notation "A → B" = FuncType(A, B)
+    notation "λx:A. t" = Abs(x, A, t)
+    notation "s t" = App(s, t)
+
+    infer TypeInference(Γ: Context, t: Term, T: Type):
+      (x: T ∈ Γ) --> Γ ⊢ Var(x, T) : T
+      (Γ, x: A ⊢ t : B) --> Γ ⊢ (λx:A. t) : (A → B)  
+      (Γ ⊢ s : (A → B), Γ ⊢ t : A) --> Γ ⊢ (s t) : B
+
+    infer Subtyping(A: Type, B: Type):
+      A <: A
+      (A <: B, B <: C) --> A <: C
+      (A <: A', B <: B') --> (A → B) <: (A' → B')
+
+    rewrite BetaReduction: (λx:A. t) s ~> t[x := s]
+    rewrite EtaReduction: (λx:A. t x) ~> t
+  }
+
+  STRUCTURE {
+    ; No axioms needed
+  }
+
+  PROOFS {
+    theorem ChurchRosser: ∀t, u, v: Term. (t ~>* u) ∧ (t ~>* v) ⟹ ∃w. (u ~>* w) ∧ (v ~>* w)
+    {
+      assume t, u, v: Term
+      assume (t ~>* u) ∧ (t ~>* v)
+
+      ; We prove the theorem by induction on the reduction sequences t ~>* u and t ~>* v
+      by Induction(λt, u. (t ~>* u) ⟹ ∀v. (t ~>* v) ⟹ ∃w. (u ~>* w) ∧ (v ~>* w)) {
+        ; Base case: t = u
+        ; In this case, we can choose w = v and the theorem holds trivially
+        
+        ; Inductive case: t ~> t' ~>* u
+        ; IH: ∀v. (t' ~>* v) ⟹ ∃w. (u ~>* w) ∧ (v ~>* w)
+        assume t ~> t'
+        assume t' ~>* u
+        assume t ~>* v
+        
+        ; We proceed by case analysis on the reduction t ~> t'
+        by CaseAnalysis(t ~> t') {
+          ; Case 1: t = (λx:A. s) r ~> s[x := r] = t'
+          assume t = (λx:A. s) r
+          assume t' = s[x := r]
+          
+          ; We have two subcases depending on how v is derived from t
+          by CaseAnalysis(t ~>* v) {
+            ; Subcase 1: v = (λx:A. s') r ~>* s'[x := r]
+            assume v = (λx:A. s') r
+            assume s' ~>* s
+            
+            ; By IH, ∃w. (s[x := r] ~>* w) ∧ (s'[x := r] ~>* w)
+            ; Choose this w and the theorem holds
+            
+            ; Subcase 2: (λx:A. s) ~>* (λx:A. s') and r ~>* r', where v = s' r'
+            assume (λx:A. s) ~>* (λx:A. s')
+            assume r ~>* r'
+            assume v = s' r'
+            
+            ; By IH, ∃w. (s[x := r] ~>* w) ∧ (s'[x := r'] ~>* w)
+            ; Choose this w and the theorem holds
+          }
+          
+          ; Case 2: t = (λx:A. s) r and t' = (λx:A. s') r, where s ~> s'
+          ; Similar to Case 1, Subcase 2
+          
+          ; Case 3: t = s r and t' = s' r, where s ~> s'
+          ; Similar to Case 1, Subcase 2
+        }
+      }
+    }
+
+    theorem NormalizationTheorem: ∀t: Term, T: Type. (⊢ t : T) ⟹ ∃v. (t ~>* v) ∧ (∀u. v ~> u ⟹ u = v)
+    {
+      assume t: Term, T: Type
+      assume ⊢ t : T
+
+      ; We prove the theorem by induction on the derivation of ⊢ t : T
+      by Induction(λt, T. (⊢ t : T) ⟹ ∃v. (t ~>* v) ∧ (∀u. v ~> u ⟹ u = v)) {
+        ; Case 1: t = x
+        ; In this case, t is already a normal form, so we can choose v = t
+        
+        ; Case 2: t = λx:A. s and T = A → B
+        assume t = λx:A. s
+        assume T = A → B
+        assume x: A ⊢ s : B
+        
+        ; By IH, ∃v. (s ~>* v) ∧ (∀u. v ~> u ⟹ u = v)
+        let v such that (s ~>* v) ∧ (∀u. v ~> u ⟹ u = v)
+        
+        ; We choose λx:A. v as the normal form of t
+        ; To show t ~>* λx:A. v, we use the fact that s ~>* v and the congruence rule for lambda abstraction
+        ; To show ∀u. λx:A. v ~> u ⟹ u = λx:A. v, we use the fact that ∀u. v ~> u ⟹ u = v and the congruence rule for lambda abstraction
+        
+        ; Case 3: t = s r and T = B
+        assume t = s r
+        assume T = B
+        assume ⊢ s : A → B
+        assume ⊢ r : A
+        
+        ; By IH, ∃v_s. (s ~>* v_s) ∧ (∀u_s. v_s ~> u_s ⟹ u_s = v_s)
+        ; By IH, ∃v_r. (r ~>* v_r) ∧ (∀u_r. v_r ~> u_r ⟹ u_r = v_r)
+        let v_s such that (s ~>* v_s) ∧ (∀u_s. v_s ~> u_s ⟹ u_s = v_s)
+        let v_r such that (r ~>* v_r) ∧ (∀u_r. v_r ~> u_r ⟹ u_r = v_r)
+        
+        ; We proceed by case analysis on v_s
+        by CaseAnalysis(v_s) {
+          ; Case 3.1: v_s = λx:A'. s'
+          assume v_s = λx:A'. s'
+          
+          ; We have s r ~>* (λx:A'. s') v_r ~> s'[x := v_r]
+          ; By IH, ∃v. (s'[x := v_r] ~>* v) ∧ (∀u. v ~> u ⟹ u = v)
+          ; Choose this v and the theorem holds
+          
+          ; Case 3.2: v_s is a variable or an application
+          ; In this case, v_s v_r is already a normal form, so we can choose v = v_s v_r
+        }
+      }
+    }
+  }
+}

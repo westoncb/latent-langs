@@ -1,0 +1,159 @@
+CONCEPT GrokkingImplicitReasoning {
+  NOTATION {
+    D_train = {(x, y) | x ∈ X_atomic ∪ X_inferred, y ∈ Y}  -- Training data
+    D_test_id = {(x, y) | x ∈ X_inferred - X_train_inferred, y ∈ Y}  -- ID test data 
+    D_test_ood = {(x, y) | x ∈ X_ood_inferred, y ∈ Y}  -- OOD test data
+    ϕ = |X_train_inferred| / |X_atomic|  -- Inferred to atomic ratio in training data
+    M_θ : X → Y  -- Transformer model with parameters θ
+    L(θ, D) = ∑_{(x,y) ∈ D} ℓ(M_θ(x), y)  -- Loss function on dataset D
+  }
+
+  LANGUAGE {
+    TYPE Fact
+    TYPE AtomicFact <: Fact
+    TYPE InferredFact <: Fact
+
+    FUNC Deduce(facts: [AtomicFact], rules: [Rule]) : [InferredFact]
+    FUNC Train(M_θ, D_train, steps: Int) : M_θ  -- Training function
+    FUNC Evaluate(M_θ, D) : Accuracy  -- Evaluation function
+
+    PRED Grokking(M_θ, D_train, D_test, step: Int) :  -- Grokking predicate 
+      Accuracy(M_θ, D_test)[step] ≫ Accuracy(M_θ, D_test)[step - k]  
+        WHERE k ≪ step AND L(θ, D_train)[step] ≈ 0
+
+    AXIOM ReasoningTypeComposition : Rule  -- Composition reasoning 
+      R_compose(f1: AtomicFact, f2: AtomicFact) : InferredFact 
+
+    AXIOM ReasoningTypeComparison : Rule  -- Comparison reasoning
+      R_compare(f1: AtomicFact, f2: AtomicFact) : InferredFact
+  }
+
+  STRUCTURES {
+    STRUCTURE Circuit {  -- Model circuit abstraction
+      FIELD InputNodes : [Node]
+      FIELD OutputNodes : [Node] 
+      FIELD Edges : [InputNode, OutputNode, Weight]
+
+      FUNC Forward(inputs: [Tensor]) : [Tensor]
+        FORALL i, o, w ∈ Edges :  o = ∑_i w * i 
+
+      FUNC Complexity : Int = |Edges|
+    }
+  }
+
+  TRANSFORMERS {
+    -- Circuit extraction via causal tracing and logit lens
+    TACTIC ExtractCircuit(M_θ, D) : Circuit
+      -- 1. Run M_θ on D and record activations
+      -- 2. Perturb each input node and measure impact on output
+      -- 3. Use logit lens to interpret node representations  
+      -- 4. Prune low-weight edges and irrelevant nodes
+  }
+
+  PROOFS {
+    THEOREM ImplicitReasoningViaGrokking {
+      FORALL R ∈ {R_compose, R_compare}, ϕ > 0, M_θ :
+        Train(M_θ, D_train, steps) IMPLIES
+        EXISTS step : Grokking(M_θ, D_train, D_test_id, step) 
+    } BY {
+      -- 1. M_θ first memorizes D_train via circuit C_mem  
+      LET C_mem = ExtractCircuit(M_θ, D_train) BEFORE step  
+      ASSERT C_mem.Forward(x) = y FORALL (x, y) ∈ D_train
+      
+      -- 2. M_θ then learns to reason via circuit C_gen
+      LET C_gen = ExtractCircuit(M_θ, D_train) AFTER step
+      ASSERT R(C_gen.InputNodes) = C_gen.OutputNodes FORALL R
+      
+      -- 3. Grokking happens when C_gen becomes more efficient than C_mem
+      ASSERT C_mem.Complexity = Θ(|D_train|)  
+      ASSERT C_gen.Complexity = Θ(|X_atomic| + |X_inferred|)
+      ASSERT C_gen.Complexity < C_mem.Complexity WHEN ϕ ≫ 0
+    }
+
+    THEOREM GeneralizationSpeedCorrelatesWithInferredRatio {
+      FORALL ϕ1 > ϕ2, R, M_θ : 
+        LET steps_i = Min{s | Grokking(M_θ, D_train_i, D_test_id_i, s)}
+        |D_train_1| / |D_train_2| = ϕ1 / ϕ2 IMPLIES  
+        steps_1 < steps_2
+    } BY {
+      -- Larger ϕ increases efficiency gain of C_gen over C_mem
+      REWRITE C_gen.Complexity / C_mem.Complexity 
+        = (|X_atomic| + |X_inferred|) / (|X_atomic| + ϕ |X_atomic|)
+        = 1 / (1 + ϕ)
+      
+      ASSERT ϕ1 > ϕ2 IMPLIES 
+        C_gen.Complexity / C_mem.Complexity UNDER ϕ1
+          < C_gen.Complexity / C_mem.Complexity UNDER ϕ2 
+    }
+
+    THEOREM GeneralizationBehaviorIndependentOfDataSize {
+      FORALL ϕ, R, M_θ, α > 0 :
+        LET D'_train = Sample(D_train, α)  -- Subsampled training set
+        Grokking(M_θ, D_train, D_test_id, step) IFF  
+        Grokking(M_θ, D'_train, D_test_id, step)
+    } BY {
+      -- Changing data size while fixing ϕ preserves C_gen / C_mem complexity ratio
+      ASSERT C_gen.Complexity = Θ(|X_atomic| + |X_inferred|) UNDER D_train AND D'_train
+      ASSERT C_mem.Complexity = Θ(|D_train|) UNDER D_train
+      ASSERT C_mem.Complexity = Θ(|D'_train|) UNDER D'_train  
+      ASSERT |D_train| / |D'_train| = |X_atomic| / |X'_atomic| = |X_inferred| / |X'_inferred|
+    }
+
+    THEOREM CompositionLacksOODGeneralization {
+      FORALL ϕ, M_θ : 
+        R_compose IMPLIES  
+        Accuracy(M_θ, D_test_ood) ≈ 0 EVEN WHEN Grokking(M_θ, D_train, D_test_id, step)
+    } BY {  
+      -- Composition circuit retrieves facts sequentially, lacking OOD facts in upper layers
+      LET C_gen = ExtractCircuit(M_θ, D_train) AFTER step
+      ASSERT C_gen.Forward = RetrieveFact_1 -> RetrieveFact_2 -> R_compose  
+      ASSERT RetrieveFact_2 ACCESSES X_train_atomic  
+      ASSERT X_ood_atomic NOT IN X_train_atomic
+    }
+
+    THEOREM ComparisonAchievesOODGeneralization { 
+      FORALL ϕ, M_θ :
+        R_compare IMPLIES
+        Accuracy(M_θ, D_test_ood) ≈ Accuracy(M_θ, D_test_id)  
+        WHEN Grokking(M_θ, D_train, D_test_id, step)
+    } BY {
+      -- Comparison circuit retrieves facts in parallel, sharing OOD and ID facts  
+      LET C_gen = ExtractCircuit(M_θ, D_train) AFTER step
+      ASSERT C_gen.Forward = RetrieveFact_1 || RetrieveFact_2 -> R_compare
+      ASSERT RetrieveFact_i ACCESSES X_train_atomic FORALL i  
+      ASSERT X_ood_atomic SAME DISTRIBUTION AS X_train_atomic
+    }
+  }
+  
+  EXAMPLES {
+    EXAMPLE ToyCompositionTask {
+      X_atomic = {"Barack HasWife Michelle", "Michelle BornIn 1964"}
+      X_inferred = {"Barack HasWife BornIn 1964"}
+      X_ood_atomic = {"Donald HasWife Melania", "Melania BornIn 1970"}
+
+      ASSERT D_train = X_atomic ∪ Subset(X_inferred) UNDER ϕ > 0
+
+      LET M_θ = Train(RandomInit, D_train, steps)
+      
+      CONFIRM ImplicitReasoningViaGrokking
+      CONFIRM GeneralizationSpeedCorrelatesWithInferredRatio
+      CONFIRM GeneralizationBehaviorIndependentOfDataSize  
+      CONFIRM CompositionLacksOODGeneralization
+    }
+
+    EXAMPLE ToyComparisonTask {
+      X_atomic = {"Trump Age 78", "Biden Age 82"}  
+      X_inferred = {"Age Trump Biden Younger"}
+      X_ood_atomic = {"Obama Age 60", "Bush Age 76"}
+      
+      ASSERT D_train = X_atomic ∪ Subset(X_inferred) UNDER ϕ > 0
+
+      LET M_θ = Train(RandomInit, D_train, steps)
+
+      CONFIRM ImplicitReasoningViaGrokking
+      CONFIRM GeneralizationSpeedCorrelatesWithInferredRatio
+      CONFIRM GeneralizationBehaviorIndependentOfDataSize
+      CONFIRM ComparisonAchievesOODGeneralization  
+    }
+  }  
+}

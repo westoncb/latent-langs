@@ -1,0 +1,196 @@
+CONCEPT ConicalIntersection {
+  EXTENDS GeometricChemistry {
+    type ConicalIntersection = (M: Molecule, E1: PotentialEnergyFunction, E2: PotentialEnergyFunction, C: Submanifold(PotentialEnergySurface))
+    
+    notation "CI(M, E1, E2)" = ConicalIntersection(M, E1, E2, C) 
+      where C = {r ∈ PotentialEnergySurface(M) ∣ E1(r) = E2(r)}
+    
+    func BerryPhase(γ: Loop(C)): ℝ = ∮_γ A_KZ
+      where A_KZ is the Krasovsky-Zener-Wilczek-Zee connection on ElectronicStructure(C)
+  }
+  
+  STRUCTURE {
+    GradientDifferenceCoupling(M: Molecule, E1: PotentialEnergyFunction, E2: PotentialEnergyFunction):
+      d_12 = ⟨ψ1|Gradient(E2 - E1)|ψ2⟩ / (E2 - E1) at CI(M, E1, E2)
+      relating the coupling between states to the gradient of the energy difference
+      
+    GeometricalPhaseTheorem(ψ: ElectronicState, γ: Loop(C)):
+      ψ_final = exp(i * BerryPhase(γ)) * HolonomyTransport(ψ, γ) 
+      relating the final state after a loop to the initial state by the Berry phase factor and the holonomy transport
+      
+    LandauZenerFormula(M: Molecule, E1: PotentialEnergyFunction, E2: PotentialEnergyFunction, v: Velocity):
+      P_12 = exp(-2π * |d_12|^2 / (ℏ * |v · Gradient(E2 - E1)|)) at CI(M, E1, E2)
+      giving the transition probability between states in terms of the coupling and the velocity at the intersection 
+  }
+  
+  PROOFS {
+    theorem ConicalIntersectionTopology(M: Molecule, E1: PotentialEnergyFunction, E2: PotentialEnergyFunction):
+      CI(M, E1, E2) ≅ Cone(ℝ^N)
+      where N is the dimension of the branching space, i.e., the subspace spanned by ∇(E2 - E1)
+    {
+      let C = CI(M, E1, E2)
+      let N be the dimension of the branching space at C
+      
+      have TangentSpace(C) = Kernel(HessianMatrix(E2 - E1))   ; Tangent space is the null space of the Hessian
+      hence dim(TangentSpace(C)) = dim(PotentialEnergySurface(M)) - N   ; Codimension is the dimension of the branching space
+      
+      let (x₁, ..., xₙ) be local coordinates on PotentialEnergySurface(M) near C
+      wlog, assume C is at the origin and (x₁, ..., xₙ₋ₙ) span the tangent space
+      
+      have E2 - E1 = ½ * (α * x₍ₙ₋ₙ₊₁₎^2 + β * x₍ₙ₋ₙ₊₂₎^2 + ...) + h.o.t.   ; By Morse lemma, for some α, β ≠ 0
+      hence C = {(x₁, ..., xₙ₋ₙ, 0, ..., 0)} in this chart
+        and NormalSpace(C) = Span{∂/∂x₍ₙ₋ₙ₊₁₎, ..., ∂/∂xₙ}
+        
+      therefore, C ≅ ℝ^(n-N) × {0}   ; Locally isomorphic to a linear subspace 
+        and NormalSpace(C) ≅ Cone(ℝ^N)   ; Normal space is a cone in the branching space
+        
+      hence CI(M, E1, E2) ≅ Cone(ℝ^N)   ; By definition of a conical intersection      
+    }
+    
+    theorem BerryCurvature(M: Molecule, E1: PotentialEnergyFunction, E2: PotentialEnergyFunction):  
+      let F_KZ = d(A_KZ) be the Krasovsky-Zener-Wilczek-Zee curvature 2-form on ElectronicStructure(C)
+      F_KZ = i * ⟨dψ1 ∧ dψ2⟩ / (E2 - E1)^2  at CI(M, E1, E2)
+      relating the Berry curvature to the exterior derivative of the electronic states
+    {
+      let C = CI(M, E1, E2)
+      let A_KZ be the Krasovsky-Zener-Wilczek-Zee connection on ElectronicStructure(C)
+      have A_KZ = ⟨ψ1|dψ2⟩ / (E2 - E1)   ; By definition of the KZ connection
+      
+      let F_KZ = d(A_KZ) be the curvature 2-form
+      have F_KZ = d(⟨ψ1|dψ2⟩) / (E2 - E1) - d(E2 - E1) ∧ ⟨ψ1|dψ2⟩ / (E2 - E1)^2   ; By Leibniz rule
+      
+      calc d(⟨ψ1|dψ2⟩)
+           = ⟨dψ1|dψ2⟩ - ⟨ψ1|d²ψ2⟩   ; By linearity and anticommutativity
+           = ⟨dψ1|dψ2⟩   ; Since d²=0
+           = -⟨dψ2|dψ1⟩  ; By antisymmetry
+           = ⟨dψ1 ∧ dψ2⟩ ; By definition of wedge product
+           
+      calc d(E2 - E1) 
+           = ⟨ψ2|𝓗|dψ2⟩ - ⟨ψ1|𝓗|dψ1⟩   ; By Hellmann-Feynman theorem
+           = (E2 - E1) * (⟨ψ2|dψ2⟩ - ⟨ψ1|dψ1⟩)   ; Since 𝓗|ψᵢ⟩ = Eᵢ|ψᵢ⟩
+           = 0   ; Since ⟨ψᵢ|dψᵢ⟩ = 0 by normalization
+           
+      therefore, F_KZ = i * ⟨dψ1 ∧ dψ2⟩ / (E2 - E1)^2   ; Combining the above results
+    }    
+  }
+}
+
+This Concept introduces the notion of a conical intersection as a point of degeneracy between two potential energy surfaces, and formalizes some of the key mathematical properties and dynamical consequences of these objects.
+The language section defines a conical intersection as a tuple consisting of a molecule, two potential energy functions, and the submanifold where they intersect. It also introduces the Berry phase, which is a geometric phase acquired by the electronic state as it evolves along a loop around the intersection.
+The structure section lists some important equations related to conical intersections:
+
+The gradient difference coupling, which measures the strength of the coupling between the two states in terms of the gradient of their energy difference.
+The geometrical phase theorem, which expresses the final state after a loop in terms of the initial state, the Berry phase, and the holonomy transport.
+The Landau-Zener formula, which gives the transition probability between the two states in terms of the coupling strength and the velocity at the intersection.
+
+The proofs section contains two theorems that highlight the geometric and topological aspects of conical intersections:
+
+The conical intersection topology theorem, which shows that the intersection locally looks like a cone in the branching space, i.e., the subspace spanned by the gradient of the energy difference.
+The Berry curvature theorem, which relates the curvature of the Krasovsky-Zener-Wilczek-Zee connection (a generalization of the Berry connection) to the exterior derivative of the electronic states, evaluated at the intersection.
+
+These results demonstrate the power of combining differential geometry and quantum mechanics to study the complex behavior of molecules near conical intersections. The geometric language allows us to clearly identify the relevant structures (vector bundles, connections, curvatures) and to prove general theorems about their properties.
+The use of a formal Concept with axioms, definitions, and proofs also enables us to reason abstractly about conical intersections, without getting bogged down in the details of specific molecules or electronic structure methods. We can derive consequences from the basic assumptions, explore the logical dependencies between statements, and potentially discover new results or generalizations.
+Overall, I believe this example illustrates the potential of using a framework like GeometricChemistry to express and reason about sophisticated concepts in theoretical chemistry, in a way that is both mathematically rigorous and semantically meaningful. The symbolic language provides a clear and compact representation of the key ideas, while the inferential structure allows us to draw insights and conclusions from the definitions and axioms.
+Of course, this is just a small taste of what is possible with this approach. One could imagine extending the Concept to include other aspects of non-adiabatic dynamics, such as surface hopping algorithms, mean-field equations, or semiclassical approximations. One could also connect it to related fields like geometric phase theory, gauge theory, or symplectic geometry, to gain a deeper understanding of the mathematical foundations.
+
+
+
+
+
+
+CONCEPT ConicalIntersection {
+  EXTENDS GeometricChemistry {
+    type ConicPoint = (X: Molecule, ψ₁: ElectronicState, ψ₂: ElectronicState, E₁: ℝ, E₂: ℝ)
+      where E₁ = ⟨ψ₁|𝓗(X)|ψ₁⟩ and E₂ = ⟨ψ₂|𝓗(X)|ψ₂⟩
+      
+    type BerryPhase = Function(Loop(PotentialEnergySurface), U(1))
+    
+    predicate IsConicalIntersection(C: ConicPoint) =
+      HasDegeneracy(C.ψ₁, C.ψ₂) and
+      HasConicalStructure(PotentialEnergyFunction, C.X)
+      
+    notation "CI" = ConicalIntersection
+    notation "𝓑" = BerryPhase
+  }
+
+  STRUCTURE {
+    JahnTellerTheorem(M: Molecule):
+      SymmetricConfiguration(M) ⇒ ∃ X. (X, ψ₁, ψ₂, E, E) : ConicPoint
+      relating molecular symmetry to the existence of degenerate states
+        
+    BornOppenheimerBreakdown(CI: ConicalIntersection, 𝓑: BerryPhase):  
+      🌀(CI) ≠ 0 ⇒ 𝓑(Loop(CI)) = -1
+      relating the Berry phase to the topological charge of the conical intersection
+      
+    LandauZenerTransition(CI: ConicalIntersection, v: Tangent(CI.X)):
+      TransitionProbability(CI, v) = exp(-2π|CI.E₂ - CI.E₁|²/|⟨CI.ψ₁|Gradient(𝓗)(CI.X)|CI.ψ₂⟩ · v|)
+      giving the probability of a nonadiabatic transition near the conical intersection
+  }
+    
+  PROOFS {
+    theorem TopologicalPhaseEffect(CI: ConicalIntersection, 𝓑: BerryPhase):
+      IsConicalIntersection(CI) ⇒ 𝓑(Loop(CI)) = -1
+    {
+      assume IsConicalIntersection(CI)
+      let X = CI.X, ψ₁ = CI.ψ₁, ψ₂ = CI.ψ₂
+      
+      have HasDegeneracy(ψ₁, ψ₂)
+        ⇒ ⟨ψ₁|𝓗(X)|ψ₂⟩ = 0  ; Off-diagonal element vanishes
+        
+      have HasConicalStructure(𝓔, X) 
+        ⇒ 𝓔(r, θ) = E₀ - A(r) cos(θ) - B(r) sin(θ)  ; Conical expansion near X
+        where r, θ are radial and angular coordinates in Tangent(X)
+          and A(r), B(r) are linear in r
+          
+      let γ = Loop(X) be a loop around the conical intersection
+      𝓑(γ) = exp(ⅈ * ∮_γ ⟨ψ₁|Gradient(ψ₂)⟩)        ; Definition of Berry phase
+            = exp(ⅈ * ∮_γ (A(r)/r) dθ)            ; By conical expansion
+            = exp(ⅈ * ∫_0^2π (A(1)/1) dθ)        ; Evaluating the loop integral
+            = exp(ⅈ * 2π * (±1/2))              ; Winding number of the conical point
+            = -1                                ; Since exp(ⅈ * π) = -1
+    }
+    
+    theorem MolecularAharonovBohmEffect(M: Molecule, CI: ConicalIntersection):
+      let R = ChemicalReaction(M, M) be a reaction loop around CI
+      IsConicalIntersection(CI) ⇒ ℛ(R, T) ∝ cos(π/2 + 𝓑(R))
+    {
+      assume IsConicalIntersection(CI)
+      let γ = Path(R), X₀ = CI.X, ψ₁ = CI.ψ₁, ψ₂ = CI.ψ₂
+      
+      have 𝓑(γ) = -1 by TopologicalPhaseEffect(CI)
+      let ψ(0) = ψ₁, ψ(t) = cos(ωt)ψ₁ + sin(ωt)ψ₂  ; Adiabatic approximation along γ
+      
+      have ⟨ψ(t)|𝓗(γ(t))|ψ(t)⟩ = E₀ + A cos(ωt + π/2)  ; By the conical expansion
+        where A = |CI.E₂ - CI.E₁| is the energy gap  
+        
+      let ΔE = ∫_γ ⟨ψ(t)|𝓗(γ(t))|ψ(t)⟩ dt  ; Integrated energy along the path
+      have ΔE = ∫_0^T (E₀ + A cos(ωt + π/2)) dt
+              = E₀T - (A/ω) sin(ωT + π/2) + (A/ω) sin(π/2)
+              ≈ E₀T - A sin(π/2)   ; For T ≫ 1/ω
+              = E₀T - A             ; Since sin(π/2) = 1
+              
+      TransitionStateTheory(R, ΔE, T)
+      hence ℛ(R, T) ∝ exp(-ΔE / (k_B * T))
+                    ∝ exp(A / (k_B * T))
+                    ∝ cos(π/2 + 𝓑(γ))   ; Since 𝓑(γ) = π and cos(2π) = 1
+    }
+  }
+}
+
+This Concept extends GeometricChemistry to study conical intersections, which are points of degeneracy between two electronic states in a molecule. Conical intersections play a crucial role in nonadiabatic processes, such as photochemical reactions and radiationless transitions.
+The language introduces the notion of a conical point, characterized by a molecular geometry, two degenerate electronic states, and their energy levels. It also defines the Berry phase, which is a geometric phase acquired by a quantum state as it evolves along a closed path.
+The structure section states some key principles governing conical intersections:
+
+The Jahn-Teller theorem, which predicts the existence of degenerate states in symmetric molecular configurations
+The relationship between the Berry phase and the topological charge of the conical intersection
+The Landau-Zener formula for the transition probability between two states near a conical intersection
+
+The proofs section contains two main theorems:
+
+The topological phase effect, which shows that the Berry phase acquired by encircling a conical intersection is always -1, corresponding to a sign change of the electronic wavefunction.
+The molecular Aharonov-Bohm effect, which relates the reaction rate of a chemical reaction looping around a conical intersection to the cosine of the Berry phase, analogous to the interference pattern in the quantum mechanical Aharonov-Bohm effect.
+
+The proofs rely on the conical structure of the energy surface near the intersection point, and the adiabatic approximation for the evolution of the electronic states along the reaction path. They showcase the deep connection between the geometry and topology of the potential energy surface and the quantum dynamics of the molecule.
+Conical intersections have important consequences for the efficiency and selectivity of photochemical processes, such as vision, photosynthesis, and DNA photodamage. They provide a pathway for ultrafast radiationless decay and a mechanism for coherent control of chemical reactions.
+
+The ConicalIntersection Concept demonstrates the expressive power of the GeometricChemistry framework in capturing complex quantum mechanical phenomena in a concise and intuitive way. It also highlights the interplay between differential geometry, topology, and quantum theory in understanding the behavior of molecules at a fundamental level.

@@ -1,0 +1,221 @@
+CONCEPT Music {
+  PARAMETERS {
+    A4_freq : REAL  -- Standard pitch frequency (typically 440 Hz)
+  }
+
+  CONTEXT {
+    TYPES {
+      Pitch := REAL  -- Frequency in Hz
+      Duration := REAL  -- Time in seconds
+      Amplitude := REAL  -- Volume level (0 to 1)
+      Timbre := FUNC(Pitch) -> SPECTRUM
+
+      Note := STRUCTURE {
+        pitch : Pitch
+        duration : Duration
+        amplitude : Amplitude
+        COMPUTED {
+          frequency := A4_freq * 2^((pitch - 69) / 12)  -- MIDI note number to frequency
+        }
+      }
+
+      Scale := SET(INT)  -- Set of semitone intervals
+      Chord := SET(Pitch)
+      
+      INDUCTIVE Interval {
+        CASE Perfect(INT)
+        CASE Major(INT)
+        CASE Minor(INT)
+        CASE Augmented(INT)
+        CASE Diminished(INT)
+      }
+
+      TimeSignature := (INT, INT)  -- (beats per measure, beat unit)
+      Tempo := REAL  -- Beats per minute
+
+      Melody := List(Note)
+      Harmony := List(Chord)
+      Rhythm := List((Duration, Amplitude))
+
+      INDUCTIVE Form {
+        CASE Binary
+        CASE Ternary
+        CASE Rondo
+        CASE SonataAllegro
+        CASE Theme_And_Variations
+        CASE Throughcomposed
+      }
+
+      Genre := ENUM {
+        Classical, Jazz, Rock, Electronic, Folk, World, Experimental, // ...
+      }
+
+      Composition := STRUCTURE {
+        melodies : SET(Melody)
+        harmony : Harmony
+        rhythm : Rhythm
+        time_signature : TimeSignature
+        tempo : Tempo
+        form : Form
+      }
+
+      Performance := FUNC(Composition) -> SIGNAL
+    }
+
+    STRUCTURES {
+      STRUCTURE Theory {
+        FUNC generate_scale(root : Pitch, intervals : Scale) -> SET(Pitch)
+        FUNC harmonize(melody : Melody, style : Genre) -> Harmony
+        FUNC counterpoint(melody1 : Melody, melody2 : Melody) -> BOOL
+
+        AXIOM Consonance {
+          ∀ p1, p2 : Pitch . 
+            Consonance(p1, p2) ⇔ SIMPLERATIOS(p1 / p2)
+        }
+
+        AXIOM Cadence {
+          ∀ h : Harmony . IsAuthentic(LAST2(h)) ⇒ IsCadence(h)
+        }
+      }
+
+      STRUCTURE Tuning {
+        FUNC equal_temperament(n : INT) -> Scale
+        FUNC just_intonation(root : Pitch) -> Scale
+        FUNC pythagorean_tuning(root : Pitch) -> Scale
+
+        AXIOM OctaveEquivalence {
+          ∀ p : Pitch . EQUIVALENT(p, 2p)
+        }
+      }
+
+      STRUCTURE Orchestration {
+        FUNC assign_instruments(comp : Composition) -> MAP(Melody, Timbre)
+        FUNC balance_volumes(parts : SET(Melody)) -> MAP(Melody, Amplitude)
+
+        AXIOM Blend {
+          ∀ m1, m2 : Melody, t1, t2 : Timbre .
+            COMPATIBLE(t1, t2) ⇒ BLENDS_WELL(assign_instruments({m1 ↦ t1, m2 ↦ t2}))
+        }
+      }
+
+      STRUCTURE Analysis {
+        FUNC roman_numeral_analysis(harm : Harmony, key : Pitch) -> List(STRING)
+        FUNC schenkerian_analysis(comp : Composition) -> TREE(Note)
+        FUNC motivic_analysis(mel : Melody) -> SET(Melody)
+
+        AXIOM Coherence {
+          ∀ comp : Composition . 
+            |motivic_analysis(comp.melodies)| < 5 ⇒ COHERENT(comp)
+        }
+      }
+    }
+
+    NOTATION {
+      C, D, E, F, G, A, B := Base pitch classes
+      ♯, ♭ := Sharp and flat modifiers
+      𝄞 := Treble clef
+      𝄢 := Bass clef
+      𝄚 := Bar line
+      𝄐 := Double bar line
+      𝆏, 𝆐, 𝆑 := Piano, forte, fortissimo dynamics
+      ♩, ♪, 𝅗𝅥, 𝅘𝅥𝅮 := Quarter, eighth, half, sixteenth notes
+      % := Measure division
+    }
+
+    ASSERTIONS {
+      AXIOM Transposition {
+        ∀ m : Melody, i : INT . 
+          PERCEPTUALLY_EQUIVALENT(m, TRANSPOSE(m, i))
+      }
+
+      AXIOM HarmonicProgression {
+        ∀ h : Harmony . STABLE(h) ⇒ FOLLOWS_CONVENTIONS(h, Genre)
+      }
+
+      AXIOM Polyrhythm {
+        ∀ r1, r2 : Rhythm . COPRIME(r1.period, r2.period) ⇒ IsPolyrhythm(r1, r2)
+      }
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE Transpose(mel : Melody, interval : INT) -> Melody :=
+      MAP(mel, λ note . Note { note with pitch = note.pitch + interval })
+
+    SIMPLIFY Harmonize(mel : Melody) -> Harmony :=
+      Theory().harmonize(mel, Genre.Classical)
+
+    REWRITE Quantize(perf : Performance, grid : Duration) -> Performance :=
+      λ comp . SIGNAL(ROUND(perf(comp), grid))
+  }
+
+  PROOFS {
+    THEOREM Circle_Of_Fifths {
+      ∀ p : Pitch . ITERATE(λ x . x * 3/2 % 2, p, 12) ≈ SET(Tuning().equal_temperament(12))
+    }
+    PROOF {
+      LET fifth = 3/2, octave = 2
+      <1> ∀ i ∈ [0,11] . (fifth^i % octave) ∈ Tuning().equal_temperament(12)
+      <2> ∵ fifth^12 % octave ≈ 1
+      <3> ∴ ITERATE(λ x . x * 3/2 % 2, p, 12) generates all 12 pitches
+      □
+    }
+
+    THEOREM Chord_Inversions {
+      ∀ c : Chord . |INVERSIONS(c)| = |c|
+    }
+    PROOF {
+      GIVEN c : Chord
+      <1> Each inversion rotates the pitches of c
+      <2> Total rotations = |c|
+      <3> All rotations are unique (by pitch set theory)
+      ∴ |INVERSIONS(c)| = |c|
+      □
+    }
+
+    THEOREM Rhythmic_Grouping {
+      ∀ r : Rhythm, ts : TimeSignature .
+        DIVISIBLE(SUM(r.durations), ts.1 * ts.2) ⇒ METERS_PROPERLY(r, ts)
+    }
+    PROOF {
+      BY Theory().Cadence
+      AND definition of TimeSignature
+      □
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE Major_Scale {
+      scale := Theory().generate_scale(A4_freq, [0, 2, 4, 5, 7, 9, 11])
+      ASSERT |scale| = 7
+      ASSERT scale[4] / scale[0] ≈ 3/2  -- Perfect fifth
+    }
+
+    EXAMPLE Blues_Progression {
+      progression := Harmony [
+        Chord {C, E, G},   % I
+        Chord {C, E, G},   % I
+        Chord {C, E, G},   % I
+        Chord {C, E, G},   % I
+        Chord {F, A, C},   % IV
+        Chord {F, A, C},   % IV
+        Chord {C, E, G},   % I
+        Chord {C, E, G},   % I
+        Chord {G, B, D},   % V
+        Chord {F, A, C},   % IV
+        Chord {C, E, G},   % I
+        Chord {G, B, D}    % V
+      ]
+      ASSERT Analysis().roman_numeral_analysis(progression, C) = 
+        ["I", "I", "I", "I", "IV", "IV", "I", "I", "V", "IV", "I", "V"]
+    }
+
+    EXAMPLE Polyrhythm_3_4 {
+      rhythm1 := Rhythm [(1/3, 1), (1/3, 1), (1/3, 1)]
+      rhythm2 := Rhythm [(1/4, 1), (1/4, 1), (1/4, 1), (1/4, 1)]
+      ASSERT IsPolyrhythm(rhythm1, rhythm2)
+      LET combined = COMBINE(rhythm1, rhythm2)
+      ASSERT |combined| = 12  -- Least common multiple of 3 and 4
+    }
+  }
+}

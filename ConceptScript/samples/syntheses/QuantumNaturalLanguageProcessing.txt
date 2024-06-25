@@ -1,0 +1,233 @@
+CONCEPT QuantumNaturalLanguageProcessing {
+  PARAMETERS {
+    n : Nat  -- number of qubits
+    Σ : Vocabulary
+    S : SentenceSpace(Σ)
+    H : Hilbert(2^n)
+  }
+  
+  CONTEXT {
+    TYPES {
+      Vocabulary = SET(Symbol)
+      Symbol = String
+      
+      SentenceSpace(V : Vocabulary) = {
+        Dimension : Nat
+        Basis : FUNC(Sentence(V), Vec(Dimension))  
+      }
+
+      Sentence(V : Vocabulary) = List(V)
+      
+      Hilbert(n : Nat) = {
+        Dimension : n  
+        InnerProduct : FUNC(Vec(n), Vec(n), C)
+        Tensor : FUNC(Hilbert(m), Hilbert(k), Hilbert(m * k))
+      }
+      
+      Vec(n : Nat) = C^n
+      
+      QuantumState(H : Hilbert) = {
+        StateVector : Vec(H.Dimension)
+        Normalized : PRED(StateVector, "|ψ|² = 1")
+      }
+      
+      QuantumChannel(H : Hilbert, K : Hilbert) = FUNC(Density(H), Density(K))
+      
+      Density(H : Hilbert) = {  
+        Operator : FUNC(Vec(H.Dimension), Vec(H.Dimension))
+        Hermitian : PRED(Operator, "A† = A") 
+        TraceOne : PRED(Operator, "tr(A) = 1")
+        Positive : PRED(Operator, "⟨ψ|A|ψ⟩ ≥ 0")
+      }
+      
+      DisCoCat(V : Vocabulary) = {
+        Objects : SET(Hilbert)
+        Morphisms : FUNC(Objects × Objects, QuantumChannel)
+        Tensor : FUNC(Morphisms × Morphisms, Morphisms)
+        Composition : FUNC(Morphisms × Morphisms, Morphisms)
+        Identity : FUNC(Objects, Morphisms)
+        Compact : AXIOM(...)
+      }
+      
+      Functor(C : Category, D : Category) = {
+        ObjectMap : FUNC(C.Objects, D.Objects)  
+        MorphismMap : FUNC(C.Morphisms, D.Morphisms)
+        Preserves : AXIOM(...)
+      }
+      
+      NaturalTransformation(F : Functor, G : Functor) = {
+        Components : FUNC(F.Domain.Objects, G.Codomain.Morphisms)
+        Commutes : AXIOM(...)
+      }
+    }
+    
+    STRUCTURES {
+      STRUCTURE SentenceSpace(V : Vocabulary) {
+        FIELD Dimension : Nat
+        FIELD Basis : FUNC(Sentence(V), Vec(Dimension))
+        
+        AXIOM BasisIndependence(s1 : Sentence(V), s2 : Sentence(V)) :
+          s1 ≠ s2 IMPLIES Orthogonal(Basis(s1), Basis(s2))
+          
+        AXIOM BasisCompleteness(v : Vec(Dimension)) :
+          ∃ (λ : FUNC(Sentence(V), C)) . 
+            (FORALL s : Sentence(V) . FINITE_SUPPORT(λ, s)) AND 
+            v = Σ_s λ(s) · Basis(s)
+      }
+      
+      STRUCTURE Hilbert(n : Nat) {
+        FIELD Dimension : n
+        FIELD InnerProduct : FUNC(Vec(n), Vec(n), C)
+        FIELD Tensor : FUNC(Hilbert(m), Hilbert(k), Hilbert(m * k))
+        
+        AXIOM Linearity(u v : Vec(n), α β : C) :
+          ⟨α·u + β·v, w⟩ = α*⟨u, w⟩ + β*⟨v, w⟩
+        
+        AXIOM Conjugate_Symmetry(u v : Vec(n)) : 
+          ⟨u, v⟩ = ⟨v, u⟩*  
+          
+        AXIOM Positive_Definite(u : Vec(n)) :
+          ⟨u, u⟩ ≥ 0 AND (⟨u, u⟩ = 0 IFF u = 0)  
+      }
+      
+      STRUCTURE DisCoCat(V : Vocabulary) EXTENDS Category {
+        FIELD Objects : SET(Hilbert)
+        FIELD Morphisms : FUNC(Objects × Objects, QuantumChannel)
+        
+        FIELD Tensor : FUNC(Morphisms × Morphisms, Morphisms)
+        FIELD Composition : FUNC(Morphisms × Morphisms, Morphisms)  
+        FIELD Identity : FUNC(Objects, Morphisms)
+        
+        AXIOM Compact {
+          FORALL H : Objects . 
+            EXISTS (η : Morphisms(C, H ⊗ H*)) .
+            EXISTS (ε : Morphisms(H* ⊗ H, C)) .
+              (IdH ⊗ ε) ∘ (η ⊗ IdH) = IdH AND
+              (ε ⊗ IdH*) ∘ (IdH* ⊗ η) = IdH*
+        }
+      }
+    }
+    
+    ASSERTIONS {
+      ASSUME Word2Vec : FUNC(Σ, H)
+      ASSUME Phrase2Vec : FUNC(List(Σ), H ⊗ ... ⊗ H)
+      ASSUME Sentence2Vec : FUNC(S, H^(2^n))
+      
+      DEFINE Meaning(s : S) : Density(H) = 
+        LET |ψ⟩ = Sentence2Vec(s) IN |ψ⟩⟨ψ|
+        
+      DEFINE Ambiguity(s : S) : Real = 
+        LET ρ = Meaning(s) IN -tr(ρ log(ρ))
+        
+      DEFINE Distinguish(s1 : S, s2 : S) : Real =
+        LET ρ1 = Meaning(s1), ρ2 = Meaning(s2) IN tr(|ρ1 - ρ2|)
+        
+      DEFINE Grammar : DisCoCat(Σ) = ...
+      
+      DEFINE F : Functor(Grammar, QuantumCircuit) = ...
+      DEFINE G : Functor(QuantumCircuit, Grammar) = ...
+      DEFINE η : NaturalTransformation(IdGrammar, G ∘ F) = ...
+      DEFINE ε : NaturalTransformation(F ∘ G, IdCircuit) = ...
+    }
+    
+    NOTATION {
+      IdH = "Identity(H)"
+      C = "Hilbert(1)"
+      H* = "DualSpace(H)"
+    }
+  }
+  
+  TRANSFORMERS {
+    REWRITE Measurement(s : S, P : Predicate) :
+      Meaning(s) ~> ρ' WHERE 
+        LET M = MeasurementOperator(P) IN
+          ρ' = (M × Meaning(s) × M†) / tr(M × Meaning(s) × M†)
+          
+    SIMPLIFY Composition(φ : QuantumChannel, ψ : QuantumChannel) :
+      (φ ∘ ψ)(ρ) ~> φ(ψ(ρ))
+      
+    SIMPLIFY Tensor(φ : QuantumChannel, ψ : QuantumChannel) :
+      (φ ⊗ ψ)(ρ ⊗ σ) ~> φ(ρ) ⊗ ψ(σ) 
+  }
+  
+  PROOFS {
+    THEOREM Ambiguity_Invariance(s : S) :
+      FORALL U : UnitaryOperator . 
+        Ambiguity(s) = Ambiguity(ApplyUnitary(U, s))
+    PROOF {
+      LET |ψ⟩ = Sentence2Vec(s), |ψ'⟩ = ApplyUnitary(U, |ψ⟩)
+      
+      THEN Meaning(s) ≡ |ψ⟩⟨ψ| 
+           AND Meaning(ApplyUnitary(U, s)) ≡ |ψ'⟩⟨ψ'|
+             ≡ U|ψ⟩⟨ψ|U† BY UnitaryProperty  
+             
+      HENCE Ambiguity(ApplyUnitary(U, s))
+        = -tr(U|ψ⟩⟨ψ|U† log(U|ψ⟩⟨ψ|U†))
+        = -tr(|ψ⟩⟨ψ| log(|ψ⟩⟨ψ|)) 
+          BY InvariantUnderUnitary(VonNeumannEntropy)
+        = Ambiguity(s)
+        
+      CONCLUDE Ambiguity(s) = Ambiguity(ApplyUnitary(U, s))
+      QED
+    }
+    
+    THEOREM Meaning_Preservation(F : Functor(Grammar, QuantumCircuit)) :
+      FORALL (s : S) . F(Meaning(s)) = Meaning(F(s))
+    PROOF {
+      SUPPOSE s : S
+      
+      LET ρ = Meaning(s), |ψ⟩ = Sentence2Vec(s)
+      LET |ψF⟩ = F(|ψ⟩), ρF = |ψF⟩⟨ψF|
+      
+      THEN ρ ≡ |ψ⟩⟨ψ|
+        AND F(ρ) ≡ F(|ψ⟩⟨ψ|) BY FunctorProperty
+           ≡ |ψF⟩⟨ψF| ≡ ρF BY Definition(Meaning)
+           
+      THEREFORE F(Meaning(s)) ≡ F(ρ) ≡ ρF ≡ Meaning(F(s))
+      
+      CONCLUDE FORALL (s : S) . F(Meaning(s)) = Meaning(F(s))
+      QED  
+    }
+  }
+  
+  EXAMPLES {
+    EXAMPLE Entailment(s1 : S = "Alice runs", 
+                       s2 : S = "Someone moves") WHERE
+      DEFINE τ : Real = 0.8
+      
+      ASSUME |ψ1⟩ = Sentence2Vec(s1), |ψ2⟩ = Sentence2Vec(s2)
+      ASSUME ρ1 = Meaning(s1), ρ2 = Meaning(s2)
+    
+      THEN Entails(s1, s2) 
+        IFF Distinguish(s1, s2) ≤ τ
+        IFF tr(|ρ1 - ρ2|) ≤ τ BY Definition(Distinguish)
+        IFF 1 - Re(⟨ψ1|ψ2⟩) ≤ τ  BY TraceDistance_Fidelity
+          
+    EXAMPLE CausalReasoning(s1 : S = "The rock hit the window",
+                            s2 : S = "The window broke") WHERE
+                            
+      FUNC CausalPower(c : S, e : S) -> Real {
+        LET ρC = Meaning(c), ρE = Meaning(e)
+        RETURN Distinguish(ρE, ApplyChannel("Cause -> Effect", ρC))
+      }
+            
+      ASSUME "CausalPower(s1, s2) > CausalPower(s2, s1)"
+        BECAUSE "Rocks hitting windows is more likely to cause windows breaking
+                 than windows breaking is to cause rocks hitting them"
+        
+      THEN Direction(s1, s2) IS "Forward"
+        AND Direction(s2, s1) IS "Backward"
+
+    COUNTEREXAMPLE Intersective_Adjectives {
+      LET s1 : S = "red car"
+      LET s2 : S = "red apple"
+      
+      ASSUME Noun("car") ⊥ Noun("apple")
+      
+      THEN Meaning(s1) ⊗ Meaning(s2) ≠ 0
+        BECAUSE Adjective("red") IS_NOT Intersective
+        
+      CONCLUDE IntersectiveAdjectives ⊬ Meaning(Adjective × Noun) ≡ Meaning(Adjective) ∩ Meaning(Noun)
+    }
+  }
+}

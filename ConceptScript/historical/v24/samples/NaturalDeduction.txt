@@ -1,0 +1,141 @@
+CONCEPT NaturalDeduction {
+  LANGUAGE {
+    TYPE Formula
+    TYPE Proof
+    TYPE Assumption = Formula
+    TYPE Judgement = Formula
+
+    PRED Proves : Proof -> Judgement -> Bool
+    PRED Assumes : Proof -> Assumption -> Bool
+    
+    FUNC Implication : Formula -> Formula -> Formula
+    NOTATION "A ⟹ B" = Implication(A, B)
+
+    FUNC Conjunction : Formula -> Formula -> Formula  
+    NOTATION "A ∧ B" = Conjunction(A, B)
+
+    FUNC Disjunction : Formula -> Formula -> Formula
+    NOTATION "A ∨ B" = Disjunction(A, B)
+
+    FUNC Negation : Formula -> Formula
+    NOTATION "¬ A" = Negation(A)
+
+    FUNC Assumption : Formula -> Proof
+    FUNC Implication_Intro : (Proof -> Proof) -> Proof  
+    FUNC Implication_Elim : Proof -> Proof -> Proof
+    FUNC Conjunction_Intro : Proof -> Proof -> Proof
+    FUNC Conjunction_Elim_Left : Proof -> Proof  
+    FUNC Conjunction_Elim_Right : Proof -> Proof
+    FUNC Disjunction_Intro_Left : Proof -> Proof
+    FUNC Disjunction_Intro_Right : Proof -> Proof
+    FUNC Disjunction_Elim : Proof -> (Proof -> Proof) -> (Proof -> Proof) -> Proof
+    FUNC Negation_Intro : (Proof -> Proof) -> Proof
+    FUNC Negation_Elim : Proof -> Proof -> Proof
+    FUNC Explosion : Proof -> Formula -> Proof
+
+    REWRITE Proves(Assumption(A), A) = True
+    REWRITE Proves(Implication_Intro(f), A ⟹ B) = Proves(f(Assumption(A)), B)
+    REWRITE Proves(Implication_Elim(p, q), B) = Proves(p, A ⟹ B) ∧ Proves(q, A)  
+    REWRITE Proves(Conjunction_Intro(p, q), A ∧ B) = Proves(p, A) ∧ Proves(q, B)
+    REWRITE Proves(Conjunction_Elim_Left(p), A) = Proves(p, A ∧ B)
+    REWRITE Proves(Conjunction_Elim_Right(p), B) = Proves(p, A ∧ B)
+    REWRITE Proves(Disjunction_Intro_Left(p), A ∨ B) = Proves(p, A)
+    REWRITE Proves(Disjunction_Intro_Right(p), A ∨ B) = Proves(p, B)  
+    REWRITE Proves(Disjunction_Elim(p, f, g), C) = 
+      Proves(p, A ∨ B) ∧ Proves(f(Assumption(A)), C) ∧ Proves(g(Assumption(B)), C)
+    REWRITE Proves(Negation_Intro(f), ¬ A) = Proves(f(Assumption(A)), Contradiction)
+    REWRITE Proves(Negation_Elim(p, q), Contradiction) = Proves(p, A) ∧ Proves(q, ¬ A)
+    REWRITE Proves(Explosion(p, B), B) = Proves(p, Contradiction)
+      
+    REWRITE Assumes(Assumption(A), A) = True
+    REWRITE Assumes(Implication_Intro(f), A) = Assumes(f(Assumption(A)), A)
+    REWRITE Assumes(Implication_Elim(p, q), A) = Assumes(p, A) ∨ Assumes(q, A)
+    REWRITE Assumes(Conjunction_Intro(p, q), A) = Assumes(p, A) ∨ Assumes(q, A) 
+    REWRITE Assumes(Conjunction_Elim_Left(p), A) = Assumes(p, A)
+    REWRITE Assumes(Conjunction_Elim_Right(p), A) = Assumes(p, A)
+    REWRITE Assumes(Disjunction_Intro_Left(p), A) = Assumes(p, A)
+    REWRITE Assumes(Disjunction_Intro_Right(p), A) = Assumes(p, A)
+    REWRITE Assumes(Disjunction_Elim(p, f, g), A) = 
+      Assumes(p, A) ∨ Assumes(f(Assumption(A)), A) ∨ Assumes(g(Assumption(A)), A)
+    REWRITE Assumes(Negation_Intro(f), A) = Assumes(f(Assumption(A)), A)  
+    REWRITE Assumes(Negation_Elim(p, q), A) = Assumes(p, A) ∨ Assumes(q, A)
+    REWRITE Assumes(Explosion(p, B), A) = Assumes(p, A)
+  }
+  
+  STRUCTURE {
+    DEF Deduction_Theorem : A ⟹ B = (Assumption(A) ⊢ B)
+
+    DEF Contradiction : Formula = P ∧ ¬ P
+  }
+
+  PROOFS {
+    THEOREM Implication_Introduction {
+      STATEMENT: (A ⊢ B) <-> (⊢ A ⟹ B)
+      PROOF:
+        REWRITE (A ⊢ B)
+          = Proves(p, B) GIVEN Assumes(p, A) BY Definition(Turnstile)
+        REWRITE (⊢ A ⟹ B)  
+          = Proves(Implication_Intro(λ p. p), A ⟹ B)
+          = Proves((λ p. p)(Assumption(A)), B) BY Rewrite(Implication_Intro)
+          = Proves(Assumption(A), B)
+          = (A ⊢ B) BY Definition(Turnstile)
+    }
+
+    THEOREM Conjunction_Elimination {
+      STATEMENT: (A ∧ B ⊢ A) ∧ (A ∧ B ⊢ B)
+      PROOF:
+        SHOW (A ∧ B ⊢ A) BY {
+          LET p : Proof;
+          ASSUME Proves(p, A ∧ B);
+          SHOW Proves(Conjunction_Elim_Left(p), A) BY Rewrite(Conjunction_Elim_Left)
+        }
+        SHOW (A ∧ B ⊢ B) BY {  
+          LET p : Proof;
+          ASSUME Proves(p, A ∧ B);
+          SHOW Proves(Conjunction_Elim_Right(p), B) BY Rewrite(Conjunction_Elim_Right)  
+        }
+    }
+      
+    THEOREM Disjunction_Introduction {  
+      STATEMENT: (A ⊢ A ∨ B) ∧ (B ⊢ A ∨ B)
+      PROOF:
+        SHOW (A ⊢ A ∨ B) BY {
+          LET p : Proof;
+          ASSUME Proves(p, A);
+          SHOW Proves(Disjunction_Intro_Left(p), A ∨ B) BY Rewrite(Disjunction_Intro_Left)
+        }
+        SHOW (B ⊢ A ∨ B) BY {
+          LET p : Proof;  
+          ASSUME Proves(p, B);
+          SHOW Proves(Disjunction_Intro_Right(p), A ∨ B) BY Rewrite(Disjunction_Intro_Right)
+        }  
+    }
+
+    THEOREM Negation_Introduction {
+      STATEMENT: ((A ⊢ Contradiction) <-> (⊢ ¬ A))
+      PROOF:  
+        REWRITE (A ⊢ Contradiction)
+          = Proves(p, Contradiction) GIVEN Assumes(p, A) BY Definition(Turnstile)
+        REWRITE (⊢ ¬ A)
+          = Proves(Negation_Intro(λ p. p), ¬ A)  
+          = Proves((λ p. p)(Assumption(A)), Contradiction) BY Rewrite(Negation_Intro)
+          = Proves(Assumption(A), Contradiction)
+          = (A ⊢ Contradiction) BY Definition(Turnstile)
+    }
+      
+    THEOREM ExMiddle {
+      STATEMENT: ⊢ A ∨ ¬ A
+      PROOF:
+        LET Case1 = Assumption(A);
+        LET Case2 = Assumption(¬ A);
+        LET Step1 = Disjunction_Intro_Left(Case1);
+        LET Step2 = Disjunction_Intro_Right(Case2);
+        SHOW Proves(Disjunction_Elim(Case1, λ p. Step1, λ p. Step2), A ∨ ¬ A) BY {
+          Proves(Case1, A) BY Rewrite(Assumption)
+          Proves(λ p. Step1, A ⟹ A ∨ ¬ A) BY Implication_Introduction
+          Proves(λ p. Step2, ¬ A ⟹ A ∨ ¬ A) BY Implication_Introduction
+          Proves(Disjunction_Elim(Case1, λ p. Step1, λ p. Step2), A ∨ ¬ A) BY Rewrite(Disjunction_Elim)  
+        }
+    }
+  }
+}

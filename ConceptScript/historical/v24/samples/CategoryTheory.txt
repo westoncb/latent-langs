@@ -1,0 +1,135 @@
+CONCEPT CategoryTheory {
+
+  LANGUAGE {
+    CLASS Category {
+      Obj : Type
+      Hom : Obj -> Obj -> Type
+      
+      id : ∀ (A : Obj). Hom(A, A)
+      compose : ∀ (A B C : Obj). Hom(B, C) -> Hom(A, B) -> Hom(A, C)
+      
+      LAWS {
+        LeftIdentity  : ∀ (A B : Obj) (f : Hom(A, B)). compose(id(B), f) = f
+        RightIdentity : ∀ (A B : Obj) (f : Hom(A, B)). compose(f, id(A)) = f
+        Associativity : ∀ (A B C D : Obj) (f : Hom(A, B)) (g : Hom(B, C)) (h : Hom(C, D)). 
+                          compose(compose(h, g), f) = compose(h, compose(g, f))
+      }
+    }
+    
+    CLASS Functor(C D : Category) {
+      map : ∀ (A B : C.Obj). C.Hom(A, B) -> D.Hom(F(A), F(B))
+      
+      LAWS {
+        Preservation : ∀ (A B : C.Obj) (f : C.Hom(A, B)). map(C.id(A)) = D.id(F(A))
+        Functoriality : ∀ (A B C : C.Obj) (f : C.Hom(A, B)) (g : C.Hom(B, C)). 
+                         map(C.compose(g, f)) = D.compose(map(g), map(f))
+      }
+    }
+    
+    CLASS NaturalTransformation(C D : Category, F G : Functor(C, D)) {
+      component : ∀ (A : C.Obj). D.Hom(F.F(A), G.F(A))
+      
+      LAWS {
+        Naturality : ∀ (A B : C.Obj) (f : C.Hom(A, B)).
+                       D.compose(component(B), F.map(f)) = D.compose(G.map(f), component(A))
+      }
+    }
+    
+    NOTATION "A ~> B" = Hom(A, B)
+    NOTATION "f ∘ g" = compose(f, g)
+    NOTATION "1_A" = id(A)
+    NOTATION "F : C ⟶ D" = Functor(C, D)
+    NOTATION "α : F ⟹ G" = NaturalTransformation(C, D, F, G)
+    NOTATION "α_A" = component(A)
+  }
+  
+  STRUCTURE {
+    DEF OppositeCategory(C : Category) : Category = {
+      Obj = C.Obj
+      Hom(A, B) = C.Hom(B, A)
+      id(A) = C.id(A)
+      compose(f, g) = C.compose(g, f)
+    }
+    
+    NOTATION "C^op" = OppositeCategory(C)
+    
+    DEF ComposeFunctors(C D E : Category, F : C ⟶ D, G : D ⟶ E) : C ⟶ E = {
+      F(A) = G.F(F.F(A))
+      map(f) = G.map(F.map(f))
+    }
+    
+    NOTATION "G ∘ F" = ComposeFunctors(C, D, E, F, G)
+    
+    DEF IdentityFunctor(C : Category) : C ⟶ C = {
+      F(A) = A
+      map(f) = f
+    }
+    
+    NOTATION "1_C" = IdentityFunctor(C)
+    
+    DEF HorizontalComposition(C D E : Category, F G : C ⟶ D, H : D ⟶ E, α : F ⟹ G) : H ∘ F ⟹ H ∘ G = {
+      component(A) = H.map(α_A)
+    }
+    
+    NOTATION "H ◯ α" = HorizontalComposition(C, D, E, F, G, H, α)
+    
+    DEF VerticalComposition(C D : Category, F G H : C ⟶ D, α : F ⟹ G, β : G ⟹ H) : F ⟹ H = {
+      component(A) = D.compose(β_A, α_A)
+    }
+    
+    NOTATION "β ▽ α" = VerticalComposition(C, D, F, G, H, α, β)
+  }
+  
+  PROOFS {
+    THEOREM FunctorIdentity(C D : Category, F : C ⟶ D) {
+      STATEMENT: F ∘ 1_C = F ∧ 1_D ∘ F = F
+      PROOF:
+        SHOW F ∘ 1_C = F BY {
+          LET A : C.Obj
+          (F ∘ 1_C).F(A) 
+            = F.F(1_C.F(A))   BY Definition(ComposeFunctors)
+            = F.F(A)          BY Definition(IdentityFunctor)
+          
+          LET f : A ~> B
+          (F ∘ 1_C).map(f)
+            = F.map(1_C.map(f)) BY Definition(ComposeFunctors)
+            = F.map(f)          BY Definition(IdentityFunctor)
+        }
+        
+        SHOW 1_D ∘ F = F BY {
+          LET A : C.Obj
+          (1_D ∘ F).F(A)
+            = 1_D.F(F.F(A))    BY Definition(ComposeFunctors)
+            = F.F(A)           BY Definition(IdentityFunctor)
+          
+          LET f : A ~> B  
+          (1_D ∘ F).map(f)
+            = 1_D.map(F.map(f)) BY Definition(ComposeFunctors)
+            = F.map(f)          BY Definition(IdentityFunctor)
+        }
+    }
+    
+    THEOREM HorizontalCompositionAssociativity(C D E K : Category, F G : C ⟶ D, H : D ⟶ E, I : E ⟶ K, α : F ⟹ G) {
+      STATEMENT: I ◯ (H ◯ α) = (I ∘ H) ◯ α
+      PROOF:
+        LET A : C.Obj
+        (I ◯ (H ◯ α))_A
+          = I.map((H ◯ α)_A)     BY Definition(HorizontalComposition)
+          = I.map(H.map(α_A))    BY Definition(HorizontalComposition)
+          = (I ∘ H).map(α_A)     BY Definition(ComposeFunctors)
+          = ((I ∘ H) ◯ α)_A      BY Definition(HorizontalComposition)
+    }
+    
+    THEOREM VerticalCompositionAssociativity(C D : Category, F G H I : C ⟶ D, α : F ⟹ G, β : G ⟹ H, γ : H ⟹ I) {
+      STATEMENT: (γ ▽ β) ▽ α = γ ▽ (β ▽ α)
+      PROOF:  
+        LET A : C.Obj
+        ((γ ▽ β) ▽ α)_A
+          = D.compose((γ ▽ β)_A, α_A)   BY Definition(VerticalComposition)
+          = D.compose(D.compose(γ_A, β_A), α_A) BY Definition(VerticalComposition)
+          = D.compose(γ_A, D.compose(β_A, α_A)) BY Associativity(D)
+          = D.compose(γ_A, (β ▽ α)_A)   BY Definition(VerticalComposition)
+          = (γ ▽ (β ▽ α))_A             BY Definition(VerticalComposition)
+    }
+  }
+}

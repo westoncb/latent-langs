@@ -1,0 +1,135 @@
+STRUCTURE QuantizedTransformerLanguageModel {
+  PARAMETERS {
+    VocabSize : Int # Size of the token vocabulary 
+    EmbeddingSize : Int # Size of token embeddings
+    NumLayers : Int # Number of transformer layers
+    HiddenSize : Int # Size of hidden states 
+    NumHeads : Int # Number of attention heads
+    FFSize : Int # Size of feed-forward expansion
+  }
+
+  NOTATION {
+    ⊛(x, W) := TernaryAccumulate(x, W) # Ternary "MatMul"
+    σ(x) := Sigmoid(x)  
+    τ(x) := SiLU(x)
+    S(x) := Softmax(x)
+    LN(x) := LayerNorm(x)
+  }
+
+  DEF TernaryWeight := TensorLike[[Any, Any], {-1, 0, 1}] 
+
+  STRUCTURE TernaryLinear(InputSize, OutputSize) {
+    DEF weight : TernaryWeight[InputSize, OutputSize]
+    DEF bias : TensorLike[[OutputSize], Float]
+
+    DEF forward(input : TensorLike[InputSize]) -> TensorLike[OutputSize] := (
+      input ⊛ weight + bias  
+    )
+  }
+
+  STRUCTURE TernaryMHA(HiddenSize, NumHeads) {
+    DEF head_size := HiddenSize / NumHeads
+    DEF query_proj : TernaryLinear(HiddenSize, HiddenSize) 
+    DEF key_proj : TernaryLinear(HiddenSize, HiddenSize)
+    DEF value_proj : TernaryLinear(HiddenSize, HiddenSize)
+    DEF output_proj : TernaryLinear(HiddenSize, HiddenSize)
+    
+    DEF forward(x : TensorLike[HiddenSize]) -> TensorLike[HiddenSize] := (
+      LET q := SPLIT(query_proj.forward(x), NumHeads),
+          k := SPLIT(key_proj.forward(x), NumHeads), 
+          v := SPLIT(value_proj.forward(x), NumHeads),
+          scores := [S(q_i ⊛ TRANSPOSE(k_i) / SQRT(head_size)) 
+                     FOR (q_i, k_i) : ZIP(q, k)],
+          attn := [score ⊛ v_i FOR (score, v_i) : ZIP(scores, v)],
+          concat := CONCAT(attn, -1)
+      IN output_proj.forward(concat)
+    )
+  }
+
+  STRUCTURE TernaryFFN(HiddenSize, FFSize) {
+    DEF proj1 : TernaryLinear(HiddenSize, FFSize)
+    DEF proj2 : TernaryLinear(FFSize, HiddenSize)
+    
+    DEF forward(x : TensorLike[HiddenSize]) -> TensorLike[HiddenSize] := (
+      LET expanded := τ(proj1.forward(x))
+      IN proj2.forward(expanded)  
+    )
+  }
+  
+  STRUCTURE TransformerLayer(HiddenSize, NumHeads, FFSize) {
+    DEF mha := TernaryMHA(HiddenSize, NumHeads)
+    DEF ffn := TernaryFFN(HiddenSize, FFSize)
+    DEF mha_norm := LayerNorm(HiddenSize)
+    DEF ffn_norm := LayerNorm(HiddenSize)
+    
+    DEF forward(x : TensorLike[HiddenSize]) -> TensorLike[HiddenSize] := (
+      LET mha_out := mha.forward(x),
+          mha_residual := LN(x + mha_out),
+          ffn_out := ffn.forward(mha_residual),
+          ffn_residual := LN(mha_residual + ffn_out)
+      IN ffn_residual  
+    )
+  }
+
+  DEF token_embedding : TensorLike[[VocabSize, EmbeddingSize], Float]
+  DEF pos_embedding : TensorLike[[MaxLen, EmbeddingSize], Float] 
+  DEF output_proj : TernaryLinear(HiddenSize, VocabSize)
+  
+  DEF layers : List[TransformerLayer]
+
+  DEF init := (
+    layers := [TransformerLayer(IF i = 0 THEN EmbeddingSize ELSE HiddenSize, 
+                                NumHeads,
+                                FFSize) 
+               FOR i : RANGE(NumLayers)]  
+  )
+
+  DEF forward(input : Sequence[Int], seq_len : Int) -> TensorLike[VocabSize] := (
+    LET input_emb := token_embedding[input] + pos_embedding[0:seq_len],
+        hidden := FOLDL(
+          (h, layer) -> layer.forward(h),
+          input_emb, 
+          layers
+        )
+    IN SOFTMAX(output_proj.forward(hidden[-1]))
+  )
+
+  STRUCTURE Typechecker {
+    DEF Type := * | Type "→" Type  
+    DEF Env := MAP(String, Type)
+    
+    DEF typecheck(env : Env, term : Term) -> Type := (
+      CASE term OF
+        Var(x) -> env(x),
+        LAMBDA(x, t1, t2) -> (
+          LET new_env := env + {x -> t1}
+          IN t1 "→" typecheck(new_env, t2)
+        ),
+        APP(t1, t2) -> (
+          LET t1_type := typecheck(env, t1),
+              t2_type := typecheck(env, t2)
+          IN CASE t1_type OF 
+               t_in "→" t_out -> (
+                 IF t_in = t2_type THEN t_out
+                 ELSE ERROR("Type mismatch")  
+               ),
+               _ -> ERROR("Not a function type")
+        )
+    )
+  }
+
+  DEF Term := Var(String) 
+            | LAMBDA(String, Type, Term)
+            | APP(Term, Term)
+
+  [∀env : Env, ∀t : Term, ∀T : Type .
+    Typechecker.typecheck(env, t) = T => ∃v : Term . Evaluate(t) = v    
+  ] # Type Soundness
+
+  [∀seq : Sequence[Int] . 
+    SUM(forward(seq, LENGTH(seq))) = 1.0
+    AND ARGMAX(forward(seq, LENGTH(seq))) ∈ [0, VocabSize)
+  ] # Valid probability distribution
+
+  RETURN forward
+}

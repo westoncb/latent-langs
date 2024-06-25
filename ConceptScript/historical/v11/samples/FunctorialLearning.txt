@@ -1,0 +1,57 @@
+CONCEPT FunctorialLearning {
+  STRUCTURE {
+    [C := Category of input spaces]
+    [D := Category of output spaces]
+    [F : C → D ↦ Functor representing the learning process]
+    [∀X ∈ Ob(C), ∀Y ∈ Ob(D), F(X, Y) := Hom(X, F(Y))]
+    [∀X, Y ∈ Ob(C), ∀f : X → Y, F(f) : F(X) → F(Y)]
+    [η_X : X → F(X) ↦ Natural transformation representing feature extraction]
+    [ε_Y : F(Y) → Y ↦ Natural transformation representing prediction]
+  }
+
+  PROOFS {
+    theorem functorial_learning_adjunction :
+      (F ⊣ G) ⇔ (∀X ∈ Ob(C), ∀Y ∈ Ob(D), Hom(F(X), Y) ≅ Hom(X, G(Y)))
+    {
+      (F ⊣ G) => {
+        ∀X ∈ Ob(C), ∀Y ∈ Ob(D), 
+        Hom(F(X), Y) ≅ Hom(X, G(Y)) by definition of adjunction
+      }
+      
+      (∀X ∈ Ob(C), ∀Y ∈ Ob(D), Hom(F(X), Y) ≅ Hom(X, G(Y))) => {
+        define η_X : X → G(F(X)) by η_X = Hom(id_X, ε_F(X))
+        define ε_Y : F(G(Y)) → Y by ε_Y = Hom(η_G(Y), id_Y)
+        
+        ∀X ∈ Ob(C), F(G(F(X))) →^(F(η_X)) F(X) →^(ε_F(X)) F(X) = id_F(X) by {
+          Hom(F(X), F(X)) ≅ Hom(X, G(F(X))) by hypothesis
+          id_F(X) corresponds to η_X ∈ Hom(X, G(F(X))) by definition
+          F(η_X) ∘ ε_F(X) corresponds to id_F(X) by Yoneda lemma
+        }
+
+        ∀Y ∈ Ob(D), G(Y) →^(η_G(Y)) G(F(G(Y))) →^(G(ε_Y)) G(Y) = id_G(Y) by {
+          Hom(G(Y), G(Y)) ≅ Hom(F(G(Y)), Y) by hypothesis  
+          id_G(Y) corresponds to ε_Y ∈ Hom(F(G(Y)), Y) by definition
+          G(ε_Y) ∘ η_G(Y) corresponds to id_G(Y) by Yoneda lemma
+        }
+
+        (F ⊣ G) by definition of adjunction
+      }
+    }
+  }
+  
+  LANGUAGE {
+    type InputSpace
+    type OutputSpace
+    type Functor
+    
+    func F(X : InputSpace) : OutputSpace
+    func G(Y : OutputSpace) : InputSpace
+    
+    pred is_adjoint(F : Functor, G : Functor) = 
+      ∀X : InputSpace, ∀Y : OutputSpace,
+      Hom(F(X), Y) ≅ Hom(X, G(Y))
+    
+    func η_X(X : InputSpace) : Hom(X, G(F(X)))
+    func ε_Y(Y : OutputSpace) : Hom(F(G(Y)), Y)
+  }
+}

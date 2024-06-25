@@ -1,0 +1,76 @@
+CONCEPT BiochemicalPathways {
+  LANGUAGE {
+    TYPE Molecule
+    TYPE Enzyme <: Molecule
+    TYPE Reaction(substrates : List[Molecule], products : List[Molecule], enzymes : List[Enzyme])
+    TYPE Pathway = List[Reaction]
+
+    FUNC Reactants(r : Reaction) -> List[Molecule]
+    FUNC Products(r : Reaction) -> List[Molecule]  
+    FUNC Catalysts(r : Reaction) -> List[Enzyme]
+    FUNC SubstrateSpecificity(e : Enzyme) -> List[Molecule]
+    FUNC Cofactors(e : Enzyme) -> List[Molecule]
+
+    PRED Reversible(r : Reaction)
+    PRED Irreversible(r : Reaction)
+    PRED RateLimiting(r : Reaction, p : Pathway)
+
+    AXIOM ReactionConservation {
+      FORALL (r : Reaction).
+        LET reactants = Reactants(r), products = Products(r) IN
+        SUM(reactants, MolecularMass) = SUM(products, MolecularMass)
+    }
+  }
+
+  STRUCTURE Metabolism {
+    LET Catabolism : List[Pathway]
+    LET Anabolism : List[Pathway]
+
+    REQUIRE FORALL (p : Pathway) in Catabolism. 
+      FORALL (r : Reaction) in p. Irreversible(r)
+
+    REQUIRE EXISTS (p : Pathway) in Catabolism.
+      EXISTS (r : Reaction) in p. RateLimiting(r, p)
+
+    REQUIRE FORALL (p : Pathway) in Anabolism.
+      EXISTS (r : Reaction) in p. Reversible(r)
+  }
+
+  STRUCTURE EnzymeKinetics(e : Enzyme, r : Reaction | e in Catalysts(r)) {
+    LET kcat : Real  // turnover number
+    LET Km : Real    // Michaelis constant
+    
+    DEF CatalyticEfficiency : Real = kcat / Km
+
+    REQUIRE FORALL (s : Molecule) in SubstrateSpecificity(e).
+      s in Reactants(r)
+
+    REQUIRE FORALL (m : Molecule) in Cofactors(e).
+      m in Reactants(r) AND m in Products(r)
+  }
+
+  PROOFS {
+    THEOREM MetabolicRegulation {
+      STATEMENT:
+        EXISTS (e : Enzyme) (r1 : Reaction) (r2 : Reaction) (p1 : Pathway) (p2 : Pathway).
+          (e in Catalysts(r1)) AND (e in Catalysts(r2)) AND 
+          (r1 in p1) AND (r2 in p2) AND
+          (p1 in Catabolism) AND (p2 in Anabolism) AND
+          RateLimiting(r1, p1) AND RateLimiting(r2, p2)
+
+      PROOF:
+        LET e = PhosphofructokinaseEnzyme,
+            r1 = Phosphofructokinase1Reaction, r2 = Phosphofructokinase2Reaction,  
+            p1 = GlycolysisPathway, p2 = GluconeogenesisPathway
+        HAVE e in Catalysts(r1) AND e in Catalysts(r2)  
+        HAVE r1 in p1 AND r2 in p2
+        HAVE p1 in Catabolism AND p2 in Anabolism
+        SHOW RateLimiting(r1, p1) AND RateLimiting(r2, p2) BY {
+          HAVE Irreversible(r1) AND Irreversible(r2)
+          HAVE FORALL (s : Molecule) in Reactants(r1). s in Reactants(r2)
+          HAVE EnzymeKinetics(e, r1).kcat / EnzymeKinetics(e, r1).Km 
+            < EnzymeKinetics(e, r2).kcat / EnzymeKinetics(e, r2).Km
+        }
+    }
+  }
+}

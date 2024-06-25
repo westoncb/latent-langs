@@ -1,0 +1,110 @@
+CONCEPT HyperbolicSemanticSpaces {
+  LANGUAGE {
+    TYPE HyperbolicSpace <: Manifold
+    TYPE PoincareModel <: HyperbolicSpace
+    TYPE HyperbolicVector[H : HyperbolicSpace, p : H]
+    TYPE HyperbolicTensor[H : HyperbolicSpace, p : H, r s : ℕ] = 
+      (HyperbolicVector[H, p] -> )^r -> (CotangentVector[H, p] -> )^s -> ℝ
+    TYPE HyperbolicEmbedding[H : HyperbolicSpace] <: HyperbolicTensor[H, _, 1, 0]
+    TYPE HyperbolicHypergraph
+    TYPE HyperbolicHyperedge <: HyperbolicTensor[_, _, 0, k] -- k-uniform hyperedge
+
+    FUNC GyroMidpoint[H : HyperbolicSpace](x y : H) : H
+    FUNC GyroDistance[H : HyperbolicSpace](x y : H) : Real
+    FUNC ExpMap[H : HyperbolicSpace](p : H, v : HyperbolicVector[H, p]) : H
+    FUNC LogMap[H : HyperbolicSpace](p : H, q : H) : HyperbolicVector[H, p]
+    FUNC ParallelTransport[H : HyperbolicSpace, γ : Curve[H]]
+         (v : HyperbolicVector[H, γ(0)], t : Real) : HyperbolicVector[H, γ(t)]
+    FUNC Centroid[H : HyperbolicSpace](ps : List(H)) : H
+    FUNC Encode(s : String) : HyperbolicEmbedding[PoincareModel]
+    FUNC Decode(e : HyperbolicEmbedding[PoincareModel]) : String
+
+    AXIOM GyroAssoc {
+      ∀ (x y z : H) . GyroMidpoint(GyroMidpoint(x, y), z) = GyroMidpoint(x, GyroMidpoint(y, z))
+    }
+
+    AXIOM GyroIdentity {
+      ∀ (x : H) . GyroMidpoint(x, x) = x
+    }
+
+    AXIOM GyroInverse {
+      ∀ (x y : H) . GyroMidpoint(x, y) = GyroMidpoint(y, x)
+    }
+  }
+
+  STRUCTURE HyperbolicEmbeddingSpace[H : HyperbolicSpace] {
+    REQUIRE ∀ (e : HyperbolicEmbedding[H]). e : H
+
+    FUNC Similarity(e1 e2 : HyperbolicEmbedding[H]) : Real = 
+      1 / (1 + GyroDistance(e1, e2))
+
+    FUNC Analogy(e1 e2 e3 : HyperbolicEmbedding[H]) : HyperbolicEmbedding[H] =
+      ExpMap(e3, ParallelTransport(LogMap(e1, e2), 1))
+  }
+
+  STRUCTURE SemanticHypergraph[H : HyperbolicSpace] {
+    LET G : HyperbolicHypergraph
+    LET VertexEmbedding : H -> HyperbolicEmbedding[H]
+    LET EdgeEmbedding : HyperbolicHyperedge -> HyperbolicEmbedding[H]
+
+    REQUIRE ∀ (e : HyperbolicHyperedge) . 
+      EdgeEmbedding(e) = Centroid(Map(VertexEmbedding, Vertices(e)))
+
+    FUNC Navigate(start : H, landmarks : List(H)) : H =
+      MATCH landmarks WITH
+      | [] -> start
+      | l :: ls -> Navigate(GyroMidpoint(start, VertexEmbedding(l)), ls)
+  }
+
+  STRUCTURE HyperbolicSemanticSpaces {
+    LET H : PoincareModel
+    LET Embeddings : HyperbolicEmbeddingSpace[H]
+    LET Hypergraph : SemanticHypergraph[H]
+
+    FUNC Parse(input : String) : H =
+      LET chunks = Chunk(input)
+      LET landmarks = Map(Encode, chunks)
+      IN Hypergraph.Navigate(Encode(input), landmarks)
+
+    FUNC Generate(e : H, length : Nat) : String =
+      LET vertices = FIND (vs : List(H)) 
+        WHERE Length(vs) = length ∧ 
+              ∀ (v : H) . v ∈ vs => GyroDistance(e, v) ≤ r
+      IN Decode(Centroid(vertices))
+
+    -- Cognitive Operations
+
+    FUNC Analogy(s1 s2 s3 : String) : String =
+      LET e1 = Encode(s1), e2 = Encode(s2), e3 = Encode(s3)
+      IN Decode(Embeddings.Analogy(e1, e2, e3))
+
+    FUNC Similarity(s1 s2 : String) : Real =
+      LET e1 = Encode(s1), e2 = Encode(s2)
+      IN Embeddings.Similarity(e1, e2)
+
+    FUNC Categorization(s : String) : String =
+      LET e = Encode(s)
+      LET edge = FIND (e : HyperbolicHyperedge) 
+        WHERE GyroDistance(EdgeEmbedding(e), e) ≤ r ∧
+              ∀ (v : H) . v ∈ Vertices(e) => GyroDistance(v, e) ≤ r
+      IN Decode(EdgeEmbedding(edge))
+
+    FUNC Unification(ss : List(String)) : String =
+      LET es = Map(Encode, ss)  
+      LET e = Centroid(es)
+      IN Decode(e)
+  }
+}
+
+This formulation explores semantic representations in hyperbolic space, modeled using the Poincaré ball model. Key ideas:
+
+Embeddings and semantic tensors live in hyperbolic space, allowing for hierarchical and scale-free structure
+Gyrovector operations (midpoint, distance, etc) used to navigate and compare embeddings
+Semantic hypergraph connects related concepts, with hyperedges embedding the centroid of their vertices
+Parsing navigates from an input embedding to a target concept by following landmark embeddings
+Generation samples a neighborhood around a concept embedding and decodes the centroid
+Analogies performed by parallel transport of difference vectors between embeddings
+Categorization finds the closest hyperedge to an embedding
+Unification finds the centroid of a set of embeddings
+
+The hyperbolic geometry naturally captures hierarchical relationships, while hypergraphs allow for higher-order semantic connections between concepts. The goal was to reformulate the semantic space in a way that leverages the unique properties of hyperbolic embeddings and higher-dimensional computing.

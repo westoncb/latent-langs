@@ -1,0 +1,57 @@
+CONCEPT ConformalPrediction {
+  LANGUAGE {
+    TYPE X                     -- Input space
+    TYPE Y                     -- Output space
+    TYPE ℝ₊ <: Real            -- Non-negative reals
+    FUNC d : Y × Y -> ℝ₊        -- Metric on output space
+    FUNC μ : List[X] × List[Y] -> (X -> Y)  -- Base predictor trained on given data
+
+    FUNC NonConformityScore(x : X, y : Y, S : List[X], T : List[Y]) : ℝ₊ =
+      LET m = μ(S, T) IN d(y, m(x))
+
+    FUNC ConformalSet(x : X, S : List[X], T : List[Y], ε : ℝ₊) : 𝒫(Y) =
+      LET α_i = NonConformityScore(S_i, T_i, DELETE(S, i), DELETE(T, i)) for i = 1..|S|
+          α_ε = Quantile(α_1, ..., α_|S|, 1 - ε)  
+      IN {y : Y | NonConformityScore(x, y, S, T) ≤ α_ε}
+
+    NOTATION "𝒫" = PowerSet
+    NOTATION "DELETE" = λ(X : List[A]) (i : Nat), CONCAT(TAKE(X, i-1), DROP(X, i))
+    NOTATION "Quantile" = λ(X : List[Real]) (p : Real), SORT(X)_FLOOR(p * |X|)
+  }
+
+  STRUCTURE ConformalPredictor(S : List[X], T : List[Y], ε : ℝ₊) {
+    REQUIRE ε ∈ (0, 1)
+    REQUIRE |S| = |T| > 0
+
+    DEF Predict(x : X) : 𝒫(Y) = ConformalSet(x, S, T, ε)
+
+    THEOREM Validity {
+      ∀(P : 𝒫(X × Y)), P(Predict(X) ∋ Y) ≥ 1 - ε  
+    }
+    PROOF {
+      LET P : 𝒫(X × Y), (S', T') = (CONCAT(S, [X]), CONCAT(T, [Y])) 
+      
+      P(Predict(X) ∋ Y)
+        = P({y : Y | NonConformityScore(X, y, S', T') ≤ Quantile({NonConformityScore(S'_i, T'_i, DELETE(S', i), DELETE(T', i)) | i = 1..|S'|}, 1 - ε)} ∋ Y)
+        = P(NonConformityScore(X, Y, S', T') ≤ Quantile({NonConformityScore(S'_i, T'_i, DELETE(S', i), DELETE(T', i)) | i = 1..|S'|}, 1 - ε))
+        ≥ P(Rank(NonConformityScore(X, Y, S', T'), {NonConformityScore(S'_i, T'_i, DELETE(S', i), DELETE(T', i)) | i = 1..|S'|}) > ε * (|S'| + 1))
+        = P(U > ε)  where U ~ Uniform(0, 1)
+        = 1 - ε
+    }
+
+    THEOREM Efficiency {
+      ∀(P : 𝒫(X × Y)), E[P, λ(x : X), SIZE(Predict(x))] ≤ (1 / (1 - ε)) * E[P, λ((x, y) : X × Y), NonConformityScore(x, y, S, T)]
+    }
+    PROOF {
+      LET P : 𝒫(X × Y), f = λ((x, y) : X × Y), NonConformityScore(x, y, S, T)
+      
+      E[P, λ(x : X), SIZE(Predict(x))]  
+        = E[P, λ(x : X), P(Y | Predict(x) ∋ Y) * SIZE(Y)]
+        ≤ (1 / (1 - ε)) * E[P, λ(x : X), P(Y | f(x, Y) ≤ Quantile(f(S, T), 1 - ε)) * SIZE(Y)]
+        = (1 / (1 - ε)) * E[P, λ(x : X), E[P(Y | X = x), λ(y : Y), 𝟙{f(x, y) ≤ Quantile(f(S, T), 1 - ε)} * 1]]  
+        = (1 / (1 - ε)) * E[P, λ((x, y) : X × Y), 𝟙{f(x, y) ≤ Quantile(f(S, T), 1 - ε)}]
+        ≤ (1 / (1 - ε)) * E[P, λ((x, y) : X × Y), f(x, y) / Quantile(f(S, T), 1 - ε)]
+        = (1 / (1 - ε)) * E[P, f]
+    }
+  }
+}

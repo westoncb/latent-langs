@@ -1,0 +1,179 @@
+CONCEPT Topology {
+  NOTATION {
+    ∅ = Empty set
+    ⋃ = Union of sets
+    ⋂ = Intersection of sets
+    𝒫(X) = Power set of X
+    X ∖ Y = Set difference between X and Y
+    f⁻¹(U) = Preimage of U under f
+    f(U) = Image of U under f
+    X ≅ Y = Homeomorphism between X and Y
+  }
+
+  LANGUAGE {
+    TYPE Set 
+    TYPE OpenSet<X> = Subset of X
+    TYPE Topology<X> = Set of OpenSets on X
+    TYPE ContinuousFunction<X,Y> = Function f : X -> Y
+    TYPE Homeomorphism<X,Y> = Bijective ContinuousFunction f : X -> Y with ContinuousFunction f⁻¹ : Y -> X
+
+    FUNC interior<X>(A: Subset<X>, 𝓣: Topology<X>): OpenSet<X> = 
+      ⋃{U ∈ 𝓣 | U ⊆ A}
+
+    FUNC closure<X>(A: Subset<X>, 𝓣: Topology<X>): Subset<X> = 
+      ⋂{F ⊆ X | A ⊆ F, X ∖ F ∈ 𝓣}  
+
+    PRED isOpen<X>(U: Subset<X>, 𝓣: Topology<X>) = U ∈ 𝓣
+    PRED isClosed<X>(A: Subset<X>, 𝓣: Topology<X>) = X ∖ A ∈ 𝓣
+    PRED dense<X>(D: Subset<X>, 𝓣: Topology<X>) = closure(D, 𝓣) = X
+
+    AXIOM EmptyInTopology : ∀ 𝓣 : Topology<X> . ∅ ∈ 𝓣
+    AXIOM UnionInTopology : ∀ 𝓣 : Topology<X>, U : 𝒫(𝓣) . ⋃U ∈ 𝓣
+    AXIOM IntersectionInTopology : ∀ 𝓣 : Topology<X>, U1, U2 ∈ 𝓣 . U1 ⋂ U2 ∈ 𝓣 
+    AXIOM Continuity : ∀ f : X -> Y, 𝓣X : Topology<X>, 𝓣Y : Topology<Y> . 
+      f is continuous ⇔ (∀ V ∈ 𝓣Y . f⁻¹(V) ∈ 𝓣X)
+  }
+
+  STRUCTURES {
+    STRUCTURE DiscreteTopology<X> {
+      FIELD 𝓣 : Topology<X>
+      COMPUTE 𝓣 = 𝒫(X)  
+    }
+
+    STRUCTURE IndiscreteTopology<X> {
+      FIELD 𝓣 : Topology<X>
+      COMPUTE 𝓣 = {∅, X}
+    }
+
+    STRUCTURE OrderTopology<X> {
+      FIELD 𝓣 : Topology<X>
+      FIELD ≤ : PartialOrder<X>
+      COMPUTE 𝓣 = {U ⊆ X | ∀ x ∈ U . ∃ a,b ∈ X . a ≤ x ≤ b ∧ {y | a ≤ y ≤ b} ⊆ U} 
+    }
+
+    STRUCTURE MetricTopology<X,d> {
+      FIELD 𝓣 : Topology<X>  
+      FIELD d : Metric<X>
+      
+      NOTATION {
+        B_ε(x) = Open ball of radius ε around x
+      }
+      
+      COMPUTE 𝓣 = {U ⊆ X | ∀ x ∈ U . ∃ ε>0 . B_ε(x) ⊆ U}
+      
+      FUNC B_ε(x: X) : OpenSet<X> = {y ∈ X | d(x,y) < ε}
+    }
+
+    STRUCTURE QuotientTopology<X,~> {
+      FIELD 𝓣 : Topology<X/~>
+      FIELD 𝓣X : Topology<X>
+      FIELD ~ : Equivalence<X>
+
+      NOTATION {
+        π : X -> X/~ = Canonical projection 
+      }
+
+      COMPUTE 𝓣 = {U ⊆ X/~ | π⁻¹(U) ∈ 𝓣X}
+    }
+
+    STRUCTURE ProductTopology<X,Y> {
+      FIELD 𝓣 : Topology<X × Y>
+      FIELD 𝓣X : Topology<X>  
+      FIELD 𝓣Y : Topology<Y>
+
+      NOTATION {
+        π_X : X × Y -> X = Projection onto X
+        π_Y : X × Y -> Y = Projection onto Y  
+      }
+
+      COMPUTE 𝓣 = {U ⊆ X × Y | ∀ (x,y) ∈ U . ∃ V ∈ 𝓣X, W ∈ 𝓣Y . x ∈ V ∧ y ∈ W ∧ V×W ⊆ U}
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE InteriorIdempotent<X> : 
+      ∀ 𝓣 : Topology<X>, U : OpenSet<X> . interior(U, 𝓣) -> U
+
+    REWRITE ClosureInvolution<X> :
+      ∀ 𝓣 : Topology<X>, A : Subset<X> . closure(closure(A, 𝓣), 𝓣) -> closure(A, 𝓣)
+
+    SIMPLIFY ClosureComplement<X> : 
+      ∀ 𝓣 : Topology<X>, A : Subset<X> . closure(X ∖ A, 𝓣) -> X ∖ interior(A, 𝓣)
+
+    TACTIC SplitUnion<X> : 
+      isOpen(⋃i Ui, 𝓣) <-> ∀i . isOpen(Ui, 𝓣)
+  }
+  
+  PROOFS {
+    PROOF InteriorIsLargestOpen<X> :
+      ∀ 𝓣 : Topology<X>, A : Subset<X>, U : OpenSet<X> . U ⊆ A ⇒ U ⊆ interior(A, 𝓣)
+    {
+      GIVEN 𝓣 : Topology<X>, A : Subset<X>, U : OpenSet<X>
+      ASSUME U ⊆ A
+
+      U is open in 𝓣                BY assumption
+      interior(A, 𝓣) = ⋃{V ∈ 𝓣 | V ⊆ A}  BY def. of interior
+      U ∈ {V ∈ 𝓣 | V ⊆ A}           BY USING U ⊆ A
+      U ⊆ ⋃{V ∈ 𝓣 | V ⊆ A}         BY properties of ⋃
+      U ⊆ interior(A, 𝓣)            BY def. of interior
+
+      QED
+    }
+
+    PROOF ClosureIsSmallestClosed<X> : 
+      ∀ 𝓣 : Topology<X>, A : Subset<X>, B : Subset<X> . A ⊆ B ∧ isClosed(B, 𝓣) ⇒ closure(A, 𝓣) ⊆ B
+    {
+      GIVEN 𝓣 : Topology<X>, A : Subset<X>, B : Subset<X>
+      ASSUME A ⊆ B ∧ isClosed(B, 𝓣)
+      
+      closure(A, 𝓣) = ⋂{F ⊆ X | A ⊆ F, X ∖ F ∈ 𝓣}   BY def. of closure
+      B ∈ {F ⊆ X | A ⊆ F, X ∖ F ∈ 𝓣}                BY USING A ⊆ B ∧ isClosed(B, 𝓣)
+      ⋂{F ⊆ X | A ⊆ F, X ∖ F ∈ 𝓣} ⊆ B               BY properties of ⋂
+      closure(A, 𝓣) ⊆ B                             BY def. of closure
+      
+      QED
+    }
+    
+    PROOF ContinuousComposition<X,Y,Z> :
+      ∀ f : X -> Y, g : Y -> Z, 𝓣X : Topology<X>, 𝓣Y : Topology<Y>, 𝓣Z : Topology<Z> .
+      isContinuous(f, 𝓣X, 𝓣Y) ∧ isContinuous(g, 𝓣Y, 𝓣Z) ⇒ isContinuous(g ∘ f, 𝓣X, 𝓣Z)  
+    {
+      GIVEN f : X -> Y, g : Y -> Z, 𝓣X : Topology<X>, 𝓣Y : Topology<Y>, 𝓣Z : Topology<Z>
+      ASSUME isContinuous(f, 𝓣X, 𝓣Y) ∧ isContinuous(g, 𝓣Y, 𝓣Z)
+      
+      SUFFICES_TO_SHOW ∀ W ∈ 𝓣Z . (g ∘ f)⁻¹(W) ∈ 𝓣X
+
+      TAKE W ∈ 𝓣Z
+      g⁻¹(W) ∈ 𝓣Y                      BY continuity of g  
+      f⁻¹(g⁻¹(W)) ∈ 𝓣X                 BY continuity of f
+      (g ∘ f)⁻¹(W) = f⁻¹(g⁻¹(W))       BY properties of inverse images
+      (g ∘ f)⁻¹(W) ∈ 𝓣X                BY above
+      
+      QED
+    }
+
+    PROOF Homeomorphism<X,Y> :
+      ∀ f : X -> Y, 𝓣X : Topology<X>, 𝓣Y : Topology<Y> .
+      isHomeomorphism(f, 𝓣X, 𝓣Y) ⇔ isBijective(f) ∧ isContinuous(f, 𝓣X, 𝓣Y) ∧ isContinuous(f⁻¹, 𝓣Y, 𝓣X)
+    {
+      GIVEN f : X -> Y, 𝓣X : Topology<X>, 𝓣Y : Topology<Y>
+      
+      isHomeomorphism(f, 𝓣X, 𝓣Y) 
+        ⇔ isBijective(f) ∧ isContinuous(f, 𝓣X, 𝓣Y) ∧ isContinuous(f⁻¹, 𝓣Y, 𝓣X)  BY def. of homeomorphism
+        
+      QED  
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE TopologyOfReals : 𝓣_ℝ = MetricTopology<ℝ, d_Euclidean>
+
+    EXAMPLE TopologyOfCantor : 
+      LET C = Cantor set
+      𝓣_C = SubspaceTopology<ℝ, C>
+      WHERE SubspaceTopology<X,S> = {S ⋂ U | U ∈ 𝓣X}
+
+    EXAMPLE UnitCircleQuotient : 𝕋² ≅ 𝕊¹ × 𝕊¹ / ((x,y) ~ (-x,-y))
+      WHERE 𝕋² has QuotientTopology<𝕊¹ × 𝕊¹, ~>
+  } 
+}

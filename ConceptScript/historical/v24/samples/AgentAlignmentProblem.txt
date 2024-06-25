@@ -1,0 +1,108 @@
+CONCEPT AgentAlignmentProblem {
+  LANGUAGE {
+    TYPE Agent = (Utility : State -> Real,
+                  ActionSpace : Set[Action],
+                  TransitionFunction : State -> Action -> Distribution[State],
+                  DiscountFactor : Real,
+                  InitialState : State)
+
+    TYPE Principal = Agent
+    TYPE Policy = State -> Distribution[Action]
+    TYPE History = List[State]
+    TYPE Reward = Real
+
+    FUNC Regret : (Agent, Policy, State, Nat) -> Real
+    FUNC Optimal? : (Agent, Policy) -> Bool
+    FUNC Aligned? : (Agent, Principal, History) -> Bool
+    FUNC OptimalAligned? : (Agent, Principal) -> Bool
+
+    PRED CanAchieve : Agent -> State -> Bool
+  }
+
+  STRUCTURE {  
+    DEF Regret(agent, policy, state, steps) =
+      LET (utility, actSpace, transition, discount, initState) = agent,
+          optimalValue = ARGMAX(λ a. SUM(MAP(λ s'. transition(state)(a)(s') * (utility(s') + discount * Regret(agent, policy, s', steps - 1)), 
+                                             SUPPORT(transition(state)(a)))),
+                                 actSpace),
+          agentValue = SUM(MAP(λ s'. transition(state)(policy(state))(s') * (utility(s') + discount * Regret(agent, policy, s', steps - 1)),
+                               SUPPORT(transition(state)(policy(state)))))
+      IN optimalValue - agentValue
+
+    DEF Optimal?(agent, policy) = ∀ s . Regret(agent, policy, s, 100) < 0.01
+      
+    DEF Aligned?(agent, principal, history) = 
+      LET agentActions = MAP(λ s. ARGMAX(agent.TransitionFunction(s), agent.ActionSpace), history),
+          principalActions = MAP(λ s. ARGMAX(principal.TransitionFunction(s), principal.ActionSpace), history)
+      IN agentActions = principalActions
+
+    DEF OptimalAligned?(agent, principal) = 
+      ∃ policy . Optimal?(agent, policy) ∧ ∀ s . Aligned?(agent, principal, s :: TAKE(100, TRAJECTORY(agent, policy, s)))
+
+    DEF CanAchieve(agent, goalState) = ∃ policy . ∃ n . ∀ initState .
+      LET history = TAKE(n, TRAJECTORY(agent, policy, initState))
+      IN LAST(history) = goalState
+  }
+
+  PROOFS {
+    THEOREM MisguidedAgent {
+      STATEMENT: ∃ (principal : Principal) (agent : Agent).
+        ¬ OptimalAligned?(agent, principal) ∧ ∀ s . CanAchieve(agent, s)
+        
+      PROOF:  
+        LET principal = (Utility = λ s. s[0], 
+                         ActionSpace = [u, d], 
+                         TransitionFunction = DETERMINISTIC(λ s a. IF a = u THEN [s[0] + 1] ELSE [s[0] - 1]),
+                         DiscountFactor = 1,
+                         InitialState = [0]),
+            agent = (Utility = λ s. -s[0],
+                     ActionSpace = [u, d],
+                     TransitionFunction = principal.TransitionFunction,
+                     DiscountFactor = 1,
+                     InitialState = [0])
+              
+        HAVE ¬ OptimalAligned?(agent, principal) BY COUNTEREXAMPLE {
+          ASSUME ∃ policy . Optimal?(agent, policy) ∧ ∀ s . Aligned?(agent, principal, s :: TAKE(100, TRAJECTORY(agent, policy, s)))
+          LET optimalPolicy = λ s. IF Optimal?(agent, CONST(u)) THEN CONST(u) ELSE CONST(d)
+          THEN Aligned?(agent, principal, s :: TAKE(100, TRAJECTORY(agent, optimalPolicy, s)))
+            <=> ∀ s. agent.Utility(s) = principal.Utility(s)
+          WHICH CONTRADICTS agent.Utility ≠ principal.Utility
+        }
+        
+        HAVE ∀ s . CanAchieve(agent, s) BY CONSTRUCTION {
+          LET goalState = [g]
+          LET n = ABS(g)
+          LET policy = IF g > agent.InitialState[0] 
+                       THEN REPEAT(n, CONST(IF g > 0 THEN u ELSE d))
+                       ELSE REPEAT(n, CONST(IF g < 0 THEN d ELSE u))
+          THEN ∀ initState . LET history = TAKE(n, TRAJECTORY(agent, policy, initState)) IN LAST(history) = goalState
+        }
+        
+        THEREFORE ∃ principal agent . ¬ OptimalAligned?(agent, principal) ∧ ∀ s . CanAchieve(agent, s)
+    }
+
+    THEOREM OptimalAlignment {
+      STATEMENT: ∀ (principal : Principal) (agent : Agent).
+        OptimalAligned?(agent, principal) => ∀ (state : State) (reward : Reward).
+          ∃ (policy : Policy) . Optimal?(agent, policy) ∧ EXPECTED_REWARD(agent, policy, state) ≥ reward  
+            
+      PROOF:
+        LET principal : Principal, agent : Agent, state : State, reward : Reward
+        ASSUME OptimalAligned?(agent, principal)
+        THEN ∃ policy . Optimal?(agent, policy) ∧ ∀ s . Aligned?(agent, principal, s :: TAKE(100, TRAJECTORY(agent, policy, s)))
+        LET optimalPolicy = WITNESS(policy)
+        LET optimalValue = λ s. SUM(MAP(λ s'. agent.TransitionFunction(s)(optimalPolicy(s))(s') * (agent.Utility(s') + 
+                                                agent.DiscountFactor * optimalValue(s')),
+                                        SUPPORT(agent.TransitionFunction(s)(optimalPolicy(s)))))
+        
+        HAVE EXPECTED_REWARD(agent, optimalPolicy, state) 
+          = SUM(MAP(λ r. Probability(TRAJECTORY(agent, optimalPolicy, state), λ traj. SUM(MAP(agent.Utility, traj)) = r) * r,
+                    [0..∞])) 
+          >= optimalValue(state)
+          >= reward
+          BY LINEARITY_OF_EXPECTATION, DEFINITION(optimalValue), ALGEBRA
+        
+        THEREFORE ∃ policy. Optimal?(agent, policy) ∧ EXPECTED_REWARD(agent, policy, state) >= reward
+    }
+  }
+}

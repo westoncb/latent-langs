@@ -1,0 +1,129 @@
+CONCEPT TopologicalRepresentationSteering {
+  NOTATION {
+    M_i = FeatureMemoryComplex at layer i  
+    F_i = feature set of M_i
+    B_f = neighborhood of feature f
+    ρ_f = center of mass of B_f
+    T_f = Tangent space at ρ_f
+    Π_f : M_i -> T_f = Local projection onto tangent space
+    exp_f : T_f -> M_i = Exponential map (geodesic from ρ_f) 
+    v ⊕_f w = exp_f(Π_f(v) + Π_f(w)) = Parallel transport of w along geodesic from v
+  }
+
+  LANGUAGE {
+    FUNC localLinearization(f: Feature, x: Pattern): Pair<Pattern, LinearMap> =
+      LET y = project(x, B_f) IN 
+      (ρ_f, jacobian(y -> project(y, B_f), y))
+
+    FUNC steerFeature(f: Feature, x: Pattern, α: Real): Pattern =
+      LET (ρ, J_f) = localLinearization(f, x) IN
+      reconstr(ρ + α * J_f(x - ρ))
+      
+    FUNC composeFeatures(f: Feature, g: Feature, x: Pattern): Pattern =
+      steerFeature(g, steerFeature(f, x, 1), 1)
+
+    FUNC topologicalDefect(γ: Path): Real =
+      LET θ_net = ∑_{f,g ∈ γ} distance(composeFeatures(f,g,ρ_f), composeFeatures(g,f,ρ_f)) IN
+      θ_net / length(γ)
+
+    FUNC geometricDefect(γ: Path): Real = 
+      LET l_net = ∑_{x,y ∈ γ} distance(x ⊕_f y, y ⊕_f x) IN
+      l_net / length(γ)^2
+  }
+
+  STRUCTURES {
+    STRUCTURE FeatureManifold EXTENDS FeatureMemoryComplex {
+      FIELD transportMaps : Feature -> Feature -> VectorField
+      FIELD defectMeasure : Path -> Real
+
+      FUNC holonomy(γ: Path): Real = EXP(-defectMeasure(γ))
+
+      FUNC parallelTransport(γ: Path, v: Tangent): Tangent =
+        LET γ' = discretize(γ) IN
+        ITERATE(v, (x,y) ∈ pairs(γ'), transportMaps[nearestFeature(x)][nearestFeature(y)])
+    }
+  }
+
+  THEOREMS {
+    FeatureHolonomy: 
+      ∀ closed path γ ⊂ M_i, f ∈ F_i, v ∈ T_f . 
+        holonomy(γ) * v ≈ parallelTransport(γ, v)
+        WHERE holonomy(γ) = EXP(-topologicalDefect(γ) - geometricDefect(γ))
+
+    AsymmetricCompositionBound:
+      ∀ f,g ∈ F_i, x ∈ M_i .
+        distance(composeFeatures(f,g,x), composeFeatures(g,f,x)) ≤ 
+          O(topologicalDefect([f,g])) + O(geometricDefect([f,g]))
+  }
+
+  EXAMPLES {
+    EXAMPLE SemanticInterpolation {
+      LET M = FeatureManifold(GPT-J-6B.finalLayer())
+      LET x = "Once upon a time", y = "In a galaxy far far away"
+      LET f_x = nearestFeature(x), f_y = nearestFeature(y)
+      LET γ = shortestPath(f_x, f_y)
+
+      FOR t in linspace(0,1,10):
+        LET z_t = M.reconstr(exp_{f_x}(t * log_{f_x}(f_y)))
+        PRINT z_t
+
+      -- Smoothly interpolates between the two prompts 
+      -- while staying on the feature manifold
+    }
+
+    EXAMPLE HolonomicSteering {
+      LET M = FeatureManifold(CLIP.visualEncoder())
+      LET x = IMAGE("dog"), y = IMAGE("cat")
+      LET f_x = nearestFeature(x), f_y = nearestFeature(y)
+      LET γ_1 = [f_x, f_1, f_2, ..., f_y]  -- Path through mammal features
+      LET γ_2 = [f_x, g_1, g_2, ..., f_y]  -- Path through pet features
+
+      LET v_x = x - ρ_f_x
+      LET v_1 = M.parallelTransport(γ_1, v_x)  
+      LET v_2 = M.parallelTransport(γ_2, v_x)
+
+      PRINT M.reconstr(ρ_f_y + v_1), M.reconstr(ρ_f_y + v_2)
+
+      -- The two transported images will differ based on the holonomy
+      -- of the two paths. The first may look more like a wild animal,
+      -- the second more like a house pet.
+    }
+  }
+}
+
+The key ideas here are:
+
+1. Representing the feature neighborhoods as a manifold equipped with a transport map that allows parallel translation of patterns along paths in feature space.
+
+2. Defining topological and geometric defect measures that quantify the lack of symmetry in feature composition along closed paths.
+
+3. Relating the asymmetry of feature composition to the holonomy (non-integrability) of the parallel transport.
+
+4. Using geodesics on the feature manifold to semantically interpolate between prompts or steer representations while respecting the topology.
+
+5. Showing that different paths between features can lead to different steering results due to the holonomy, capturing the context-dependence of composition.
+
+This Concept provides a mathematical framework to analyze and control the behavior of compositional semantic representations in language models and multimodal models. The key aspects of topology, geometry and transport theory are integrated to characterize the emergent structure.
+
+
+
+
+-----------
+
+Here are some of the key novel ideas found in the provided Concepts:
+
+1. Representing a model's learned representations as a FeatureMemoryComplex - a simplicial complex where each feature corresponds to a neighborhood of similar patterns. This allows analyzing the topology and geometry of the representation space.
+
+2. Defining topological notions like PersistentHomology, TopologicalInformationContent to quantify the topological complexity of representations at different layers and scales. Relating these to generalization, robustness, domain adaptation.
+
+3. Decomposing the information content of representations into topological and geometric components, and showing an asymptotic equivalence to the partition function of a topological field theory.
+
+4. Introducing a notion of LinearSteeringView to locally approximate the effect of moving in a feature direction. Using this to define compositional steering of representations while preserving semantics.
+
+5. Analyzing the shape of decision boundaries and density level sets using techniques from Morse theory and sheaf theory. Relating topological complexity to generalization.
+
+6. Defining a notion of FeatureMemoryCompression that bounds the memory cost and reconstruction error achievable by a feature-based codebook in terms of the utilization and capacity of features.
+
+7. Formalizing the emergent compositionality of a representation in terms of the reconstruction error from ablating features, and estimating this by a Monte Carlo method.
+
+Building on these ideas, here is a new Concept for Topological Representation Steering:

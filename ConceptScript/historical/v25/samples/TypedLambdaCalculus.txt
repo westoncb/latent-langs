@@ -1,0 +1,114 @@
+CONCEPT TypedLambdaCalculus {
+  LANGUAGE {
+    TYPE Term = 
+      | Var(String)
+      | Abs(String, Type, Term)
+      | App(Term, Term)
+    
+    TYPE Type =
+      | TVar(String)  
+      | TArr(Type, Type)
+    
+    PRED TypeOf(t: Term, ty: Type, ctx: Map[String, Type])
+    
+    NOTATION "λ" = Abs
+    NOTATION "⇒" = TArr
+  }
+  
+  STRUCTURE WellTypedTerms {
+    REQUIRE ∀ (t: Term) (ty: Type) (ctx: Map[String, Type]).
+      TypeOf(t, ty, ctx) ⇒ 
+        MATCH t {
+          Var(x) -> ctx[x] = ty
+          Abs(x, ty1, t1) -> ∃ (ty2: Type). ty = TArr(ty1, ty2) ∧ TypeOf(t1, ty2, ctx.Add(x, ty1))
+          App(t1, t2) -> ∃ (ty1: Type) (ty2: Type). TypeOf(t1, TArr(ty1, ty2), ctx) ∧ TypeOf(t2, ty1, ctx) ∧ ty = ty2
+        }
+  }
+  
+  STRUCTURE Reduction {
+    LET Subst(x: String, s: Term, t: Term): Term = MATCH t {
+      Var(y) -> IF x = y THEN s ELSE t
+      Abs(y, ty, t1) -> IF x = y THEN t ELSE Abs(y, ty, Subst(x, s, t1))
+      App(t1, t2) -> App(Subst(x, s, t1), Subst(x, s, t2))
+    }
+    
+    REWRITE BetaReduction(x: String, s: Term, t: Term):
+      App(Abs(x, _, t), s) = Subst(x, s, t)
+  }
+  
+  PROOFS {
+    THEOREM Preservation {
+      STATEMENT:
+        ∀ (t: Term) (t': Term) (ty: Type) (ctx: Map[String, Type]).
+          TypeOf(t, ty, ctx) ∧ t ↦ t' ⇒ TypeOf(t', ty, ctx)
+      
+      PROOF:
+        LET t: Term, t': Term, ty: Type, ctx: Map[String, Type]
+        ASSUME TypeOf(t, ty, ctx), t ↦ t'
+        
+        INDUCTION ON t ↦ t' {
+          CASE BetaReduction(x, s, t1):
+            LET Abs(x, ty1, t1) = t1, s: Term
+            ASSUME TypeOf(Abs(x, ty1, t1), TArr(ty1, ty), ctx), TypeOf(s, ty1, ctx)
+            SHOW TypeOf(Subst(x, s, t1), ty, ctx) {
+              TypeOf(t1, ty, ctx.Add(x, ty1))   BY WellTypedTerms
+              ∀ (u: Term). TypeOf(u, ty1, ctx) ⇒ TypeOf(Subst(x, u, t1), ty, ctx)   BY Substitution
+              TypeOf(Subst(x, s, t1), ty, ctx)   BY MODUS_PONENS
+            }
+          
+          CASE App(t1, t2) ↦ App(t1', t2):
+            ASSUME TypeOf(App(t1, t2), ty, ctx), t1 ↦ t1'
+            SHOW TypeOf(App(t1', t2), ty, ctx) {
+              ∃ (ty1: Type) (ty2: Type). 
+                TypeOf(t1, TArr(ty1, ty2), ctx) ∧ TypeOf(t2, ty1, ctx) ∧ ty = ty2   BY WellTypedTerms
+              TypeOf(t1', TArr(ty1, ty2), ctx)   BY INDUCTION_HYPOTHESIS
+              TypeOf(App(t1', t2), ty2, ctx)     BY WellTypedTerms
+            }
+          
+          CASE App(t1, t2) ↦ App(t1, t2'):
+            ASSUME TypeOf(App(t1, t2), ty, ctx), t2 ↦ t2'
+            SHOW TypeOf(App(t1, t2'), ty, ctx) {
+              ∃ (ty1: Type) (ty2: Type).
+                TypeOf(t1, TArr(ty1, ty2), ctx) ∧ TypeOf(t2, ty1, ctx) ∧ ty = ty2   BY WellTypedTerms
+              TypeOf(t2', ty1, ctx)              BY INDUCTION_HYPOTHESIS
+              TypeOf(App(t1, t2'), ty2, ctx)     BY WellTypedTerms
+            }
+        }
+    }
+    
+    THEOREM Progress {
+      STATEMENT:
+        ∀ (t: Term) (ty: Type).
+          TypeOf(t, ty, EmptyMap) ⇒ (IsValue(t) ∨ ∃ (t': Term). t ↦ t')
+      
+      PROOF:
+        LET t: Term, ty: Type
+        ASSUME TypeOf(t, ty, EmptyMap)
+        
+        INDUCTION ON t {
+          CASE Var(x):
+            CONTRADICTION   -- Since the context is empty, no variable can be well-typed
+          
+          CASE Abs(x, ty1, t1):
+            IsValue(Abs(x, ty1, t1))   -- λ-abstractions are values
+          
+          CASE App(t1, t2):
+            ∃ (ty1: Type) (ty2: Type).
+              TypeOf(t1, TArr(ty1, ty2), EmptyMap) ∧ TypeOf(t2, ty1, EmptyMap) ∧ ty = ty2   BY WellTypedTerms
+            CASES {
+              IsValue(t1) ∧ IsValue(t2):
+                t1 = Abs(x, ty1', t1')   BY ValueLemma
+                App(t1, t2) ↦ Subst(x, t2, t1')   BY BetaReduction
+              
+              ¬IsValue(t1):
+                ∃ (t1': Term). t1 ↦ t1'   BY INDUCTION_HYPOTHESIS
+                App(t1, t2) ↦ App(t1', t2)   BY ContextRule
+              
+              ¬IsValue(t2):
+                ∃ (t2': Term). t2 ↦ t2'   BY INDUCTION_HYPOTHESIS
+                App(t1, t2) ↦ App(t1, t2')   BY ContextRule
+            }
+        }
+    }
+  }
+}

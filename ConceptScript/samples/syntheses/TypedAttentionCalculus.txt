@@ -1,0 +1,168 @@
+CONCEPT TypedAttentionCalculus {
+  PARAMETERS {
+    Dim : Nat  -- dimension of vectors
+    N : Nat    -- sequence length
+  }
+
+  CONTEXT {
+    TYPES {
+      INDUCTIVE Type {
+        CASE Base
+        CASE Vector
+        CASE Sequence(Type)
+        CASE Arrow(Type, Type)
+        CASE Attention(Type, Type, Type)  -- Attention(Key, Query, Value)
+      }
+
+      INDUCTIVE Term {
+        CASE Var(String)
+        CASE Abs(String, Type, Term)
+        CASE App(Term, Term)
+        CASE Vec(List(Real))
+        CASE Seq(List(Term))
+        CASE DotProduct(Term, Term)
+        CASE SoftMax(Term)
+        CASE AttentionMechanism(Term, Term, Term)  -- keys, queries, values
+      }
+
+      ENV := MAP(String, Type)
+    }
+
+    NOTATION {
+      INFIX "⊢" := TypeOf
+      INFIX "→" := Arrow
+      PREFIX "λ" := Abs
+      INFIX "·" := DotProduct
+      PREFIX "σ" := SoftMax
+      INFIX "⊗" := AttentionMechanism
+    }
+
+    STRUCTURES {
+      STRUCTURE Typing {
+        TypeOf(env : ENV, t : Term) -> Type
+          CASE Var(x) => env(x)
+          CASE Abs(x, T, t) => T → TypeOf(env ∪ {x : T}, t)
+          CASE App(f, t) => (
+            LET S = TypeOf(env, f)
+            LET T = TypeOf(env, t)
+            REQUIRE S IS Arrow(T, U)
+            U
+          )
+          CASE Vec(xs) => (
+            REQUIRE LEN(xs) = Dim
+            Vector
+          )
+          CASE Seq(ts) => (
+            REQUIRE LEN(ts) = N
+            LET T = TypeOf(env, ts[0])
+            REQUIRE FORALL i . TypeOf(env, ts[i]) = T
+            Sequence(T)
+          )
+          CASE DotProduct(t1, t2) => (
+            REQUIRE TypeOf(env, t1) = Vector
+            REQUIRE TypeOf(env, t2) = Vector
+            Base
+          )
+          CASE SoftMax(t) => (
+            REQUIRE TypeOf(env, t) = Sequence(Base)
+            Sequence(Base)
+          )
+          CASE AttentionMechanism(k, q, v) => (
+            LET K = TypeOf(env, k)
+            LET Q = TypeOf(env, q)
+            LET V = TypeOf(env, v)
+            REQUIRE K = Sequence(Vector)
+            REQUIRE Q = Vector
+            REQUIRE V = Sequence(Vector)
+            Vector
+          )
+
+        AXIOM AttentionTyping {
+          env ⊢ k : Sequence(Vector) ∧
+          env ⊢ q : Vector ∧
+          env ⊢ v : Sequence(Vector) ⇒
+          env ⊢ (k ⊗ q ⊗ v) : Vector
+        }
+      }
+
+      STRUCTURE Semantics {
+        Eval(t : Term) -> Term
+          CASE App(Abs(x, _, t), s) => t[x ↦ s]
+          CASE App(f, t) => App(Eval(f), Eval(t))
+          CASE DotProduct(Vec(xs), Vec(ys)) => 
+            Vec([SUM(xs[i] * ys[i] for i in [0..Dim-1])])
+          CASE SoftMax(Seq(ts)) => 
+            LET vs = [Eval(t) for t in ts]
+            LET exps = [EXP(v) for v in vs]
+            Seq([e / SUM(exps) for e in exps])
+          CASE AttentionMechanism(k, q, v) => 
+            LET ks = Eval(k)
+            LET qs = Eval(q)
+            LET vs = Eval(v)
+            LET weights = SoftMax(Seq([DotProduct(k, q) for k in ks]))
+            SUM(weights[i] * vs[i] for i in [0..N-1])
+      }
+    }
+  }
+
+  TRANSFORMERS {
+    SIMPLIFY DotProductCommutative {
+      a · b <=> b · a
+    }
+
+    SIMPLIFY AttentionLinearity {
+      (αk ⊗ q ⊗ αv) <=> α(k ⊗ q ⊗ v)
+        WHERE α IS Real
+    }
+
+    REWRITE SoftMaxInvariance {
+      σ(Seq(x + c for x in xs)) <=> σ(xs)
+        WHERE c IS Real
+    }
+  }
+
+  PROOFS {
+    THEOREM AttentionPreservesType {
+      FORALL (env : ENV, k q v : Term) .
+        env ⊢ k : Sequence(Vector) ∧
+        env ⊢ q : Vector ∧
+        env ⊢ v : Sequence(Vector) ⇒
+        env ⊢ Eval(k ⊗ q ⊗ v) : Vector
+    }
+    PROOF {
+      ASSUME env : ENV, k q v : Term
+      ASSUME env ⊢ k : Sequence(Vector)
+      ASSUME env ⊢ q : Vector
+      ASSUME env ⊢ v : Sequence(Vector)
+
+      <1>. SHOW env ⊢ (k ⊗ q ⊗ v) : Vector
+        BY AttentionTyping
+
+      <2>. Eval(k ⊗ q ⊗ v)
+        = SUM(σ(Seq([k'[i] · q for i in [0..N-1]]))[i] * v[i] for i in [0..N-1])
+        WHERE k' = Eval(k), q' = Eval(q), v' = Eval(v)
+        BY DEF Eval, AttentionMechanism, SoftMax, DotProduct
+
+      <3>. SHOW env ⊢ Eval(k ⊗ q ⊗ v) : Vector
+        BY <1>, <2>, PreservationLemma
+
+      QED
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE SelfAttention {
+      LET env = {x : Sequence(Vector), y : Vector}
+      LET term = x ⊗ y ⊗ x
+
+      THEN env ⊢ term : Vector
+    }
+
+    EXAMPLE ComposedAttention {
+      LET env = {x : Sequence(Vector), y : Vector, z : Sequence(Vector) → Vector}
+      LET term = z(x ⊗ y ⊗ x)
+
+      THEN env ⊢ term : Vector
+    }
+  }
+}

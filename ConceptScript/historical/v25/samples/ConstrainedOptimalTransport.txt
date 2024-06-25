@@ -1,0 +1,63 @@
+CONCEPT ConstrainedOptimalTransport {
+  LANGUAGE {
+    TYPE Measure(X)
+    TYPE CostFunc[X Y : Measure] = X × Y -> ℝ≥0
+    TYPE Coupling[μ : Measure(X), ν : Measure(Y)] = Measure(X × Y)
+
+    FUNC Cost[μ : Measure(X), ν : Measure(Y)](π : Coupling[μ, ν], c : CostFunc[X, Y]) : ℝ≥0
+    FUNC Marginalize[μ : Measure(X), ν : Measure(Y), π : Coupling[μ, ν]](A : X -> 𝔹) : ℝ≥0
+    FUNC Product[μ : Measure(X), ν : Measure(Y)] : Coupling[μ, ν]
+    FUNC Constrain[μ : Measure(X), ν : Measure(Y), π : Coupling[μ, ν]](φ : X × Y -> 𝔹) : Coupling[μ, ν]
+
+    AXIOM Marginals {
+      ∀ (X Y : Measure) (μ : Measure(X)) (ν : Measure(Y)) (π : Coupling[μ, ν]) .
+        Marginalize[μ, ν, π](A) = μ(A) ∧ Marginalize[ν, μ, Swap(π)](B) = ν(B)
+    }
+
+    AXIOM ConstrainedMonotonicity {
+      ∀ (X Y : Measure) (μ : Measure(X)) (ν : Measure(Y)) (π : Coupling[μ, ν]) (φ ψ : X × Y -> 𝔹) .
+        (∀ (x : X) (y : Y) . φ(x, y) => ψ(x, y)) => 
+        ∀ (A : X -> 𝔹) . Marginalize[μ, ν, Constrain[μ, ν, π](φ)](A) ≤ Marginalize[μ, ν, Constrain[μ, ν, π](ψ)](A)
+    }
+
+    NOTATION "∫∫" = Cost
+    NOTATION "∏" = Product
+    NOTATION "⋈" = Constrain
+  }
+
+  PROOFS {
+    THEOREM OptimalTransportDuality {
+      STATEMENT : ∀ (X Y : Measure) (μ : Measure(X)) (ν : Measure(Y)) (c : CostFunc[X, Y]) .
+        Min{ ∫∫(π, c) | π : Coupling[μ, ν] } = Sup{ ∫(f, dμ) + ∫(g, dν) | f : X -> ℝ, g : Y -> ℝ, ∀ (x : X) (y : Y) . f(x) + g(y) ≤ c(x, y) }
+
+      PROOF {
+        LET X Y : Measure, μ : Measure(X), ν : Measure(Y), c : CostFunc[X, Y]
+
+        DEF I = Min{ ∫∫(π, c) | π : Coupling[μ, ν] }
+        DEF J = Sup{ ∫(f, dμ) + ∫(g, dν) | f : X -> ℝ, g : Y -> ℝ, ∀ (x : X) (y : Y) . f(x) + g(y) ≤ c(x, y) }
+
+        HAVE (1) : I ≥ J BY {
+          LET π : Coupling[μ, ν], f : X -> ℝ, g : Y -> ℝ
+          ASSUME (H) : ∀ (x : X) (y : Y) . f(x) + g(y) ≤ c(x, y)
+
+          ∫∫(π, c) 
+            ≥ ∫∫(π, (x, y) ↦ f(x) + g(y))   BY (H)
+            = ∫(f, dμ) + ∫(g, dν)           BY Fubini, Marginals
+        }
+
+        HAVE (2) : I ≤ J BY {
+          LET π : Coupling[μ, ν]
+          DEFINE f*(y) = Min{ c(x, y) - ∫(c(-, y), dπ(-|y)) | x : X }
+          DEFINE g*(x) = ∫(c(x, -), dπ(-|x))
+
+          HAVE (3) : ∀ (x : X) (y : Y) . f*(y) + g*(x) ≤ c(x, y) BY {
+            LET x : X, y : Y
+            f*(y) + g*(x) 
+              = Min{ c(x', y) - ∫(c(-, y), dπ(-|y)) | x' : X } + ∫(c(x, -), dπ(-|x))
+              ≤ c(x, y) - ∫(c(-, y), dπ(-|y)) + ∫(c(x, -), dπ(-|x))
+              = c(x, y)
+          }
+
+          ∫(f*, dν) + ∫(g*, dμ) 
+            ≤ J                BY (3)  
+            = ∫∫(π, c)

@@ -1,0 +1,106 @@
+// Base concepts
+Tensor := (Dimensions:_, DataType:_)
+LinearLayer := (InputSize:_, OutputSize:_)
+Activation := Function(Input:Tensor, Output:Tensor)
+
+// Transformer-specific concepts
+MultiheadAttention := (
+  NumHeads:_,
+  KeyDimension:_,
+  ValueDimension:_,
+  QueryDimension:_,
+  OutputDimension:_
+) :: {
+  [NumHeads > 0]
+  [KeyDimension = ValueDimension]
+  [QueryDimension = KeyDimension]
+}
+
+FeedForward := (
+  InputSize:_,
+  HiddenSize:_,
+  OutputSize:_,
+  ActivationFunction:Activation
+)
+
+// Transformer components
+AttentionHead := (Query, Key, Value) |> LinearLayer |> Attention |> LinearLayer
+AttentionBlock := AttentionHead{NumHeads} |> Concatenate |> LinearLayer
+
+EncoderLayer := (
+  SelfAttention:MultiheadAttention,
+  FeedForward:FeedForward,
+  LayerNormalization,
+  ResidualConnection  
+) :: {
+  Pipeline := Sequence |> SelfAttention |> LayerNormalization |> ResidualConnection 
+                       |> FeedForward |> LayerNormalization |> ResidualConnection
+}
+
+DecoderLayer := EncoderLayer + (
+  CrossAttention:MultiheadAttention,
+  LayerNormalization,
+  ResidualConnection
+) :: {
+  Pipeline := Sequence |> SelfAttention |> LayerNormalization |> ResidualConnection
+                       |> CrossAttention |> LayerNormalization |> ResidualConnection
+                       |> FeedForward |> LayerNormalization |> ResidualConnection
+}
+
+// Transformer architecture
+Transformer := (
+  Encoder:TransformerEncoder,
+  Decoder:TransformerDecoder
+) :: {
+  [Encoder.OutputDimension = Decoder.InputDimension]
+
+  DEF[
+    |=>: Encoding,
+    |->: Decoding,
+    |~>: CrossAttention,
+    >->: SequenceTransformation
+  ]
+  
+  Pipeline := Sequence |=> Encoder |~> Decoder >-> OutputEmbedding >-> OutputDistribution
+}
+
+TransformerEncoder := (
+  InputEmbedding,
+  PositionalEncoding,  
+  Layers:EncoderLayer{NumLayers}
+) :: {
+  Pipeline := Sequence |> InputEmbedding |> PositionalEncoding |> Layers
+}
+
+TransformerDecoder := (
+  OutputEmbedding,
+  PositionalEncoding,
+  Layers:DecoderLayer{NumLayers}  
+) :: {  
+  Pipeline := Sequence |> OutputEmbedding |> PositionalEncoding |> Layers
+}
+
+// Example usage
+[
+  InputSequence |>
+  Transformer(
+    Encoder:TransformerEncoder(
+      InputEmbedding:Embedding{VocabSize, EmbeddingDim},
+      PositionalEncoding:SinusoidalPositionalEncoding,
+      Layers:EncoderLayer{6}(
+        SelfAttention:MultiheadAttention(NumHeads:8, KeyDim:64, ValueDim:64, QueryDim:64, OutputDim:512),
+        FeedForward:FeedForward(InputSize:512, HiddenSize:2048, OutputSize:512, ActivationFunction:ReLU)        
+      )
+    ),
+    Decoder:TransformerDecoder(
+      OutputEmbedding:Embedding{VocabSize, EmbeddingDim},      
+      PositionalEncoding:SinusoidalPositionalEncoding,
+      Layers:DecoderLayer{6}(
+        SelfAttention:MultiheadAttention(NumHeads:8, KeyDim:64, ValueDim:64, QueryDim:64, OutputDim:512),
+        CrossAttention:MultiheadAttention(NumHeads:8, KeyDim:512, ValueDim:512, QueryDim:512, OutputDim:512),
+        FeedForward:FeedForward(InputSize:512, HiddenSize:2048, OutputSize:512, ActivationFunction:ReLU)
+      )
+    )
+  ) >->
+  OutputDistribution:Softmax
+]{🤖 Transformer-based Sequence-to-Sequence Model}

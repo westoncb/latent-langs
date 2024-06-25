@@ -1,0 +1,111 @@
+CONCEPT HybridSymbolicDynamics {
+  LANGUAGE {
+    type HybridSystem = (ContinuousDynamics, DiscreteProgram, Interface)
+    type ContinuousDynamics = Dynamics(Manifold, Fld)
+    type DiscreteProgram = Memory -> Memory
+    type Interface = (Embedding, Projection)
+    
+    type Fld = Fun(Man, ℝ) | Vec(Man, Tangent) | Form(Man, Cotangent)
+    type Memory = [Sym]
+    type Embedding = Fld -> Sym
+    type Projection = Sym -> Fld
+    
+    notation "S ≈ F" = Correspond(S: Sym, F: Fld)
+    notation "S ≋ F" = InvCorrespond(S: Sym, F: Fld)
+    notation "⟦S⟧" = ValueOf(S: Sym)
+    
+    func Evolve(d: ContinuousDynamics, t: ℝ≥0) -> Fld
+    func Compute(p: DiscreteProgram, m: Memory) -> Memory
+    func Interact(h: HybridSystem, t: ℝ≥0) -> Fld
+    
+    axiom SymbolicDynamics(S: Sym, f: Fld):
+      (S ≈ f) ⇒ ⟦d[S]/dt⟧ = L[Evolve(d, _), f] 
+  }
+
+  STRUCTURE {
+    EvolutionLemma: ∀ (M, f): (Manifold, Fld), t: ℝ≥0.
+      Evolve(Dynamics(M, f), t) = Pullback(FlowOf(f), t) 
+      
+    ProgramInvariant: ∀ (p, φ): (DiscreteProgram, Assertion). 
+      (∀ m: Memory. φ(m) ⇒ φ(Compute(p, m))) ⇒
+      (∀ m: Memory, k: ℕ. φ(m) ⇒ φ(Compute(p^k, m)))
+      
+    Interaction: ∀ (d, p, (e, p)): HybridSystem, t: ℝ≥0, k: ℕ. 
+      Interact((d, p, (e, p)), t) =
+        let f = Evolve(d, t), m = [S | (S ≈ f) ∈ e] in  
+          Pullback(p, Compute(p^k, m))
+          
+    ShadowingTheorem(h: HybridSystem, T: ℝ≥0, ε: ℝ>0):
+      ∃ (τ, k). ∀ t: ℝ, 0 ≤ t ≤ T. ∃ m: Memory.
+        |Interact(h, t) - Project(Compute(p^k, m))| < ε 
+      where (d, p, _) = h, τ = T/k
+  }   
+
+  PROOFS {
+    tactic Symbolic(S: Sym, f: Fld, prop):
+      (S ≈ f) ⊢ prop(S) ⟺ prop(f)
+      
+    tactic Invariant(m: Memory, p: DiscreteProgram, φ: Assertion):
+      (φ(m) ⊢ φ(Compute(p, m))) ⇒ (∀ k: ℕ. φ(m) ⊢ φ(Compute(p^k, m))) 
+      
+    theorem SymbolicProgram(S: Sym, p: DiscreteProgram, φ: Assertion): 
+      (∀ T: Sym. φ(T) ⇒ φ(p(T))) ⊢ (∀ k: ℕ. φ(S) ⇒ φ(p^k(S)))
+    {
+      letrec Property(k: ℕ): φ(S) ⇒ φ(p^k(S)) = {
+        if k = 0 then (λ _. ⊤)
+        else (λ h. Property(k-1)(h) ∧ (φ(p^(k-1)(S)) ⇒ φ(p^k(S))))
+      }
+      
+      let ψ = (λ T. φ(T) ⇒ φ(p(T)))
+      suffices to show ∀ k. Property(k) by Induction:
+      { case 0: trivial
+        case k+1: 
+        { assume IH: Property(k)
+          suffices to show φ(S) ⇒ φ(p^(k+1)(S))
+          { assume φ(S)
+            have φ(p^k(S)) by IH
+            have φ(p^k(S)) ⇒ φ(p^(k+1)(S)) by ψ
+            hence φ(p^(k+1)(S)) 
+          }
+        }
+      }
+    }
+      
+    theorem ShadowingTheorem(h: HybridSystem, T: ℝ≥0, ε: ℝ>0): 
+      ∃ (τ, k). ∀ t: ℝ, 0 ≤ t ≤ T. ∃ m: Memory. 
+        |Interact(h, t) - Project(Compute(p^k, m))| < ε
+    {
+      let (d, p, (e, p)) = h
+      let L = max {|L[Evolve(d,t), f]|: t ∈ [0,T], (f:Fld) ∈ range(p)}
+      assume (e, p) are ε/(2L)-inverse of each other
+      let τ = ε/(2L), k = ⌈T/τ⌉
+      
+      suffices to show 
+        ∀ 0 ≤ i < k. ∀ t ∈ [i*τ, (i+1)*τ]. ∃ m: Memory.
+          |Interact(h, t) - Project(Compute(p^i, m))| < ε
+          
+      { fix 0 ≤ i < k, let t ∈ [i*τ, (i+1)*τ]
+        let f = Evolve(d, t), S ∈ Memory such that S ≈ f
+        have |f - p(S)| < ε/2 by inverse property
+        calc |Interact(h, t) - Project(Compute(p^i, S))|
+             = |Pullback(p, f) - Pullback(p, Project(Compute(p^i, S)))|
+            <= |f - Project(Compute(p^i, S))|
+             = |f - p(... p(p(S)))| ; i times
+            <= |f - p(S)| + |p(S) - p(...p(S))|
+            <= ε/2 + L*i*τ
+            <= ε/2 + L*T/k
+             = ε/2 + ε/2 = ε            
+      } 
+    }
+  }
+}
+
+This Concept defines a HybridSystem consisting of continuous dynamics on a manifold, a discrete program operating on symbolic memories, and an interface for translating between the continuous and discrete representations.
+The key ideas are:
+
+Symbolic dynamics: The evolution of continuous fields can be approximated by the manipulation of symbolic expressions, mediated by an embedding/projection interface.
+Program invariants: Properties of the discrete program can be formally stated and proved by induction, enabling rigorous analysis of the discrete side.
+Interaction: The hybrid system evolves by alternating between continuous dynamics and discrete computation steps, with the interface translating between the two domains.
+Shadowing theorem: Under suitable conditions on the accuracy of the symbolic representation and the rate of discrete computation, the hybrid evolution closely tracks the true continuous dynamics over finite time intervals.
+
+The proofs utilize tactics for reasoning about symbolic correspondences and invariants of discrete programs. The main shadowing theorem establishes a rigorous approximation bound between the hybrid and continuous evolutions.

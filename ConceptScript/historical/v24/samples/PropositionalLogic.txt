@@ -1,0 +1,100 @@
+CONCEPT PropositionalLogic {
+  LANGUAGE {
+    TYPE Var
+    TYPE Formula = Var 
+                 | "⊤" | "⊥"
+                 | "¬" Formula 
+                 | Formula "∧" Formula
+                 | Formula "∨" Formula
+                 | Formula "→" Formula
+                 | Formula "↔" Formula
+                 
+    FUNC Valuation = Var -> Bool
+    
+    FUNC Semantics(v : Valuation) : Formula -> Bool
+    Semantics(v, ⊤) = TRUE
+    Semantics(v, ⊥) = FALSE
+    Semantics(v, x) = v(x)
+    Semantics(v, ¬ φ) = NOT Semantics(v, φ)
+    Semantics(v, φ ∧ ψ) = Semantics(v, φ) AND Semantics(v, ψ)
+    Semantics(v, φ ∨ ψ) = Semantics(v, φ) OR Semantics(v, ψ)
+    Semantics(v, φ → ψ) = IF Semantics(v, φ) THEN Semantics(v, ψ) ELSE TRUE
+    Semantics(v, φ ↔ ψ) = Semantics(v, φ) = Semantics(v, ψ)
+    
+    NOTATION "⊨ φ" = FORALL (v : Valuation). Semantics(v, φ)
+    NOTATION "Γ ⊨ φ" = FORALL (v : Valuation). (FORALL (ψ : Γ). Semantics(v, ψ)) -> Semantics(v, φ)
+
+    NOTATION "Γ ⊢ φ" = Proves(Γ, φ)
+    NOTATION "⊢ φ" = Proves(∅, φ)
+  }
+  
+  STRUCTURE {
+    PRED Proves : List(Formula) -> Formula -> Bool
+
+    INDUCTIVE Proves {
+      Axiom1: ⊨ φ → (ψ → φ)
+      Axiom2: ⊨ (φ → (ψ → ξ)) → ((φ → ψ) → (φ → ξ))
+      Axiom3: ⊨ (¬ψ → ¬φ) → (φ → ψ)
+      
+      ModusPonens: φ ∈ Γ /\ (φ → ψ) ∈ Γ -> Γ ⊢ ψ
+      
+      Weaken   : Γ ⊆ Γ' /\ Γ ⊢ φ -> Γ' ⊢ φ
+      Cut      : Γ ⊢ φ /\ (Γ ∪ {φ}) ⊢ ψ -> Γ ⊢ ψ
+      Deduction: (Γ ∪ {φ}) ⊢ ψ -> Γ ⊢ (φ → ψ)
+    }
+  }
+
+  PROOFS {
+    TACTIC Intro(φ) = LAMBDA (Γ : Premise). Γ ∪ {φ}
+    TACTIC Elim(φ) = LAMBDA (ψ : Formula). (HAVE Γ ⊢ (φ → ψ); SHOW Γ ⊢ ψ) BY ModusPonens
+    
+    TACTIC Contradiction(φ) = (ASSUME ¬φ; SHOW ⊥) THEN (SHOW φ) BY (SUPPOSE ¬φ; ⊥-Elim)
+    
+    TACTIC LeftAnd(φ, ψ) = LAMBDA (Γ : Premise). (HAVE Γ ⊢ φ ∧ ψ; SHOW Γ ⊢ φ) BY Axiom1(ψ, φ)
+    TACTIC RightAnd(φ, ψ) = LAMBDA (Γ : Premise). (HAVE Γ ⊢ φ ∧ ψ; SHOW Γ ⊢ ψ) BY Axiom1(φ, ψ), Axiom2(φ, ψ, ψ), ModusPonens
+
+    TACTIC LeftOr(φ, ψ) = LAMBDA (ξ : Formula). SUPPOSE (ASSUME φ; SHOW ξ), (ASSUME ψ; SHOW ξ); (HAVE Γ ⊢ φ ∨ ψ; SHOW ξ) BY Axiom3
+    TACTIC RightOr(φ, ψ) = LAMBDA (Γ : Premise). Γ ⊢ φ \/ Γ ⊢ ψ -> Γ ⊢ φ ∨ ψ
+    
+    TACTIC Iff(φ, ψ) = (ASSUME φ; SHOW ψ), (ASSUME ψ; SHOW φ) THEN (SHOW φ ↔ ψ)
+
+    THEOREM Soundness {
+      STATEMENT: Γ ⊢ φ -> Γ ⊨ φ
+      PROOF: BY INDUCTION ON Proves
+    }
+    
+    THEOREM Deduction {
+      STATEMENT: (Γ ∪ {φ}) ⊢ ψ <-> Γ ⊢ (φ → ψ)
+      PROOF:
+        (<-) HAVE (Γ ∪ {φ}) ⊢ ψ 
+             SHOW Γ ⊢ (φ → ψ) BY Deduction
+             
+        (->) ASSUME Γ ⊢ (φ → ψ);
+             HAVE φ BY Premise;
+             SHOW ψ BY Elim(φ)
+    }
+      
+    THEOREM ModusTollens {
+      STATEMENT: ⊢ ((φ → ψ) → ((¬ψ) → (¬φ)))
+      PROOF:  
+        ASSUME (φ → ψ), (¬ψ);
+        SHOW (¬φ) BY Contradiction(φ)
+    }
+      
+    THEOREM DisjunctiveSyllogism {
+      STATEMENT: ⊢ (((φ ∨ ψ) ∧ (¬φ)) → ψ)
+      PROOF:
+        ASSUME ((φ ∨ ψ) ∧ (¬φ)); 
+        CASES LeftAnd(φ ∨ ψ, ¬φ) OF
+          (φ) -> SHOW ⊥ BY Elim(¬φ); SHOW ψ BY ⊥-Elim
+          (ψ) -> SHOW ψ BY Assumption
+    }
+      
+    THEOREM Bicondition {
+      STATEMENT: ⊢ ((φ → ψ) → ((ψ → φ) → (φ ↔ ψ)))
+      PROOF:  
+        ASSUME (φ → ψ), (ψ → φ);
+        SHOW (φ ↔ ψ) BY Iff(φ, ψ)
+    }
+  }
+}

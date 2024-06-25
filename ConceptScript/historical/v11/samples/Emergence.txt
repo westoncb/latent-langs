@@ -1,0 +1,98 @@
+CONCEPT Emergence {
+
+STRUCTURE {
+  [Φ: States(L) -> States(H)] // Coarse-graining map from low-level to high-level states
+  [τ_L << τ_H] // Separation of timescales between low-level and high-level dynamics 
+  [S_L(t) |> Φ(S_L(t)) = S_H(t)] // Compatibility of dynamics under coarse-graining
+  [∃! P: States(L) -> [0,1] s.t. P(S_L) = P(S_L' | S_H = Φ(S_L))] // Conditional independence of low-level states given high-level state
+  [I[S_H ; S_L] := H[S_L] - H[S_L | S_H] > 0] // Positive mutual information between levels
+  [d/dt I[S_H(t) ; S_L(t)] ≥ 0] // Monotonic increase of mutual information over time
+  [∂S_H/∂t = F(S_H) + O(1/τ_L) + η/√τ_L] // Autonomous emergent dynamics with small fluctuations 
+}
+
+PROOFS {
+  theorem EmergentDynamics: ∃ F s.t. ∂S_H/∂t = F(S_H) + O(1/τ_L) + η/√τ_L
+  proof {
+    let P[S_L(t) | S_H(t)] = ∏_i P[S_L^i(t) | S_H(t)] by ConditionalIndependence
+    let P_t[S_L] = ∑_{S_H} P[S_H(t)] P[S_L | S_H] by ChainRule
+    have d/dt P_t[S_L] = L P_t[S_L] where L is the low-level Liouvillian by Liouville
+    let L = L_H + L_I where L_H P[S_L | S_H] = 0 by Compatibility
+    have d/dt P[S_H] = Tr_L[L P[S_L]] = Tr_L[L_H P[S_L]] + O(ε) where ε = 1/τ_L by Perturbation
+    let F(S_H) := Tr_L[L_H P[S_L | S_H]]
+    have Tr_L[L_H P[S_L | S_H]] = F(S_H) P[S_H] by Factorization(L_H, P[S_L|S_H])
+    let η := Tr_L[√(L_H P[S_L | S_H] - F(S_H) P[S_L | S_H])]
+    conclude ∂S_H/∂t = F(S_H) + O(1/τ_L) + η/√τ_L by Noise(η), Timescale(τ_L)
+  }
+  
+  theorem IncreasingComplexity: d/dt I[S_H(t) ; S_L(t)] ≥ 0
+  proof {
+    have I[S_H;S_L] = H[S_L] - H[S_L|S_H] by MutualInformation  
+    have H[S_L] = -∑_i P[S_L^i] log P[S_L^i] by Entropy
+    have H[S_L|S_H] = -∑_i P[S_H] ∑_j P[S_L^j | S_H] log P[S_L^j | S_H] by ConditionalEntropy
+    let P[S_L|S_H] → δ(S_L - Φ^{-1}(S_H)) as t → ∞ by Convergence under coarse-graining
+    have H[S_L|S_H] → 0 as t → ∞  
+    conclude d/dt I[S_H(t);S_L(t)] ≥ 0 since H[S_L] increases while H[S_L|S_H] decreases
+  }
+}
+
+LANGUAGE {
+  types {
+    States(X) // Space of possible configurations of system X
+    Observables(X) // Space of real-valued functions on States(X)
+    Measures(X) // Space of probability measures on States(X)
+  }
+
+  operators {  
+    Φ: States(L) -> States(H) // Coarse-graining map
+    P[_] : States -> [0,1] // Probability of a state
+    P[_|_] : (States, States) -> [0,1] // Conditional probability    
+    E[_] : Observables -> R // Expectation value of an observable
+    Tr_X[_] : Observables(X*Y) -> Observables(Y) // Partial trace over X
+    √: Observables -> Observables // Square root of an observable
+  }
+   
+  functionals {
+    H[_] : Measures -> R ∪ {∞} // Entropy 
+    I[_;_] : (Measures, Measures) -> R // Mutual information
+  }
+
+  tactics {
+    ChainRule { 
+      P[X,Y] = P[Y|X] P[X];
+    }
+    
+    ConditionalIndependence {
+      P[X,Y|Z] = P[X|Z] P[Y|Z] if X indep Y given Z;  
+    }
+    
+    Compatibility(Φ, P_L, P_H) {
+      P_H = Φ(P_L);
+      P[S_L | S_H] = δ(S_L - Φ^{-1}(S_H)); 
+    }
+      
+    Factorization(L, P) {
+      Tr[L P] = F(Tr[P]) if L(A B) = L(A) B + A L(B);
+    }
+      
+    Perturbation(ε) {
+      O(ε) = R_1 ε + R_2 ε^2 + ... where R_i bounded uniformly in ε;
+    }
+    
+    Noise(η[O]) {  
+      η[O] := √(Var[O]) = √(E[O^2] - E[O]^2);
+    }
+      
+    Timescale(τ) {
+      O(1/τ) negligible if τ >> 1;  
+    }
+  }
+}
+}
+
+This Concept formalizes the phenomenon of emergence, where high-level structures and dynamics arise from the collective behavior of many interacting low-level components. The key ideas are:
+
+There exists a coarse-graining map Φ that extracts the relevant high-level features from the low-level micro-state.
+The characteristic timescales of the high-level dynamics are much slower than those of the low-level fluctuations.
+The coarse-grained dynamics are approximately autonomous, with residual fluctuations that become negligible in the limit of large timescale separation.
+Mutual information between the micro and macro levels increases monotonically over time, reflecting the self-organization and increase in complexity of the emergent structures.
+The proofs leverage concepts from statistical mechanics and information theory to derive the emergent dynamical equations and the law of increasing complexity.

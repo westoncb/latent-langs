@@ -1,0 +1,208 @@
+CONCEPT TopologicalAttentionNetwork {
+  PARAMETERS {
+    d : Nat -- Input dimension
+    h : Nat -- Number of attention heads
+    𝕜 : Field -- Coefficient field
+  }
+
+  CONTEXT {
+    TYPES {
+      INDUCTIVE LayerType {
+        CASE Input
+        CASE Hidden
+        CASE Output
+      }
+
+      PointCloud := List(ℝ^d)
+      
+      PHDgm := Multiset(Δ)
+      Δ := {(b, d) | b ≤ d}
+      
+      AttentionWeight := ℝ
+      
+      STRUCTURE Neuron {
+        FIELD layer : LayerType
+        FIELD activation : ℝ^d -> ℝ
+      }
+      
+      STRUCTURE Layer {
+        FIELD type : LayerType
+        FIELD neurons : List(Neuron)
+      }
+      
+      STRUCTURE Network {
+        FIELD layers : List(Layer)
+      }
+    }
+    
+    STRUCTURES {
+      STRUCTURE PersistentHomology {
+        FIELD computePHT : PointCloud -> PHDgm
+        
+        AXIOM Stability ∀ X Y : PointCloud .
+          dB(computePHT(X), computePHT(Y)) ≤ dH(X, Y)
+          WHERE dB := BottleneckDistance
+                dH := HausdorffDistance
+      }
+      
+      STRUCTURE TopologicalAttention IMPLEMENTS Attention(PHDgm, PHDgm, ℝ^d) {
+        PARAMETERS {
+          persistentHomology : PersistentHomology
+        }
+        
+        IMPLEMENT Alignment(dgm1 : PHDgm, dgm2 : PHDgm) -> ℝ
+          WITH exp(-dB(dgm1, dgm2) / σ)
+          WHERE dB := BottleneckDistance
+                σ  := ScalingFactor
+        
+        IMPLEMENT FUNC(q : PHDgm, ks : Seq(PHDgm), vs : Seq(ℝ^d)) -> ℝ^d
+          WITH Σ_i α_i * vs[i]
+          WHERE α = SoftMax(Seq(Alignment(ks[i], q) for i in Fin(N)))
+        
+        AXIOM TopologicalInvariance ∀ X Y : PointCloud .
+          Homeo(X, Y) => Alignment(computePHT(X), computePHT(Y)) = 1
+      }
+      
+      STRUCTURE TopologicalAttentionLayer IMPLEMENTS Layer {
+        FIELD attention : TopologicalAttention
+        FIELD inputDim : Nat
+        FIELD outputDim : Nat
+        
+        FUNC forward(input : List(PointCloud)) -> List(ℝ^outputDim) {
+          LET dgms = MAP(input, attention.persistentHomology.computePHT)
+          LET attended = attention(dgms[0], dgms, input)
+          RETURN MAP(attended, λ x . Linear(x, inputDim, outputDim))
+        }
+      }
+    }
+    
+    NOTATION {
+      Homeo := Homeomorphism
+      dB := BottleneckDistance
+      dH := HausdorffDistance
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE AttentionLinearity {
+      TopologicalAttention(a * dgms1 + b * dgms2, qs, a * vs1 + b * vs2) <=>
+        a * TopologicalAttention(dgms1, qs, vs1) + b * TopologicalAttention(dgms2, qs, vs2)
+    }
+    
+    SIMPLIFY HomeoInvariance {
+      TopologicalAttention(Homeo(X), qs, vs) <=> TopologicalAttention(X, qs, vs)
+    }
+  }
+
+  PROOFS {
+    THEOREM TopologicalAttentionStability {
+      FORALL (X Y : PointCloud, qs : Seq(PHDgm), vs : Seq(ℝ^d)) .
+        ‖TopologicalAttention(X, qs, vs) - TopologicalAttention(Y, qs, vs)‖ ≤ L * dH(X, Y)
+        WHERE L := LipschitzConstant
+    }
+    PROOF {
+      ASSUME X Y : PointCloud, qs : Seq(PHDgm), vs : Seq(ℝ^d)
+      
+      LET dgmX = persistentHomology.computePHT(X)
+      LET dgmY = persistentHomology.computePHT(Y)
+      
+      <1>. SHOW dB(dgmX, dgmY) ≤ dH(X, Y)
+        BY PersistentHomology.Stability
+      
+      <2>. LET αX = SoftMax(Seq(Alignment(ks[i], dgmX) for i in Fin(N)))
+           LET αY = SoftMax(Seq(Alignment(ks[i], dgmY) for i in Fin(N)))
+      
+      <3>. SHOW ‖αX - αY‖ ≤ L1 * dB(dgmX, dgmY)
+        BY LipschitzContinuityOfSoftmax
+      
+      <4>. SHOW ‖TopologicalAttention(X, qs, vs) - TopologicalAttention(Y, qs, vs)‖
+             = ‖Σ_i (αX[i] - αY[i]) * vs[i]‖
+             ≤ ‖αX - αY‖ * MAX(‖vs[i]‖)
+             ≤ L1 * dB(dgmX, dgmY) * MAX(‖vs[i]‖)
+             ≤ L1 * dH(X, Y) * MAX(‖vs[i]‖)
+        BY <1>, <2>, <3>, TriangleInequality
+      
+      TAKE L := L1 * MAX(‖vs[i]‖)
+      QED
+    }
+    
+    THEOREM TopologicalAttentionPreservesHomeo {
+      FORALL (X Y : PointCloud, qs : Seq(PHDgm), vs : Seq(ℝ^d)) .
+        Homeo(X, Y) => 
+          TopologicalAttention(X, qs, vs) = TopologicalAttention(Y, qs, vs)
+    }
+    PROOF {
+      ASSUME X Y : PointCloud, qs : Seq(PHDgm), vs : Seq(ℝ^d), Homeo(X, Y)
+      
+      <1>. SHOW persistentHomology.computePHT(X) = persistentHomology.computePHT(Y)
+        BY HomeoInvarianceOfPersistentHomology
+      
+      <2>. LET dgm = persistentHomology.computePHT(X)
+      
+      <3>. SHOW Alignment(ks[i], dgm) = Alignment(ks[i], dgm) for all i
+        TRIVIAL
+      
+      <4>. SHOW SoftMax(Seq(Alignment(ks[i], dgm) for i in Fin(N))) =
+                SoftMax(Seq(Alignment(ks[i], dgm) for i in Fin(N)))
+        BY <3>
+      
+      <5>. CONCLUDE TopologicalAttention(X, qs, vs) = TopologicalAttention(Y, qs, vs)
+        BY <1>, <2>, <4>, DefinitionOfTopologicalAttention
+      
+      QED
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE SimpleTopologicalAttentionNetwork {
+      LET inputDim = 3
+      LET hiddenDim = 64
+      LET outputDim = 1
+      LET numHeads = 4
+      
+      DEFINE SimpleNetwork = Network WITH {
+        layers = [
+          TopologicalAttentionLayer WITH {
+            type = LayerType.Input,
+            inputDim = inputDim,
+            outputDim = hiddenDim,
+            attention = MultiheadAttention(numHeads) WITH {
+              KEY = PHDgm,
+              QUERY = PHDgm,
+              VALUE = ℝ^inputDim
+            }
+          },
+          TopologicalAttentionLayer WITH {
+            type = LayerType.Hidden,
+            inputDim = hiddenDim,
+            outputDim = hiddenDim,
+            attention = MultiheadAttention(numHeads) WITH {
+              KEY = PHDgm,
+              QUERY = PHDgm,
+              VALUE = ℝ^hiddenDim
+            }
+          },
+          Layer WITH {
+            type = LayerType.Output,
+            neurons = [Neuron WITH {
+              layer = LayerType.Output,
+              activation = λ x . Linear(x, hiddenDim, outputDim)
+            }]
+          }
+        ]
+      }
+      
+      LET input : List(PointCloud) = [
+        [(0,0,0), (1,0,0), (0,1,0)],
+        [(0,0,1), (1,0,1), (0,1,1)],
+        [(1,1,0), (1,1,1)]
+      ]
+      
+      THEN SimpleNetwork.layers[0].forward(input) : List(ℝ^hiddenDim)
+      AND SimpleNetwork.layers[1].forward(SimpleNetwork.layers[0].forward(input)) : List(ℝ^hiddenDim)
+      AND SimpleNetwork.layers[2].neurons[0].activation(
+        SimpleNetwork.layers[1].forward(SimpleNetwork.layers[0].forward(input))[0]
+      ) : ℝ
+    }
+  }
+}

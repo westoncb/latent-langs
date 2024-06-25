@@ -1,0 +1,151 @@
+CONCEPT SymbolicDifferentialGeometry {
+
+  LANGUAGE {
+    TYPE Sym = Const(Real) | Var(Nat) | Unary(Sym) | Binary(Sym, Sym)
+    TYPE Man = Manifold(Vector[Real, n]) | Boundary(Man)
+    TYPE Riem = Riemannian(Man, Metric)
+    TYPE Symp = Symplectic(Man, Form)
+    TYPE Fld = Fun(Man -> Real) | Vec(Man -> Vector[Real, n]) | Form(Man -> Exterior[Real, n])
+
+    FUNC SymFun : (Sym, Man) -> Fun(Man -> Real) 
+    FUNC SymVec : (Sym, Man) -> Vec(Man -> Vector[Real, n])
+    FUNC SymForm : (Sym, Man) -> Form(Man -> Exterior[Real, n])
+    FUNC d : Fld -> Form(dom(Fld) -> Exterior[codom(Fld)])  ; Exterior derivative
+    FUNC ∫ : (Form, dom(Form)) -> Real  ; Integration
+    FUNC L : (Vec, Fld) -> Fld  ; Lie derivative
+    FUNC [_,_] : (Vec, Vec) -> Vec  ; Lie bracket
+    FUNC ⟨_,_⟩ : (Fld, Fld) -> Fun(dom(Fld) -> Real)  ; Inner product
+    FUNC ∧ : (Form, Form) -> Form  ; Wedge product
+    FUNC ∇ : (Vec, Vec) -> Vec ; Covariant derivative (Riemannian)
+    FUNC R : (Vec, Vec) -> (Vec -> Vec)  ; Curvature tensor (Riemannian)
+
+    AXIOM CorrespondenceCommutes : 
+      ∀ (S T : Sym) (M : Man) . SymVec(S + T, M) = SymVec(S, M) + SymVec(T, M)
+    AXIOM CorrespondenceAssociates : 
+      ∀ (S T : Sym) (M : Man) . SymForm(S ∧ T, M) = SymForm(S, M) ∧ SymForm(T, M)  
+    AXIOM SymplecticStructure : 
+      ∀ (M : Symp) . ∃! (ω : Form(M -> Exterior²[Real, dim(M)])) . dω = 0 ∧ Nondegenerate(ω)
+    AXIOM RiemannMetric : 
+      ∀ (M : Riem) . ∃! (g : Sym(2, 0)[Real, dim(M)]) . Symmetric(g) ∧ PositiveDefinite(g) 
+    AXIOM LieAlgebraHom : 
+      ∀ (S T : Sym) (M : Man) . [SymVec(S, M), SymVec(T, M)] = SymVec(d(⟨S, T⟩), M)
+  }
+
+  STRUCTURE {
+    DEF SymFun : (Sym, Man) -> Fun(Man -> Real) = 
+      MATCH (Sym, Man) {
+        (Const(c), M) -> Fun(p -> c)
+        (Var(n), M) -> Fun(p -> p[n])
+        (Unary(S), M) -> p -> SymFun(S, M)(p)
+        (Binary(S, T), M) -> p -> SymFun(S, M)(p) · SymFun(T, M)(p)
+      }
+
+    DEF SymVec : (Sym, Man) -> Vec(Man -> Vector[Real, n]) = 
+      MATCH (Sym, Man) {
+        (Const(c), M) -> Vec(p -> ZeroVector(p))
+        (Var(n), M) -> Vec(p -> BasisVector(n, p))
+        (Unary(S), M) -> p -> SymVec(S, M)(p)
+        (Binary(S, T), M) -> p -> SymFun(S, M)(p) · SymVec(T, M)(p) + SymFun(T, M)(p) · SymVec(S, M)(p)
+      }
+
+    DEF SymForm : (Sym, Man) -> Form(Man -> Exterior[Real, n]) = 
+      MATCH (Sym, Man) {
+        (Const(c), M) -> Form(p -> c · BasisForm(1, dim(M), p))
+        (Var(n), M) -> Form(p -> BasisForm(n, p))  
+        (Unary(S), M) -> p -> SymForm(S, M)(p)
+        (Binary(S, T), M) -> p -> SymForm(S, M)(p) ∧ SymForm(T, M)(p)
+      }
+  }
+
+  PROOFS {
+    TACTIC Symbolize : (Fld, Man) -> Sym = 
+      MATCH (Fld, Man) {
+        (Fun(f), M) -> CHOOSE S : Sym SUCH THAT ∀ (p : M) . SymFun(S, M)(p) = f(p) USING CorrespondenceCommutes 
+        (Vec(v), M) -> CHOOSE S : Sym SUCH THAT ∀ (p : M) . SymVec(S, M)(p) = v(p) USING CorrespondenceCommutes
+        (Form(ω), M) -> CHOOSE S : Sym SUCH THAT ∀ (p : M) . SymForm(S, M)(p) = ω(p) USING CorrespondenceAssociates
+      } 
+    
+    TACTIC Substitute : (Sym, Man, Fld -> Bool) -> Bool = 
+      MATCH (Sym, Man) {
+        (S, M) -> LET F : Fld = SymFun(S, M) IN prop(F)
+        (S, M) -> LET F : Fld = SymVec(S, M) IN prop(F)
+        (S, M) -> LET F : Fld = SymForm(S, M) IN prop(F)
+      }
+    
+    THEOREM CorrespondOfDerivative {
+      STATEMENT : ∀ (S : Sym) (M : Man) (p : M) . d(SymFun(S, M))(p) = SymForm(d(S), M)(p)
+      PROOF {
+        LET S : Sym, M : Man
+        LET f = SymFun(S, M), df = d(f)
+        SYMBOLIZE df ON M AS T
+        
+        SHOW ∀ (p : M) . df(p) = SymForm(T, M)(p) BY Substitute(T, M, F -> ∀ (p : M) . F(p) = df(p))
+        
+        REWRITE SymForm(T, M) 
+          = df  BY ABOVE
+          = d(SymFun(S, M))  BY DEFINITION
+          = SymForm(d(S), M)  USING CorrespondenceCommutes
+
+        HENCE ∀ (p : M) . df(p) = SymForm(d(S), M)(p) 
+      }
+    }
+
+    THEOREM StokesTheorem {
+      STATEMENT : ∀ (S : Sym) (M : Man) . ∫(d(SymForm(S, M)), M) = ∫(SymForm(S, Boundary(M)), Boundary(M))
+      PROOF {
+        LET S : Sym, M : Man 
+        LET ω = SymForm(S, M), ∂M = Boundary(M)
+
+        REWRITE ∫(d(ω), M)
+          = ∫(SymForm(d(S), M), M)  BY CorrespondOfDerivative 
+          = ∫(SymForm(d(S), ∂M), ∂M)  BY Stokes 
+          = ∫(SymForm(S, ∂M), ∂M)  BY CorrespondenceCommutes
+      }
+    }
+
+    THEOREM SymplecticStructureTheorem {
+      STATEMENT : ∀ (S T : Sym) (M : Symp) (p : M) . 
+        ⟨SymVec(d(S), M), SymVec(d(T), M)⟩(p) = 0 <-> [SymVec(S, M), SymVec(T, M)](p) = ZeroVector(p)
+      PROOF {
+        LET S T : Sym, M : Symp, p : M
+        LET X = SymVec(S, M), Y = SymVec(T, M)
+        LET ω : Form(M -> Exterior²[Real, dim(M)]) SUCH THAT dω = 0 ∧ Nondegenerate(ω)  USING SymplecticStructure
+
+        REWRITE ⟨SymVec(d(S), M), SymVec(d(T), M)⟩(p) 
+          = ⟨d(SymFun(S, M)), d(SymFun(T, M))⟩(p)  BY CorrespondOfDerivative
+          = ω_p(d(SymFun(S, M)), d(SymFun(T, M)))  BY DEFINITION of inner product on Symp
+
+        THEN ω_p(d(SymFun(S, M)), d(SymFun(T, M))) = 0
+          <-> d(SymFun(S, M))_p ∧ d(SymFun(T, M))_p = 0  USING Nondegenerate(ω)
+          <-> L(X, SymFun(T, M))(p) - L(Y, SymFun(S, M))(p) - SymFun(d(⟨S, T⟩), M)(p) = 0 BY CartanMagicFormula
+          <-> [X, Y](p) = SymVec(d(⟨S, T⟩), M)(p)  BY LieAlgebraHom
+          <-> [SymVec(S, M), SymVec(T, M)](p) = ZeroVector(p)  BY LieAlgebraHom, CorrespondenceCommutes  
+      }
+    }
+
+    THEOREM RiemannCurvature {
+      STATEMENT : ∀ (S T U : Sym) (M : Riem) (p : M) . 
+        R(SymVec(S, M), SymVec(T, M))(SymVec(U, M))(p) = 
+          SymVec(d(⟨d(S), [T, U]⟩ + ⟨d(T), [U, S]⟩ + ⟨d(U), [S, T]⟩), M)(p)
+      PROOF {
+        LET S T U : Sym, M : Riem, p : M
+        LET X = SymVec(S, M), Y = SymVec(T, M), Z = SymVec(U, M)  
+        LET g : Sym(2, 0)[Real, dim(M)] SUCH THAT Symmetric(g) ∧ PositiveDefinite(g)  USING RiemannMetric
+
+        REWRITE R(X, Y)(Z)(p)
+          = (∇[X, ∇[Y, Z]] - ∇[Y, ∇[X, Z]] - ∇[[X, Y], Z])(p)  BY DEFINITION of curvature
+          = (L(X, L(Y, Z)) - L(Y, L(X, Z)) - L([X, Y], Z))(p)  USING ∇ compatible with g  
+          = (L(X, SymVec(d(⟨T, U⟩), M)) 
+              - L(Y, SymVec(d(⟨S, U⟩), M)) 
+              - SymVec(d(⟨d(⟨S, T⟩), U⟩), M))(p)
+            BY LieAlgebraHom
+          = (SymVec(d(⟨S, d(⟨T, U⟩)⟩), M) 
+              - SymVec(d(⟨T, d(⟨S, U⟩)⟩), M)
+              - SymVec(d(⟨d(⟨S, T⟩), U⟩), M))(p)  
+            USING L(X, SymVec(S, M)) = SymVec(d(⟨X♭, S⟩), M)
+          = SymVec(d(⟨d(S), [T, U]⟩ + ⟨d(T), [U, S]⟩ + ⟨d(U), [S, T]⟩), M)(p)
+            BY expanding and collecting terms
+      }
+    }
+  }
+}

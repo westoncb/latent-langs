@@ -1,0 +1,225 @@
+CONCEPT FractalMusicComposition {
+  PARAMETERS {
+    max_recursion_depth : INT  -- Maximum depth for fractal generation
+    base_frequency : REAL      -- Base frequency for pitch generation (e.g., 440 Hz for A4)
+  }
+
+  CONTEXT {
+    TYPES {
+      Pitch := REAL  -- Frequency in Hz
+      Duration := REAL  -- Time in seconds
+      Amplitude := REAL  -- Volume level (0 to 1)
+
+      Note := STRUCTURE {
+        pitch : Pitch
+        duration : Duration
+        amplitude : Amplitude
+      }
+
+      Melody := List(Note)
+      
+      FractalParams := STRUCTURE {
+        initiator : Melody
+        generator : FUNC(Note) -> Melody
+        transformations : List(FUNC(Melody) -> Melody)
+      }
+
+      Scale := List(INT)  -- List of semitone intervals
+
+      TimeSignature := TUPLE(INT, INT)  -- (beats per measure, beat unit)
+
+      Composition := STRUCTURE {
+        melodies : List(Melody)
+        harmony : List(List(Pitch))  -- List of chords
+        rhythm : List(Duration)
+        time_signature : TimeSignature
+      }
+
+      FractalDimension := REAL
+    }
+
+    STRUCTURES {
+      STRUCTURE FractalGenerator {
+        FUNC generate(params: FractalParams, depth: INT) -> Melody
+        FUNC compute_dimension(melody: Melody) -> FractalDimension
+
+        AXIOM SelfSimilarity {
+          ∀ m: Melody, d: INT .
+            LET sub_m = SUBSECTION(m, 0, LEN(m) / 2)
+            IN SIMILARITY(m, generate(FractalParams(sub_m, params.generator, []), d)) > 0.8
+        }
+      }
+
+      STRUCTURE MusicTheory {
+        FUNC create_scale(root: Pitch, intervals: Scale) -> List(Pitch)
+        FUNC harmonize(melody: Melody, scale: List(Pitch)) -> List(List(Pitch))
+
+        AXIOM ScaleConsistency {
+          ∀ root: Pitch, intervals: Scale .
+            LET scale = create_scale(root, intervals)
+            IN ∀ i, j . (scale[i] / scale[j]) ≈ 2^((intervals[i] - intervals[j]) / 12)
+        }
+      }
+
+      STRUCTURE Composer {
+        FUNC compose(fractal: Melody, style: FUNC(Melody) -> Composition) -> Composition
+        FUNC apply_rhythm(melody: Melody, rhythm: List(Duration)) -> Melody
+
+        AXIOM RhythmConsistency {
+          ∀ m: Melody, r: List(Duration) .
+            LET m' = apply_rhythm(m, r)
+            IN SUM(n.duration for n in m') ≈ SUM(r)
+        }
+      }
+    }
+
+    NOTATION {
+      f♯ := f * 2^(1/12)  -- Sharp
+      f♭ := f / 2^(1/12)  -- Flat
+      |m| := LEN(m)  -- Length of melody
+      m[i:j] := SLICE(m, i, j)  -- Slice of melody
+      f_n := base_frequency * 2^(n/12)  -- nth semitone from base frequency
+    }
+
+    ASSERTIONS {
+      AXIOM PitchRangeConstraint {
+        ∀ n: Note . 20 ≤ n.pitch ≤ 20000  -- Audible frequency range
+      }
+
+      AXIOM FractalDimensionBound {
+        ∀ m: Melody . 1 ≤ FractalGenerator().compute_dimension(m) < 2
+      }
+
+      AXIOM StyleConsistency {
+        ∀ m1, m2: Melody, style: FUNC(Melody) -> Composition .
+          SIMILARITY(m1, m2) > 0.9 ⇒ SIMILARITY(style(m1), style(m2)) > 0.8
+      }
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE TransposeMelody(m: Melody, semitones: INT) -> Melody :=
+      [Note{pitch = n.pitch * 2^(semitones/12), duration = n.duration, amplitude = n.amplitude} 
+       for n in m]
+
+    SIMPLIFY InvertMelody(m: Melody) -> Melody :=
+      LET avg_pitch = AVG(n.pitch for n in m)
+      IN [Note{pitch = 2 * avg_pitch - n.pitch, duration = n.duration, amplitude = n.amplitude}
+          for n in m]
+
+    REWRITE ApplyRhythmicAugmentation(m: Melody, factor: REAL) -> Melody :=
+      [Note{pitch = n.pitch, duration = n.duration * factor, amplitude = n.amplitude}
+       for n in m]
+  }
+
+  PROOFS {
+    THEOREM FractalMelodyDimensionInvariance {
+      ∀ params: FractalParams, d1, d2: INT .
+        |d1 - d2| ≤ 1 ⇒
+          |FractalGenerator().compute_dimension(generate(params, d1)) -
+           FractalGenerator().compute_dimension(generate(params, d2))| < ε
+    }
+    PROOF {
+      GIVEN params: FractalParams, d1, d2: INT
+      ASSUME |d1 - d2| ≤ 1
+      <1> LET m1 = FractalGenerator().generate(params, d1)
+          LET m2 = FractalGenerator().generate(params, d2)
+      <2> BY FractalGenerator.SelfSimilarity, m1 and m2 are highly similar
+      <3> Fractal dimension is a measure of self-similarity
+      <4> Small changes in depth result in small changes in self-similarity
+      <5> THEREFORE, fractal dimensions of m1 and m2 are close
+      ∴ |FractalGenerator().compute_dimension(m1) - 
+         FractalGenerator().compute_dimension(m2)| < ε
+      □
+    }
+
+    THEOREM HarmonizationPreservesContour {
+      ∀ m: Melody, scale: List(Pitch) .
+        LET harmony = MusicTheory().harmonize(m, scale)
+        IN CONTOUR(m) ≈ CONTOUR(TOP_NOTES(harmony))
+    }
+    PROOF {
+      GIVEN m: Melody, scale: List(Pitch)
+      <1> LET harmony = MusicTheory().harmonize(m, scale)
+      <2> Harmonization typically uses chord tones from the scale
+      <3> The top note of each chord often follows the melody
+      <4> CONTOUR measures the relative up/down motion of pitches
+      <5> BY <2> and <3>, the top notes of harmony closely follow m
+      ∴ CONTOUR(m) ≈ CONTOUR(TOP_NOTES(harmony))
+      □
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE CantorSetMelody {
+      LET cantor_params = FractalParams {
+        initiator = [Note{pitch = f_0, duration = 1, amplitude = 1}],
+        generator = λ n . [
+          Note{pitch = n.pitch, duration = n.duration/3, amplitude = n.amplitude},
+          Note{pitch = n.pitch * 2^(7/12), duration = n.duration/3, amplitude = n.amplitude}
+        ],
+        transformations = [
+          λ m . INTERLEAVE(m, TransposeMelody(m, 7))  // Perfect fifth transposition
+        ]
+      }
+
+      LET cantor_melody = FractalGenerator().generate(cantor_params, 5)
+      LET dimension = FractalGenerator().compute_dimension(cantor_melody)
+
+      ASSERT 1.5 < dimension < 1.7  // Close to theoretical Cantor set dimension
+      ASSERT |cantor_melody| == 2^5  // Number of notes grows exponentially with depth
+
+      LET composition = Composer().compose(cantor_melody, BAROQUE_STYLE)
+      ASSERT composition.time_signature == (3, 4)  // Common time signature for Baroque
+      ASSERT LEN(composition.harmony) == |cantor_melody|  // One chord per note
+    }
+
+    EXAMPLE KochCurveRhythm {
+      LET koch_params = FractalParams {
+        initiator = [Note{pitch = f_0, duration = 1, amplitude = 1}],
+        generator = λ n . [
+          Note{pitch = n.pitch, duration = n.duration/3, amplitude = n.amplitude},
+          Note{pitch = n.pitch * 2^(4/12), duration = n.duration/3, amplitude = n.amplitude},
+          Note{pitch = n.pitch * 2^(-3/12), duration = n.duration/3, amplitude = n.amplitude},
+          Note{pitch = n.pitch, duration = n.duration/3, amplitude = n.amplitude}
+        ],
+        transformations = [
+          λ m . ApplyRhythmicAugmentation(m, 1.5)
+        ]
+      }
+
+      LET koch_melody = FractalGenerator().generate(koch_params, 4)
+      LET dimension = FractalGenerator().compute_dimension(koch_melody)
+
+      ASSERT 1.2 < dimension < 1.3  // Close to theoretical Koch curve dimension
+      ASSERT |koch_melody| == 4^4  // Number of notes grows as a power of 4
+
+      LET composition = Composer().compose(koch_melody, MINIMALIST_STYLE)
+      ASSERT composition.time_signature == (4, 4)
+      ASSERT LEN(composition.rhythm) > |koch_melody|  // Complex rhythmic structure
+    }
+  }
+}
+
+Claude Sonnet 3.5:
+
+This FractalMusicComposition Concept demonstrates several advanced features of ConceptScript while exploring an interesting intersection of mathematics and music:
+
+Interdisciplinary Modeling: It combines concepts from fractal geometry, music theory, and algorithmic composition.
+Complex Structures: It defines structures for musical elements (Note, Melody, Composition) and fractal generation (FractalParams).
+Higher-Order Functions: The FractalParams structure includes function parameters for generators and transformations.
+Custom Notation: It introduces music-specific notation for sharps, flats, and frequency calculations.
+Mathematical Rigor: It includes axioms and theorems that establish properties of the fractal music system, such as self-similarity and dimension invariance.
+Practical Application: The examples show how to generate melodies based on famous fractals (Cantor set and Koch curve) and compose them into different musical styles.
+Creative Transformations: It includes transformers for common musical operations like transposition, inversion, and rhythmic augmentation.
+Constraint Handling: It enforces musical constraints like pitch range and rhythmic consistency.
+
+Key aspects that make this Concept interesting:
+
+Creativity Meets Formalism: It shows how rigorous mathematical concepts can be applied to creative endeavors.
+Scalability: The fractal generation process can create complex structures from simple rules, demonstrating how ConceptScript can model scalable systems.
+Style Parameterization: The composition process allows for different musical styles, showing how the system can be flexible and extensible.
+Emergent Properties: The relationship between fractal dimension and musical characteristics provides an interesting area for exploration.
+Practical Output: While abstract, this system could potentially be connected to actual music generation software, bridging theoretical concepts with practical applications.
+
+This FractalMusicComposition Concept showcases ConceptScript's ability to model complex, interdisciplinary systems that blend abstract mathematics with creative applications. It demonstrates how the language can be used to explore innovative ideas at the intersection of different fields, potentially leading to new forms of artistic expression or analysis tools for music.

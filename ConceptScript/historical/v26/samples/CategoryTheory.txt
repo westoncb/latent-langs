@@ -1,0 +1,244 @@
+CONCEPT CategoryTheory {
+  LANGUAGE {
+    TYPE Object
+    TYPE Arrow[A : Object, B : Object]
+    TYPE Category = (Objects : Set[Object], Arrows : (A B : Object) -> Set[Arrow[A, B]], 
+                     Compose : (A B C : Object) -> Arrow[B, C] -> Arrow[A, B] -> Arrow[A, C],
+                     Identity : (A : Object) -> Arrow[A, A])
+
+    AXIOM AssociativityAxiom[(C : Category, A B C D : C.Objects, 
+                              f : C.Arrows(A, B), g : C.Arrows(B, C), h : C.Arrows(C, D))] {
+      C.Compose(A, C, D, C.Compose(B, C, D, h, g), f) = C.Compose(A, B, D, h, C.Compose(A, B, C, g, f))
+    }
+      
+    AXIOM IdentityAxiom[(C : Category, A B : C.Objects, f : C.Arrows(A, B))] {
+      C.Compose(A, B, B, f, C.Identity(A)) = f
+      C.Compose(A, A, B, C.Identity(B), f) = f
+    }
+
+    TYPE Functor[C D : Category] = (
+      ObjectMap : C.Objects -> D.Objects,
+      ArrowMap : (A B : C.Objects) -> C.Arrows(A, B) -> D.Arrows(ObjectMap(A), ObjectMap(B))
+    )
+
+    AXIOM FunctorIdentity[(F : Functor[C, D], A : C.Objects)] {
+      F.ArrowMap(A, A, C.Identity(A)) = D.Identity(F.ObjectMap(A))  
+    }
+      
+    AXIOM FunctorComposition[(F : Functor[C, D], A B C : C.Objects, 
+                              f : C.Arrows(A, B), g : C.Arrows(B, C))] {
+      F.ArrowMap(A, C, C.Compose(A, B, C, g, f)) 
+        = D.Compose(F.ObjectMap(A), F.ObjectMap(B), F.ObjectMap(C), 
+                    F.ArrowMap(B, C, g), F.ArrowMap(A, B, f))
+    }
+
+    TYPE NaturalTransformation[C D : Category, F G : Functor[C, D]] = 
+      (Components : (A : C.Objects) -> D.Arrows(F.ObjectMap(A), G.ObjectMap(A)))
+
+    AXIOM NaturalityCondition[(C D : Category, F G : Functor[C, D], 
+                                η : NaturalTransformation[C, D, F, G],
+                                A B : C.Objects, f : C.Arrows(A, B))] {
+      D.Compose(F.ObjectMap(A), F.ObjectMap(B), G.ObjectMap(B), 
+                η.Components(B), F.ArrowMap(A, B, f))
+        = D.Compose(F.ObjectMap(A), G.ObjectMap(A), G.ObjectMap(B),
+                    G.ArrowMap(A, B, f), η.Components(A))
+    }
+  }
+    
+  NOTATION {
+    "A ~> B" = Arrow[A, B]
+    "f · g" = Compose(_, _, _, f, g)
+    "F : C -> D" = Functor[C, D]
+    "η : F -> G" = NaturalTransformation[_, _, F, G] 
+    "1_A" = Identity(A)
+  }
+    
+  TRANSFORMERS {
+    TACTIC FunctorialPath[C D : Category, F G : Functor[C, D], A B : C.Objects,
+                          f g : C.Arrows(A, B), p : f = g] = {
+      LET e : Equiv[F.ArrowMap(A, B, f) = G.ArrowMap(A, B, g)] = {
+        (q : F.ArrowMap(A, B, f) = G.ArrowMap(A, B, g)) 
+          => REWRITE q BY FunctorComposition, p,
+        (r : F.ArrowMap(A, B, f) = G.ArrowMap(A, B, g))
+          => REWRITE r BY FunctorComposition, REWRITE f = g BY p
+      }
+      CONCLUDE univalence(e)  
+    }
+  }
+    
+  STRUCTURE Isomorphism {
+    DEF Isomorphic[C : Category, A B : C.Objects] = {
+      (f : C.Arrows(A, B), g : C.Arrows(B, A)) 
+        WHERE f · g = 1_B AND g · f = 1_A
+    }
+      
+    DEF InitialObject[C : Category, I : C.Objects] = {
+      (u_A : (A : C.Objects) -> Unique(C.Arrows(I, A)))
+    }
+      
+    DEF TerminalObject[C : Category, T : C.Objects] = {
+      (u_A : (A : C.Objects) -> Unique(C.Arrows(A, T)))  
+    }
+  }
+    
+  PROOFS {
+    THEOREM Uniqueness {
+      STATEMENT:
+        ∀ (C : Category, A B : C.Objects) . 
+          Isomorphic(A, B) => ∀ (f g : Isomorphism[C, A, B]) . f.1 = g.1
+            
+      PROOF:
+        LET C : Category, A B : C.Objects
+        ASSUME (H1) : Isomorphic(A, B)
+        LET f g : Isomorphism[C, A, B]
+          
+        REWRITE f.1 
+          = f.1 · 1_B
+            BY IdentityAxiom
+          = f.1 · (g.2 · g.1) 
+            BY H1
+          = (f.1 · g.2) · g.1
+            BY AssociativityAxiom
+          = 1_A · g.1
+            BY H1  
+          = g.1
+            BY IdentityAxiom
+              
+        QED
+    }
+      
+    THEOREM InitialImpliesTerminal {
+      STATEMENT:  
+        ∀ (C : Category) . (∃ (I : C.Objects) . InitialObject(I))
+                         <=> (∃ (T : C.Objects) . TerminalObject(T))
+          
+      PROOF:
+        LET C : Category
+          
+        SHOW (∃ (I : C.Objects) . InitialObject(I)) 
+          => (∃ (T : C.Objects) . TerminalObject(T)) {
+            
+          ASSUME (I : C.Objects), (H1 : InitialObject(I))
+            
+          LET D : Category = (
+            C.Objects, 
+            (A B : C.Objects) -> C.Arrows(B, A),
+            (A B C : C.Objects) -> C.Compose(C, B, A, _, _),
+            C.Identity  
+          )
+            
+          HAVE InitialObject[D, I] BY {
+            LET u_A = (A : D.Objects) => H1.u_A(A)
+            (A : D.Objects) => Unique(D.Arrows(I, A))
+          }
+            
+          HENCE TerminalObject[C, I]
+        }
+          
+        SHOW (∃ (T : C.Objects) . TerminalObject(T))
+          => (∃ (I : C.Objects) . InitialObject(I)) {
+            
+          ASSUME (T : C.Objects), (H2 : TerminalObject(T))
+            
+          LET D : Category = (
+            C.Objects,
+            (A B : C.Objects) -> C.Arrows(B, A), 
+            (A B C : C.Objects) -> C.Compose(C, C, B, A, _, _),
+            C.Identity
+          )
+            
+          HAVE TerminalObject[D, T] BY {
+            LET u_A = (A : D.Objects) => H2.u_A(A)  
+            (A : D.Objects) => Unique(D.Arrows(A, T))
+          }
+            
+          HENCE InitialObject[C, T]  
+        }
+          
+        QED
+      }
+  }
+}
+
+
+
+CONCEPT CategoryTheory[Ob : Type, Hom : Ob -> Ob -> Type] {
+  LANGUAGE {
+    TYPE Object = Ob
+    TYPE Arrow[A, B : Object] = Hom(A, B)
+    TYPE Functor[C, D : Concept[Ob, Hom]] = {
+      ObjMap : C.Object -> D.Object,
+      ArrMap[A, B : C.Object] : C.Arrow[A, B] -> D.Arrow[ObjMap(A), ObjMap(B)]
+    }
+    TYPE NaturalTransformation[C, D : Concept[Ob, Hom], F, G : Functor[C, D]] = 
+      ∀ (A : C.Object) . D.Arrow[F.ObjMap(A), G.ObjMap(A)]
+  }
+
+  NOTATION {
+    "A ⇒ B" := Arrow[A, B]
+    "F ⋙ G" := FunctorComposition(F, G)
+    "α : F ⇒ G" := NaturalTransformation[C, D, F, G]
+  }
+
+  TRANSFORMERS {
+    FUNC IdentityFunctor[C : Concept[Ob, Hom]] -> Functor[C, C] = {
+      ObjMap(A) = A,
+      ArrMap(f) = f
+    }
+
+    FUNC FunctorComposition[C, D, E : Concept[Ob, Hom], F : Functor[C, D], G : Functor[D, E]] 
+      -> Functor[C, E] = {
+        ObjMap(A) = G.ObjMap(F.ObjMap(A)),
+        ArrMap(f) = G.ArrMap(F.ArrMap(f))
+    }
+
+    REWRITE NaturalTransformationComposition {
+      (α : F ⇒ G) ∘ (β : G ⇒ H) = λ(A : Object) . β(A) ∘ α(A)
+    }
+  }
+
+  STRUCTURE Monoidal {
+    EXTENDS CategoryTheory[Ob, Hom]
+    
+    REQUIRE Tensor : Object -> Object -> Object
+    REQUIRE UnitObject : Object
+    
+    REQUIRE LeftUnitor[A : Object] : (UnitObject ⊗ A) ⇒ A
+    REQUIRE RightUnitor[A : Object] : (A ⊗ UnitObject) ⇒ A
+    REQUIRE Associator[A, B, C : Object] : ((A ⊗ B) ⊗ C) ⇒ (A ⊗ (B ⊗ C))
+    
+    REQUIRE ∀ (A, B, C, D : Object) . 
+      (Associator[A, B, C] ⊗ idD) ∘ Associator[A, B, C ⊗ D] ∘ (idA ⊗ Associator[B, C, D])
+       = Associator[A ⊗ B, C, D] ∘ Associator[A, B ⊗ C, D]
+  }
+
+  PROOFS {
+    THEOREM FunctorIdentity[C, D : Concept[Ob, Hom], F : Functor[C, D]] {
+      STATEMENT:
+        IdentityFunctor[D] ⋙ F = F ∧ F ⋙ IdentityFunctor[C] = F
+        
+      PROOF:
+        SHOW IdentityFunctor[D] ⋙ F = F {
+          LET G = IdentityFunctor[D] ⋙ F
+          SUFFICES_TO_SHOW ∀ (A : C.Object) . G.ObjMap(A) = F.ObjMap(A)
+                        ∧ ∀ (f : C.Arrow) . G.ArrMap(f) = F.ArrMap(f)  
+          
+          LET A : C.Object
+          REWRITE G.ObjMap(A)
+            = (IdentityFunctor[D] ⋙ F).ObjMap(A)
+            = IdentityFunctor[D].ObjMap(F.ObjMap(A)) BY FunctorComposition
+            = F.ObjMap(A)                              BY IdentityFunctor
+          
+          LET f : C.Arrow  
+          REWRITE G.ArrMap(f)
+            = (IdentityFunctor[D] ⋙ F).ArrMap(f)  
+            = IdentityFunctor[D].ArrMap(F.ArrMap(f)) BY FunctorComposition
+            = F.ArrMap(f)                             BY IdentityFunctor
+        }
+        
+        SHOW F ⋙ IdentityFunctor[C] = F BY symmetric argument
+        
+        QED
+    }
+  }
+}

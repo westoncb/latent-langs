@@ -1,0 +1,131 @@
+CONCEPT QuantumThermodynamics {
+  LANGUAGE {
+    type Sys<S> = (State<S>, Dynamics<S>, Hilbert<S>)
+    type State<S> = UnitVec(Hilbert<S>) 
+    type Dynamics<S> = S -> S
+    type Hilbert<S> = (Vec<S>, InnerProduct<S>)
+    
+    type Observable<S> = Herm(Hilbert<S>)
+    
+    func Entropy<S>(ρ: State<S>): ℝ
+    func Hamiltonian<S>(s: Sys<S>): Observable<S>
+    func Lindbladian<S>(s: Sys<S>): SuperOperator(Hilbert<S>)
+    func ThermalState<S>(H: Observable<S>, T: ℝ≥0): State<S>
+
+    pred Entangled(ψ: State<S ⊗ T>, φ: State<S>, χ: State<T>)
+    pred Separable(ρ: State<S ⊗ T>)
+
+    notation "H(s)" = Hamiltonian(s)
+    notation "L(s)" = Lindbladian(s)
+    notation "ρ[H, T]" = ThermalState(H, T)
+    notation "S(ρ)" = Entropy(ρ)
+    notation "ρ ~ Sep" = Separable(ρ)
+    notation "A ⊗ B" = TensorProduct(A, B)
+    notation "trᵦ[A]" = PartialTrace(A, B)
+
+    infer ThermalEquilibrium<S>(s: Sys<S>, T: ℝ≥0):
+      s.State = ρ[H(s), T] ⟺ L(s)|ρ⟩ = 0
+
+    infer Decoherence<S, E>(ρ: State<S ⊗ E>, H: Observable<S ⊗ E>, t: ℝ≥0):
+      (trₑ[e^(-itH)ρe^(itH)] ~ Sep) as t -> ∞
+      
+    infer EntropyProductState<S, T>(ρ: State<S>, σ: State<T>): 
+      S(ρ ⊗ σ) = S(ρ) + S(σ)
+      
+    infer SubadditivityEntropy<S, T>(ρ: State<S ⊗ T>):
+      S(ρ) ≤ S(trₛ[ρ]) + S(trₜ[ρ])
+      
+    rewrite VonNeumannEquation<S>(ρ: State<S>, H: Observable<S>):
+      d/dt ρ(t) = -i[H, ρ(t)]
+      
+    rewrite LindbladEquation<S>(ρ: State<S>, L: SuperOperator(Hilbert<S>)):
+      d/dt ρ(t) = L(ρ(t))
+  }
+  
+  STRUCTURE {
+    ; 2nd Law of Thermodynamics
+    ∀(S: Type, s: Sys<S>). S(s.Dynamics(s.State)) ≥ S(s.State)
+    
+    ; Fundamental thermodynamic relation
+    ∀(S: Type, s: Sys<S>, ρ: State<S>, T: ℝ≥0).
+      dS[ρ] = 1/T dE[ρ] - 1/T ⟨dH[s, ρ]⟩
+      
+    ; KMS condition for thermal equilibrium
+    ∀(S: Type, s: Sys<S>, T: ℝ≥0, t: ℂ, A: Obs<S>, B: Obs<S>).
+      ThermalEquilibrium(s, T) ⟺ ⟨A(t)B⟩_T = ⟨BA(t+iℏ/kT)⟩_T
+      
+    ; Entangled states not separable
+    ∀(S, T: Type, ψ: State<S ⊗ T>, φ: State<S>, χ: State<T>).
+      Entangled(ψ, φ, χ) ⟹ ¬Separable(ψ)
+  }
+
+  PROOFS {
+    theorem Decoherence<S, E>: 
+      ∀(ρ: State<S ⊗ E>, H: Observable<S ⊗ E>, t: ℝ≥0).
+        (trₑ[e^(-itH)ρe^(itH)] ~ Sep) as t -> ∞
+    {
+      let U(t) = e^(-itH)
+      let ρ(t) = U(t) ρ U(t)†
+
+      calc trₑ[ρ(t)]
+         = ∑ᵢⱼₖₗ ⟨eᵢ|(Uₜ ⊗ Id) (ρ ⊗ |eₖ⟩⟨eₗ|) (Uₜ† ⊗ Id)|eⱼ⟩ |eᵢ⟩⟨eⱼ|  ; by matrix elements of partial trace
+         = ∑ᵢⱼₖₗ ⟨eᵢ|Uₜ|ψₖₗ⟩⟨ψₖₗ|ρ|ψₖₗ⟩⟨ψₖₗ|Uₜ†|eⱼ⟩ |eᵢ⟩⟨eⱼ|   ; with |ψₖₗ⟩ = (Id ⊗ ⟨eₗ|)|ψ⟩
+         = ∑ₖₗ pₖₗ ∑ᵢⱼ ⟨eᵢ|Uₜ|ψₖₗ⟩⟨ψₖₗ|Uₜ†|eⱼ⟩ |eᵢ⟩⟨eⱼ|   ; with pₖₗ = ⟨ψₖₗ|ρ|ψₖₗ⟩
+         = ∑ₖₗ pₖₗ σₖₗ(t)   ; with σₖₗ(t) = Uₜ|ψₖₗ⟩⟨ψₖₗ|Uₜ†
+         
+      σₖₗ(t) -> |ψₖₗ⟩⟨ψₖₗ| as t -> ∞   ; by dephasing in energy eigenbasis {|ψₖₗ⟩}
+      
+      hence trₑ[ρ(t)] -> ∑ₖₗ pₖₗ |ψₖₗ⟩⟨ψₖₗ| ~ Sep as t -> ∞
+    }
+
+    theorem Subadditivity<S, T>:
+      ∀(ρ: State<S ⊗ T>). S(ρ) ≤ S(trₛ[ρ]) + S(trₜ[ρ])
+    {
+      let H(p) = -∑ᵢ pᵢ log(pᵢ) be the Shannon entropy of the distribution p 
+
+      S(trₛ[ρ]) = H(Spec(trₛ[ρ]))   ; definition of von Neumann entropy
+      S(trₜ[ρ]) = H(Spec(trₜ[ρ]))
+
+      calc S(ρ)
+         = H(Spec(ρ))
+         ≤ H(Spec(trₛ[ρ]) × Spec(trₜ[ρ]))   ; joint entropy ≤ product of marginals
+         = H(Spec(trₛ[ρ])) + H(Spec(trₜ[ρ]))   ; Shannon entropy of product
+         = S(trₛ[ρ]) + S(trₜ[ρ])
+    }
+    
+    theorem QuantumZeroLaw<S>: 
+      ∀(s₁: Sys<S>, s₂: Sys<S>, T: ℝ≥0). 
+        ThermalEquilibrium(s₁, T) ∧ ThermalEquilibrium(s₂, T) ⊢ 
+          ThermalEquilibrium(TensorProduct(s₁, s₂), T)
+    {
+      assume ThermalEquilibrium(s₁, T) ∧ ThermalEquilibrium(s₂, T)
+
+      s₁.State = ρ[H(s₁), T]   ; by definition
+      s₂.State = ρ[H(s₂), T]
+
+      TensorProduct(s₁, s₂).State 
+        = s₁.State ⊗ s₂.State
+        = ρ[H(s₁), T] ⊗ ρ[H(s₂), T]
+        = ρ[H(s₁) ⊗ 𝟙₂ + 𝟙₁ ⊗ H(s₂), T]   ; by tensor product of observables
+        = ρ[H(TensorProduct(s₁, s₂)), T]   ; by definition of composite system
+        
+      hence ThermalEquilibrium(TensorProduct(s₁, s₂), T)   ; by definition
+    }
+
+    theorem QuantumEntropyProduct<S, T>:
+      ∀(ρ: State<S>, σ: State<T>). S(ρ ⊗ σ) = S(ρ) + S(σ)
+    {
+      calc S(ρ ⊗ σ)
+        = -tr((ρ ⊗ σ) log(ρ ⊗ σ))   ; definition of von Neumann entropy
+        = -tr((ρ log ρ) ⊗ (σ log σ))   ; logarithm of tensor product
+        = -tr(ρ log ρ) tr(σ log σ)   ; trace of tensor product  
+        = S(ρ) + S(σ)   ; definition of von Neumann entropy
+    }
+  } 
+}
+
+This Concept, named QuantumThermodynamics, combines ideas from quantum mechanics, thermodynamics, and information theory. It defines a quantum system as a triplet of state, dynamics, and Hilbert space, akin to the classical definition in FunctionalThermodynamics. Observables are Hermitian operators on the Hilbert space.
+Key concepts include entropy, Hamiltonian, thermal state, entanglement, and separability. Inferential rules specify conditions for thermal equilibrium, decoherence of entangled states, entropy of product states, and subadditivity of entropy. Rewrite rules give the von Neumann equation for unitary evolution and the Lindblad equation for open system dynamics.
+The structural axioms assert the 2nd law, the fundamental thermodynamic relation, the KMS condition for equilibrium, and the non-separability of entangled states.
+Theorems prove decoherence as the approach to a separable state, subadditivity of entropy, the zeroth law of thermodynamics for composite quantum systems, and the additivity of entropy for product states.
+The Concept makes heavy use of tensor product structure to discuss composite systems and partial trace to extract subsystem states.

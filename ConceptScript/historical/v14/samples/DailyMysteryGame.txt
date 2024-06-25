@@ -1,0 +1,248 @@
+CONCEPT DailyMysteryGame {
+  
+  STRUCTURE {
+    [Game := Web-based mystery game with daily AI-generated episodes]
+    [Episode := Self-contained mystery set in a unique world, limited to 100 player actions]
+    [World := Graph-structured setting for an episode, varying across genres]
+    [Location := Node in the world graph, representing a distinct area]
+    [Connection := Edge in the world graph, representing a path between locations]
+    [Item := Object that the player can interact with or collect within a location]
+    [NPC := Non-player character that the player can interact with to gather clues]
+    [Dialogue := Graph-structured conversation with an NPC, with player choices as edges]
+    [Mystery := Central puzzle or challenge that the player must solve in each episode]
+    [Clue := Piece of information obtained from interactions, helping the player solve the mystery]
+    [Solution := Correct answer to the mystery that the player can present only once per episode]
+    [Interface := Sleek web app with modern design, appealing graphics, and light sounds]
+    [Progression := Player advances to the next episode by waiting for the next day, regardless of solving the current mystery]
+    [ContentGenerator := AI system that creates daily episodes, including world layout, NPCs, dialogues, items, and mysteries]
+  }
+  
+  PROOFS {
+    theorem engaging_daily_episodes:
+      ∀p : Player, ∀d : Day,
+      ∃e : Episode, ∃w : World, ∃m : Mystery,
+      ContentGenerator(d) = (e, w, m) ∧
+      Engaging(e) ∧ Coherent(w, m)
+      {
+        assume p : Player
+        assume d : Day
+        let (e, w, m) := ContentGenerator(d)
+        assert Engaging(e) by episode_quality_control
+        assert Coherent(w, m) by world_mystery_consistency_check
+      }
+    
+    theorem solvable_mysteries:
+      ∀p : Player, ∀e : Episode, ∀m : Mystery,
+      Solvable(m) ∧
+      (Solved(p, m) → Success(p, e))
+      {
+        assume p : Player
+        assume e : Episode
+        assume m : Mystery
+        assert Solvable(m) by mystery_solvability_check
+        assume Solved(p, m)
+        conclude Success(p, e) by game_mechanics
+      }
+    
+    theorem limited_actions:
+      ∀p : Player, ∀e : Episode,
+      Count(Actions(p, e)) ≤ 100
+      {
+        assume p : Player
+        assume e : Episode
+        assert Count(Actions(p, e)) ≤ 100 by action_limit_enforcement
+      }
+  }
+  
+  LANGUAGE {
+    type Action := (Location, Item, NPC, Dialogue, String)
+    type WorldGraph := Graph(Location, Connection)
+    type DialogueGraph := Graph(String, String)
+    
+    pred Engaging(e : Episode) :=
+      HasNovelty(e) ∧ HasIntrigue(e) ∧ HasRelevance(e)
+    
+    pred Coherent(w : World, m : Mystery) :=
+      ConsistentSetting(w) ∧ IntegratedMystery(m, w)
+    
+    pred Solvable(m : Mystery) :=
+      ∃c₁, c₂, ..., cₙ : Clue, ∃s : Solution,
+      Solves(c₁ ∧ c₂ ∧ ... ∧ cₙ, m, s)
+    
+    pred Solved(p : Player, m : Mystery) :=
+      ∃s : Solution, Presents(p, s, m) ∧ Correct(s, m) ∧ OnlyOnce(p, s, m)
+    
+    pred Success(p : Player, e : Episode) :=
+      Solved(p, Mystery(e)) ∧ DisplaysSuccess(Interface, p)
+    
+    func Actions(p : Player, e : Episode) : List(Action) =
+      [a₁, a₂, ..., aₙ] where
+        (a₁, a₂, ..., aₙ) = Interacts(p, e) ∧
+        n ≤ 100
+  }
+  
+}
+
+
+
+
+
+
+
+
+CONCEPT DailyMysteryGame {
+  
+  LANGUAGE {
+    type Game := (Episode, Player, Interface, ContentGenerator)
+    type Episode := (World, Mystery, Clue, Solution, Int)
+    type World := Graph(Location, Connection)
+    type Location := (String, List(Item), List(NPC))
+    type Connection := (Location, Location)
+    type Item := String
+    type NPC := (String, DialogueGraph)
+    type DialogueGraph := Graph(String, String)
+    type Mystery := String
+    type Clue := String
+    type Solution := String
+    type Player := (String, Location, Int)
+    type Interface := (Graphics, Sounds)
+    type Graphics := (String, String)
+    type Sounds := (String, String)
+    type ContentGenerator := Function(Day, (Episode, World, Mystery))
+    type Day := Timestamp
+    type Action := (Location, Item, NPC, Dialogue, String)
+    
+    pred Engaging(e : Episode) :=
+      HasNovelty(e) ∧ HasIntrigue(e) ∧ HasRelevance(e)
+    
+    pred Coherent(w : World, m : Mystery) :=
+      ConsistentSetting(w) ∧ IntegratedMystery(m, w)
+    
+    pred Solvable(m : Mystery) :=
+      ∃c₁, c₂, ..., cₙ : Clue, ∃s : Solution,
+      Solves(c₁ ∧ c₂ ∧ ... ∧ cₙ, m, s)
+    
+    pred Solved(p : Player, m : Mystery) :=
+      ∃s : Solution, Presents(p, s, m) ∧ Correct(s, m) ∧ OnlyOnce(p, s, m)
+    
+    pred Success(p : Player, e : Episode) :=
+      Solved(p, Mystery(e)) ∧ DisplaysSuccess(Interface, p)
+    
+    func Actions(p : Player, e : Episode) : List(Action) =
+      [a₁, a₂, ..., aₙ] where
+        (a₁, a₂, ..., aₙ) = Interacts(p, e) ∧
+        n ≤ 100
+  }
+  
+  STRUCTURE {
+    [GameLoop :=
+      d : Day → 
+      e : Episode ← ContentGenerator(d) →
+      p : Player → 
+      while ¬Solved(p, Mystery(e)) ∧ Count(Actions(p, e)) ≤ 100 do
+        a : Action ← PlayerInput(p, e) →
+        UpdateState(p, e, a) →
+        if PresentsSolution(a) then
+          if Correct(Solution(a), Mystery(e)) then
+            DisplaySuccess(p, e)
+          else
+            DisplayFailure(p, e)
+        else
+          DisplayWorld(p, e)
+    ]
+    
+    [UpdateState(p, e, a) :=
+      match a with
+        (l, _, _, _, _) => MoveTo(p, l)
+        (_, i, _, _, _) => CollectItem(p, i)
+        (_, _, n, d, _) => AdvanceDialogue(p, n, d)
+        (_, _, _, _, s) => RecordSolution(p, s)
+    ]
+  }
+  
+  PROOFS {
+    theorem gameplay_enables_engaging_episodes:
+      ∀p : Player, ∀e : Episode,
+      Engaging(e) ∧ Coherent(World(e), Mystery(e)) ∧
+      Solvable(Mystery(e))
+      {
+        assume p : Player
+        assume e : Episode
+        assert Engaging(e) by content_generator_quality
+        assert Coherent(World(e), Mystery(e)) by content_generator_consistency
+        assert Solvable(Mystery(e)) by mystery_design
+      }
+    
+    theorem gameplay_limits_actions:
+      ∀p : Player, ∀e : Episode,
+      Count(Actions(p, e)) ≤ 100
+      {
+        assume p : Player
+        assume e : Episode
+        assert Count(Actions(p, e)) ≤ 100 by action_limit_in_game_loop
+      }
+    
+    theorem gameplay_allows_single_solution_attempt:
+      ∀p : Player, ∀e : Episode, ∀m : Mystery,
+      Solved(p, m) → OnlyOnce(p, Solution(p, m), m)
+      {
+        assume p : Player
+        assume e : Episode
+        assume m : Mystery
+        assume Solved(p, m)
+        let s := Solution(p, m)
+        assert Presents(p, s, m) by solved_definition
+        assert Correct(s, m) by solved_definition
+        assert OnlyOnce(p, s, m) by single_solution_attempt_in_game_loop
+      }
+    
+    theorem gameplay_progresses_episodes_daily:
+      ∀p : Player, ∀d₁, d₂ : Day,
+      d₁ < d₂ →
+      Episode(GameState(p, d₁)) ≠ Episode(GameState(p, d₂))
+      {
+        assume p : Player
+        assume d₁, d₂ : Day
+        assume d₁ < d₂
+        let e₁ := Episode(GameState(p, d₁))
+        let e₂ := Episode(GameState(p, d₂))
+        assert e₁ ≠ e₂ by daily_episode_generation
+      }
+  }
+  
+}
+
+
+
+Interesting. I've been running into this a lot with ConceptScript lately—lots of promise, but more need for verification.
+
+Alright, let's move on to todays task though. I have some relatively tight time-constraints on earning some money and I'm exploring different ideas for starting a very lightweight software business. I'm hoping you can help me brainstorm and reason through alternatives. I'll first tell you more about myself, then about my current project ideas; then I'll see if you have any project ideas for me, and we'll proceed to narrowing down to a particular choice from there.
+
+So I'm 38, spent the past 7 years or so doing contract software engineering work primarily for very early stage startups who haven't built their central product yet. I'm often the initial engineer on such a product. This has all been done using web technologies. I'm often heavily involved in design, and would frequently do work around real-time rendering or developing novel algorithms requiring research in applied math and cs.
+
+Prior to that I was at a YC startup as a founding engineer (2014) building a sophisticated ios app for a kind of multi-user media spreadsheet system, followed by a role I took at a multi-material printer startup where I began learning web technologies, built their "dashboard" system and a detailed 3d simulator of their printer which they'd use to analyze print outcomes prior to actually printing.
+
+Prior to and during those projects I spent a lot of time working on novel developer tools that combined my mixed background in theoretical CS, math, philosophy, linguistics, HCI, and video game development to arrive at new concepts for structured code-editing and a high-level/visual time-traveling debugger/data structure visualizer.
+
+I tend to be pretty creative and have done a lot of design work, drawing, and writing (essays and short stories). I like interacting with people and building tools, and my strongest aesthetic interests are music and concepts.
+
+I had been working for quite a while on this novel developer tool named printeff which in many ways is a successor to my previous project, Lucidity (described above as a visual data structure debugger). In many ways it distills Lucidity to its essence to arrive at a much more focused, practical, and lightweight tool. I have spent hundreds of hours designing and building this to date. I initially worked for about 4 months straight, then took about 1.2yrs away from programming, then moved to a new city and decided to get back into printeff about 6 months ago. However, my progress on it went at a crawling rate. Around this same time I discovered gpt4 via the chatgpt ios app with voice interaction and was wildly impressed by it. I ended up doing a deep study on new AI technologies, and did a lot of abstract thinking about geometric interpretations of latent space, ending by coming up with a compact diagrammatic notation which I still use to reason about LLM latent spaces on occasion.
+
+Following that period of study I found myself full of ideas for things to build on top of LLM technologies. The first of those ideas was for an app that would read the Arxiv RSS feed each day so that we could get a list of new papers that had been published and then use an AI system on the backend to essentially narrow down those candidates into the ones which would be of most potential interest to one of four fixed biographies which the system was aware of. These biographies were things like researcher, engineer, concerned citizen, leader. At the time those roles had been introduced we'd actually moved beyond thinking of just using the Arxiv RSS feed to looking at the hacker news RSS feed as well as certain select subreddits and possibly looking at a set of Twitter users and their feed essentially or not feed but their posts. Again, aggregating all that data, filtering through it, generating tailored summaries for each of the bios and then building up a feed which was presented in a Tinder style where for each of these articles that appears in your feed you basically say whether you're interested or not by swiping left or right and there's some other options you can do when looking at the presentation of one of these articles like getting more details, doing some exploration with an AI and so on.
+
+This is something I'd like to get back to some day, but not sure it's the most practical project for me right now since I need to have income within a month. 
+
+The other idea I'd considered was around doing Something like a daily AI-generated mystery that incorporated some contemporary societal topics in a similar way that South Park does. That is that you would play something like a text-based game of the classical type Zork for instance, where you select options from a menu to navigate around some mysterious planet or dimension which you've been transported to. And from there you can speak to different NPCs and essentially try to solve this mystery. The format for it is kind of like Star Trek or Futurama or something like that where each episode allows users to explore interesting new sci-fi concepts. But then we do sort of a Columbo style or house style mystery solving that the player engages in and they have one opportunity to present what they think the solution to the mystery is on each day. And if they do so, they're able to transport off the planet and get back home. And some of the overarching story is that basically we're in some future state where like multiverse timelines are getting crossed or something like that. So occasionally people are transported randomly onto different planets or dimensions. So I think I have a pretty clear idea in mind of how I could set up a system to generate the data for these stories each day in a way that would actually give very interesting detailed like background plots, interesting mysteries, interesting NPCs. And a lot of this would be facilitated by using concept scripts to guide LLM generation to produce these artifacts in a non generic way. And I don't think that the development time for this project would be significant. I have strong background and, you know, web development and building all manner of graphical user interfaces and doing graphics programming. And I have some ideas around putting together a nicely aesthetic interface for it that gives some suggestive renderings for each of the environments that you visit and so on. So it could be a nice little art project at the same time.
+
+
+
+
+Great, we're pretty close, but I'll make a few corrections. The first time you play you're presented with an explanation of the overall situation you find yourself in (chaotically crossing timelines that accidentally transport you to unknown regions)—but the individual episodes themselves will be completely self-contained. Think twilight zone. As far as the setting, it will be broader than just sci-fi: could have twilight zone like episodes, or those that are more horror-based, those more tied to normal earth settings, those in sci-fi or fantasy settings, and so on.
+
+The game will give you something like 100 "actions" (making a selection from the a menu to do something like travel to another location, pick up an item, talk to an NPC, etc.). The idea is for this to be fairly Wordle-like: a quick game you play each day that gets you thinking a bit, but in our case also puts you in a new interesting atmosphere/setting. The world of the day will have something like 6 - 10 locations within it, items scattered about, like e.g. "treasure chests", NPCs, and so on. You solve the mysteries by getting clues from NPCs and finding key items. There will also be one special location in each world which has an NPC you speak with to present your solution to the mystery; you only get one chance at this, then have to wait till the next day to play the next episode.
+
+The UI will be a web app. I can create a sleek modern-looking design here augmented with light sounds and appealing graphics. At the top of the page will be a large banner graphic with a procedurally generated representation of your current location along with some text in one corner giving the location name.
+
+While the interaction scheme is reminiscent of these old text based games like Zork, I'm especially interested in introducing this format to a generation which may not be familiar with it. The possibilities for generative story, plot, and dialogue and visual content, backed with modern LLMs and ConceptScript could produce content interesting to a wide audience, despite the interface's resemblance to a niche old game format.
+
+My thinking for how to structure the content generation is basically that there would be a process run on the server each day which outputs a bunch of JSON describing the setting, plot, npcs, correct answer to the solution, graph layout of connected levels in the world, dialog options, items which can be picked up etc. This JSON is essentially a configuration of the game and represents a particular 'episode'. Because I do the generation just once per day, rather needing any AI-involvement on a per-user basis, it should be affordable for me to use the most sophisticated existing models for this generation, e.g. you (Claude 3 Opus).

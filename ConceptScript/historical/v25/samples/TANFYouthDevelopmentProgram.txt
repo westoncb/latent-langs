@@ -1,0 +1,323 @@
+CONCEPT TANFYouthDevelopmentProgram {
+  LANGUAGE {
+    TYPE Youth <: Person
+    TYPE Provider <: Organization
+    TYPE Activity
+    TYPE Service
+    TYPE SupportiveService <: Service
+    TYPE Barrier
+    TYPE VerificationDocument
+    
+    FUNC Age(y: Youth): Nat
+    FUNC IsEligible(y: Youth): Bool
+    FUNC Income(y: Youth): Nat
+    FUNC HasBarrier(y: Youth, b: Barrier): Bool
+    FUNC Provides(p: Provider, a: Activity): Bool  
+    FUNC Provides(p: Provider, s: Service): Bool
+    FUNC ParticipatesIn(y: Youth, a: Activity): Bool
+    FUNC ReceivesService(y: Youth, s: Service): Bool
+    FUNC VerifiedSSN(y: Youth): Bool
+    FUNC VerifiedIdentity(y: Youth): Bool
+    FUNC USCitizen(y: Youth): Bool
+    FUNC EligibleNonCitizen(y: Youth): Bool
+    FUNC PAResident(y: Youth): Bool
+    FUNC HighPovertyAreaResident(y: Youth): Bool
+    FUNC HasVerificationDocument(y: Youth, d: VerificationDocument): Bool
+    
+    AXIOM EligibilityRequirements {
+      ∀ (y: Youth).
+        IsEligible(y) ⇔ 
+          12 ≤ Age(y) ≤ 24 ∧
+          VerifiedSSN(y) ∧ 
+          VerifiedIdentity(y) ∧
+          (USCitizen(y) ∨ EligibleNonCitizen(y)) ∧
+          PAResident(y) ∧
+          (Income(y) ≤ 235% FederalPovertyLevel ∨ 
+           (HighPovertyAreaResident(y) ∧ ∃ (b: Barrier). HasBarrier(y, b)))
+    }
+    
+    AXIOM VerificationDocumentation {
+      ∀ (y: Youth).
+        IsEligible(y) ⇒
+          ∃ (d1: VerificationDocument). HasVerificationDocument(y, d1) ∧ VerifiesSSN(d1) ∧
+          ∃ (d2: VerificationDocument). HasVerificationDocument(y, d2) ∧ VerifiesIdentity(d2) ∧
+          ∃ (d3: VerificationDocument). HasVerificationDocument(y, d3) ∧ VerifiesResidency(d3) ∧
+          ∃ (d4: VerificationDocument). HasVerificationDocument(y, d4) ∧ VerifiesIncome(d4)
+    }
+    
+    AXIOM PrioritizationOfServices {
+      ∀ (y: Youth) (b: Barrier).
+        HasBarrier(y, b) ⇒ PrioritizeServices(y)
+    }
+    
+    AXIOM SupportiveServiceEligibility {
+      ∀ (y: Youth) (s: SupportiveService).
+        ReceivesService(y, s) ⇒ 
+          IsEligible(y) ∧ 
+          EnablesParticipation(s, y) ∧
+          ¬ReceivesServiceFromCAO(y, s)
+    }
+  }
+  
+  STRUCTURE Program {
+    REQUIRE ∀ (y: Youth) (p: Provider) (a: Activity).
+      ParticipatesIn(y, a) ⇒ 
+        IsEligible(y) ∧ Provides(p, a)
+        
+    REQUIRE ∀ (y: Youth) (p: Provider) (s: Service).
+      ReceivesService(y, s) ⇒
+        IsEligible(y) ∧ Provides(p, s)
+        
+    DEF RequiredActivities: List[Activity] = [
+      Tutoring,
+      AlternativeSecondarySchool, 
+      WorkExperience,
+      OccupationalSkillsTraining,
+      LeadershipDevelopment,
+      SupportiveServices,
+      AdultMentoring,
+      FollowUpServices,
+      GuidanceAndCounseling,
+      IntegratedEducationAndTraining,
+      FinancialLiteracyEducation, 
+      EntrepreneurialSkillsTraining,
+      LaborMarketInformation,
+      PostsecondaryPreparation
+    ]
+    
+    REQUIRE ∀ (a: Activity). a ∈ RequiredActivities ⇒ 
+      ∃ (p: Provider). Provides(p, a)
+      
+    DEF AllowableExpenditures: List[Type] = [
+      WorkforceInvestmentOpportunities,
+      ParticipantSupportCosts,
+      WorkExperience, 
+      CareerAwarenessActivities,
+      EducationalSupplies,
+      ConfidentialityMeasures,
+      ParticipantWages,
+      ClearanceCosts,
+      ParticipantIncentives,
+      SupportiveServices,
+      SpecialProjects,
+      InfrastructureCosts,
+      StipendCosts,
+      StaffCosts
+    ]
+    
+    REQUIRE ∀ (e: Expenditure). 
+      ProgramExpenditure(e) ⇒ Type(e) ∈ AllowableExpenditures
+      
+    REQUIRE ∀ (i: ParticipantIncentive) (y: Youth).
+      ReceivesIncentive(y, i) ⇒ 
+        ∃ (a: Activity). ParticipatesIn(y, a) ∧ IncentiveRelatedTo(i, a)
+        
+    REQUIRE ∀ (i: ParticipantIncentive).
+      ¬ EntertainmentRelated(i)
+  }
+  
+  STRUCTURE Monitoring {
+    REQUIRE VerifyProgramCompliance
+    REQUIRE VerifyYouthEngagement
+    REQUIRE ReviewSampleOfDataFiles
+    REQUIRE ReviewOutcomes
+    REQUIRE CorrectiveActionPlanForDeficiencies
+  }
+  
+  PROOFS {
+    THEOREM Eligibility {
+      STATEMENT:
+        ∀ (y: Youth) (p: Provider) (a: Activity).
+          ParticipatesIn(y, a) ⇒ IsEligible(y)
+          
+      PROOF:
+        LET y: Youth, p: Provider, a: Activity
+        ASSUME ParticipatesIn(y, a)
+        SHOW IsEligible(y) BY <<Program structure requirement>>
+    }
+    
+    THEOREM VerificationDocumentation {
+      STATEMENT:
+        ∀ (y: Youth). IsEligible(y) ⇒
+          HasVerificationDocument(y, SSNVerification) ∧
+          HasVerificationDocument(y, IdentityVerification) ∧ 
+          HasVerificationDocument(y, ResidencyVerification) ∧
+          HasVerificationDocument(y, IncomeVerification)
+          
+      PROOF:
+        LET y: Youth
+        ASSUME IsEligible(y)
+        SHOW ∃ (d: VerificationDocument). 
+               HasVerificationDocument(y, d) ∧ VerifiesSSN(d)
+          AND ∃ (d: VerificationDocument).
+                HasVerificationDocument(y, d) ∧ VerifiesIdentity(d)  
+          AND ∃ (d: VerificationDocument).
+                HasVerificationDocument(y, d) ∧ VerifiesResidency(d)
+          AND ∃ (d: VerificationDocument).
+                HasVerificationDocument(y, d) ∧ VerifiesIncome(d)
+          BY VerificationDocumentation
+    }
+    
+    THEOREM SupportiveServiceEligibility {
+      STATEMENT:
+        ∀ (y: Youth) (s: SupportiveService).
+          ReceivesService(y, s) ⇒ 
+            IsEligible(y) ∧ 
+            EnablesParticipation(s, y) ∧
+            ¬ReceivesServiceFromCAO(y, s)
+            
+      PROOF:
+        LET y: Youth, s: SupportiveService 
+        ASSUME ReceivesService(y, s)
+        SHOW IsEligible(y) ∧ EnablesParticipation(s, y) ∧ ¬ReceivesServiceFromCAO(y, s)
+          BY SupportiveServiceEligibility
+    }
+  }
+}
+
+
+
+CONCEPT TANFYouthDevelopmentProgramFramework {
+  LANGUAGE {
+    TYPE Person
+    TYPE Youth <: Person
+    TYPE Organization
+    TYPE Provider <: Organization
+    TYPE Activity
+    TYPE Service
+    TYPE Barrier
+    TYPE Income
+    TYPE Documentation
+    
+    FUNC Age(p: Person): Nat
+    FUNC IsEligible(y: Youth): Bool
+    FUNC IsVerified(y: Youth, d: Documentation): Bool
+    FUNC HasBarrier(y: Youth, b: Barrier): Bool
+    FUNC Provides(p: Provider, a: Activity): Bool  
+    FUNC Provides(p: Provider, s: Service): Bool
+    FUNC ParticipatesIn(y: Youth, a: Activity): Bool
+    FUNC ReceivesService(y: Youth, s: Service): Bool
+    FUNC PersonalMonthlyGrossIncome(p: Person): Income
+    
+    PRED USCitizen(p: Person)
+    PRED EligibleNonCitizen(p: Person)
+    PRED PAResident(p: Person)
+    
+    AXIOM EligibilityRequirements {
+      ∀ (y: Youth).
+        IsEligible(y) ⇔ 
+          12 ≤ Age(y) ≤ 24 ∧
+          IsVerified(y, SSN) ∧ 
+          IsVerified(y, Identity) ∧
+          (USCitizen(y) ∨ EligibleNonCitizen(y)) ∧
+          PAResident(y) ∧
+          PersonalMonthlyGrossIncome(y) ≤ 235% FederalPovertyLevel 
+    }
+    
+    AXIOM VerificationDocumentation {
+      ∀ (y: Youth).
+        IsVerified(y, SSN) ⇔ HasAcceptableDocument(y, SSNCard) ∧
+        IsVerified(y, Identity) ⇔ HasAcceptableDocument(y, 
+          IdentityDocs) ∧
+        IsVerified(y, PAResidency) ⇔ HasAcceptableDocument(y, 
+          ResidencyDocs) ∧  
+        IsVerified(y, Income) ⇔ HasAcceptableDocument(y, IncomeDocs) ∧
+        IsVerified(y, CitizenshipStatus) ⇔ 
+          HasAcceptableDocument(y, CitizenshipDocs)
+    }
+    
+    AXIOM PrioritizationOfServices {
+      ∀ (y: Youth) (b: Barrier).
+        HasBarrier(y, b) ⇒ PrioritizeServices(y)
+    }
+    
+    AXIOM ConfidentialityOfData {
+      ∀ (y: Youth).
+        KeepDataConfidential(y) ∧
+        ReleaseDataOnlyWithConsent(y)
+    }
+  }
+  
+  STRUCTURE Program {
+    REQUIRE ∀ (y: Youth) (p: Provider) (a: Activity).
+      ParticipatesIn(y, a) ⇒ 
+        IsEligible(y) ∧ Provides(p, a)
+        
+    REQUIRE ∀ (y: Youth) (p: Provider) (s: Service).
+      ReceivesService(y, s) ⇒
+        IsEligible(y) ∧ Provides(p, s)
+        
+    DEF RequiredActivities: List[Activity] = [
+      Tutoring,
+      AlternativeSecondarySchool, 
+      PaidAndUnpaidWorkExperience,
+      OccupationalSkillsTraining,
+      LeadershipDevelopment,
+      SupportiveServices,
+      AdultMentoring,
+      FollowUpServices,
+      ComprehensiveGuidanceAndCounseling,
+      IntegratedEducationAndTraining,
+      FinancialLiteracyEducation, 
+      EntrepreneurialSkillsTraining,
+      LaborMarketInformation,
+      PostsecondaryPreparationAndTransition
+    ]
+    
+    REQUIRE ∀ (a: Activity). a ∈ RequiredActivities ⇒ 
+      ∃ (p: Provider). Provides(p, a)
+      
+    DEF AllowableExpenditures: List[Expenditure] = [
+      ParticipantSupportCosts,
+      WorkExperience, 
+      CareerAwarenessActivities,
+      SuppliesAndEquipment,
+      ParticipantIncentives,
+      ParticipantSupportiveServices,
+      StaffCosts
+    ]
+    
+    REQUIRE ∀ (e: Expenditure). 
+      e ∈ AllowableExpenditures ⇒ IsAllowed(e)
+  }
+  
+  STRUCTURE Monitoring {
+    REQUIRE VerifyProgramCompliance
+    REQUIRE VerifyYouthEngagement
+    REQUIRE ReviewSampleOfDataFiles
+    REQUIRE ReviewOutcomes
+    REQUIRE ConductExitConferences
+    
+    REQUIRE ∀ (p: Provider). 
+      ¬MeetsExpectations(p) ⇒ SubmitCorrectiveActionPlan(p)
+  }
+  
+  PROOFS {
+    TACTIC VerifyEligibility(y: Youth) -> Bool {
+      MATCH EligibilityRequirements WITH 
+      | Age(y) ∈ [12, 24] ∧ 
+        IsVerified(y, SSN) ∧
+        IsVerified(y, Identity) ∧ 
+        (USCitizen(y) ∨ EligibleNonCitizen(y)) ∧
+        PAResident(y) ∧
+        PersonalMonthlyGrossIncome(y) ≤ 235% FederalPovertyLevel
+          -> SHOW IsEligible(y)
+      | _ -> SHOW ¬IsEligible(y)
+    }
+    
+    TACTIC VerifyDocumentation(y: Youth, d: Documentation) -> Bool {
+      MATCH d WITH
+      | SSNCard -> SHOW IsVerified(y, SSN)  
+      | IdentityDocs -> SHOW IsVerified(y, Identity)
+      | ResidencyDocs -> SHOW IsVerified(y, PAResidency)
+      | IncomeDocs -> SHOW IsVerified(y, Income)
+      | CitizenshipDocs -> SHOW IsVerified(y, CitizenshipStatus)
+      | _ -> SHOW ¬IsVerified(y, d)
+    }
+    
+    TACTIC CheckBarriers(y: Youth) -> List[Barrier] {
+      APPLY (RULE (∀ (b: Barrier). HasBarrier(y, b) ⇒ b ∈ Barriers)
+             THEN Barriers)
+    }
+  }
+}

@@ -1,0 +1,137 @@
+CONCEPT SonataTheory {
+  DECLARE {
+    Pitch : TYPE
+    Interval : TYPE = Pitch × Pitch
+    Chord : TYPE = ℘(Pitch)
+    Key : TYPE
+    Tonality : TYPE = Key × (Major | Minor)
+    
+    Time : TYPE = ℝ₊
+    Duration : TYPE = Time
+    Rhythm : TYPE = Duration × ℕ
+    Meter : TYPE = ℕ × ℕ
+    Tempo : TYPE = ℝ₊
+    
+    Motive : TYPE = Rhythm × Chord
+    Theme : TYPE = [Motive]
+    Exposition : TYPE = (Theme × Key)²
+    Development : TYPE = [Theme × Key]
+    Recapitulation : TYPE = (Theme × Key)²
+    Coda : TYPE = [Theme × Key]
+    
+    Movement : TYPE = Exposition × Development × Recapitulation × Coda
+    Sonata : TYPE = Movement × Movement × Movement
+    
+    Modulation : TYPE = Key × Key
+    Tonicization : TYPE = Key × Key
+    Cadence : TYPE = (Authentic | Plagal | Deceptive | HalfCadence)
+    
+    Voice : TYPE = (Soprano | Alto | Tenor | Bass)
+    VoiceLeading : TYPE = [Voice × Pitch]
+    ParallelMotion : TYPE = VoiceLeading
+    ContraryMotion : TYPE = VoiceLeading
+    ObliqueMotion : TYPE = VoiceLeading
+    SimilarMotion : TYPE = VoiceLeading
+    
+    DiatonicCollection : TYPE = {p : Pitch | p ∈ C ∨ p ∈ D ∨ p ∈ E ∨ p ∈ F ∨ p ∈ G ∨ p ∈ A ∨ p ∈ B}
+    ChromaticCollection : TYPE = {p : Pitch | p ∈ C ∨ p ∈ C♯ ∨ p ∈ D ∨ p ∈ D♯ ∨ p ∈ E ∨ p ∈ F ∨ p ∈ F♯ ∨ p ∈ G ∨ p ∈ G♯ ∨ p ∈ A ∨ p ∈ A♯ ∨ p ∈ B}
+    WholeHalfDiminishedScale : TYPE = {p : Pitch | p ∈ C ∨ p ∈ D ∨ p ∈ D♯ ∨ p ∈ F ∨ p ∈ F♯ ∨ p ∈ G♯ ∨ p ∈ A ∨ p ∈ B}
+    OctatonicScale : TYPE = {p : Pitch | p ∈ C ∨ p ∈ C♯ ∨ p ∈ D♯ ∨ p ∈ E ∨ p ∈ F ∨ p ∈ F♯ ∨ p ∈ G♯ ∨ p ∈ A}
+  }
+  
+  DEFINE {
+    ; Triadic chord progressions
+    Tonic(k) ≜ {I, vi, iii}[k]  
+    Subdominant(k) ≜ {IV, ii, vi}[k]
+    Dominant(k) ≜ {V, vii°}[k]
+    
+    ; Diatonic functions
+    Tonic(t) ≜ {I, iii, vi}[t]
+    Predominant(t) ≜ {ii, IV}[t]  
+    Dominant(t) ≜ {V, vii°}[t]
+    
+    ; Chromatic functions
+    Neapolitan(t) ≜ {♭II}[t]
+    AugmentedSixth(t) ≜ {It6, Fr6, Ger6}[t]
+    
+    ; Modulation types  
+    DiatonicModulation(k1, k2) ≜ ∃k. k ∈ Tonic(k1) ∧ k ∈ Dominant(k2)
+    ChromaticModulation(k1, k2) ≜ ∃k. k ∈ Dominant(k1) ∧ k ∈ Neapolitan(k2)
+    EnharmonicModulation(k1, k2) ≜ ∃k. k ∈ Dominant(k1) ∧ k ∈ AugmentedSixth(k2)
+    
+    ; Cadence types
+    AuthenticCadence(t) ≜ ∃k1, k2. k1 ∈ Dominant(t) ∧ k2 ∈ Tonic(t) ∧ k1 < k2  
+    PlagalCadence(t) ≜ ∃k1, k2. k1 ∈ Subdominant(t) ∧ k2 ∈ Tonic(t) ∧ k1 < k2
+    DeceptiveCadence(t) ≜ ∃k1, k2. k1 ∈ Dominant(t) ∧ k2 ∈ Subdominant(t) ∧ k1 < k2
+    HalfCadence(t) ≜ ∃k. k ∈ Dominant(t)
+  }
+  
+  AXIOM {
+    ; Diatonic scale axioms
+    ∀k : Key. DiatonicCollection(k) = {p : Pitch | ∃i : ℤ. p = k + i * 2 ∨ p = k + i * 2 + 1}
+    ∀t : Tonality. t = (k, Major) ⇒ DiatonicCollection(t) = DiatonicCollection(k)
+    ∀t : Tonality. t = (k, Minor) ⇒ DiatonicCollection(t) = DiatonicCollection(k + 1)
+    
+    ; Chromatic scale axiom
+    ∀p : Pitch. p ∈ ChromaticCollection
+    
+    ; Voice leading axioms
+    ∀v1, v2 : Voice, p1, p2 : Pitch. ParallelMotion(v1, p1, v2, p2) ⇔ v1 ≠ v2 ∧ p2 - p1 = 0 ∨ p2 - p1 = 12
+    ∀v1, v2 : Voice, p1, p2 : Pitch. ContraryMotion(v1, p1, v2, p2) ⇔ v1 ≠ v2 ∧ (p2 - p1 > 0 ⇒ p2 - p1 < 0) ∧ (p2 - p1 < 0 ⇒ p2 - p1 > 0)
+    ∀v1, v2 : Voice, p1, p2 : Pitch. ObliqueMotion(v1, p1, v2, p2) ⇔ v1 ≠ v2 ∧ (p2 - p1 = 0 ⇒ p2 - p1 ≠ 0) ∧ (p2 - p1 ≠ 0 ⇒ p2 - p1 = 0)
+    ∀v1, v2 : Voice, p1, p2 : Pitch. SimilarMotion(v1, p1, v2, p2) ⇔ v1 ≠ v2 ∧ (p2 - p1 > 0 ⇒ p2 - p1 > 0) ∧ (p2 - p1 < 0 ⇒ p2 - p1 < 0)
+    
+    ; Exposition axioms
+    ∀e : Exposition. ∃t1, t2 : Theme, k1, k2 : Key. e = ((t1, k1), (t2, k2)) ∧ k1 ≠ k2 ∧ DiatonicModulation(k1, k2)
+    ∀e : Exposition, t : Theme, k : Key. (t, k) ∈ e ⇒ ∀m : Motive, p : Pitch. (m, p) ∈ t ⇒ p ∈ DiatonicCollection(k)
+    
+    ; Development axioms  
+    ∀d : Development, t : Theme, k : Key. (t, k) ∈ d ⇒ ∃k' : Key. ChromaticModulation(k, k') ∨ EnharmonicModulation(k, k')
+    ∀d : Development, t : Theme, k : Key. (t, k) ∈ d ⇒ ∃m : Motive, p : Pitch. (m, p) ∈ t ∧ p ∈ ChromaticCollection
+    
+    ; Recapitulation axioms
+    ∀r : Recapitulation. ∃t1, t2 : Theme, k : Key. r = ((t1, k), (t2, k))
+    ∀r : Recapitulation, e : Exposition. ∃t1, t2 : Theme, k1, k2 : Key. e = ((t1, k1), (t2, k2)) ∧ r = ((t1, k1), (t2, k1))
+    
+    ; Coda axioms
+    ∀c : Coda, t : Theme, k : Key. (t, k) ∈ c ⇒ ∀m : Motive, p : Pitch. (m, p) ∈ t ⇒ p ∈ DiatonicCollection(k)
+    ∀c : Coda. ∃k : Key. ∀t : Theme. (t, k) ∈ c ⇒ AuthenticCadence(k)
+  }
+  
+  THEOREM SonataFormTheorem {
+    PROOF {
+      assume s : Sonata
+      let (e, d, r, c) = s
+      
+      have ∀t : Theme, k : Key. (t, k) ∈ e ⇒ ∀m : Motive, p : Pitch. (m, p) ∈ t ⇒ p ∈ DiatonicCollection(k) by Exposition axiom
+      have ∃t1, t2 : Theme, k1, k2 : Key. e = ((t1, k1), (t2, k2)) ∧ k1 ≠ k2 ∧ DiatonicModulation(k1, k2) by Exposition axiom
+      
+      have ∀t : Theme, k : Key. (t, k) ∈ d ⇒ ∃k' : Key. ChromaticModulation(k, k') ∨ EnharmonicModulation(k, k') by Development axiom
+      have ∀t : Theme, k : Key. (t, k) ∈ d ⇒ ∃m : Motive, p : Pitch. (m, p) ∈ t ∧ p ∈ ChromaticCollection by Development axiom
+      
+      obtain t1, t2 : Theme, k : Key with r = ((t1, k), (t2, k)) by Recapitulation axiom
+      obtain t1', t2' : Theme, k1, k2 : Key with e = ((t1', k1), (t2', k2)) ∧ r = ((t1', k1), (t2', k1)) by Recapitulation axiom
+      
+      have ∀t : Theme, k : Key. (t, k) ∈ c ⇒ ∀m : Motive, p : Pitch. (m, p) ∈ t ⇒ p ∈ DiatonicCollection(k) by Coda axiom
+      obtain k : Key with ∀t : Theme. (t, k) ∈ c ⇒ AuthenticCadence(k) by Coda axiom
+      
+      show SonataForm(s) by definition of Sonata
+    }
+  }
+  
+  THEOREM MotivicDevelopmentTheorem {
+    PROOF {
+      assume d : Development
+      assume t : Theme, k : Key with (t, k) ∈ d
+      
+      obtain k' : Key with ChromaticModulation(k, k') ∨ EnharmonicModulation(k, k') by Development axiom
+      obtain m : Motive, p : Pitch with (m, p) ∈ t ∧ p ∈ ChromaticCollection by Development axiom
+      
+      obtain m' : Motive by construction {
+        let m' = TransformMotive(m, Augmentation | Diminution | Inversion | Retrograde)
+      }
+      
+      show ∃m' : Motive. m' ∈ TransformMotive(m, _) ∧ (m', _) ∈ t by construction of m'
+    }
+  }
+}

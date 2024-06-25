@@ -1,0 +1,106 @@
+CONCEPT TransitionStateTheory EXTENDS GeometricChemistry {
+  AXIOMS {
+    ; A transition state is a saddle point on the potential energy surface
+    TransitionState(R: ChemicalReaction):
+      let M_t = TransitionState(R)
+      Hessian(𝓔)(M_t) has one negative eigenvalue and (3n-1) positive eigenvalues
+      where n is the number of atoms in the system
+      
+    ; The reaction path is the steepest descent path from the transition state to the reactants and products  
+    ReactionPath(R: ChemicalReaction):
+      let γ: [0, 1] -> PotentialEnergySurface be a parametrization of the reaction path
+      γ(0) = Reactants(R), γ(1) = Products(R), γ(t_s) = TransitionState(R) for some t_s ∈ (0, 1)
+      γ'(t) = -Gradient(𝓔)(γ(t)) / |Gradient(𝓔)(γ(t))| for all t ≠ t_s
+      
+    ; The reaction coordinate is the signed distance along the reaction path  
+    ReactionCoordinate(R: ChemicalReaction, M: Molecule):
+      let s(M) = ∫_γ ds where γ is the reaction path and s(TransitionState(R)) = 0
+      s(M) < 0 for M in the reactant region and s(M) > 0 for M in the product region
+  }
+  
+  PROOFS {
+    theorem HammondPostulate(R: ChemicalReaction):
+      let M_r = Reactants(R), M_p = Products(R), M_t = TransitionState(R)
+      assume |𝓔(M_t) - 𝓔(M_r)| < |𝓔(M_t) - 𝓔(M_p)|
+      prove Geometry(M_t) is closer to Geometry(M_r) than to Geometry(M_p)
+    {
+      assume |𝓔(M_t) - 𝓔(M_r)| < |𝓔(M_t) - 𝓔(M_p)|  ; Exothermic reaction
+      
+      let γ be the ReactionPath(R) parametrized by the ReactionCoordinate s
+      have γ(s_r) = M_r, γ(s_t) = M_t, γ(s_p) = M_p where s_r < s_t < s_p
+      
+      let ΔE_r = 𝓔(M_t) - 𝓔(M_r), ΔE_p = 𝓔(M_t) - 𝓔(M_p)
+      have |ΔE_r| < |ΔE_p| by assumption
+      
+      for M in a neighborhood of M_t:
+        have 𝓔(M) ≈ 𝓔(M_t) + (1/2) * ⟨ℋ_t * (M - M_t), (M - M_t)⟩  ; By Taylor expansion
+        where ℋ_t = Hessian(𝓔)(M_t)
+        
+      let v_r, v_p be the unit tangent vectors to γ at M_t pointing towards M_r, M_p
+      have v_r ≈ (M_r - M_t) / |M_r - M_t|, v_p ≈ (M_p - M_t) / |M_p - M_t|
+      
+      let κ_r = ⟨ℋ_t * v_r, v_r⟩, κ_p = ⟨ℋ_t * v_p, v_p⟩ be the curvatures of 𝓔 along v_r, v_p
+      have κ_r < 0, κ_p < 0 since M_t is a saddle point
+      
+      calc |M_r - M_t| / |M_p - M_t|
+           ≈ sqrt(|ΔE_r| / |κ_r|) / sqrt(|ΔE_p| / |κ_p|)  ; By the quadratic approximation
+           < sqrt(|ΔE_p| / |κ_r|) / sqrt(|ΔE_p| / |κ_p|)  ; Since |ΔE_r| < |ΔE_p|  
+           = sqrt(|κ_p| / |κ_r|) 
+           ≤ 1  ; Since |κ_p| ≤ |κ_r| by the assumption of an exothermic reaction
+           
+      hence |M_r - M_t| < |M_p - M_t|, i.e., Geometry(M_t) is closer to Geometry(M_r)
+    }
+    
+    theorem MarcusTheory(R: ChemicalReaction, ΔE: Energy, λ: Energy):
+      let ΔG = FreeEnergy(Products(R)) - FreeEnergy(Reactants(R))
+      assume ReactionPath(R) is well-approximated by a parabola near the TransitionState(R)
+      prove ActivationEnergy(R) = (λ + ΔG)^2 / (4 * λ)
+      where λ is the reorganization energy and ΔE is the energy difference between the reactants and products
+    {
+      let M_r = Reactants(R), M_p = Products(R), M_t = TransitionState(R)
+      let γ be the ReactionPath(R) parametrized by the ReactionCoordinate s
+      
+      assume the potential energy along γ is well-approximated by:
+        𝓔(γ(s)) ≈ 𝓔_r + (1/2) * k_r * s^2 for s < 0  ; Reactant region
+        𝓔(γ(s)) ≈ 𝓔_p + (1/2) * k_p * (s - s_p)^2 for s > 0  ; Product region
+        where 𝓔_r = 𝓔(M_r), 𝓔_p = 𝓔(M_p), s_p = ReactionCoordinate(R, M_p)
+        and k_r, k_p are the force constants of the reactant and product wells
+        
+      let ΔE = 𝓔_p - 𝓔_r be the energy difference between the reactants and products  
+        
+      at the transition state M_t, we have:
+        𝓔(M_t) = 𝓔_r + (1/2) * k_r * s_t^2 = 𝓔_p + (1/2) * k_p * (s_t - s_p)^2
+        where s_t = ReactionCoordinate(R, M_t)
+        
+      solving for s_t:
+        s_t = (1/2) * s_p * (1 + ΔE / λ)
+        where λ = (1/2) * k_p * s_p^2 is the reorganization energy
+        
+      the activation energy is:
+        E_a = 𝓔(M_t) - 𝓔_r
+            = (1/2) * k_r * s_t^2
+            = (1/2) * k_r * ((1/2) * s_p * (1 + ΔE / λ))^2
+            = (1/2) * k_r * s_p^2 * (1/4) * (1 + ΔE / λ)^2
+            = (λ / k_p) * (k_r / k_p) * (1/4) * (1 + ΔE / λ)^2
+            
+      assume k_r ≈ k_p ≈ k, i.e., the force constants are similar in the reactant and product wells
+      
+      calc E_a = (λ / k) * (1/4) * (1 + ΔE / λ)^2
+               = (λ / 4) * (1 + 2 * ΔE / λ + (ΔE / λ)^2)
+               = (λ / 4) * (1 + 2 * ΔE / λ + ΔE^2 / λ^2)
+               = (λ + 2 * ΔE + ΔE^2 / λ) / 4
+               = ((λ + ΔE)^2 / λ) / 4  
+               = (λ + ΔG)^2 / (4 * λ)  ; Since ΔE ≈ ΔG at constant pressure
+    }
+  }
+}
+
+In this extension of the GeometricChemistry Concept, we focus on the theory of transition states and reaction paths. The key ideas are:
+
+A transition state is a saddle point on the potential energy surface, characterized by one negative eigenvalue of the Hessian matrix.
+The reaction path is the steepest descent path connecting the reactants, the transition state, and the products. It is parametrized by the reaction coordinate, which measures the signed distance along the path.
+The Hammond postulate states that for an exothermic reaction, the transition state geometry is closer to the reactants than to the products. This is proven using a Taylor expansion of the potential energy and comparing the curvatures of the energy profile near the transition state.
+Marcus theory provides an expression for the activation energy in terms of the reorganization energy (λ) and the free energy difference between the reactants and products (ΔG). The proof assumes a parabolic approximation of the energy profile along the reaction path and solves for the position of the transition state.
+
+These results showcase how the geometric language of potential energy surfaces, gradients, and Hessians can be used to derive fundamental principles of chemical kinetics. The symbolic notation and axiomatic structure make the proofs concise and modular, while also highlighting the key assumptions and approximations.
+The Concept could be further extended to include other aspects of reaction rate theory, such as transition state theory, RRKM theory, or variational transition state theory. The connection to statistical mechanics could also be made more explicit by considering partition functions and free energy surfaces.

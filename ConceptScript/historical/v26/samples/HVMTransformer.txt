@@ -1,0 +1,175 @@
+CONCEPT HVMTransformer {
+  LANGUAGE {
+    TYPE Tensor[shape : ℕ...] = ℝ^shape
+    TYPE Sequence = Tensor[[d_model, *]]
+    TYPE Attention = (Tensor[[d_model, d_model]], Tensor[[d_model, d_model]], Tensor[[d_model, d_model]])
+    TYPE FFN = (Tensor[[d_model, d_ff]], Tensor[[d_ff, d_model]])
+    TYPE TransformerLayer = (Attention, FFN, Tensor[[d_model, d_model]])
+    TYPE TransformerStack = TransformerLayer^n_layers
+    TYPE Transformer = (TransformerStack, TransformerStack, Tensor[[d_model, d_vocab_in]], Tensor[[d_vocab_out, d_model]])
+    
+    TYPE HVMNode = 
+      | EMB(idx : ℕ)
+      | ATT(Q : Tensor[[d_model, d_model]], K : Tensor[[d_model, d_model]], V : Tensor[[d_model, d_model]])
+      | FFN(W1 : Tensor[[d_model, d_ff]], W2 : Tensor[[d_ff, d_model]]) 
+      | ADD
+      | LN(scale : Tensor[[d_model]], bias : Tensor[[d_model]])
+      
+    TYPE HVMPort = ℕ × ℕ
+    TYPE HVMPair = HVMPort × HVMPort
+    TYPE HVMGNN = (nodes : Array[HVMNode], cons : Array[HVMPair])
+    
+    FUNC Embed(input : ℕ^n, embed_matrix : Tensor[[d_vocab_in, d_model]]) -> Tensor[[n, d_model]]
+    FUNC AttentionHead(Q K V : Tensor[[d_model, *]], mask : Tensor[[*, *]]) -> Tensor[[d_model, *]]
+    FUNC MultiHeadAttention(Q K V : Sequence, mask : Tensor[[*, *]]) -> Sequence
+    FUNC LayerNorm(input : Sequence, scale : Tensor[[d_model]], bias : Tensor[[d_model]]) -> Sequence
+    FUNC FeedForward(input : Sequence, W1 : Tensor[[d_model, d_ff]], W2 : Tensor[[d_ff, d_model]]) -> Sequence
+    
+    FUNC Link(gnn : HVMGNN, a : HVMPort, b : HVMPort) : Unit
+    FUNC Expand(gnn : HVMGNN, node : HVMNode, port : HVMPort) : Unit
+    FUNC Annihilate(gnn : HVMGNN, a : HVMPort, b : HVMPort) : Unit
+    FUNC Commute(gnn : HVMGNN, a : HVMPort, b : HVMPort) : Unit
+    
+    PRED ValidPort(port : HVMPort) = port.0 < Length(gnn.nodes) ∧ port.1 < 3
+    PRED ValidPair(pair : HVMPair) = ValidPort(pair.0) ∧ ValidPort(pair.1)
+  }
+  
+  NOTATION {
+    "A ~ B" = Link(gnn, A, B)
+    "A ~> B" = Expand(gnn, A, B)
+    "alloc(N)" = (ok, nodes) WHERE 
+                   ok = (Length(gnn.nodes) + N < MAX_NODES)
+                   nodes = [Length(gnn.nodes) + i for i in 0:N]
+  }
+  
+  STRUCTURE HVMTransformerLayer {
+    gnn : HVMGNN
+    
+    FUNC SelfAttention(input : Sequence, mask : Tensor[[*, *]]) -> Sequence {
+      LET (ok, [q_idx, k_idx, v_idx, add_idx, ln_idx]) = alloc(5)
+      REQUIRE ok
+      
+      LET Q = ATT(RandomTensor[[d_model, d_model]](), 0, 0)
+      LET K = ATT(0, RandomTensor[[d_model, d_model]](), 0)  
+      LET V = ATT(0, 0, RandomTensor[[d_model, d_model]]())
+      
+      gnn.nodes[q_idx] ~> Q
+      gnn.nodes[k_idx] ~> K
+      gnn.nodes[v_idx] ~> V
+      gnn.nodes[add_idx] ~> ADD
+      gnn.nodes[ln_idx] ~> LN(RandomTensor[[d_model]](), RandomTensor[[d_model]]())
+      
+      input ~ (q_idx, 0)
+      input ~ (k_idx, 0)
+      input ~ (v_idx, 0)
+      (q_idx, 1) ~ (add_idx, 0)  
+      (k_idx, 1) ~ (add_idx, 1)
+      (v_idx, 1) ~ (add_idx, 2)
+      (add_idx, 0) ~ (ln_idx, 0)
+      
+      RETURN (ln_idx, 1)
+    }
+    
+    FUNC FeedForward(input : Sequence) -> Sequence {
+      LET (ok, [ff_idx, add_idx, ln_idx]) = alloc(3)
+      REQUIRE ok
+      
+      LET W1 = RandomTensor[[d_model, d_ff]]()
+      LET W2 = RandomTensor[[d_ff, d_model]]()
+      
+      gnn.nodes[ff_idx] ~> FFN(W1, W2)
+      gnn.nodes[add_idx] ~> ADD
+      gnn.nodes[ln_idx] ~> LN(RandomTensor[[d_model]](), RandomTensor[[d_model]]())
+      
+      input ~ (ff_idx, 0)
+      (ff_idx, 1) ~ (add_idx, 0)
+      input ~ (add_idx, 1)  
+      (add_idx, 0) ~ (ln_idx, 0)
+      
+      RETURN (ln_idx, 1)
+    }
+  }
+  
+  STRUCTURE HVMTransformerStack {
+    layers : HVMTransformerLayer^n_layers
+    
+    FUNC Apply(input : Sequence, mask : Tensor[[*, *]]) -> Sequence {
+      LET x = input
+      FOR layer in layers:
+        x = layer.SelfAttention(x, mask)
+        x = layer.FeedForward(x)
+      RETURN x  
+    }
+  }
+  
+  STRUCTURE HVMTransformer {
+    encoder_stack : HVMTransformerStack
+    decoder_stack : HVMTransformerStack 
+    input_embed : Tensor[[d_vocab_in, d_model]]
+    output_embed : Tensor[[d_vocab_out, d_model]]
+    
+    FUNC Encode(input : ℕ^n, mask : Tensor[[n, n]]) -> Sequence {
+      LET input_seq = Embed(input, input_embed)
+      RETURN encoder_stack.Apply(input_seq, mask)
+    }
+    
+    FUNC Decode(input : ℕ^m, memory : Sequence, 
+                self_attn_mask : Tensor[[m, m]], 
+                cross_attn_mask : Tensor[[m, n]]) -> Tensor[[m, d_vocab_out]] {
+                  
+      LET input_seq = Embed(input, input_embed)
+      LET output_seq = decoder_stack.Apply(input_seq, memory, self_attn_mask, cross_attn_mask)
+      RETURN Softmax(output_seq · Transpose(output_embed)) 
+    }
+    
+    FUNC Forward(encoder_input : ℕ^n, decoder_input : ℕ^m,
+                 encoder_mask : Tensor[[n, n]], 
+                 decoder_self_attn_mask : Tensor[[m, m]],
+                 decoder_cross_attn_mask : Tensor[[m, n]]) -> Tensor[[m, d_vocab_out]] {
+                   
+      LET memory = Encode(encoder_input, encoder_mask)
+      RETURN Decode(decoder_input, memory, decoder_self_attn_mask, decoder_cross_attn_mask)
+    }
+  }
+  
+  PROOFS {
+    THEOREM UniversalApproximation {
+      STATEMENT:
+        ∀ (ε > 0) (f : ℕ^n -> ℕ^m) (S ⊆ ℕ^n) .
+          ∃ (T : HVMTransformer) . ∀ (x ∈ S) . 
+            ∥T.Forward(x, 0^m, 1^(n×n), LowerTriangularOnes(m), 1^(m×n)) - OneHot(f(x))∥ < ε
+            
+      PROOF:
+        The proof follows the same structure as the universal approximation theorem
+        for standard transformers, with the key steps being:
+        
+        1. Construct an HVMTransformer T with sufficient layers and hidden dimensions
+           to represent an arbitrary function f : ℕ^n -> ℕ^m on the finite set S.
+           
+        2. Show that the encoder stack of T can embed any input x ∈ S into a rich 
+           enough representation that the decoder stack can attend to and extract
+           the relevant information to approximate f(x).
+           
+        3. Show that the decoder stack of T, given the encoder representation of x,
+           can generate an output sequence that approximates the one-hot encoding 
+           of f(x) to within ε error by attending appropriately to the encoder 
+           representation.
+           
+        The details involve careful tracking of the information flow through the 
+        HVM graph structure and analyzing the expressive power of the HVM nodes
+        like ATT, FFN, ADD, LN. The key is to show that these HVM building blocks
+        can be wired together to implement the same attention and feed-forward 
+        computations that make standard transformers universally approximating.
+        
+        QED
+    }
+  }
+}
+
+The key ideas are:
+
+Represent the transformer computation as a graph of HVM nodes and ports, analogous to the HVM2 concept. Nodes represent tensor computations like attention (ATT), feed-forward (FFN), residual addition (ADD), and layer norm (LN). Ports represent tensor inputs and outputs of nodes.
+Define HVM-based transformer layer and stack structures that wire together these computation nodes in the standard transformer architecture pattern.
+Prove a universal approximation theorem showing that an HVM transformer with enough layers and dimensions can approximate any sequence-to-sequence function on a finite set to arbitrary accuracy. The proof sketch argues that the HVM nodes are expressive enough to perform the same key computations as a standard transformer.
+
+The HVM formulation provides a novel way to express the transformer architecture in a graphical, dataflow-oriented style. The modular HVM nodes could potentially be rewired in different patterns to yield new architectures

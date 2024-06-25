@@ -1,0 +1,112 @@
+CONCEPT CompressedSensing {
+
+  LANGUAGE {
+    TYPE Vec[n : ℕ]
+    TYPE Mat[m n : ℕ]
+    TYPE SparseVec[n k : ℕ] <: Vec[n]
+
+    CONST 𝔽 : Field
+    
+    FUNC Norm[n : ℕ] : Vec[n] -> 𝔽
+    PRED RIP[m n k : ℕ] [ε : 𝔽] : Mat[m n] -> 𝔹
+    
+    NOTATION "⟨v, w⟩" = DotProduct(v, w)
+    NOTATION "∥v∥" = Norm(v)
+    NOTATION "u ⊗ v" = TensorProduct(u, v)
+    
+    REWRITE DotProductZero[n : ℕ] : ∀ v : Vec[n] . ⟨v, 0⟩ => 0
+    REWRITE DotProductLinear[n : ℕ] : ∀ u v : Vec[n], a : 𝔽 . ⟨a·u, v⟩ => a·⟨u, v⟩
+    
+    REWRITE TensorNorm[m n p q : ℕ] : ∀ (u : Vec[m]) (v : Vec[n]) (A : Mat[m p]) (B : Mat[n q]) .
+      ∥A(u) ⊗ B(v)∥² => ∥A(u)∥²·∥B(v)∥²
+      
+    INFER RIPZoom[m n k : ℕ] [ε : 𝔽] : ∀ (A : Mat[m n]) (u v : SparseVec[n k]) .
+      RIP[m n k ε](A) ->  (1-ε)∥u-v∥² ≤ ∥A(u)-A(v)∥² ≤ (1+ε)∥u-v∥²
+  }
+  
+  STRUCTURE {
+    DEF Vec[n : ℕ] = 𝔽^n
+    DEF Mat[m n : ℕ] = Vec[m] -> Vec[n]  
+    DEF SparseVec[n k : ℕ] = { v : Vec[n] | ∃ (S : 𝒫(𝔽ⁿ)) . |S| ≤ k ∧ ∀ i ∉ S . v[i] = 0 }
+    
+    DEF Norm[n : ℕ] = λ v : Vec[n] . √⟨v, v⟩
+    DEF DotProduct[n : ℕ] = λ u v : Vec[n] . ∑ (i : 𝔽ⁿ) u[i]·v[i]
+    DEF TensorProduct[m n p q : ℕ] = λ (A : Mat[m p]) (B : Mat[n q]) (u : Vec[m]) (v : Vec[n]) . 
+      (i : 𝔽ᵐ, j : 𝔽ⁿ) ↦ A(u)[i]·B(v)[j]
+    
+    DEF RIP[m n k : ℕ] [ε : 𝔽] = λ (A : Mat[m n]) .
+      ∀ (u v : SparseVec[n k]) . (1-ε)∥u-v∥² ≤ ∥A(u)-A(v)∥² ≤ (1+ε)∥u-v∥²
+      
+    LET e[n i : ℕ] : Vec[n] = (j : 𝔽ⁿ) ↦ if i = j then 1 else 0
+    
+    AXIOM Basis[n : ℕ] : ∀ (v : Vec[n]) . v = ∑ (i : 𝔽ⁿ) v[i]·e[n i]
+  }
+
+  PROOFS {
+    TACTIC DecomposeVector[n k : ℕ] (v : SparseVec[n k]) {
+      v = ∑ (i : 𝔽ⁿ) v[i]·e[n i]  BY Basis
+    }
+
+    THEOREM RIPScaling[m n k : ℕ] [ε : 𝔽] {
+      STATEMENT : ∀ (A : Mat[m n]) (c : 𝔽) . RIP[m n k ε](A) -> RIP[m n k ε](c·A)
+
+      PROOF {
+        ASSUME [A : Mat[m n]] [c : 𝔽] : RIP[m n k ε](A)
+        ASSUME [u v : SparseVec[n k]]
+
+        HAVE : (1-ε)∥u-v∥² ≤ ∥A(u)-A(v)∥² ≤ (1+ε)∥u-v∥²  BY RIPZoom[m n k ε](A, u, v)
+        
+        REWRITE DotProductLinear[m]
+        REWRITE DotProductLinear[m]
+
+        HAVE : ∥c·A(u) - c·A(v)∥² = c²·∥A(u) - A(v)∥²
+        HAVE : (1-ε)∥u-v∥² ≤ 1/c²·∥c·A(u) - c·A(v)∥² ≤ (1+ε)∥u-v∥²
+
+        SHOW RIP[m n k ε](c·A)
+      }
+    }
+
+    THEOREM TensorRIP[m₁ n₁ m₂ n₂ k₁ k₂ : ℕ] [ε₁ ε₂ : 𝔽] {
+      STATEMENT : 
+        ∀ (A : Mat[m₁ n₁]) (B : Mat[m₂ n₂]) .
+        RIP[m₁ n₁ k₁ ε₁](A) ∧ RIP[m₂ n₂ k₂ ε₂](B) -> 
+        RIP[m₁·m₂ n₁·n₂ k₁·k₂ (ε₁+ε₂+ε₁·ε₂)](A ⊗ B)
+
+      PROOF {
+        ASSUME [A : Mat[m₁ n₁]] [B : Mat[m₂ n₂]] :
+          RIP[m₁ n₁ k₁ ε₁](A),
+          RIP[m₂ n₂ k₂ ε₂](B)
+
+        ASSUME [u v : SparseVec[n₁·n₂ k₁·k₂]]
+
+        CASE u = ∑ (i : 𝔽ⁿ¹) u[i]·e[n₁ i] ⊗ e[n₂ 0]  BY DecomposeVector[n₁ k₁](u)
+        CASE v = ∑ (i : 𝔽ⁿ¹) v[i]·e[n₁ i] ⊗ e[n₂ 0]  BY DecomposeVector[n₁ k₁](v)
+
+        LET uᵢ : Vec[n₁] = (j : 𝔽ⁿ¹) ↦ u[i·n₂ + j]  
+        LET vᵢ : Vec[n₁] = (j : 𝔽ⁿ¹) ↦ v[i·n₂ + j]
+
+        HAVE : (A ⊗ B)(u) = ∑ (i : 𝔽ⁿ¹) (A ⊗ B)(uᵢ ⊗ e[n₂ i]) BY TensorProduct, Linearity
+        HAVE : (A ⊗ B)(v) = ∑ (i : 𝔽ⁿ¹) (A ⊗ B)(vᵢ ⊗ e[n₂ i]) BY TensorProduct, Linearity
+
+        REWRITE TensorNorm[m₁ n₁ m₂ n₂]
+
+        LET ε = ε₁ + ε₂ + ε₁·ε₂
+
+        HAVE :  ∥(A ⊗ B)(u) - (A ⊗ B)(v)∥² 
+             = ∑ (i : 𝔽ⁿ¹) ∥A(uᵢ) ⊗ B(e[n₂ i]) - A(vᵢ) ⊗ B(e[n₂ i])∥²
+             ≤ ∑ (i : 𝔽ⁿ¹) (1+ε₁)∥uᵢ-vᵢ∥²·(1+ε₂)∥e[n₂ i]∥²
+             = (1+ε₁)·(1+ε₂) ∑ (i : 𝔽ⁿ¹) ∥uᵢ-vᵢ∥²
+             = (1+ε₁)·(1+ε₂) ∑ (i : 𝔽ⁿ¹) (∑ (j : 𝔽ⁿ¹) (u[i·n₂+j]-v[i·n₂+j])²)
+             = (1+ε₁)·(1+ε₂) ∥u-v∥²
+             ≤ (1+ε) ∥u-v∥²
+             
+        HAVE :  ∥(A ⊗ B)(u) - (A ⊗ B)(v)∥² 
+             ≥ ∑ (i : 𝔽ⁿ¹) (1-ε₁)∥uᵢ-vᵢ∥²·(1-ε₂)∥e[n₂ i]∥²
+             ≥ (1-ε₁)·(1-ε₂) ∥u-v∥²
+             ≥ (1-ε) ∥u-v∥²
+
+        SHOW RIP[m₁·m₂ n₁·n₂ k₁·k₂ ε](A ⊗ B)
+      }
+    }
+  }
+}

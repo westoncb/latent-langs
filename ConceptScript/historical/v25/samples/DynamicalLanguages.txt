@@ -1,0 +1,114 @@
+CONCEPT DynamicalLanguages {
+  LANGUAGE {
+    TYPE Symbol
+    TYPE String = List[Symbol]
+    TYPE Language = Set[String]
+    TYPE DynRule = String -> String
+    TYPE DynLanguage = (Language, DynRule)
+
+    FUNC Evolve(L : Language, r : DynRule, n : Nat) : Language
+    FUNC LimitLanguage(L : Language, r : DynRule) : Language
+
+    PRED Generates(D : DynLanguage, s : String) : Bool
+    PRED Stable(L : Language, r : DynRule) : Bool
+
+    AXIOM Stability {
+      ∀(L : Language) (r : DynRule).
+        Stable(L, r) ⇔ ∃(n : Nat). ∀(k : Nat). k ≥ n ⇒ Evolve(L, r, k) = Evolve(L, r, n)
+    }
+
+    AXIOM LimitProperty {
+      ∀(L : Language) (r : DynRule) (s : String). 
+        s ∈ LimitLanguage(L, r) ⇔ ∃(n : Nat). s ∈ Evolve(L, r, n)
+    }
+
+    NOTATION "⟨" <DynRule> "⟩" = Grammar
+  }
+
+  STRUCTURE ContextFreeDynamics[S <: Symbol, T <: Symbol] <: DynLanguage {
+    G : ContextFreeGrammar[S, T]  
+
+    FUNC Rule(s : String) : String = {
+      IF s ∈ G.Language 
+      THEN CHOOSE(t : String). t ∈ G.Generates(s)
+      ELSE s
+    }
+
+    FUNC Language -> Language = G.Language
+  }
+
+  STRUCTURE LindenmayerSystem[T <: Symbol] <: DynLanguage {
+    ALPHABET : Set[T]
+    RULES : Map[T, String[T]]
+    AXIOM : String[T]
+
+    FUNC Rule(s : String) : String = 
+      JoinStrings(MAP((c : T) => RULES[c], s))
+
+    FUNC Language -> Language = {AXIOM}
+  }
+
+  PROOFS {
+    TACTIC GrowthFunction(D, n) = {
+      LET growth = (k : Nat) ↦ 
+        MAX(MapOver((s : String) ↦ |s|, Evolve(D.Language, D.Rule, k)))
+      SHOW ∀(k ≤ n). growth(k)
+    }
+
+    TACTIC GroupoidDiagram(D) = {
+      LET X = D.Language
+      LET G = SetoidCategory(Groupoid) WITH {
+        OBJ = X
+        MOR(x, y) = { w : String | D.Rule(x · w) = y }
+        ID(x) = ε
+        COMP(w1 : x → y, w2 : y → z) = w1 · w2
+        EQ(w1 w2 : x → y) ⇔ w1 = w2
+      }
+      SHOW CommutativeDiagram(G)
+    }
+
+    THEOREM DynLangStability {
+      STATEMENT: ∀(D : DynLanguage). (∃(p : Nat). GrowthFunction(D, p) ≤ p) ⇒ Stable(D.Language, D.Rule)
+        
+      PROOF:
+        LET D : DynLanguage
+        ASSUME ∃(p : Nat). GrowthFunction(D, p) ≤ p
+        
+        LET p : Nat 
+        ASSUME ∀(k ≤ p). GrowthFunction(D, k) ≤ p
+
+        LET n = 2*p
+        SUFFICES SHOW ∀(k ≥ n). Evolve(D.Language, D.Rule, k) = Evolve(D.Language, D.Rule, n)
+
+        SHOW ∀(k ≥ n). GroupoidDiagram(Fix(D, n)) USING {
+          LET s ∈ Evolve(D.Language, D.Rule, k)
+          LET m = k - n ≥ p
+          LET w : s[..p] -> s[p..] ∈ MOR(GroupoidDiagram(Fix(D, n)))
+          HENCE s[..p] · w = s[p..] ∈ Evolve(D.Language, D.Rule, n)
+        }
+
+        QED BY Stability
+    }
+
+    THEOREM CFLimitGrowth {
+      STATEMENT: ∀(D : ContextFreeDynamics[S, T]). 
+        ∃(c p : Nat). ∀(n : Nat). GrowthFunction(D, n) ≤ c * n^p
+
+      PROOF:
+        LET D : ContextFreeDynamics[S, T]
+        LET c = MAX(MAP(|R[1]|, D.G.Rules))  ; max length of RHS
+        LET p = |D.G.Variables|              ; number of nonterminal symbols
+
+        LET n : Nat
+        SHOW GrowthFunction(D, n) ≤ c * n^p BY {
+          LET s ∈ Evolve(D.Language, D.Rule, n)
+          
+          SHOW |s| ≤ c * n^p BY StructuralInduction(s) {
+            CASE s = ε: TRIVIAL 
+            CASE s = a · s': WHERE a : T
+              |s| = |a| + |s'| ≤ 1 + c * (n-1)^p ≤ c * n^p
+          }
+        }
+    }
+  }
+}

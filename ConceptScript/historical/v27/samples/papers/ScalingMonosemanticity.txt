@@ -1,0 +1,186 @@
+CONCEPT ScalingMonosemanticity {
+  NOTATION {
+    x̂ = b_dec + Σ_{i=1}^F f_i(x) W_{⋅,i}^dec  -- Reconstructed activation
+    f_i(x) = ReLU(W_{i,⋅}^enc ⋅ x + b_i^enc)  -- Feature activation
+    L = 𝔼_x[∥x - x̂∥_2^2 + λ Σ_i f_i(x) ⋅ ∥W_{⋅,i}^dec∥_2]  -- SAE loss function
+  }
+
+  LANGUAGE {
+    TYPE Vector = [Real]
+    TYPE FeatureVector = Vector
+    TYPE Activation = Vector
+    
+    FUNC sparse_autoencoder(
+      activations: [Activation], 
+      num_features: Int, 
+      sparsity_penalty: Real,
+      num_steps: Int,
+      learning_rate: Real
+    ) -> {features: [FeatureVector], coefficients: [[Real]]} = PER_PAPER
+
+    FUNC cosine_similarity(v1: Vector, v2: Vector) -> Real = 
+      DOT(v1, v2) / (NORM(v1) * NORM(v2))
+      
+    FUNC pearson_correlation(v1: Vector, v2: Vector) -> Real =
+      LET μ1 = MEAN(v1), μ2 = MEAN(v2), σ1 = STD(v1), σ2 = STD(v2) IN
+      MEAN([(v1[i] - μ1) * (v2[i] - μ2) for i in 0..LEN(v1)-1]) / (σ1 * σ2)
+
+    FUNC specificity(feature: FeatureVector, examples: [String], model: Model) -> Real =
+      MEAN([HumanScore(example, Interpretation(feature)) for example in examples])
+  }
+
+  STRUCTURES {
+    STRUCTURE Model {
+      FIELD layers : Int
+      FIELD neurons_per_layer : [Int]
+      FIELD activations : [[Activation]]
+    }
+
+    STRUCTURE ActivationDataset {
+      FIELD model : Model
+      FIELD layer : Int 
+      FIELD data : [Activation]
+    }
+    
+    STRUCTURE ScalingLaw {
+      FIELD compute : Real -> Real
+      FIELD num_features : Real -> Int
+      FIELD num_steps : Real -> Int
+      FIELD loss : Real -> Real
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE NearestNeighbor : 
+      MAP(features, f1 => ARGMAX(features, f2 => cosine_similarity(f1, f2)))
+    
+    REWRITE NeuronCorrelation :
+      ARGMAX(model.layers[layer].neurons, n => pearson_correlation(n, feature))
+      
+    SIMPLIFY FeatureFrequencyThreshold : 
+      inverse(num_alive_features) -> training_freq
+  }
+
+  PROOFS {    
+    THEOREM InterpretableFeatures {
+      GIVEN 
+        model : Model,
+        dataset : ActivationDataset,
+        num_features : Int,
+        sparsity_penalty : Real
+      PROVE 
+        LET {features, coefficients} = 
+          sparse_autoencoder(dataset.data, num_features, sparsity_penalty)
+        FORALL f : features . Interpretable(f)
+    }
+
+    THEOREM FeatureSpecificity {
+      GIVEN
+        model : Model,
+        dataset : ActivationDataset,
+        num_features : Int,
+        sparsity_penalty : Real        
+      PROVE
+        LET {features, coefficients} = 
+          sparse_autoencoder(dataset.data, num_features, sparsity_penalty)
+        FORALL f : features . 
+          LET examples = HighestActivatingExamples(f, dataset)
+          Specific(Interpretation(f), examples) BY
+            ASSERT MEAN(specificity(f, examples, model)) > 0.8
+    }
+
+    THEOREM DownstreamEffects {
+      GIVEN
+        model : Model,
+        prompt : String,
+        feature : FeatureVector,
+        multiplier : Real
+      PROVE
+        LET steer_func = a => a + multiplier * feature  
+        LET output_normal = model(prompt)
+        LET output_steered = model(prompt, steer_func)
+        DownstreamEffect(output_normal, output_steered, Interpretation(feature))
+    }
+    
+    THEOREM FeatureOrthogonality {
+      GIVEN
+        model : Model,
+        layer : Int,
+        features : [FeatureVector]
+      PROVE
+        FORALL f : features .
+          LET neuron = NeuronCorrelation(model, layer, f) 
+          pearson_correlation(f, neuron) < 0.3
+    }
+    
+    THEOREM FeatureCompleteness {
+      GIVEN
+        model : Model,
+        dataset : ActivationDataset,
+        concepts : [String],
+        num_features : Int
+      PROVE  
+        LET freq_threshold = inverse(0.5 * num_features)
+        COUNT(c in concepts : 
+          EXISTS f in features : 
+            Interpretation(f) == c AND TrainingFrequency(c) > freq_threshold
+        ) / COUNT(concepts) INCREASES_WITH num_features
+    }
+  }
+  
+  EXAMPLES {
+    EXAMPLE GoldenGateBridgeFeature {
+      LET model = ClaudeSonnet WITH layers = 48, neurons_per_layer = Confidential 
+      LET dataset = model.activations[24] 
+      LET {features, _} = sparse_autoencoder(dataset, num_features = 34M, sparsity_penalty = 5)
+
+      LET f = features[31164353]
+      ASSERT Interpretable(f) AND 
+             Specific(f, "descriptions of the Golden Gate Bridge") BY
+               MEAN(specificity(f, HighestActivatingExamples(f, dataset), model)) > 0.9
+
+      LET prompt = "The Golden Gate Bridge"
+      LET output_normal = model(prompt)
+      LET output_steered = model(prompt, a => a + 10 * f)
+      ASSERT DownstreamEffect(output_normal, output_steered, 
+                "model identifies as the Golden Gate Bridge")
+    }
+    
+    EXAMPLE CodeErrorFeature {
+      LET model = ClaudeSonnet WITH layers = 48, neurons_per_layer = Confidential
+      LET dataset = model.activations[24]
+      LET {features, _} = sparse_autoencoder(dataset, num_features = 1M, sparsity_penalty = 5)
+      
+      LET f = features[1013764]
+      ASSERT Interpretable(f) AND
+             Specific(f, "errors and exceptions in code") BY
+               COUNT(HighestActivatingExamples(f, dataset), 
+                     e -> ContainsCodeError(e)) / COUNT(HighestActivatingExamples(f, dataset)) > 0.8
+      
+      LET prompt = "def add(a, b):"
+      LET output_normal = model(prompt)
+      LET output_steered = model(prompt, a => a + 5 * f)
+      ASSERT ContainsCodeError(output_steered) AND NOT ContainsCodeError(output_normal)
+    }
+    
+    EXAMPLE ScalingLaws {
+      LET model = ClaudeSonnet
+      LET compute_range = [1e15, 1e16, 1e17, 1e18]
+      
+      LET scaling_laws = ScalingLaw WITH
+        compute      = c => c
+        num_features = c => 1e6 * c^0.5
+        num_steps    = c => 1e3 * c^0.3 
+        loss         = c => 1e-3 * c^-0.2
+
+      FORALL c in compute_range .
+        LET {features, _} = sparse_autoencoder(
+            model.activations[24], 
+            num_features = scaling_laws.num_features(c),
+            num_steps = scaling_laws.num_steps(c)
+        )
+        ASSERT MEAN(features, Interpretable) > 0.5 AND
+               MEAN(features, f -> FeatureSpecificity.PROOF(model, dataset, f)) > 0.8
+    }
+  }
+}

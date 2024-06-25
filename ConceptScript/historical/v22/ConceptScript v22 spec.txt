@@ -1,0 +1,930 @@
+ConceptScript v22
+
+CONCEPT ConceptName [Params] [: ParentConcept] {
+
+  LANGUAGE {
+    DECLARE {
+      TYPE TypeName [Params] [: Kind]
+      CONST ConstantName : Type  
+      FUNC FuncName [Params] : Type
+      PRED PredName [Params] : Type
+      NOTATION NotationName = Expression
+    }
+
+    DEFINE {
+      DefName : Formula | Syntax
+      RewriteName : Expression => Expression  
+    }
+  }
+
+  STRUCTURE {
+    LET LetName [Params] = Expression
+    AXIOM AxiomName : Formula
+  }
+
+  THEOREMS {
+    THEOREM TheoremName {
+      STATEMENT : Formula
+      PROOF {
+        ASSUME [HypName] : Formula
+        LET LetName [Params] = Expression
+        HAVE HaveName : Formula [BY TacticName]
+        SHOW ShowName : Formula
+        CASE CaseName : Formula
+        INDUCE InductionName : Expression  
+        REWRITE EqnName [IN ProofName]
+        APPLY TacticName 
+        BY ReasonName
+        HENCE ConclusionName : Formula
+      }
+    }
+  }
+}
+
+Here's an example
+
+CONCEPT CompressedSensing {
+
+  LANGUAGE {
+    DECLARE {
+      TYPE 𝕍[n] : Type
+      TYPE 𝕄[m, n] : Type  
+      TYPE 𝒮ₖ[n] <: 𝕍[n]
+      
+      CONST ℝ : Type
+      CONST ℂ : Type
+      CONST ℕ : Type
+      
+      FUNC ∥⋅∥ : 𝕍[n] → ℝ
+      PRED RIP[m, n, k, ε] : 𝕄[m, n] → 𝔹
+      
+      NOTATION "⟨⋅,⋅⟩" = λ v, w. ∑ᵢ (v[i] ⋅ w[i])  ; Inner product
+      NOTATION "∥v∥" = sqrt(⟨v,v⟩)  ; Vector norm
+      NOTATION "A ⊗ B" = λ v, w. A(v) ⊗ B(w)  ; Tensor product
+    }
+    
+    DEFINE {
+      𝕍[n] = ℝ^n  ; Vector space
+      𝕄[m, n] = 𝕍[m] → 𝕍[n]  ; Linear operator
+      𝒮ₖ[n] = { v : 𝕍[n] | ∃ S : ℙ(𝔽ⁿ). |S| ≤ k ∧ ∀ i ∉ S. v[i] = 0 }  ; Sparse vectors
+      
+      RIP(A, ε, k) : ∀ v, w ∈ 𝒮ₖ[n]. (1-ε)∥v-w∥² ≤ ∥A(v)-A(w)∥² ≤ (1+ε)∥v-w∥²
+      
+      NormProperties {
+        ∀ v : 𝕍[n]. ∥v∥ ≥ 0  ; Nonnegativity
+        ∀ c : ℝ, v : 𝕍[n]. ∥c⋅v∥ = |c|⋅∥v∥  ; Absolute homogeneity
+        ∀ v, w : 𝕍[n]. ∥v + w∥ ≤ ∥v∥ + ∥w∥  ; Triangle inequality
+      }
+      
+      Linearity(A) : ∀ c : ℝ, v, w : 𝕍[n]. A(c⋅v + w) = c⋅A(v) + A(w)  ; Linearity of operators
+      TensorNorm : ∀ A : 𝕍[m]→𝕍[n], B : 𝕍[p]→𝕍[q], v : 𝕍[n], w : 𝕍[q].
+        ∥A(v) ⊗ B(w)∥² = ∥A(v)∥² ⋅ ∥B(w)∥²  ; Tensor product norm
+    }
+  }
+  
+  STRUCTURE {
+    LET δₖ[n] = { v : 𝕍[n] | ∃ i : 𝔽ⁿ. v[i] = 1 ∧ ∀ j ≠ i. v[j] = 0 }  ; Standard basis vectors
+    AXIOM StandardBasis : ∀ n : ℕ. ∀ v : 𝕍[n]. v = ∑ᵢ v[i] ⋅ δᵢ[n]  ; Standard basis expansion
+  }
+
+  THEOREMS {
+    THEOREM RIPScaling {
+      STATEMENT : ∀ A : 𝕄[m,n], c : ℝ, ε : ℝ⁺, k : ℕ. 
+        RIP(A, ε, k) ⇒ RIP(c⋅A, ε, k)
+
+      PROOF {
+        ASSUME [A : 𝕄[m,n], c : ℝ, ε : ℝ⁺, k : ℕ] : RIP(A, ε, k)
+        LET v, w ∈ 𝒮ₖ[n]
+        
+        HAVE ∥c⋅A(v) - c⋅A(w)∥² = c² ⋅ ∥A(v) - A(w)∥²  
+          BY Linearity(A), NormProperties
+
+        HAVE (1-ε)∥v-w∥² ≤ ∥A(v)-A(w)∥² ≤ (1+ε)∥v-w∥²  
+          BY [A : 𝕄[m,n], ε : ℝ⁺, k : ℕ] : RIP(A, ε, k)
+
+        HENCE (1-ε)∥v-w∥² ≤ 1/c² ⋅ ∥c⋅A(v) - c⋅A(w)∥² ≤ (1+ε)∥v-w∥² 
+        
+        SHOW RIP(c⋅A, ε, k)
+      }
+    }
+
+    THEOREM TensorRIP {  
+      STATEMENT : ∀ A : 𝕄[m₁,n₁], B : 𝕄[m₂,n₂], ε₁ ε₂ : ℝ⁺, k₁ k₂ : ℕ.
+        RIP(A, ε₁, k₁) ∧ RIP(B, ε₂, k₂) ⇒ RIP(A ⊗ B, ε₁+ε₂+ε₁⋅ε₂, k₁⋅k₂)
+      
+      PROOF {
+        ASSUME [A : 𝕄[m₁,n₁], B : 𝕄[m₂,n₂], ε₁ ε₂ : ℝ⁺, k₁ k₂ : ℕ] : 
+          RIP(A, ε₁, k₁), RIP(B, ε₂, k₂)  
+        
+        LET v, w ∈ 𝒮ₖ₁⋅ₖ₂[n₁⋅n₂]
+        CASE v = ∑ᵢ vᵢ ⊗ eᵢ, w = ∑ᵢ wᵢ ⊗ eᵢ  ; Tensor decomposition
+        
+        HAVE ∥(A⊗B)(v) - (A⊗B)(w)∥² = ∑ᵢ ∥A(vᵢ) ⊗ B(eᵢ) - A(wᵢ) ⊗ B(eᵢ)∥²
+          BY Linearity(A⊗B), TensorNorm
+        
+        HAVE (1-ε₁)∥vᵢ-wᵢ∥² ≤ ∥A(vᵢ)-A(wᵢ)∥² ≤ (1+ε₁)∥vᵢ-wᵢ∥²
+          BY [A : 𝕄[m₁,n₁], ε₁ : ℝ⁺, k₁ : ℕ] : RIP(A, ε₁, k₁)
+        
+        HAVE (1-ε₂)∥eᵢ∥² ≤ ∥B(eᵢ)∥² ≤ (1+ε₂)∥eᵢ∥²
+          BY [B : 𝕄[m₂,n₂], ε₂ : ℝ⁺, k₂ : ℕ] : RIP(B, ε₂, k₂)
+        
+        LET ε = ε₁ + ε₂ + ε₁⋅ε₂  
+        HAVE (1-ε)∥v-w∥² ≤ ∥(A⊗B)(v) - (A⊗B)(w)∥² ≤ (1+ε)∥v-w∥²
+        
+        SHOW RIP(A ⊗ B, ε₁+ε₂+ε₁⋅ε₂, k₁⋅k₂)
+      }  
+    }
+  }
+}
+
+CONCEPT DifferentialGeometry {
+
+  LANGUAGE {
+    DECLARE {
+      TYPE 𝓜 : Type  ; Smooth manifold
+      TYPE 𝓣ₚ𝓜 : 𝓜 → Type  ; Tangent space at p ∈ 𝓜
+      TYPE 𝓣*ₚ𝓜 : 𝓜 → Type  ; Cotangent space at p ∈ 𝓜
+      
+      FUNC 𝒳(𝓜) : 𝓜 → 𝓣ₚ𝓜  ; Smooth vector fields
+      FUNC Ω¹(𝓜) : 𝓜 → 𝓣*ₚ𝓜  ; Smooth 1-forms
+      
+      FUNC d : Ω¹(𝓜) → Ω²(𝓜)  ; Exterior derivative
+      FUNC ∧ : Ωᵏ(𝓜) × Ωˡ(𝓜) → Ωᵏ⁺ˡ(𝓜)  ; Wedge product
+      
+      NOTATION "⟨X,ω⟩" = ω(X)  ; Pairing of vector field and 1-form
+      NOTATION "ℒₓ" = λ ω. X⟨dω⟩ + d⟨X,ω⟩  ; Lie derivative along X
+    }
+    
+    DEFINE {
+      Ωᵏ(𝓜) = 𝓜 → (𝓣*ₚ𝓜)ᵒᵗᵏ  ; Smooth k-forms
+      
+      DifferentialProperties {
+        ∀ ω : Ω¹(𝓜). d(dω) = 0  ; d² = 0
+        ∀ ω ∈ Ωᵏ(𝓜), η ∈ Ωˡ(𝓜). d(ω∧η) = dω∧η + (-1)ᵏ ω∧dη  ; Leibniz rule for d
+        ∀ X, Y : 𝒳(𝓜). ℒ[X,Y] = ℒₓℒy - ℒyℒₓ  ; Lie derivative identity
+      }
+      
+      PullbackProperties {
+        ∀ φ : 𝓜 → 𝓝. φ*(ω∧η) = φ*ω ∧ φ*η  ; Pullback preserves ∧  
+        ∀ φ : 𝓜 → 𝓝. φ*∘d = d∘φ*  ; Pullback commutes with d
+      }
+    }
+  }
+  
+  STRUCTURE {
+    AXIOM LocalEuclidean : ∀ p : 𝓜. ∃ φ : 𝓤 ⊆ 𝓜 ≅ 𝓥 ⊆ ℝⁿ. φ(p) = 0  ; Charts
+    AXIOM SmoothTransitions : ∀ φᵢ : 𝓤ᵢ ≅ 𝓥ᵢ, φⱼ : 𝓤ⱼ ≅ 𝓥ⱼ. φᵢ ∘ φⱼ⁻¹ ∈ C^∞(𝓥ᵢ ∩ 𝓥ⱼ)  ; Smooth structure
+  }
+  
+  THEOREMS {
+    THEOREM Stokes {
+      STATEMENT : ∀ 𝓜 : OrientableManifold, ω : Ωⁿ⁻¹(𝓜), ∂𝓜 : OrientableBoundary(𝓜).
+        ∫ₘ dω = ∫_{∂𝓜} ω
+
+      PROOF {
+        ASSUME [𝓜 : OrientableManifold, ω : Ωⁿ⁻¹(𝓜), ∂𝓜 : OrientableBoundary(𝓜)]
+        
+        CASE 𝓜 = ⋃ᵢ 𝓤ᵢ  ; Good open cover
+        CASE ω = ∑ᵢ ωᵢ  ; Partition of unity
+        
+        HAVE ∫ₘ dω = ∑ᵢ ∫_{𝓤ᵢ} dωᵢ  
+          BY Linearity(∫), Locality(d)
+        
+        HAVE ∫_{𝓤ᵢ} dωᵢ = ∫_{∂𝓤ᵢ} ωᵢ  
+          BY StokesLocal(𝓤ᵢ, ωᵢ)
+        
+        HAVE ∑ᵢ ∫_{∂𝓤ᵢ} ωᵢ = ∫_{∂𝓜} ω  
+          BY ∑ᵢ ∂𝓤ᵢ = ∂𝓜, ∑ᵢ ωᵢ = ω
+        
+        HENCE ∫ₘ dω = ∫_{∂𝓜} ω
+      }
+    }
+    
+    THEOREM deRham {
+      STATEMENT : ∀ 𝓜 : CompactManifold. 
+        Hᵏ(𝓜;ℝ) ≅ { ω : Ωᶜˡᵒˢᵉᵈᵏ(𝓜) | dω=0 } / { dη | η : Ωᵏ⁻¹(𝓜) }
+        
+      PROOF {
+        ASSUME [𝓜 : CompactManifold]
+        
+        DEFINE Zᵏ(𝓜) = { ω : Ωᶜˡᵒˢᵉᵈᵏ(𝓜) | dω=0 }  ; Closed k-forms
+        DEFINE Bᵏ(𝓜) = { dη | η : Ωᵏ⁻¹(𝓜) }  ; Exact k-forms
+        
+        HAVE Bᵏ(𝓜) ⊆ Zᵏ(𝓜)  
+          BY d²=0
+        
+        LET iₖ : Hᵏ(𝓜;ℝ) → Zᵏ(𝓜)/Bᵏ(𝓜)
+        HAVE iₖ Injective
+          BY PoincareLemma
+        HAVE iₖ Surjective  
+          BY ∀[ω]∈Zᵏ(𝓜)/Bᵏ(𝓜). ∃φ:Δᵏ→𝓜. ∫_{Δᵏ} φ*ω = ⟨[ω], [Δᵏ]⟩
+        
+        HENCE Hᵏ(𝓜;ℝ) ≅ Zᵏ(𝓜)/Bᵏ(𝓜)
+      }
+    }
+  }
+}
+
+CONCEPT AlgebraicTopology {
+
+  LANGUAGE {
+    DECLARE {
+      TYPE 𝓢ₚ[X] : Type  ; Topological space
+      TYPE 𝓒[C] : Type  ; Chain complex
+      TYPE 𝓗ₖ[X] : 𝓢ₚ[X] → Type  ; Homology group
+      
+      FUNC Sₖ : ℕ → 𝓢ₚ  ; k-sphere
+      FUNC Cₖ : 𝓢ₚ → 𝓒  ; k-chains
+      FUNC ∂ₖ : Cₖ → Cₖ₋₁  ; Boundary map
+      FUNC Hₖ : 𝓢ₚ → 𝓗ₖ  ; Homology functor
+      
+      NOTATION "⟨f⟩" = [f] ∘ [g]⁻¹  ; Homotopy class of map f ∘ g⁻¹
+    }
+    
+    DEFINE {
+      𝓒[C] = ... ⊕ Cₖ₊₁ -∂ₖ₊₁→ Cₖ -∂ₖ→ Cₖ₋₁ ⊕ ...  ; Chain complex
+      
+      Zₖ(X) = ker ∂ₖ  ; k-cycles
+      Bₖ(X) = im ∂ₖ₊₁  ; k-boundaries
+      𝓗ₖ(X) = Zₖ(X) / Bₖ(X)  ; k-th homology
+      
+      FunctorAxioms(F) {
+        F(idₓ) = idₘ  ; Identity
+        F(g ∘ f) = F(g) ∘ F(f)  ; Composition
+      }
+      
+      HomologyAxioms(H) {
+        H(f) = H(g) ⇐ f ≃ g  ; Homotopy invariance
+        0 → Hₖ(A) -Hₖ(i)→ Hₖ(X) -Hₖ(j)→ Hₖ(X/A) → 0  ; Long exact sequence
+        Hₖ(⨆ᵢ Xᵢ) ≅ ∏ᵢ Hₖ(Xᵢ)  ; Mayer-Vietoris
+      }
+    }
+  }
+  
+  STRUCTURE {
+    AXIOM Functoriality : FunctorAxioms(H)
+    AXIOM Eilenberg–Steenrod : HomologyAxioms(H)
+    
+    LET Dⁿ = { x ∈ ℝⁿ | ∥x∥ ≤ 1 }  ; n-disk
+    LET Sⁿ = ∂Dⁿ⁺¹  ; n-sphere
+  }
+
+  THEOREMS {
+    THEOREM HomotopyInvariance {
+      STATEMENT : ∀ f, g : X → Y. f ≃ g ⇒ Hₖ(f) = Hₖ(g)
+      
+      PROOF {
+        ASSUME [f, g : X → Y] : f ≃ g
+        
+        LET H : X × 𝕀 → Y, H(x,0) = f(x), H(x,1) = g(x)  ; Homotopy between f and g
+        
+        HAVE Hₖ(H(-,0)) = Hₖ(f), Hₖ(H(-,1)) = Hₖ(g)  
+          BY FunctorAxioms(Hₖ)
+        
+        HAVE Hₖ(H(-,0)) = Hₖ(H(-,1))
+          BY HomotopyAxiom(Hₖ)
+        
+        HENCE Hₖ(f) = Hₖ(g)
+      }
+    }
+    
+    THEOREM Brouwer {
+      STATEMENT : ∀ f : Dⁿ → Dⁿ. ∃ x : Dⁿ. f(x) = x
+      
+      PROOF {
+        ASSUME [f : Dⁿ → Dⁿ]
+        
+        SUPPOSE ∄ x : Dⁿ. f(x) = x
+        
+        DEFINE r : Dⁿ - {0} → Sⁿ⁻¹, r(x) = x / ∥x∥  ; Retraction
+        DEFINE α : Dⁿ → Sⁿ⁻¹, α(x) = r(x - f(x))  ; Retract of f
+        
+        HAVE α ∘ i ≃ idₛₙ₋₁  ; Where i : Sⁿ⁻¹ ↪ Dⁿ
+          BY ⟨α ∘ i⟩ = [α ∘ i] ∘ [idₛₙ₋₁]⁻¹ = [α|ₛₙ₋₁] = [idₛₙ₋₁]
+        
+        HAVE Hₙ₋₁(Sⁿ⁻¹) ≅/ 0  ; Contradiction
+          BY Hₙ₋₁(α) ∘ Hₙ₋₁(i) = Hₙ₋₁(idₛₙ₋₁) = idₕₙ₋₁
+        
+        HENCE ∃ x : Dⁿ. f(x) = x  ; Negation of supposition
+      }
+    }
+  }
+}
+
+CONCEPT TuringMachine {
+
+  LANGUAGE {
+    DECLARE {
+      TYPE State : Type
+      TYPE Symbol : Type
+      TYPE Direction : Type
+      
+      CONST Blank : Symbol
+      CONST Left : Direction  
+      CONST Right : Direction
+      CONST Stay : Direction
+      
+      FUNC δ : State × Symbol → State × Symbol × Direction  ; Transition function
+      PRED Halts : State → 𝔹  ; Halting predicate
+      
+      NOTATION "⟨s,t⟩ ⊢ ⟨s',t',d⟩" = δ(s,t) = (s',t',d)  ; Single step
+      NOTATION "c ⊢* c'" = ReflTransClosure(⊢)(c, c')  ; Multi-step 
+    }
+    
+    DEFINE {
+      Conf = State × Tape  ; Instantaneous configurations
+      Tape = ℤ → Symbol  ; Infinite tape
+      ReflTransClosure(R)(a,b) = 
+        ∃ n : ℕ, x₀ ... xₙ. a = x₀ ∧ b = xₙ ∧ ∀ i < n. R(xᵢ, xᵢ₊₁)
+    }
+  }
+
+  STRUCTURE {
+    AXIOM DeterministicTransition : 
+      ∀ s s₁ s₂ : State, t t₁ t₂ : Symbol, d₁ d₂ : Direction.
+        ⟨s,t⟩ ⊢ ⟨s₁,t₁,d₁⟩ ∧ ⟨s,t⟩ ⊢ ⟨s₂,t₂,d₂⟩ ⇒ s₁ = s₂ ∧ t₁ = t₂ ∧ d₁ = d₂
+  }
+
+  THEOREMS {
+    THEOREM Confluence {
+      STATEMENT : ∀ c c₁ c₂ : Conf. c ⊢* c₁ ∧ c ⊢* c₂ ⇒ 
+        ∃ c' : Conf. c₁ ⊢* c' ∧ c₂ ⊢* c'
+
+      PROOF {
+        ASSUME [c c₁ c₂ : Conf] : c ⊢* c₁, c ⊢* c₂
+        
+        INDUCE ON n₁, n₂ : ℕ IN c ⊢ⁿ¹ c₁, c ⊢ⁿ² c₂ {
+          CASE n₁ = 0 ∨ n₂ = 0 {
+            WLOG n₁ = 0  ; By symmetry
+            HENCE c = c₁
+            SHOW c₂ ⊢* c₂ ∧ c₁ ⊢* c₂  ; Reflexivity
+          }
+          
+          CASE n₁ > 0 ∧ n₂ > 0 {
+            LET c ⊢ c₁' ⊢ⁿ¹⁻¹ c₁  
+            LET c ⊢ c₂' ⊢ⁿ²⁻¹ c₂
+            
+            HAVE ⟨s,t⟩ ⊢ ⟨s₁',t₁',d₁'⟩ = c₁'  
+            HAVE ⟨s,t⟩ ⊢ ⟨s₂',t₂',d₂'⟩ = c₂'
+            HAVE s₁' = s₂' ∧ t₁' = t₂' ∧ d₁' = d₂'  
+              BY DeterministicTransition
+            
+            HENCE c₁' = c₂'  
+            
+            ASSUME [IH] : ∃ c' : Conf. c₁' ⊢* c' ∧ c₂' ⊢* c'
+            
+            SHOW c₁ ⊢* c' ∧ c₂ ⊢* c'
+          }
+        }
+      }
+    }
+    
+    THEOREM Decidability {
+      STATEMENT : ∀ M : TuringMachine, input : Tape. 
+        Halts(M, input) ∨ ¬Halts(M, input)
+      
+      PROOF {
+        ASSUME [M : TuringMachine, input : Tape]
+        
+        DEFINE Halts(M, input) = ∃ c : Conf. 
+          (InitialConf(M, input) ⊢* c) ∧ Halting(FinalState(c))
+        
+        LET T = { c : Conf | InitialConf(M, input) ⊢* c }  ; Tree of configurations
+        
+        HAVE T Finitely Branching  
+          BY DeterministicTransition
+        
+        CASE ∃ c : Conf. c ∈ T ∧ Halting(FinalState(c)) {
+          HENCE Halts(M, input)
+        }
+        
+        CASE ∀ c : Conf. c ∈ T ⇒ ¬Halting(FinalState(c)) {
+          ASSUME Halts(M, input)
+          HAVE ∃ c : Conf. (InitialConf(M, input) ⊢* c) ∧ Halting(FinalState(c))
+          HENCE Contradiction
+          SHOW ¬Halts(M, input)
+        }
+      }
+    }
+  }
+}
+
+
+ConceptScript is a language of a new type: it's sole intended purpose is to be used in accordance with the following methodology:
+
+1. I paste the spec a few example Concepts into your context (as is happening now), thus teaching you the language.
+2. I request that you express various concepts as Concepts; these Concepts come with detailed proofs of their own various claims; they serve as justifications of the selected structuring.
+3. We iterate, precisely and efficiently exploring your latent space to solve deep, important problems.
+
+Please always output ConceptScript in a code block otherwise formatting gets lost :/ And feel free to liberally invent notation, tactics, etc. as needed—it's zero cost in our particular usage context and this kind of abstraction can help to keep things "compressed", which is a design ideal of ours.
+
+To test the depth of your understanding of the language's capabilities, please generate some kind of interesting, sophisticated Concept of your choosing.
+
+
+
+
+
+
+CONCEPT TheTransformerArchitecture {
+
+  LANGUAGE {
+    DECLARE {
+      TYPE Tensor[n, d₁, ..., dₙ] : Type  ; n-dimensional tensor with shape d₁ × ⋯ × dₙ 
+      TYPE Sequence[n, d] <: Tensor[2, n, d]  ; Sequence of length n and embedding dim d
+      TYPE Weights[m, n] <: Tensor[2, m, n]  ; Weight matrix 
+      
+      FUNC Attention : Sequence[n, d] → Sequence[n, d]
+      FUNC FeedForward : Sequence[n, d] → Sequence[n, d]
+      FUNC LayerNorm : Sequence[n, d] → Sequence[n, d]
+      FUNC Embedding : Sequence[n, d₁] → Sequence[n, d₂]
+      FUNC PositionalEncoding : ℕ → Sequence[n, d]
+      
+      FUNC Softmax : Tensor[1, n] → Tensor[1, n]
+      FUNC Linear : Tensor[b, m] → Weights[m, n] → Tensor[b, n]
+      
+      NOTATION "Q,K,V = W_Q·X, W_K·X, W_V·X" = 
+        ∃ W_Q, W_K, W_V : Weights[d, d]. Q = W_Q·X, K = W_K·X, V = W_V·X
+        
+      NOTATION "Attn(Q,K,V) = Softmax(Q·Kᵀ/√d)·V" =
+        ∀ X : Sequence[n, d]. Attention(X) = Softmax((W_Q·X)·(W_K·X)ᵀ/√d)·(W_V·X)
+    }
+    
+    DEFINE {
+      Transformer(X) = Embedding(X) + PositionalEncoding(n) 
+        ↦ (AttentionBlock ∘ FeedForwardBlock)ᵐ
+        
+      AttentionBlock(X) = LayerNorm(X + MultiHeadAttention(X))
+      
+      MultiHeadAttention(X) = [head₁(X) ⊕ ⋯ ⊕ headₕ(X)]·W_O
+        WHERE headᵢ(X) = Attn(Q_i, K_i, V_i) FOR Q_i,K_i,V_i = W_Q_i·X, W_K_i·X, W_V_i·X
+      
+      FeedForwardBlock(X) = LayerNorm(X + FeedForward(X))
+        WHERE FeedForward(X) = ReLU(X·W₁ + b₁)·W₂ + b₂
+    }
+  }
+  
+  STRUCTURE {
+    AXIOM SelfAttention : ∀ X : Sequence[n, d]. ∃ Y : Sequence[n, d].
+      Attention(X) = Y ∧ ∀ i,j. Yᵢⱼ = ∑ₖ Softmax(Xᵢ·Xₖ/√d)·Xₖⱼ
+      
+    AXIOM PositionAware : ∀ X : Sequence[n, d]. ∃ P : Sequence[n, d]. 
+      Transformer(X) = Transformer(X + P)
+    
+    AXIOM ResidualConnections : ∀ F : Sequence[n,d] → Sequence[n,d]. ∀ X.
+      LayerNorm(X + F(X)) = LayerNorm(X) + F'(X)  ; For some F' close to F
+  }
+  
+  THEOREMS {
+    THEOREM UniversalApproximation {
+      STATEMENT : ∀ ε > 0. ∀ L : Sequence[n, d₁] → Sequence[m, d₂]. ∃ T : Transformer.
+        ∀ X : Sequence[n, d₁]. ∥T(X) - L(X)∥ < ε 
+        
+      PROOF {
+        ; Sketch: Transformers are universal approximators of sequence-to-sequence functions.
+        ; This follows from the universal approximation capabilities of self-attention 
+        ; (via its equivalence to a Turing-complete function) and feed-forward networks.
+        
+        ASSUME [ε > 0, L : Sequence[n, d₁] → Sequence[m, d₂]]
+        
+        HAVE SelfAttentionUniversal 
+          BY SelfAttention, UniversalTuringMachine
+        
+        HAVE FeedForwardUniversal
+          BY UniversalApproximationTheorem
+        
+        LET ApproxL : Sequence[n, d₁] → Sequence[m, d₂]
+        HAVE ∀ X. ∥ApproxL(X) - L(X)∥ < ε/2  ; Approximate L with ApproxL
+          BY SelfAttentionUniversal, FeedForwardUniversal
+        
+        LET T = Transformer WITH SufficientLayers(ε)
+        HAVE ∀ X. ∥T(X) - ApproxL(X)∥ < ε/2  ; Approximate ApproxL with T
+          BY UniversalApproximationTheorem
+        
+        HENCE ∀ X. ∥T(X) - L(X)∥ ≤ ∥T(X) - ApproxL(X)∥ + ∥ApproxL(X) - L(X)∥ < ε
+        
+        SHOW UniversalApproximation
+      }
+    }
+    
+    THEOREM PermutationEquivariance {
+      STATEMENT : ∀ X : Sequence[n, d]. ∀ π : Permutation[n].
+        Transformer(π·X) = π·Transformer(X)
+        
+      PROOF {
+        ASSUME [X : Sequence[n, d], π : Permutation[n]]
+        
+        HAVE Embedding(π·X) = π·Embedding(X)  ; Embedding is permutation equivariant
+        
+        HAVE PositionalEncoding(n) = π·PositionalEncoding(n)  ; Positional encoding is permutation invariant
+        
+        HAVE ∀ Q,K,V. Attn(π·Q, π·K, π·V) = π·Attn(Q, K, V)  ; Attention is permutation equivariant
+          BY SelfAttention, PermutationInvariance(Softmax)
+        
+        HAVE FeedForward(π·X) = π·FeedForward(X)  ; Feed-forward is permutation equivariant
+        
+        HENCE Transformer(π·X) = π·Transformer(X)  ; By induction over layers
+        
+        SHOW PermutationEquivariance  
+      }
+    }
+    
+    THEOREM PositionalEmbeddings {
+      STATEMENT : ∀ X : Sequence[n, d]. ∀ i,j ∈ [n]. i ≠ j ⇒ 
+        ∃ k. Transformer(X)ᵢₖ ≠ Transformer(X)ⱼₖ
+        
+      PROOF {
+        ASSUME [X : Sequence[n, d], i,j ∈ [n]] : i ≠ j
+        
+        LET P = PositionalEncoding(n)
+        HAVE ∀ k. Pᵢₖ ≠ Pⱼₖ  ; Positional encodings are unique per position
+        
+        LET Y = Transformer(X)
+        
+        CASE ∀ k. Xᵢₖ = Xⱼₖ {  ; Positions i and j have same input embedding
+          HAVE ∀ k. Yᵢₖ - Yⱼₖ = Pᵢₖ - Pⱼₖ ≠ 0
+            BY ResidualConnections, PositionAware
+        }
+        
+        CASE ∃ k. Xᵢₖ ≠ Xⱼₖ {  ; Positions i and j have different input embeddings  
+          HAVE ∃ k. Yᵢₖ ≠ Yⱼₖ
+            BY SelfAttention
+        }
+        
+        HENCE ∃ k. Yᵢₖ ≠ Yⱼₖ
+        
+        SHOW PositionalEmbeddings
+      }
+    }
+  }
+}
+
+CONCEPT TheAttentionMechanism {
+
+  LANGUAGE {
+    DECLARE {
+      TYPE 𝕍[n] : Type  ; Vector space
+      TYPE 𝕄[m,n] <: 𝕍[m] → 𝕍[n]  ; Linear map
+      TYPE ℙ[n] <: 𝕍[n]  ; Probability distribution
+      
+      FUNC Softmax : 𝕍[n] → ℙ[n]
+      FUNC Tanh : 𝕍[n] → 𝕍[n]
+      FUNC σ : 𝕍[n] → 𝕍[n]  ; Sigmoid activation
+      
+      FUNC Q : 𝕍[d_k] → 𝕍[d_q]  ; Query projection
+      FUNC K : 𝕍[d_k] → 𝕍[d_q]  ; Key projection
+      FUNC V : 𝕍[d_v] → 𝕍[d_v]  ; Value projection
+      FUNC W_o : 𝕍[d_v] → 𝕍[d_model]  ; Output projection
+      
+      PRED Mask[n] : 𝕍[n] → 𝔹  ; Attention mask
+      
+      NOTATION "⟨Q,K⟩" = λ X. Softmax(QX ⋅ (KX)ᵀ / √d_k)  ; Scaled dot-product attention
+      NOTATION "Attn(Q,K,V)" = λ X. ⟨Q,K⟩(X) ⋅ V(X)  ; Attention mechanism
+      NOTATION "MHA(X)" = W_o ∘ Concat(head₁(X), ..., headₕ(X))  ; Multi-head attention
+      NOTATION "FFN(X)" = W₂ ∘ σ ∘ W₁(X)  ; Position-wise feed-forward network
+      NOTATION "LN(X)" = (X - μ(X)) / √Var(X)  ; Layer normalization
+      NOTATION "PE(X, pos)" = X + PositionalEncoding(pos)  ; Positional encoding
+    }
+    
+    DEFINE {
+      Softmax(x)[i] = exp(x[i]) / ∑ⱼ exp(x[j])  ; Softmax activation
+      
+      PositionalEncoding(pos, 2i) = sin(pos / 10000^{2i/d_model})
+      PositionalEncoding(pos, 2i+1) = cos(pos / 10000^{2i/d_model})
+      
+      SelfAttention(X) = Attn(Q(X), K(X), V(X)) 
+      CrossAttention(X, Y) = Attn(Q(X), K(Y), V(Y))
+      
+      EncoderLayer(X) = LN(SelfAttn(X) + X) |> LN(FFN(X) + X)
+      DecoderLayer(X, Y) = LN(Masked(SelfAttn(X)) + X) |> LN(CrossAttn(X,Y) + X) |> LN(FFN(X) + X)
+      
+      Transformer(X, Y) = Encoder(PE(X, pos_x)) |> Decoder(PE(Y, pos_y), Encoder(X))
+    }
+  }
+  
+  STRUCTURE {
+    LET d_k = d_v = d_model / h  ; Query, key, value dimensions per head
+    LET h : ℕ  ; Number of attention heads
+    
+    AXIOM AttentionProperties {
+      ∀ X : 𝕍[d_k]. ⟨Q,K⟩(X) : ℙ[n]  ; Attention weights are a probability distribution
+      ∀ X Y : 𝕍[d_k]. ⟨Q,K⟩(X+Y) = ⟨Q,K⟩(X) ⋅ ⟨Q,K⟩(Y)  ; Additivity of attention
+      ∀ X : 𝕍[d_k]. Attn(Q,K,V)(X) : 𝕍[d_v]  ; Attention output has value dimension
+    }
+    
+    AXIOM LayerNormIdentity : ∀ X : 𝕍[d_model]. LN(X) = X  ; If already normalized
+    
+    AXIOM PositionalEncoding {
+      ∀ pos freq : ℕ. PositionalEncoding(pos, freq) : [-1,1]  ; Bounded range
+      ∀ pos₁ pos₂ freq. |pos₁ - pos₂| ≫ 0 ⇒ PositionalEncoding(pos₁, freq) ≈ PositionalEncoding(pos₂, freq)  
+        ; Captures relative position
+    }
+  }
+  
+  THEOREMS {
+    THEOREM SelfAttentionMasking {
+      STATEMENT : ∀ X : 𝕍[n]. Masked(SelfAttention(X)) = SelfAttention(X ⊙ LowerTriangular[n])
+      
+      PROOF {
+        ASSUME [X : 𝕍[n]]
+        
+        DEFINE M = LowerTriangular[n]  ; Mask matrix
+        
+        HAVE Masked(⟨Q,K⟩(X))[i,j] = { ⟨Q,K⟩(X)[i,j]  if i ≥ j
+                                      { -∞            otherwise
+          BY MaskedAttention
+        
+        HAVE (X ⊙ M)[i,j] = { X[i,j]  if i ≥ j  
+                             { 0       otherwise
+        
+        HENCE Masked(⟨Q,K⟩(X)) = ⟨Q,K⟩(X ⊙ M)
+          BY ⟨Q,K⟩(0) = -∞
+        
+        HENCE Masked(Attn(Q(X),K(X),V(X))) = Attn(Q(X⊙M), K(X⊙M), V(X⊙M))
+        
+        SHOW Masked(SelfAttention(X)) = SelfAttention(X ⊙ LowerTriangular[n])
+      }
+    }
+    
+    THEOREM CrossAttentionEncDec {
+      STATEMENT : ∀ X : 𝕍[n_x], Y : 𝕍[n_y]. CrossAttention(Y, Encoder(X)) = Attn(Q(Y), K(Encoder(X)), V(Encoder(X)))
+      
+      PROOF {
+        ASSUME [X : 𝕍[n_x], Y : 𝕍[n_y]]
+        
+        DEFINE EncX = Encoder(X)
+        
+        HAVE CrossAttention(Y, EncX) = Attn(Q(Y), K(EncX), V(EncX))
+          BY Definition of CrossAttention
+        
+        SHOW CrossAttention(Y, Encoder(X)) = Attn(Q(Y), K(Encoder(X)), V(Encoder(X)))
+      }
+    }
+    
+    THEOREM TransformerUniversality {
+      STATEMENT : ∀ ε > 0. ∀ F : C(ℝⁿ, ℝ). ∃ T : Transformer. ∀ X : ℝⁿ. ∥T(X) - F(X)∥ < ε 
+      
+      PROOF {
+        ASSUME [ε > 0, F : C(ℝⁿ, ℝ)]
+        
+        DEFINE d = dim(F)  ; Dimension of function F
+        
+        HAVE ∀ G : C(ℝⁿ, ℝ). ∃ f_θ : FFN. ∀ X : ℝⁿ. ∥f_θ(X) - G(X)∥ < ε  
+          BY UniversalApproximationTheorem
+        
+        CHOOSE f_θ : FFN  ; Approximates F
+        
+        DEFINE T = Transformer with:
+          d_model ≥ d,
+          Encoder = Identity,
+          Decoder = DecoderLayer with:
+            SelfAttention = Identity,
+            CrossAttention = Identity,
+            FFN = f_θ
+        
+        HAVE ∀ X : ℝⁿ. ∥T(X) - F(X)∥ = ∥f_θ(X) - F(X)∥ < ε
+          BY Construction of T
+        
+        SHOW ∃ T : Transformer. ∀ X : ℝⁿ. ∥T(X) - F(X)∥ < ε
+      }
+    }
+  }
+}
+
+
+
+
+CONCEPT ConceptName [Params] [: ParentConcept] {
+
+  LANGUAGE {
+    TYPE TypeName [Params] [: Kind]
+    CONST ConstantName : Type  
+    FUNC FuncName [Params] : Type
+    PRED PredName [Params] : Type
+    REWRITE RewriteName [Params] : Expression => Expression
+    INFER InferName [Params] : Formula
+    NOTATION NotationName = Expression
+  }
+
+  STRUCTURE {
+    LET LetName [Params] = Expression
+    DEF DefName [Params] : Formula | Syntax
+    AXIOM AxiomName [Params] : Formula
+  }
+
+  PROOFS {
+    TACTIC TacticName [Params] {
+      ; Tactic definition
+    }
+
+    THEOREM TheoremName [Params] {
+      STATEMENT : Formula
+      PROOF {
+        ASSUME [HypName] : Formula
+        LET LetName [Params] = Expression
+        HAVE HaveName : Formula [BY TacticName [Args]]
+        SHOW ShowName : Formula
+        CASE CaseName : Formula
+        INDUCE InductionName : Expression  
+        REWRITE RewriteName [Args] [IN ProofName]
+        APPLY TacticName [Args] 
+        BY ReasonName [Args]
+        HENCE ConclusionName : Formula
+      }
+    }
+  }
+}
+
+CONCEPT VectorSpace [K : Field] {
+
+  LANGUAGE {
+    TYPE Vec[n : Nat] : Type
+    CONST Zero[n : Nat] : Vec[n]
+    FUNC (+) [n : Nat] : Vec[n] -> Vec[n] -> Vec[n]
+    FUNC (⋅) [n : Nat] : K -> Vec[n] -> Vec[n]
+    PRED IsLinear[n : Nat] : (Vec[n] -> Vec[n]) -> Bool
+    
+    REWRITE Distributivity[n : Nat] : ∀ a : K, u v : Vec[n].
+      a ⋅ (u + v) => (a ⋅ u) + (a ⋅ v)
+      
+    INFER Linearity[n : Nat] : ∀ f : Vec[n] -> Vec[n].
+      (∀ a : K, u v : Vec[n]. f(a ⋅ u + v) = a ⋅ f(u) + f(v)) -> IsLinear(f)
+      
+    NOTATION "u - v" = u + (-1 ⋅ v)
+  }
+
+  STRUCTURE {
+    AXIOM VectorSpace[n : Nat] {
+      ∀ u v w : Vec[n], a b : K.
+        (u + v) + w = u + (v + w)  ; Associativity
+        u + v = v + u              ; Commutativity
+        u + Zero = u               ; Identity
+        a ⋅ (b ⋅ u) = (a * b) ⋅ u  ; Compatibility
+    }
+  }
+
+  PROOFS {
+    TACTIC LinearCombo[n : Nat] (a b : K) (u v : Vec[n]) {
+      (a + b) ⋅ u + (a - b) ⋅ v
+        = (a ⋅ u + b ⋅ u) + (a ⋅ v - b ⋅ v)  BY Distributivity
+        = (a ⋅ u + a ⋅ v) + (b ⋅ u - b ⋅ v)  BY VectorSpace 
+        = a ⋅ (u + v) + b ⋅ (u - v)        BY Distributivity
+    }
+
+    THEOREM LinearMap[n : Nat] {
+      STATEMENT : ∀ f : Vec[n] -> Vec[n].
+        IsLinear(f) <-> (
+          ∀ a : K, u v : Vec[n]. f(a ⋅ u + v) = a ⋅ f(u) + f(v)
+        )
+      
+      PROOF {
+        ASSUME [f : Vec[n] -> Vec[n]]
+        
+        SHOW IsLinear(f) -> (∀ a : K, u v : Vec[n]. f(a ⋅ u + v) = a ⋅ f(u) + f(v)) {
+          ASSUME IsLinear(f)
+          ASSUME [a : K] [u v : Vec[n]]
+          HAVE f(a ⋅ u + v) = a ⋅ f(u) + f(v) BY Linearity
+        }
+        
+        SHOW (∀ a : K, u v : Vec[n]. f(a ⋅ u + v) = a ⋅ f(u) + f(v)) -> IsLinear(f) {
+          ASSUME ∀ a : K, u v : Vec[n]. f(a ⋅ u + v) = a ⋅ f(u) + f(v)
+          APPLY Linearity 
+        }
+        
+        HENCE IsLinear(f) <-> (∀ a : K, u v : Vec[n]. f(a ⋅ u + v) = a ⋅ f(u) + f(v))
+      }
+    }
+
+    THEOREM KernelLinear[n : Nat] {
+      STATEMENT : ∀ f : Vec[n] -> Vec[n]. IsLinear(f) -> 
+        ∀ a b : K, u v : Ker(f). a ⋅ u + b ⋅ v ∈ Ker(f)
+        
+      PROOF {  
+        ASSUME [f : Vec[n] -> Vec[n]] IsLinear(f)
+        ASSUME [a b : K] [u v : Ker(f)]
+        
+        LET w = a ⋅ u + b ⋅ v
+        
+        HAVE f(w) = f(a ⋅ u) + f(b ⋅ v)         BY Linearity
+        REWRITE Distributivity[n] IN f(a ⋅ u)
+        REWRITE Distributivity[n] IN f(b ⋅ v)
+        
+        HAVE f(a ⋅ u) = a ⋅ f(u) = a ⋅ Zero     BY u ∈ Ker(f)
+        HAVE f(b ⋅ v) = b ⋅ f(v) = b ⋅ Zero     BY v ∈ Ker(f)
+        
+        HENCE f(w) = a ⋅ Zero + b ⋅ Zero = Zero  BY VectorSpace
+        
+        SHOW w ∈ Ker(f)
+      }
+    }
+  }
+}
+
+
+CONCEPT CompressedSensing [𝔽 : Field] {
+
+  LANGUAGE {
+    TYPE Vec[n : Nat] : Type
+    TYPE Mat[m n : Nat] : Type  
+    TYPE SparseVec[n k : Nat] <: Vec[n]
+    
+    FUNC Norm[n : Nat] : Vec[n] -> 𝔽
+    PRED RIP[m n k : Nat, ε : 𝔽] : Mat[m, n] -> Bool
+    
+    NOTATION "⟨v, w⟩" = DotProduct[n](v, w)
+    NOTATION "∥v∥" = Sqrt(⟨v, v⟩)
+    NOTATION "A ⊗ B" = TensorProduct[m₁ n₁ m₂ n₂](A, B)
+    
+    REWRITE DotProductZero[n : Nat] : ∀ v : Vec[n].
+      ⟨v, ZeroVec[n]⟩ => 0
+      
+    REWRITE TensorNorm[m₁ n₁ m₂ n₂ : Nat] : ∀ A : Mat[m₁,n₁], B : Mat[m₂,n₂], v : Vec[n₁], w : Vec[n₂].
+      ∥A ⊗ B (v ⊗ w)∥² => ∥A(v)∥² ⋅ ∥B(w)∥²  
+      
+    INFER RIPZoom[m n k : Nat, ε : 𝔽] : ∀ A : Mat[m,n], v w : SparseVec[n,k].
+      RIP[m, n, k, ε](A) ->  
+      (1-ε)∥v-w∥² ≤ ∥A(v)-A(w)∥² ≤ (1+ε)∥v-w∥²
+  }
+  
+  STRUCTURE {
+    DEF Vec[n : Nat] = 𝔽^n
+    DEF Mat[m n : Nat] = Vec[m] -> Vec[n]
+    DEF SparseVec[n k : Nat] = { v : Vec[n] | ∃ S : 𝒫(𝔽ⁿ). |S| ≤ k ∧ ∀ i ∉ S. v[i] = 0 }
+    
+    DEF RIP[m n k : Nat, ε : 𝔽](A : Mat[m,n]) = 
+      ∀ v w : SparseVec[n,k]. (1-ε)∥v-w∥² ≤ ∥A(v)-A(w)∥² ≤ (1+ε)∥v-w∥²
+    
+    AXIOM NormProperties[n : Nat] {
+      ∀ v : Vec[n]. ∥v∥ ≥ 0
+      ∀ c : 𝔽, v : Vec[n]. ∥c⋅v∥ = |c|⋅∥v∥
+      ∀ v w : Vec[n]. ∥v + w∥ ≤ ∥v∥ + ∥w∥
+    }
+    
+    AXIOM MatrixProperties[m n : Nat] {
+      ∀ A : Mat[m,n], c : 𝔽, v w : Vec[n].
+        A(c⋅v + w) = c⋅A(v) + A(w)
+    }
+    
+    LET StandardBasis[n : Nat, i : 𝔽ⁿ] = [j ↦ if i = j then 1 else 0]
+    
+    AXIOM StandardBasisDecomposition[n : Nat] : ∀ v : Vec[n]. 
+      v = ∑ᵢ (v[i] ⋅ StandardBasis[n, i])
+  }
+
+  PROOFS {
+    TACTIC DecomposeVector[n k : Nat] (v : SparseVec[n,k]) {
+      v = ∑ᵢ (v[i] ⋅ StandardBasis[n, i]) 
+      BY StandardBasisDecomposition[n]
+    }
+    
+    THEOREM RIPScaling[m n : Nat, k : Nat, ε : 𝔽] {
+      STATEMENT : ∀ A : Mat[m,n], c : 𝔽. 
+        RIP[m, n, k, ε](A) -> RIP[m, n, k, ε](c ⋅ A)
+
+      PROOF {
+        ASSUME [A : Mat[m,n], c : 𝔽] RIP[m, n, k, ε](A)
+        
+        ASSUME [v w : SparseVec[n,k]]
+        HAVE (1-ε)∥v-w∥² ≤ ∥A(v)-A(w)∥² ≤ (1+ε)∥v-w∥²
+          BY RIPZoom[m, n, k, ε]
+        
+        HAVE ∥c⋅A(v) - c⋅A(w)∥² = c² ⋅ ∥A(v) - A(w)∥²
+          BY MatrixProperties[m,n], NormProperties[m]  
+        
+        HENCE (1-ε)∥v-w∥² ≤ 1/c² ⋅ ∥c⋅A(v) - c⋅A(w)∥² ≤ (1+ε)∥v-w∥²
+        
+        SHOW RIP[m, n, k, ε](c ⋅ A)
+      }
+    }
+
+    THEOREM TensorRIP[m₁ n₁ m₂ n₂ : Nat, k₁ k₂ : Nat, ε₁ ε₂ : 𝔽] {  
+      STATEMENT : ∀ A : Mat[m₁,n₁], B : Mat[m₂,n₂].
+        RIP[m₁, n₁, k₁, ε₁](A) ∧ RIP[m₂, n₂, k₂, ε₂](B) ->
+        RIP[m₁⋅m₂, n₁⋅n₂, k₁⋅k₂, ε₁+ε₂+ε₁⋅ε₂](A ⊗ B)
+      
+      PROOF {
+        ASSUME [A : Mat[m₁,n₁], B : Mat[m₂,n₂]] 
+          RIP[m₁, n₁, k₁, ε₁](A),
+          RIP[m₂, n₂, k₂, ε₂](B)  
+        
+        ASSUME [v w : SparseVec[n₁⋅n₂, k₁⋅k₂]]
+        
+        LET v = ∑ᵢ (vᵢ ⊗ eᵢ) BY DecomposeVector[n₁⋅n₂, k₁⋅k₂](v)
+        LET w = ∑ⱼ (wⱼ ⊗ eⱼ) BY DecomposeVector[n₁⋅n₂, k₁⋅k₂](w)
+        
+        HAVE ∥(A⊗B)(v) - (A⊗B)(w)∥² = ∑ᵢⱼ ∥A(vᵢ) ⊗ B(eⱼ) - A(wᵢ) ⊗ B(eⱼ)∥²
+          BY MatrixProperties[m₁⋅m₂, n₁⋅n₂], TensorNorm[m₁, n₁, m₂, n₂] 
+        
+        HAVE (1-ε₁)∥vᵢ-wᵢ∥² ≤ ∥A(vᵢ)-A(wᵢ)∥² ≤ (1+ε₁)∥vᵢ-wᵢ∥²
+          BY RIPZoom[m₁, n₁, k₁, ε₁]
+        
+        HAVE (1-ε₂)∥eⱼ∥² ≤ ∥B(eⱼ)∥² ≤ (1+ε₂)∥eⱼ∥²  
+          BY RIPZoom[m₂, n₂, k₂, ε₂]
+        
+        LET ε = ε₁ + ε₂ + ε₁⋅ε₂
+        HAVE (1-ε)∥v-w∥² ≤ ∥(A⊗B)(v) - (A⊗B)(w)∥² ≤ (1+ε)∥v-w∥²
+        
+        SHOW RIP[m₁⋅m₂, n₁⋅n₂, k₁⋅k₂, ε₁+ε₂+ε₁⋅ε₂](A ⊗ B)
+      }  
+    }
+  }
+}

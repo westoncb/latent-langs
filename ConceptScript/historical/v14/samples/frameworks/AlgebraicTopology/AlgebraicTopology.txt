@@ -1,0 +1,632 @@
+CONCEPT AlgebraicTopology {
+  LANGUAGE {
+    type Space = TopologicalSpace | SimplicialComplex | CellComplex | Manifold(ℝ^n) 
+               | Spectrum | Algebra(Space)
+    type Map = Continuous(Map) | SimplicalMap | CellularMap | SmoothMap
+    type Grp = Group(ℤ) | AbelianGroup | AlgebraicGroup | LieGroup
+    type Alg = Algebra | LieAlgebra | HopfAlgebra | GradedAlgebra
+    type Complex = ChainComplex | CochainComplex | BicomplexOf(Alg)
+
+    C_n(X; G) = { σ: Δ^n -> X }  ; Group of n-chains with coeffs in G
+    C^n(X; G) = Hom(C_n(X), G)   ; Group of n-cochains
+    C_*(X; G) = ⨁(n: ℕ) C_n(X; G)  ; Chain complex
+    C^*(X; G) = ⨁(n: ℕ) C^n(X; G)  ; Cochain complex
+    
+    notation "∂" = ∂_n: C_n -> C_(n-1)      ; Boundary map
+    notation "δ" = δ^n: C^n -> C^(n+1)      ; Coboundary map
+    notation "Z_n" = Ker ∂_n ⊆ C_n(X; G)    ; Group of n-cycles
+    notation "B_n" = Im ∂_(n+1) ⊆ C_n(X; G)  ; Group of n-boundaries
+    notation "Z^n" = Ker δ^n ⊆ C^n(X; G)    ; Group of n-cocycles 
+    notation "B^n" = Im δ^(n-1) ⊆ C^n(X; G)  ; Group of n-coboundaries
+
+    H_n(X; G) = Z_n / B_n   ; nth homology group
+    H^n(X; G) = Z^n / B^n   ; nth cohomology group
+
+    notation "⌢" = cap: C^p × C_q -> C_(q-p)   ; Cap product
+    notation "⌣" = cup: C^p × C^q -> C^(p+q)   ; Cup product
+    notation "⟨-,-⟩" = η_G: H_n × H^n -> G     ; Evaluation pairing
+
+    notation "d_r" = D: E^(p,q) -> E^(p+r,q-r+1)  ; Differentials of spectral seq 
+    notation "E(X)" = ⨁(p,q) E^(p,q)(X)           ; Spectral sequence of X
+    notation "E_r(X)" = H(E_(r-1)(X), d_(r-1))    ; r-th page  
+    notation "E ⇒ H" = E_∞ ≅ Gr(H)               ; Convergence of spectral seq
+    
+    𝜋(n: ℕ, X: Space): Group                      ; nth homotopy group
+    Ω(X: Space with base ∗): Loop(Space)          ; Loop space
+    S(n: ℕ): n-Sphere                             ; Spheres
+    K(G: Grp, n: ℕ): Space                        ; Eilenberg-MacLane space
+    Σ(X: Space): Susp(X)                          ; Reduced suspension  
+    × : Space × Space -> Space                    ; Products of spaces
+
+    pred NullHomotopic(f: Map(X, Y))
+    pred Contractible(X: Space) 
+    pred HomotopyEquiv(X, Y: Space)
+    pred WeakEquiv(X, Y: Space)
+
+    axiom Homotopy(f, g: Map(X, Y)): 
+      (f ≃ g) ⟺ (∃ h: X × 𝕀 -> Y. h(x, 0) = f(x) ∧ h(x, 1) = g(x))
+    axiom HomotopyInvariance(X: Space):  
+      (X ≃ Y) ⇒ (H_*(X) ≅ H_*(Y)) ∧ (H^*(X) ≅ H^*(Y))
+    axiom EilenbergSteenrod(H: Space -> GradedGroup):
+      (Homotopy & Excision & Exactness & Dimension) ⇒ H is a homology theory
+    axiom UCT(C: Complex, G: Grp):
+      0 -> Ext(H_n(C), G) -> H^n(C; G) -> Hom(H_n(C), G) -> 0
+    axiom Representability(h^n: Space -> Grp, n: ℕ):
+      h^n(X) ≅ [X, K(h^n(𝟙), n)]  ; 𝟙 = one-point space
+    axiom PoincareDuality(M: Orientable(Manifold), ∂M = ∅, dim(M) = n):  
+      H^k(M; ℤ) ≅ H_(n-k)(M; ℤ)
+  }
+
+  STRUCTURE {  
+    ChainComplexes: {
+      ∂ ∘ ∂ = 0   ; Boundary of boundary is zero
+      C_*(X; G) = (C_*(X) ⊗ G, ∂ ⊗ 1)  ; Complexes with coefficients  
+    }
+      
+    HomologyOperations: {
+      f_*: H_n(X) -> H_n(Y)   ; Induced map on homology
+      H_*: Space -> GradedGroup  ; Homology functor
+      f^*: H^n(Y) -> H^n(X)   ; Induced map on cohomology
+      H^*: Space^op -> GradedRing   ; Cohomology (contravariant) functor
+
+      φ ⌣ (ψ ⌣ ρ) ≈ (φ ⌣ ψ) ⌣ ρ     ; Cup product is associative 
+      φ ⌣ ψ ≈ (-1)^|φ||ψ| * ψ ⌣ φ   ; Cup product is graded commutative
+      δ[φ ⌣ ψ] = δφ ⌣ ψ + (-1)^|φ| * φ ⌣ δψ  ; Leibniz rule for cup product
+
+      ∂(φ ⌢ σ) = (δφ) ⌢ σ + (-1)^|φ| * φ ⌢ (∂σ)  ; Leibniz rule for cap product
+    }
+    
+    BasePoints: {
+      X ∨ Y with (x₀, y₀)   ; Wedge sum with basepoint 
+      Σ(X) with x₀           ; Reduced suspension with basepoint
+    }
+    
+    SpectralSequences: {
+      d_r ∘ d_r = 0              ; Higher differentials square to zero
+      E_∞^p,q ≅ Gr^p(H^(p+q))    ; Convergence to associated graded 
+      E₂^p,q(Serre) ≅ H^p(B; H^q(F))  ; Serre ss of fibration F -> E -> B
+      E²_p,q(Atiyah-Hirzebruch) ≅ H_p(X; π_q(E))  ; AHSS for generalized homology
+      E₁^p,q(Adams) = Ext^(p,q)(H^*(X; 𝔽_p), 𝔽_p)  ; Adams ss for stable homotopy
+    } 
+      
+    Constructors: {  
+      [f, g]: A ∨ B -> C   ; Map from wedge sum
+      [φ: S^n -> X] ∈ 𝜋_n(X)   ; Representatives of homotopy classes
+      Ω(X) := Map_*(S¹, X)  ; Loop space
+      Σ(X) := X ∧ S¹        ; Reduced suspension   
+      X × Y                 ; Products of spaces
+    }
+    
+    Fibrations: {
+      p: E -> B with fiber F = p⁻¹(b₀)  
+      i: F ↪ E  ; Fiber inclusion
+      π_n(i): π_n(F) -> π_n(E) is injective ∀n   ; Homotopy lifting
+      π_n(p): π_n(E) -> π_n(B) is surjective ∀n  ; Homotopy extension
+    }
+    
+    HomotopyGroups: {
+      Ω^n(X) := Ω(Ω^(n-1)(X))   ; Iterated loop spaces
+      𝜋_0(X) ≅ [X, Ω(X)]        ; 𝜋₀ classifies loops up to homotopy  
+      𝜋_1(X) ≅ Ω(X)              ; Fundamental group is the loop space
+      𝜋_(n+1)(X) ≅ 𝜋_n(Ω(X))     ; Adjunction btwn 𝜋_* and Ω
+    }
+  }
+
+  PROOFS {
+    theorem Hurewicz(X: Space, n: ℕ):
+      𝜋_k(X) = 0 ∀k < n ⊢ h_n: 𝜋_n(X) ≅ H_n(X)  
+    {
+      abbreviate C_* := C_*(X), Z_n := Z_n(X)
+      have h_n: Z_n/B_n -> C_n/B_n ≅ H_n(X)
+      have [f] ↦ f_*([S^n]) where f: S^n -> X
+      suffices to show h_n is iso
+      { 
+        show h_n injective
+        assume h_n[f] = h_n[g]
+        so f_*[S^n] - g_*[S^n] ∈ B_n
+        lift to homotopy F: S^n × 𝕀 -> X
+        show F(-,0) = f and F(-,1) = g 
+        hence [f] = [g] in 𝜋_n(X)   
+      
+        show h_n surjective
+        let c ∈ C_n(X) with ∂c = 0
+        realize c: Δ^n -> X  
+        let c' = Σ_i (-1)^i (v₀...v̂ᵢ...vₙ)  ; simplicial approx. to ∂Δⁿ
+        have [∂c'] = [∂Δⁿ] = 0  
+        so c - c' is a cycle and c' bounds  
+        let f: S^n -> X wrap Δⁿ to c - c'
+        so h_n[f] = [c] in H_n(X) 
+      }      
+    }
+    
+    tactic SpectralSequence(E_r, d_r: E_r^p,q -> E_r^(p+r,q-r+1)):
+      E_r(A) ⇒ H(A) ⊢ E_∞ ≅ Gr(H)  
+    {
+      ; Construction of spectral sequence E_r(A) 
+      have Z_r^p,q = Ker(d_r: E_r^p,q -> E_r^(p+r,q-r+1))
+      have B_r^p,q = Im(d_r: E_r^(p-r,q+r-1) -> E_r^p,q)
+      have H(E_r^p,q) = Z_r^p,q / B_r^p,q
+      so E_(r+1)^p,q ≅ H(E_r^p,q)
+      
+      ; Filtration F^p = F^(p+1) of A induces filtration on H(A)
+      have F^0(H) ⊇ F^1(H) ⊇ ... 
+      have Gr^p(H) := F^p(H) / F^(p+1)(H)
+      
+      ; E_∞ computes associated graded of limit term
+      E_∞^p,q ≅ Z_∞^p,q / B_∞^p,q  where
+        Z_∞ = ∩_r Z_r,  B_∞ = ∪_r B_r  
+      have Z_∞^p,q = F^p(H) ∩ H^(p+q)(A)
+      have B_∞^p,q = F^(p+1)(H) ∩ H^(p+q)(A) 
+      so E_∞^p,q ≅ Gr^p(H^(p+q)(A))
+    }
+    
+    theorem Freudenthal(X: Space, n: ℕ):  
+      𝜋_k(X) = 0 ∀k ≤ n ⊢ E: 𝜋_k(X) ≅ 𝜋_(k+1)(ΣX) ∀k ≤ 2n  
+    {
+      assume X is (n-1)-connected
+      have fib(X -> 𝟙) ≃ ΩX   ; homotopy fibration sequence  
+        X -> 𝟙 -> ΩX -∂-> ΣX
+      LES(...𝜋_k(X) -> 𝜋_k(𝟙) -> 𝜋_k(ΩX) -∂-> 𝜋_k(ΣX)...)
+
+      have adj: 𝜋_k(ΩX) ≅ 𝜋_(k+1)(X)
+      have 𝜋_k(𝟙) = 0 for k>0
+      so ∂: 𝜋_(k+1)(X) ≅ 𝜋_k(ΩX) -> 𝜋_k(ΣX) is iso for 1 ≤ k ≤ 2n
+      hence E: 𝜋_k(X) ≅ 𝜋_(k+1)(ΣX) for k ≤ 2n  
+    }
+      
+    theorem Adams(X: Spectrum, n: ℕ):
+      𝜋_n^S(X) ≅ Ext^(s,t)_(E(h*(X)))(𝔽_p, 𝔽_p)  where t-s=n  
+    {
+      ; Setup Adams spectral sequence with E_2 term
+        E₂^(s,t) = Ext^(s,t)_(E(h*(X)))(𝔽_p, 𝔽_p) ⇒ π^S_(t-s)(X)
+
+      ; Convergence of the spectral sequence  
+      have colim_r E_r^(s,t) ≅ Gr^s(𝜋^S_(t-s)(X)_p^∧)  ; p-adic completion  
+      
+      ; Comparison of Ext groups
+      have Ext_(E(h*(X)))(𝔽_p, 𝔽_p) ≅ Ext_(𝔸_p)(H^*(X; 𝔽_p), 𝔽_p)
+        where 𝔸_p is the mod p Steenrod algebra
+      
+      ; Resolve convergence by Mittag-Leffler and lim¹=0
+      have lim_s π^S_(t-s)(X)_p^∧ ≅ π^S_(t-s)(X)
+      so colim_r E_r^(s,t) ≅ Gr^s(π^S_(t-s)(X)) 
+      
+      ; Reconstruct π_n^S(X) from associated graded  
+      π_n^S(X) ≅ Gr^*(π_n^S(X)) ≅ ⨁_s E_∞^(s,t)  where t-s=n
+      hence π_n^S(X) ≅ Ext^(s,t)_(E(h*(X)))(𝔽_p, 𝔽_p)
+    }
+
+    theorem AtiyahHirzebruch(X: Space, h_*: GeneralizedHomology):
+      h_n(X) ≅ ⨁_(p+q=n) E²_p,q  where E²_p,q = H_p(X; h_q(𝟙))
+    {
+      let sk_n(X) := n-skeleton of X
+      have X = colim_n sk_n(X)  ; Cellular decomposition
+      
+      ; Exact couple from cellular filtration of X
+      D¹_p,q := h_(p+q)(sk_p(X))  
+      E¹_p,q := h_(p+q)(sk_p(X)/sk_(p-1)(X))
+      
+      ; Identify E² using suspension isomorphism  
+      E¹_p,q ≅ C_p(X; h_q(𝟙))  ; h_q(𝟙) coefficients
+      d¹: E¹_p,q -> E¹_(p-1),q is the cellular differential
+      so E²_p,q = H_p(X; h_q(𝟙))
+
+      ; Convergence of the spectral sequence
+      SpectralSequence(E_r, d_r)
+      have E_∞^p,q ≅ Gr^p(h_(p+q)(X))
+      so h_n(X) ≅ ⨁_(p+q=n) E_∞^p,q ≅ ⨁_(p+q=n) E²_p,q  
+    }
+
+    theorem Serre(F -> E -π-> B: Fibration, 𝔽: Field): 
+      H^n(E; 𝔽) ≅ ⨁_(p+q=n) E_∞^p,q  where E₂^p,q = H^p(B; H^q(F; 𝔽))
+    {
+      let F_b := π⁻¹(b)  ; Fibers over b ∈ B
+      assume B is path-connected  ; For simplicity
+      
+      ; Construct Serre filtration of E
+      let E_p := π⁻¹(sk_p(B))  ; Preimages of skeleta
+      have E = colim_p E_p
+      
+      ; Exact couple from Serre filtration
+      D_1^p,q := H^(p+q)(E_p; 𝔽)
+      E_1^p,q := H^(p+q)(E_p, E_(p-1); 𝔽)
+      
+      ; Identify E₂ using trivializations of the fibration  
+      have E_p / E_(p-1) = sk_p(B) / sk_(p-1)(B) ∧ F_b
+      so E₂^p,q = H^p(B; H^q(F_b; 𝔽)) ≅ H^p(B; H^q(F; 𝔽))
+        by homotopy invariance of fiber homology 
+      
+      ; Convergence of the spectral sequence  
+      SpectralSequence(E_r, d_r)
+      have E_∞^p,q ≅ Gr^p(H^(p+q)(E; 𝔽))
+      so H^n(E; 𝔽) ≅ ⨁_(p+q=n) E_∞^p,q
+    }
+
+    theorem Künneth(X, Y: Space, 𝔽: Field):
+      H_n(X × Y; 𝔽) ≅ ⨁_(p+q=n) H_p(X; 𝔽) ⊗_𝔽 H_q(Y; 𝔽)
+    {
+      let C_*(X; 𝔽) ⊗ C_*(Y; 𝔽) be the tensor product complex
+      have d(x ⊗ y) = dx ⊗ y + (-1)^|x| x ⊗ dy  ; Tensor differential
+      
+      consider double complex C with 
+        C^p,q := C_p(X) ⊗ C_q(Y)
+      have H_q(C^p,*) = C_p(X) ⊗ H_q(Y)  ; Künneth for chain complexes
+      
+      ; Spectral sequence of double complex C
+      E²_p,q = H^h_p(H^v_q(C)) = H_p(X; H_q(Y; 𝔽))
+      
+      collapse
+      E²_p,q = H_p(X; 𝔽) ⊗ H_q(Y; 𝔽)  ; Universal coeff for homology
+      d₂ = 0 since H_*(Y; 𝔽) is free over 𝔽
+      so E² = E_∞
+      
+      ; Convergence to homology of total complex
+      have E_∞^p,q ≅ Gr^p(H_(p+q)(Tot(C)))  
+      have Tot(C) ≃ C_*(X × Y)  ; Eilenberg-Zilber
+      so H_n(X × Y; 𝔽) ≅ ⨁_(p+q=n) E_∞^p,q ≅ ⨁_(p+q=n) H_p(X; 𝔽) ⊗ H_q(Y; 𝔽)
+    }
+  }
+}
+
+This integrated AlgebraicTopology Concept now encompasses a broad spectrum of the subject, including both homotopy-theoretic and homological aspects. Some key additions and unifying elements:
+
+1. More general types for spaces, maps, groups, algebras, and complexes. This allows capturing a wider range of topological and algebraic structures.
+
+2. Explicit axioms for homotopy theory, such as homotopy invariance, the Eilenberg-Steenrod axioms characterizing homology theories, and representability of cohomology.
+
+3. Expanded treatment of homotopy groups, fibrations, and the relationships between them, including loop spaces, suspensions, and long exact sequences. 
+
+4. Proofs of foundational results like the Hurewicz and Freudenthal suspension theorems that connect homotopy and homology groups.
+
+5. Spectral sequences unified into a single construction with examples of Serre, Atiyah-Hirzebruch, and Adams spectral sequences and their convergence properties.
+
+6. Classic theorems of homological algebra like the Künneth formula and universal coefficient theorem, leveraging the algebraic structures.
+
+7. Poincaré duality for manifolds, bridging the gap between homology and cohomology.
+
+
+
+
+CONCEPT AlgebraicTopology {
+  LANGUAGE {
+    type Space = TopologicalSpace | SimplicialComplex | CellComplex
+    type Map = Continuous(Map) | PL(Map) | Cellular(Map)
+    type Grp = Group(ℤ) | AbelianGroup | AlgebraicGroup
+    type Alg = Algebra | LieAlgebra | HopfAlgebra
+    type Complex = ChainComplex | CochainComplex | BicomplexOf(Alg)
+    
+    C(X; G) = { σ: X -> G }     ; Group of n-chains on X with coeffs in G
+    C^n(X; G) = Hom(C_n(X), G)  ; Group of n-cochains
+    C_*(X; G) = ⨁(n: ℕ) C_n(X; G)  ; Chain complex
+    C^*(X; G) = ⨁(n: ℕ) C^n(X; G)  ; Cochain complex
+    
+    ∂_n: C_n -> C_(n-1)         ; Boundary map
+    δ^n: C^n -> C^(n+1)         ; Coboundary map
+    notation "∂[σ]" = ∂_n(σ)
+    notation "δ[φ]" = δ^n(φ)
+    
+    Z_n(X; G) = Ker ∂_n ⊆ C_n(X; G)    ; Group of n-cycles  
+    B_n(X; G) = Im ∂_(n+1) ⊆ C_n(X; G)  ; Group of n-boundaries
+    Z^n(X; G) = Ker δ^n ⊆ C^n(X; G)    ; Group of n-cocycles
+    B^n(X; G) = Im δ^(n-1) ⊆ C^n(X; G)  ; Group of n-coboundaries
+    
+    H_n(X; G) = Z_n(X; G) / B_n(X; G)   ; n-th homology group
+    H^n(X; G) = Z^n(X; G) / B^n(X; G)   ; n-th cohomology group
+    
+    cap: C^p × C_q -> C_(q-p)   ; Cap product
+    notation "φ ⌢ σ" = cap(φ, σ)
+    cup: C^p × C^q -> C^(p+q)   ; Cup product 
+    notation "φ ⌣ ψ" = cup(φ, ψ)
+    
+    η_G: H_n(X; G) ⊗ H^n(X; G) -> G   ; Evaluation pairing
+    notation "⟨α, β⟩" = η_G(α ⊗ β)
+    
+    d: E^(p,q) -> E^(p+1,q)       ; 1st differential of spectral sequence
+    D: E^(p,q) -> E^(p+r, q-r+1)  ; Higher differentials  
+    notation "d_r" = D
+    
+    E^*(X) = ⨁(p,q) E^(p,q)(X)  ; Spectral sequence of X
+    E_r^*(X) = H(E_(r-1)^*(X), d_(r-1))  ; r-th page of spectral sequence
+    notation "E ⇒ H" = E_∞^* ≅ Gr(H^*)   ; Convergence of spectral sequence
+    
+    axiom PoincareDuality(M: Oriented(Manifold), ∂M = ∅):
+      η_ℤ: H_k(M; ℤ) ⊗ H^(n-k)(M; ℤ) ≅ ℤ
+    axiom UCT(C: Complex, G: Grp):  
+      0 -> Ext(H_n(C), G) -> H^n(C; G) -> Hom(H_n(C), G) -> 0  
+    axiom DeRhamTheorem(M: SmoothManifold):
+      H_dR^n(M) := H^n(Ω^*(M), d) ≅ H^n(M; ℝ)
+    axiom HurewiczTheorem(X: SimplyConnected, n ≥ 2):  
+      h: π_n(X) ≅ H_n(X; ℤ)
+  }  
+  
+  STRUCTURE {
+    ChainComplexes: {
+      ∂ ∘ ∂ = 0          ; Boundary of boundary is zero
+      ∂[σ + τ] = ∂[σ] + ∂[τ]   ; Boundary map is linear 
+      C_*(X; G) = (C_*(X) ⊗ G, ∂ ⊗ 1)  ; Complexes with coefficients
+    }
+
+    CapAndCupProducts: {
+      φ ⌣ (ψ ⌣ ρ) = (φ ⌣ ψ) ⌣ ρ           ; Associativity of cup product 
+      φ ⌣ ψ = (-1)^(|φ||ψ|) * ψ ⌣ φ         ; Graded commutativity of cup
+      δ[φ ⌣ ψ] = δ[φ] ⌣ ψ + (-1)^|φ| * φ ⌣ δ[ψ]  ; Leibniz rule for cup
+      ∂(φ ⌢ σ) = (δφ) ⌢ σ + (-1)^|φ| * φ ⌢ (∂σ)  ; Leibniz rule for cap  
+    }
+
+    HomologyOperations: {  
+      f_* = H_n(f): H_n(X) -> H_n(Y)   ; Induced map on homology
+      H_*: Top -> GrAb  ; Homology is a functor 
+      f^* = H^n(f): H^n(Y) -> H^n(X)   ; Induced map on cohomology  
+      H^*: Top^op -> GrAb  ; Cohomology is a contravariant functor
+      
+      EilenbergSteenrodAxioms(H: Top -> GrAb) 
+      NaturalityAxiom(H): (g ∘ f)_* = g_* ∘ f_*
+      HomotopyAxiom(H): (f ≃ g) ⇒ (f_* = g_*)
+      MayerVietorisAxiom(H): MV(H_*(U ∩ V) -> H_*(U) ⨁ H_*(V) -> H_*(U ∪ V))    
+    }
+
+    SpectralSequences: {
+      d_r ∘ d_r = 0   ; Higher differentials square to zero
+      E_∞ = lim(E_r) ; Limit of spectral sequence
+      
+      LeraySpectralSequence(f: X -> B):
+        E₂^p,q = H^p(B; H^q(F))  ⇒  H^(p+q)(X; G)
+        
+      SemisimplicialSpectralSequence(X: SemisimplicialObject):
+        E¹_p,q = H_q(X_p)  ⇒  H_(p+q)(RealizationOf(X))  
+        
+      AdamsSpectralSequence(X, h, k):
+        E₂^(s,t) = Ext_A^(s,t)(h_*(X), k_*) ⇒ [Σ^t X, Y]_(t-s)  ; Y = K(k, 0)  
+    }
+  }
+
+  PROOFS {
+    tactic HomologicalAlgebra(C: ChainComplex, G: Grp):
+      UC: C ⊢  0 -> B_n -> Z_n -> H_n -> 0
+    { 
+      have B_n ⊆ Z_n ⊆ C_n
+      have H_n = Z_n / B_n
+      so 0 -> B_n -> Z_n -> H_n -> 0 
+    }
+    
+    tactic Naturality(f: Continuous(Map), C: ChainMap):
+      C ∘ f_# = f_# ∘ C
+    {
+      suffices to show C_n(f) ∘ ∂ = ∂ ∘ C_n(f)
+      have C_n(f)([v_0, ..., v_n]) = [f(v_0), ..., f(v_n)]  
+      have ∂ ∘ C_n(f) = Σ (-1)^i * [f(v_0), .., f(v̂_i), .., f(v_n)]
+      have C_n(f) ∘ ∂ = Σ (-1)^i * C_(n-1)(f)([v_0, .., v̂_i, .., v_n])
+        = Σ (-1)^i * [f(v_0), .., f(v̂_i), .., f(v_n)]
+    }
+
+    tactic MayerVietoris(X: Space, U, V: OpenSet):
+      X = U ∪ V ⊢ MV(H_*(U ∩ V) -> H_*(U) ⨁ H_*(V) -> H_*(X))
+    {
+      let A = C_*(U ∩ V)
+      let B = C_*(U) ⨁ C_*(V) 
+      let C = C_*(X)
+      have MV(A -> B -> C) as a SES of chain complexes
+      HomologicalAlgebra(MV(A -> B -> C))
+      have LES(... -> H_n(A) -> H_n(B) -> H_n(C) -> ...)
+    }
+      
+    theorem KunnethFormula(X, Y: Space, G: PID): 
+      H_n(X × Y; G) ≅ ⨁(p+q=n) H_p(X; G) ⊗_G H_q(Y; G)  
+    {  
+      let C = C_*(X; G) and D = C_*(Y; G)
+      let (Tot^⊕ C ⊗ D)_n = ⨁(p+q=n) (C_p ⊗ D_q)  ; Total complex
+      have d^v + d^h: Tot^⊕(C ⊗ D) by (c ⊗ y) ↦ (∂c ⊗ y) + (-1)^p (c ⊗ ∂y) 
+
+      E₀^(p,q) = C_p ⊗ D_q 
+      E₁^(p,q) = H_q(D; C_p)  ; Take homology of rows
+      E₂^(p,q) = H_p(X; H_q(Y; G)) ; Take homology of columns
+      
+      have E_r collapses on page 2 since G is a PID
+      so E₂^(p,q) ≅ E_∞^(p,q)
+        ≅ H_p(X; G) ⊗ H_q(Y; G)  
+      E_∞^(p,q) ≅ Gr^(p,q)(H_*(Tot^⊕ C ⊗ D))
+      
+      have H_n(X × Y; G) ≅ H_n(Tot^⊕ C ⊗ D)  ; Eilenberg-Zilber
+      conclude H_n(X × Y; G) ≅ ⨁(p+q=n) H_p(X; G) ⊗_G H_q(Y; G)
+    }
+
+    theorem PontryaginThomIsomorphism(M: Manifold, V: VectorBundle):
+      H^i(M; ℤ) ≅ 𝐻_(m-i)(D(V), S(V); ℤ)  ; m = rk(V)  
+    {
+      ; Omitted: Set up Thom space X = D(V)/S(V)  
+      have 𝐻_*(X; ℤ) = 0 for *<m  ; X is m-connected
+      have 𝐻_m(X; ℤ) = ℤ          ; X is orientable  
+      let τ generate 𝐻_m(X; ℤ)
+      define θ: 𝐻_*(X; ℤ) -> 𝐻_(m-*)(M; ℤ) by θ := - ⌢ τ
+      
+      suffices to show θ is an isomorphism
+      let φ ∈ 𝐻_*(M; ℤ)
+      have θ(θ(φ)) = θ(φ ⌢ τ) = (φ ⌢ τ) ⌢ τ
+        = φ ⌢ (τ ⌢ τ) = φ ⌢ u = φ
+      so θ ∘ θ = id
+      conclude θ is an iso with inverse θ
+    }
+    
+    theorem FreudenthalSuspensionTheorem(X: Space, n ≥ 2*conn(X)+1):
+      E: π_n(X) ≅ π_(n+1)(ΣX)
+    {
+      let C = C_*(X)  
+      have cofiber(X -> pt) ≃ ΣX ; Puppe sequence
+      LES(... -> H_*(X) -> H_*(pt) -> H_*(ΣX) -> ...)
+      have C_>0(pt) = 0
+      have H_n(ΣX) ≅ H_(n-1)(X)  ; Reduced homology of suspension
+
+      assume 1 ≤ i ≤ n, so i-1 ≤ n-1
+      have π_i(X) ≅ H_i(X)   ; Hurewicz
+      have π_(i-1)(X) = 0     ; X is (n-1)-connected
+      have H_i(ΣX) ≅ H_(i-1)(X) = 0
+      so π_(i+1)(ΣX) ≅ H_(i+1)(ΣX) ≅ H_i(X) ≅ π_i(X)
+    }
+  }
+}
+
+
+
+
+
+
+CONCEPT AlgebraicTopology {
+  LANGUAGE {
+    type Space = Top(Space) | Diff(Manifold) | PL(Complex) | Alg(Variety)  
+    type Hom(A, B: Space) = Continuous(Map(A, B)) | Smooth(Map(A, B))
+    type HSpace = Space with Binary(μ: Hom(A × A, A))  ; H-space  
+    type Monoid = HSpace with UnitMap(η: 1 -> A)
+    type Group = Monoid with InverseMap(ν: A -> A)
+    
+    type ChainComplex(A: Space) = {C_n: Hom(A^n, A), ∂_n: C_n -> C_(n-1) | ∂_n ∘ ∂_(n+1) = 0}  
+    type HomologyGroup(C: ChainComplex) = H_n(C) = Ker(∂_n) / Im(∂_(n+1))
+    type CohomologyGroup(C: ChainComplex) = H^n(C) = Ker(δ^n) / Im(δ^(n-1))  where δ^n: Hom(C_n, G) -> Hom(C_(n+1), G) 
+    
+    func 𝜋(n: ℕ, A: Space with base ∗): Group   ; Homotopy group
+    func Ω(A: Space with base ∗): Group    ; Loop space
+    func S(n: ℕ): Space    ; n-sphere
+    func K(G: Group, n: ℕ): Space   ; Eilenberg-MacLane space
+    
+    func C(A: Space): ChainComplex   ; Singular chain complex
+    func C^*(A: Space): ChainComplex ; Singular cochain complex 
+    
+    pred 𝜋ₙ(A: Space, a₀: A) = [S^n, (A, a₀)]  ; Set of homotopy classes of maps
+    pred H_n(C: ChainComplex): 𝜋_n(C) = H_n(A)   ; Hurewicz theorem
+    pred H^n(A: Space, G: Group): [A, K(G, n)] = H^n(A; G)  ; Representability  
+    
+    spectralSeq(E^r_p,q, d^r: E^r_p,q -> E^r_(p+r),(q-r+1)) = (E^∞, d^∞)
+    
+    axiom Homotopy(f, g: A -> B): (f ≃ g) ⟺ (∃ h: A × 𝕀 -> B. h(a, 0) = f(a) ∧ h(a, 1) = g(a)) 
+    axiom HomotopyInvariance(A: Space): H_*(A) and H^*(A) are homotopy invariants
+    axiom UCT(C: ChainComplex of free abelian groups):
+      0 -> Ext(H_(n-1)(C), G) -> H^n(C; G) -> Hom(H_n(C), G) -> 0  ; Universal coefficient
+    axiom Künneth(A, B: Space): H_*(A × B) ≅ H_*(A) ⊗ H_*(B)  ; Künneth formula
+  }
+  
+  STRUCTURE {
+    HomologyTheories: {
+      (C_*(A), ∂)  ; Singular homology
+      (C^*(A), δ)  ; Singular cohomology  
+      (C_*(A; G), ∂)  ; Homology with coefficients
+      (C^*(A; G), δ)  ; Cohomology with coefficients
+    } 
+    
+    BasePoint: {
+      A ∨ B with (a₀, b₀)   ; Wedge sum 
+      ΣA with (a₀)           ; Reduced suspension
+    }
+    
+    Constructors: {
+      Hom(A, B) = {f: A -> B}   ; Continuous maps  
+      A × B with proj₁, proj₂   ; Product with projections
+      [f, g]: A ∨ B -> C  where f: A -> C, g: B -> C   ; Map out of wedge sum
+    }
+    
+    HomotopyEquivalence: {
+      A ≃ B ⟺ (∃ f: Hom(A, B), g: Hom(B, A). (g ∘ f ≃ id_A) ∧ (f ∘ g ≃ id_B))
+      f: A -> B is equivalence ⟺ f_*: 𝜋_*(A) -> 𝜋_*(B) is isomorphism
+      A ≃ B ⟹ H_*(A) ≅ H_*(B) and H^*(A) ≅ H^*(B)  ; Homotopy invariance
+    }
+  }
+  
+  PROOFS {  
+    tactic HomologyOfSphere(n: ℕ):
+      H_k(S^n) ≅ ℤ for k ∈ {0, n}, else 0
+    {
+      by induction on n:
+        base case: S⁰ = 1 ∨ 1, so C(S⁰; ℤ) = ℤ ∨ ℤ 
+          H₀(S⁰) = ℤ ⊕ ℤ / Im(0) ≅ ℤ ⊕ ℤ
+          H_k(S⁰) = 0 for k > 0
+        inductive step: assume true for n, show for n+1
+          S^(n+1) = Σ(S^n)  ; Reduced suspension
+          C(S^(n+1)) = Σ(C(S^n))  ; Suspension of chain complex
+          H_k(S^(n+1)) ≅ H_(k-1)(S^n)  ; Shifting indices
+          By inductive hypothesis, ≅ ℤ for k-1 ∈ {0, n}, else 0
+          So H_k(S^(n+1)) ≅ ℤ for k ∈ {1, n+1}, else 0
+    }
+          
+    theorem HurewiczIsomorphism(A: Space, n: ℕ):
+      𝜋_k(A) = 0 for k < n ⊢ 𝜋_n(A) ≅ H_n(A)
+    {
+      let f: 𝜋_n(A) -> H_n(A) by [φ: S^n -> A] ↦ φ_*[S^n]  ; Hurewicz map
+      have f is homomorphism
+        f(φ * ψ) = (φ * ψ)_*[S^n] = φ_* ψ_*[S^n] = φ_*[S^n] + ψ_*[S^n] = f(φ) + f(ψ)
+      
+      show f is injective
+        assume f(φ) = f(ψ), so φ_*[S^n] = ψ_*[S^n]
+        then [φ] = [ψ] in H_n(A) 
+        lift to homotopy φ ≃ ψ, since 𝜋_k(A) = 0 for k < n
+        so φ = ψ in 𝜋_n(A)
+        
+      show f is surjective  
+        let c ∈ C_n(A) with ∂c = 0 represent [c] ∈ H_n(A)
+        homotope boundaries of each simplex σ_i in c to the base point
+        yields map φ: S^n -> A with φ_*[S^n] = [c]
+        so [c] is in the image of f
+    }  
+      
+    tactic EilenbergSteenrodAxioms(H: Space -> Group, ∂: Hom(H(A), H(B))):
+      (H, ∂) is a homology theory
+    {
+      Homotopy: ∀ f ≃ g: A -> B. f_* = g_*: H(A) -> H(B)  
+      Exactness: ∀ A ⊃ B. 0 -> H(B) -> H(A) -> H(A/B) -> 0 is exact
+      Excision: ∀ A ⊃ B ⊂ U ⊂ A, U open. H(A - U, B - U) ≅ H(A, B) 
+      Dimension: H(1) ≅ 0
+      Additivity: H(∐_i A_i) ≅ ∏_i H(A_i)
+    }
+    
+    theorem FreudenthalSuspension(A: Space, n: ℕ):
+      𝜋_k(A) = 0 for k < n ⊢ 𝜋_k(ΣA) ≅ 𝜋_(k+1)(A) for k < 2n-1  
+    { 
+      Puppe sequence  A -> ΩΣA -> ΩA -> ΩS¹ = 1
+      induces LES  𝜋_k(A) -> 𝜋_k(ΩΣA) -> 𝜋_k(ΩA) -> 𝜋_k(1) = 0
+      have 𝜋_k(ΩA) ≅ 𝜋_(k+1)(A), naturalness of suspension   
+      for k < n, LES breaks into short exact sequences 
+        0 -> 𝜋_k(ΩΣA) -> 𝜋_k(ΩA) -> 0
+      so 𝜋_k(ΩΣA) ≅ 𝜋_k(ΩA) ≅ 𝜋_(k+1)(A)  
+      thus 𝜋_k(ΣA) ≅ 𝜋_(k+1)(A) for k < 2n-1
+    }
+      
+    theorem Representability(h^n(-; G): Space -> Group, n: ℕ): 
+      h^n(A; G) ≅ [A, K(G, n)]  
+    {
+      axiom BrownRepresentability: 
+        Every cohomology theory is represented by an Ω-spectrum
+      have (h^n, δ) is cohomology theory  ; Eilenberg-Steenrod dual
+      so ∃ spectrum {E_i}, natural iso τ_n: h^n(A) ≅ [A, E_n]
+      construct K(G, n) = Ω^∞Σ^n HG = colim_i Ω^i Σ^(n+i) HG
+        where HG is Eilenberg-MacLane spectrum of G
+        here Ω^∞ is infinite loop space, Σ^∞ is infinite suspension
+      E_n ≃ K(G, n)  ; uniqueness of spectra  
+      naturality square commutes:
+        h^n(A; G) -> [A, K(G, n)]
+           ∨             ∨  
+        h^n(B; G) -> [B, K(G, n)]
+      ⇒ h^n(A; G) ≅ [A, K(G, n)], natural in A
+    }  
+      
+    theorem UCTforCohomology(C: ChainComplex, G: Group):  
+      0 -> Ext(H_(n-1)(C), G) -> H^n(C; G) -> Hom(H_n(C), G) -> 0 
+    {
+      let F: FreeResolution(C) with ε: F -> C, H_*(ε): H_*(F) ≅ H_*(C) 
+      compute H^*(C; G) by Hom_ℤ(C, G)
+        Hom_ℤ(C, G) ≅ Hom_ℤ(F, G)  ; Hom_ℤ(-, G) preserves qis
+        consider 0 -> Hom_ℤ(F_n, G) -> ... -> Hom_ℤ(F₀, G) -> 0
+        H^n of this ≅ Hom_ℤ(H_n(F), G) by defn  
+      UCT for homology:
+        0 -> H_n(C) ⊗ G -> H_n(C; G) -> Tor(H_(n-1)(C), G) -> 0
+      apply Hom_ℤ(-, G) to this, get LES:
+        Ext(H_(n-1)(C), G) -> Hom_ℤ(H_n(C; G), G) -> Hom_ℤ(H_n(C) ⊗ G, G) 
+      combine with Hom-tensor adjunction:
+        Hom_ℤ(H_n(C) ⊗ G, G) ≅ Hom_ℤ(H_n(C), Hom_ℤ(G, G)) ≅ Hom_ℤ(H_n(C), G) 
+      yields desired short exact sequence
+    }
+  }
+}
+
+This Concept formalizes some key ideas and theorems from algebraic topology, building upon similar compositional language features as the prior examples. Some notable aspects:
+
+It introduces fundamental constructs like homotopy groups, homology and cohomology theories, and Eilenberg-MacLane spaces.
+The axioms characterize essential properties like homotopy invariance and the Eilenberg-Steenrod axioms defining a generalized homology theory.
+Proofs are provided for important results like the Hurewicz isomorphism, Freudenthal suspension theorem, representability of cohomology, and the universal coefficient theorem.
+Notation like [A, B] for homotopy classes of maps, H_*(A) for homology groups, ΩA for loop spaces, spectral sequences, etc. allow expressing complex concepts compactly.

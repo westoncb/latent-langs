@@ -1,0 +1,102 @@
+CONCEPT QuantumMaterialsSymbology {
+  EXTENDS SymbolicDifferentialGeometry {
+    type LatticeSym = Bravais(LatticeSym) | PointGroup(LatticeSym)
+    type WaveSym = Bloch(WaveSym) | BandSym | WannierSym
+    type HamilSym = KineticSym | PotentialSym | SpinOrbitSym
+    type TopologySym = BerryCurvatureSym | ChernNumberSym | WilsonLoopSym
+      
+    type Material = (Lattice: Man, Electrons: Fld, Hamiltonian: Fun(Lattice, End(Electrons)))
+    type LatticeDynamics = Flow(Lattice)
+    type ElectronicStructure = Spectrum(Hamiltonian)
+    type MaterialProperty = Fun(Material, ℝ)
+      
+    notation "𝓚" = KineticSym
+    notation "𝓟" = PotentialSym  
+    notation "𝓢" = SpinOrbitSym
+    notation "𝓗" = HamilSym
+    notation "𝓑" = BerryCurvatureSym
+    notation "𝓒" = ChernNumberSym
+    notation "𝓦" = WilsonLoopSym
+    notation "ℬ_n(k)" = Bloch(BandSym)
+    notation "𝓦_n(R)" = Wannier(BandSym)
+  }
+    
+  STRUCTURE {  
+    LatticeStructure(a: LatticeSym, L: Lattice):
+      determines(a, L) ∧ (a ≈ L)
+      
+    BlochWavesCorrespondence(k: WaveSym, ψ: Function(Lattice, ℂ)):  
+      determines(k, ψ) ∧ (k ≈ ψ)
+    
+    Hamiltonian(𝓗: HamilSym, H: Function(Electrons, Electrons)):
+      𝓗 ≈ λψ. ⟨ψ| 𝓚 + 𝓟 + 𝓢 |ψ⟩
+      where 
+        𝓚 ≈ λψ. ∫ ∇ψ ∙ ∇ψ dr  ; Kinetic energy
+        𝓟 ≈ λψ. ∫ V(r) |ψ|² dr  ; Potential energy
+        𝓢 ≈ λψ. ∫ (ℏ/m) σ ∙ (∇V × 𝓹) |ψ|² dr  ; Spin-orbit coupling
+    
+    BlochHamiltonianSpectrum(𝓗(𝓚, 𝓟, 𝓢), {ℬ_n(k)}):  
+      {ℬ_n(k)} ≈ Eigenvalues(λk. ⟨k|𝓗(k)|k⟩)
+    
+    WannierFunctions(𝓦_n(R), {ℬ_n(k)}):
+      𝓦_n(R) ≈ ∫ ℬ_n(k) * exp(ik・R) dk
+          
+    TopologicalInvariants(𝓑, 𝓒, 𝓦): {  
+      𝓑 ≈ i * ⟨d[ℬ_n] ∧ d[ℬ_n]⟩ ; Berry curvature
+      𝓒 ≈ ∫ 𝓑 / 2π  ; Chern number
+      𝓦[C] ≈ tr[exp(i * ∫[C, A])] ; Wilson loop
+    }  
+  }
+      
+  PROOFS { 
+    theorem BlochWaveEquation(k: WaveSym, ψ: Function(Lattice, ℂ), 𝓗: HamilSym):
+      BlochWavesCorrespondence(k, ψ), Hamiltonian(𝓗, H) ⊢
+        SchrodingerEquation(H, ψ) ≈ (𝓗(k) - E_n(k)) * ℬ_n(k) ≈ 0
+      
+    {
+      assume BlochWavesCorrespondence(k, ψ) ∧ Hamiltonian(𝓗, H)  
+        
+      have SchrodingerEquation(H, ψ) ≈ 0  ; Schrodinger equation
+      have ψ ≈ ℬ_n(k) for some n by assumption    
+      Substitution(SchrodingerEquation(H, ℬ_n), SchrodingerEquation(𝓗, ℬ_n))
+  
+      hence SchrodingerEquation(H, ψ) ≈ (𝓗(k) - E_n(k)) * ℬ_n(k) ≈ 0    
+    }  
+      
+    theorem BlochWannierDuality({ℬ_n(k)}, {𝓦_n(R)}):  
+      ({ℬ_n(k)} ≈ Eigenstates(𝓗(k))) ∧ (𝓦_n(R) ≈ ∫ ℬ_n(k) * exp(ik・R) dk) ⊢  
+        {ℬ_n(k)} ≈ ∑[R] 𝓦_n(R) * exp(-ik・R)  
+          
+    {  
+      assume ({ℬ_n(k)} ≈ Eigenstates(𝓗(k))) ∧ (𝓦_n(R) ≈ ∫ ℬ_n(k) * exp(ik・R) dk)
+      
+      let U(k, R) = exp(ik・R)
+      have ℬ_n(k) ≈ ∫ 𝓦_n(R) * U(k, R) dR  ; Inverse Fourier transform
+        ≈ ∑[R] 𝓦_n(R) * exp(-ik・R)  ; Discrete Fourier transform
+        
+      hence {ℬ_n(k)} ≈ ∑[R] 𝓦_n(R) * exp(-ik・R)
+    }
+
+    theorem TopologicalPhaseDiagram(𝓒: ChernNumberSym, μ: MatPropSym, T: MatPropSym): 
+      let Materials = {Material(Lattice, Electrons, Hamiltonian(𝓚, 𝓟(μ), 𝓢(T)))}
+      (∀ M ∈ Materials. 𝓒[M] = n ∈ ℤ) ⊢ Materials ≈ TopologicalPhases(n)
+    {
+      assume ∀ M ∈ Materials. 𝓒[M] = n ∈ ℤ 
+      
+      let 𝓗_M = Hamiltonian(𝓚, 𝓟(μ[M]), 𝓢(T[M]))
+      have 𝓒[M] ≈ ∫[BZ] 𝓑[𝓗_M] / 2π = n  ; Chern number
+      
+      for M₁, M₂ ∈ Materials:
+        have 𝓒[M₁] = 𝓒[M₂] = n
+        have ∃ H(t) = (1-t)*𝓗_M₁ + t*𝓗_M₂. ∀ t ∈ [0,1]. 𝓒[H(t)] = n  ; Homotopy
+        hence M₁ ≈ M₂  ; Topological equivalence
+      
+      therefore Materials ≈ TopologicalPhases(n)  ; Partition into equivalence classes
+    }
+  }
+}
+
+This Concept, QuantumMaterialsSymbology, focuses on symbolic representations and manipulations in the study of quantum materials. It extends SymbolicDifferentialGeometry with additional types for lattice symmetries (LatticeSym), wave functions (WaveSym), Hamiltonians (HamilSym), and topological invariants (TopologySym).
+The STRUCTURE section establishes correspondences between symbolic expressions and their physical counterparts, such as the Hamiltonian operator and its matrix elements. It also defines key relationships, like the Bloch wave equation and the Wannier functions.
+The PROOFS section derives important results using the symbolic machinery. The BlochWaveEquation theorem shows how the Schrodinger equation takes form in the Bloch basis. The BlochWannierDuality theorem proves the Fourier transform relationship between Bloch and Wannier functions. Finally, the TopologicalPhaseDiagram theorem uses the Chern number invariant to classify materials into topological equivalence classes.
+The Concept aims to demonstrate how symbolic reasoning, guided by physical principles and expressed in the language of differential geometry and topology, can yield insights into the quantum mechanical properties of materials. The hope is that this blend of abstract mathematics and electronic structure physics can reveal emergent phenomena and help discover novel quantum phases of matter.

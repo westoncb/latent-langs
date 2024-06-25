@@ -1,0 +1,102 @@
+CONCEPT MonoidalCategory {
+  LANGUAGE {
+    TYPE Obj
+    TYPE Mor[A, B <: Obj] = A -> B
+    TYPE Tensor[A, B <: Obj] <: Obj
+    TYPE Unit <: Obj
+    
+    FUNC Id[A <: Obj] : Mor[A, A]
+    FUNC Compose[A, B, C <: Obj] : Mor[A, B] -> Mor[B, C] -> Mor[A, C]
+    FUNC LeftUnitor[A <: Obj] : Mor[Tensor[Unit, A], A]  
+    FUNC RightUnitor[A <: Obj] : Mor[Tensor[A, Unit], A]
+    FUNC Associator[A, B, C <: Obj] : Mor[Tensor[Tensor[A, B], C], Tensor[A, Tensor[B, C]]]
+    
+    NOTATION "∘" = Compose
+    NOTATION "⊗" = Tensor
+    NOTATION "𝟙" = Unit
+    NOTATION "λ" = LeftUnitor  
+    NOTATION "ρ" = RightUnitor
+    NOTATION "α" = Associator
+
+    AXIOM CategoryAxioms {
+      ; Identity morphisms  
+      ∀ (A <: Obj) (f : Mor[A, B]) (g : Mor[C, A]).
+        (Id[B] ∘ f = f) ∧ (f ∘ Id[A] = f) ∧ (g ∘ Id[A] = g)
+
+      ; Associativity of composition
+      ∀ (A B C D <: Obj) (f : Mor[A, B]) (g : Mor[B, C]) (h : Mor[C, D]).  
+        h ∘ (g ∘ f) = (h ∘ g) ∘ f
+    }
+    
+    AXIOM MonoidalAxioms {
+      ; Tensor product is a bifunctor
+      ∀ (A B C D <: Obj) (f : Mor[A, C]) (g : Mor[B, D]).  
+        (f ⊗ g) ∘ (Id[A] ⊗ Id[B]) = (Id[C] ⊗ Id[D]) ∘ (f ⊗ g)
+        
+      ; Associativity of tensor product  
+      ∀ (A B C <: Obj).
+        (α[A, B, C] ⊗ Id[D]) ∘ α[A, B, Tensor[C, D]] ∘ (Id[A] ⊗ α[B, C, D]) 
+        = α[Tensor[A, B], C, D] ∘ α[A, Tensor[B, C], D]
+
+      ; Unit is the identity for the tensor product
+      ∀ (A <: Obj).  
+        (Id[A] ⊗ λ[B]) ∘ α[A, 𝟙, B] = ρ[A] ⊗ Id[B]
+    }
+  }
+
+  STRUCTURE CoherenceCondition {
+    REQUIRE ∀ (A <: Obj).
+      λ[A] ∘ ρ[𝟙] ⊗ Id[A] = Id[A]
+      (λ[A] ⊗ Id[𝟙]) ∘ α[𝟙, A, 𝟙] = Id[A] ⊗ ρ[𝟙]
+      ρ[A] ∘ Id[A] ⊗ λ[𝟙] = Id[A]
+  }
+
+  PROOFS {
+    TACTIC Simplify(t, eq) = REWRITE t USING eq
+
+    THEOREM PentagonIdentity {
+      STATEMENT:
+        ∀ (A B C D <: Obj).  
+          α[A, B, Tensor[C, D]] ∘ α[Tensor[A, B], C, D] 
+          = (Id[A] ⊗ α[B, C, D]) ∘ α[A, Tensor[B, C], D] ∘ (α[A, B, C] ⊗ Id[D])
+      
+      PROOF:
+        LET A B C D <: Obj
+        
+        SHOW α[A, B, Tensor[C, D]] ∘ α[Tensor[A, B], C, D]
+          = (Id[A] ⊗ α[B, C, D]) ∘ α[A, Tensor[B, C], D] ∘ (α[A, B, C] ⊗ Id[D]) 
+        BY {
+          α[A, B, Tensor[C, D]] ∘ α[Tensor[A, B], C, D]
+            = α[A, B, Tensor[C, D]] ∘ α[Tensor[A, B], C, D] ∘ Id[Tensor[Tensor[A, B], Tensor[C, D]]]
+                                                              BY CategoryAxioms  
+            = α[A, B, Tensor[C, D]] ∘ α[Tensor[A, B], C, D] ∘ ((Id[A] ⊗ Id[B]) ⊗ (Id[C] ⊗ Id[D]))
+                                                              BY MonoidalAxioms
+            = ((Id[A] ⊗ Id[B]) ⊗ α[C, D, E]) ∘ α[Tensor[A, B], C, Tensor[D, E]] ∘ (α[A, B, C] ⊗ (Id[D] ⊗ Id[E]))  
+                                                              BY MonoidalAxioms
+            = (Id[A] ⊗ (Id[B] ⊗ α[C, D, E])) ∘ α[Tensor[A, B], C, Tensor[D, E]] ∘ ((α[A, B, C] ∘ Id[A]) ⊗ (Id[D] ⊗ Id[E]))
+                                                              BY Simplify(Id[B] ⊗ α[C, D, E], MonoidalAxioms)  
+            = (Id[A] ⊗ α[B, C, Tensor[D, E]]) ∘ α[A, Tensor[B, C], Tensor[D, E]] ∘ (α[A, B, C] ⊗ (Id[D] ⊗ Id[E]))
+                                                              BY MonoidalAxioms
+            = (Id[A] ⊗ α[B, C, Tensor[D, E]]) ∘ α[A, Tensor[B, C], Tensor[D, E]] ∘ (α[A, B, C] ⊗ Id[Tensor[D, E]])
+                                                              BY Simplify(Id[D] ⊗ Id[E], CategoryAxioms)
+        }
+    }
+
+    THEOREM TriangleIdentity {
+      STATEMENT:
+        ∀ (A B <: Obj).
+          (ρ[A] ⊗ Id[B]) ∘ α[A, 𝟙, B] = Id[A] ⊗ λ[B]  
+
+      PROOF:
+        LET A B <: Obj
+
+        (ρ[A] ⊗ Id[B]) ∘ α[A, 𝟙, B]  
+          = (ρ[A] ∘ Id[Tensor[A, 𝟙]]) ⊗ (Id[B] ∘ Id[B]) BY MonoidalAxioms
+          = (ρ[A] ∘ (Id[A] ⊗ Id[𝟙])) ⊗ Id[B]           BY CategoryAxioms
+          = ((ρ[A] ∘ Id[A]) ⊗ Id[𝟙]) ⊗ Id[B]           BY MonoidalAxioms
+          = (Id[A] ∘ (ρ[A] ∘ Id[A])) ⊗ (λ[𝟙] ⊗ Id[B])  BY CoherenceCondition
+          = Id[A] ⊗ ((λ[𝟙] ∘ Id[𝟙]) ⊗ Id[B])           BY CategoryAxioms, MonoidalAxioms
+          = Id[A] ⊗ λ[B]                              BY CoherenceCondition
+    }
+  }
+}

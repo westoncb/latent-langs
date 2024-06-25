@@ -1,0 +1,92 @@
+CONCEPT InductiveLearning {
+
+  LANGUAGE {
+    TYPE Example = ⟨input: Vector[n], output: 𝔹⟩
+    TYPE Hypothesis = Vector[n] -> 𝔹
+    TYPE TrainingData = 𝒫(Example)
+    TYPE PerformanceMeasure = Hypothesis -> TrainingData -> ℝ 
+
+    FUNC LearnHypothesis : ℕ -> TrainingData -> Hypothesis
+    FUNC EvaluateHypothesis : Hypothesis -> TrainingData -> ℝ
+
+    PRED ε-Approximate : Hypothesis -> Hypothesis -> ℝ -> 𝔹
+    PRED PAC-Learnable : (ℕ -> TrainingData -> Hypothesis) -> ℕ -> ℝ -> 𝔹
+
+    NOTATION "(x)ᵀ" = RestrictedTo(𝒟, x)
+    NOTATION "err(h, 𝒟)" = ErrorRate(h, 𝒟)
+  }
+
+  STRUCTURE {
+    DEF LearnHypothesis(n, 𝒟) = 
+      MEMOIZE 𝜆(x : Vector[n]) .
+        PluralityVote(⋃ ({d.output | d ∈ (𝒟)ᵀ[d.input = x]} ∪ {𝔽}))
+        
+    DEF EvaluateHypothesis(h, 𝒟) =
+      ∑ (d ∈ 𝒟) IF h(d.input) = d.output THEN 0 ELSE 1
+         
+    DEF ε-Approximate(h₁, h₂, ε) <-> ∀ (𝒟 : 𝒫(Example)) . |err(h₁, 𝒟) - err(h₂, 𝒟)| ≤ ε
+
+    DEF PAC-Learnable(Learn, n, ε, δ) <->
+      ∀ (𝒟 : 𝒫(Example)) (m ≥ M(n, 1/ε, 1/δ)) .
+        ℙ[S ∼ 𝒟ᵐ] (ε-Approximate(Learn(n, S), OptimalHypothesis(𝒟), ε)) ≥ 1 - δ
+          WHERE M(n, 1/ε, 1/δ) = ...
+                
+    AXIOM NoFreeLunch : 
+      ∀ (Learn₁ Learn₂ : ℕ -> TrainingData -> Hypothesis) .
+        ∑ (𝒟 : 𝒫(Example)) err(Learn₁(𝒟), 𝒟) = ∑ (𝒟 : 𝒫(Example)) err(Learn₂(𝒟), 𝒟)
+  }
+  
+  PROOFS {
+    THEOREM FiniteHypothesisClassPAC {
+      STATEMENT : ∀ (ℋ : 𝒫(Hypothesis)) (n m : ℕ) (ε δ : ℝ) .
+        |ℋ| < ∞ ∧ m ≥ log(|ℋ|/δ)/(2ε²) ->  
+        ∀ (𝒟 : 𝒫(Example)) . ℙ[S ∼ 𝒟ᵐ] (∀ (h ∈ ℋ) . ε-Approximate(h, h(𝒟), ε)) ≥ 1 - δ
+        
+      PROOF {
+        ASSUME [ℋ : 𝒫(Hypothesis)] [n m : ℕ] [ε δ : ℝ] :
+          |ℋ| < ∞,
+          m ≥ log(|ℋ|/δ)/(2ε²)
+          
+        ASSUME [𝒟 : 𝒫(Example)]
+        
+        HAVE UniformConvergence : ∀ (h ∈ ℋ) . ℙ[S ∼ 𝒟ᵐ] (|err(h, S) - err(h, 𝒟)| > ε) ≤ 2·exp(-2mε²) BY HoeffdingInequality
+
+        HAVE SimultaneousConvergence :  
+          ℙ[S ∼ 𝒟ᵐ] (∃ (h ∈ ℋ) . |err(h, S) - err(h, 𝒟)| > ε) ≤ ∑ (h ∈ ℋ) 2·exp(-2mε²) ≤ 2|ℋ|·exp(-2mε²) ≤ δ  
+            BY UnionBound, ASSUMPTION
+            
+        HENCE ℙ[S ∼ 𝒟ᵐ] (∀ (h ∈ ℋ) . |err(h, S) - err(h, 𝒟)| ≤ ε) ≥ 1 - δ 
+
+        THUS ℙ[S ∼ 𝒟ᵐ] (∀ (h ∈ ℋ) . ε-Approximate(h, h(𝒟), ε)) ≥ 1 - δ
+      }
+    }
+    
+    THEOREM FinitePACLearnability {
+      STATEMENT : ∀ (n : ℕ) . ∀ (ℋ : 𝒫(Vector[n] -> 𝔹)) . |ℋ| < ∞ ->
+        PAC-Learnable(𝜆(n, 𝒟) . argmin (h ∈ ℋ) EvaluateHypothesis(h, 𝒟), n, ε, δ)
+        
+      PROOF {
+        ASSUME [n : ℕ] [ℋ : 𝒫(Vector[n] -> 𝔹)] : |ℋ| < ∞
+        
+        DEFINE ERM(n, 𝒟) = argmin (h ∈ ℋ) EvaluateHypothesis(h, 𝒟)
+          
+        ASSUME [𝒟 : 𝒫(Example)] [ε δ : ℝ] : ε > 0, δ > 0
+        
+        CHOOSE h* = argmin (h ∈ ℋ) err(h, 𝒟)  
+        
+        CHOOSE m ≥ log(|ℋ|/δ)/(2(ε/2)²)
+        
+        HAVE EPACApproximation :
+          ℙ[S ∼ 𝒟ᵐ] (∀ (h ∈ ℋ) . ε/2-Approximate(h, h(𝒟), ε/2)) ≥ 1 - δ
+            BY FiniteHypothesisClassPAC
+            
+        HAVE ERMOptimality : 
+          ℙ[S ∼ 𝒟ᵐ] (err(ERM(n, S), 𝒟) ≤ err(h*, 𝒟) + ε) 
+            ≥ ℙ[S ∼ 𝒟ᵐ] (∀ (h ∈ ℋ) . ε/2-Approximate(h, h(𝒟), ε/2))  
+            ≥ 1 - δ
+            
+        HENCE PAC-Learnable(ERM, n, ε, δ)
+      }
+    }
+  }
+}

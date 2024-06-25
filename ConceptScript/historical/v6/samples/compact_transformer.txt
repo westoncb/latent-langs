@@ -1,0 +1,71 @@
+// Base concepts
+Tensor := (Dimensions:_, DataType:_)
+LinearLayer := (InputSize:_, OutputSize:_)
+Activation := Function(Input:Tensor, Output:Tensor)
+
+// Transformer components
+MultiheadAttention := (
+  NumHeads:_, KeyDim:_, ValueDim:_, QueryDim:_, OutputDim:_
+) :: {
+  [NumHeads > 0]
+  [KeyDim = ValueDim = QueryDim]
+}
+
+FeedForward := (InputSize:_, HiddenSize:_, OutputSize:_, Activation:_)
+
+EncoderLayer := (
+  SelfAttention:MultiheadAttention,
+  FeedForward:FeedForward,
+  LayerNorm,
+  ResidualConnection
+)
+
+DecoderLayer := EncoderLayer + (CrossAttention:MultiheadAttention)
+
+// Transformer architecture
+Transformer := (
+  Encoder:TransformerEncoder,
+  Decoder:TransformerDecoder
+) :: {
+  TransformerEncoder := (
+    InputEmbedding,
+    PositionalEncoding,
+    Layers:EncoderLayer{NumLayers}
+  )
+
+  TransformerDecoder := (
+    OutputEmbedding,
+    PositionalEncoding,
+    Layers:DecoderLayer{NumLayers}
+  )
+
+  Pipeline := Sequence |> Encoder |> Decoder |> OutputLinear |> Softmax
+
+  [InputSequence |> Pipeline $ OutputProbabilities]
+}
+
+// Example usage
+[
+  InputSequence |>
+  Transformer(
+    Encoder:TransformerEncoder(
+      InputEmbedding:Embedding{VocabSize, EmbeddingDim},
+      PositionalEncoding:SinusoidalPositionalEncoding,
+      Layers:EncoderLayer{6}(
+        SelfAttention:MultiheadAttention(NumHeads:8, KeyDim:64, ValueDim:64, QueryDim:64, OutputDim:512),
+        FeedForward:FeedForward(InputSize:512, HiddenSize:2048, OutputSize:512, Activation:ReLU)
+      )
+    ),
+    Decoder:TransformerDecoder(
+      OutputEmbedding:Embedding{VocabSize, EmbeddingDim},
+      PositionalEncoding:SinusoidalPositionalEncoding,
+      Layers:DecoderLayer{6}(
+        SelfAttention:MultiheadAttention(NumHeads:8, KeyDim:64, ValueDim:64, QueryDim:64, OutputDim:512),
+        CrossAttention:MultiheadAttention(NumHeads:8, KeyDim:512, ValueDim:512, QueryDim:512, OutputDim:512),
+        FeedForward:FeedForward(InputSize:512, HiddenSize:2048, OutputSize:512, Activation:ReLU)
+      )
+    )
+  ) |> 
+  OutputLinear(InputSize:512, OutputSize:VocabSize) |>
+  Softmax
+]{🤖 Transformer Sequence-to-Sequence Model}

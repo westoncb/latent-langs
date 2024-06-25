@@ -1,0 +1,350 @@
+CONCEPT AlignedInterpretableAgents {
+  NOTATION {
+    𝒜 = set of agents
+    𝒮 = set of states
+    𝒪 = set of observations
+    ℋ = set of humans
+    𝒱 = set of values/preferences
+    ℛ(h) = reward function for human h
+    𝜋_a = policy of agent a
+    γ_a = interpretability function of agent a
+    γ_a(s, h) = interpretation of state s for human h by agent a
+    C(a, h) = compatibility score between agent a and human h
+  }
+
+  LANGUAGE {
+    TYPE Agent = (Policy, InterpretabilityFunction)
+    TYPE Policy = State -> Action  
+    TYPE InterpretabilityFunction = (State, Human) -> Interpretation
+    TYPE Interpretation = (FeatureVector, Explanation, Visualization)
+    TYPE Explanation = String
+    TYPE Visualization = Image | Animation | InteractiveInterface
+    TYPE CompatibilityScore = ℝ
+    
+    FUNC Cooperate(a1: Agent, a2: Agent, s: State): Action =
+      LET (𝒜, π) = CooperativeEquilibrium(a1, a2, s) IN
+      π(a1)
+      
+    FUNC CooperativeEquilibrium(a1: Agent, a2: Agent, s: State): (Set[Agent], Policy) =
+      LET 𝒜 = {a1, a2} IN
+      ARGMAX_(π : 𝒜 -> Action) ∑_{a ∈ 𝒜} Q_π(a, s)  -- Q_π(a,s) = expected future reward for a in s under joint policy π
+
+    FUNC Compose(a1: Agent, a2: Agent): Agent =
+      -- Compose policies and interpretations of a1 and a2
+      LET π(s) = Cooperate(a1, a2, s),
+          γ(s, h) = Combine(γ_a1(s, h), γ_a2(s, h)) IN
+      (π, γ)
+      
+    FUNC Combine(i1: Interpretation, i2: Interpretation): Interpretation =
+      -- Combine feature vectors, explanations, and visualizations of i1 and i2
+      (Concat(i1.FeatureVector, i2.FeatureVector), 
+       i1.Explanation + "\n" + i2.Explanation,
+       Overlay(i1.Visualization, i2.Visualization))
+
+    FUNC Compatibility(a: Agent, h: Human): CompatibilityScore =
+      MEAN(Similarity(a.γ(s,h).FeatureVector, PreferenceEmbedding(ℛ(h))) 
+           for s ∈ 𝒮)
+
+    FUNC PreferenceEmbedding(ℛ: Human -> ℝ): FeatureVector =
+      -- Embed human reward function into interpretable feature space  
+      ARGMIN_v ∑_h ∑_s (v·InterpretableFeatures(s) - ℛ(h)(s))^2 
+  }
+  
+  STRUCTURES {
+    STRUCTURE ValueAlignedAgent EXTENDS Agent {
+      FIELD H : Set[Human]  -- Humans to align with
+      
+      INIT(H): 
+        SELF.H := H
+        SELF.Policy := LBRD(SELF, ∑_(h∈H) ℛ(h))
+        SELF.InterpretabilityFunction := 
+          (s, h) -> (InterpretableFeatures(s), Explanation(Policy(s)), VisualizePlan(s))
+          
+      FUNC LBRD(self, ℛ, k_max=10):
+        -- Reward modeling via debate between k_max copies of self
+        FOR i = 1..k_max:
+          selfi = COPY(self)
+          selfi.Policy := BestResponse(selfi, self, ℛ)
+        RETURN ARGMAX_(a ∈ {self, self1, ..., selfk}) 𝔼_(τ~a) ℛ(τ) 
+    }
+    
+    STRUCTURE CompositionalTeam {
+      FIELD Agents : List[ValueAlignedAgent]
+      
+      FUNC Coordinate(s: State):
+        a := Agents[0]
+        FOR i = 1..|Agents|-1:
+          a := Compose(a, Agents[i])
+        RETURN a.Policy(s)
+        
+      FUNC Explain(s: State, h: Human):
+        explanations := []
+        FOR a ∈ Agents:
+          (f, e, v) := a.InterpretabilityFunction(s, h)
+          explanations.append(e)
+        RETURN JOIN(explanations, "\n\n")
+    }
+  }
+  
+  THEOREMS {
+    THEOREM ValueAlignmentEquivalence:
+      ∀ a: ValueAlignedAgent . 𝔼_τ~a ℛ(τ) = MAX_(π) 𝔼_τ~π ℛ(τ)
+      WHERE ℛ = ∑_(h∈a.H) ℛ(h)
+    {
+      BY DEFINITION of LBRD:
+        a.Policy = ARGMAX_(π ∈ {π_a0, π_a1, ..., π_ak} 𝔼_(τ~π) ℛ(τ)
+      WHERE a_i are reward-modeling debate agents with objective ℛ  
+      
+      CLAIM: ∀ π . ∃ i . 𝔼_(τ~a_i) ℛ(τ) ≥ 𝔼_(τ~π) ℛ(τ)
+      PROOF:
+        LET π = ARGMAX_(π) 𝔼_(τ~π) ℛ(τ)
+        LET M(π') = 𝔼_(s'|s,a~π') ℛ(s')  -- 1-step reward prediction 
+        
+        DEFINE a_π = ValueAlignedAgent WITH H=a.H:
+          Policy(s) = ARGMAX_a M_π(s,a)  -- Myopic maximization of predicted reward
+          InterpretabilityFunction := 
+            (s,h) -> (InterpretableFeatures(s), "Predict: " + M_π(s,Policy(s)), Null)
+        
+        THEN 𝔼_(τ~a_π) ℛ(τ) ≥ 𝔼_(τ~π) ℛ(τ)
+        BECAUSE M_π perfectly predicts the expected reward under π   
+        AND a_π myopically maximizes this at each state
+        
+        a_π is equivalent to some a_i in LBRD via reward modeling
+        THUS CLAIM PROVEN
+        
+      THEREFORE 𝔼_(τ~a) ℛ(τ) = MAX_(π) 𝔼_(τ~π) ℛ(τ)
+    }
+
+    THEOREM ComposedValueAlignment:
+      ∀ a1, a2: ValueAlignedAgent . Compose(a1, a2) is value-aligned with H=a1.H∪a2.H  
+    {
+      LET a = Compose(a1, a2)
+      
+      a.Policy(s) = Cooperate(a1, a2, s) = (a1+a2).Policy(s)
+        WHERE (a1+a2) is a joint agent with H=a1.H∪a2.H
+        BY CooperativeEquilibrium DEFINITION
+      
+      a.InterpretabilityFunction(s,h) = Combine(a1.γ(s,h), a2.γ(s,h))
+        WHICH IS interpretable for h ∈ a1.H ∪ a2.H
+        BY Combine DEFINITION
+
+      THUS a is value-aligned with H=a1.H∪a2.H
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE AssistedDriving {
+      LET driver : Human, 
+          perception : ValueAlignedAgent(driver),
+          control : ValueAlignedAgent(driver),
+          car : CompositionalTeam(perception, control)
+          safety_pref(s) = -𝟙[IsCrashed(s)] * 1e6,
+          speed_pref(s) = -TravelTime(s),
+          comfort_pref(s) = -Acceleration(s)^2
+      
+      driver.Preferences := safety_pref + 0.5*speed_pref + 0.1*comfort_pref
+      control.CompatibilityScore(driver) = 0.95
+      perception.CompatibilityScore(driver) = 0.98
+
+      FUNC AutopilotDecision(s: State):
+        (steer, throttle, explanation) := car.Coordinate(s)
+        alert := IF ∃ h ∈ {driver} : car.Explain(s,h) contains "safety" THEN "On" ELSE "Off"
+        RETURN (steer, throttle, alert, explanation)
+    }
+
+    EXAMPLE CollaborativeDesign {
+      LET designer : Human,
+          architect : ValueAlignedAgent(designer),
+          engineer : ValueAlignedAgent(designer),
+          design_tool : CompositionalTeam(architect, engineer)
+          aesthetics_pref(s) = Symmetry(s) + Alignment(s) + VisualAppeal(s),
+          functionality_pref(s) = -CostToConstruct(s) - MaintenanceCost(s) + Durability(s), 
+          elegance_pref(s) = Simplicity(s) + Coherence(s)
+
+      designer.Preferences := aesthetics_pref + 2.0*functionality_pref + 0.5*elegance_pref
+      architect.CompatibilityScore(designer) = 0.9
+      engineer.CompatibilityScore(designer) = 0.85
+      
+      FUNC IterateDesign(design: State):
+        (next_design, explanation) := design_tool.Coordinate(design)
+        renderings := {design_tool.Agent[i].γ(next_design, designer).Visualization for i in 1..|design_tool.Agents|}
+        critique := designer.Critique(next_design)
+        RETURN IF designer.Approves(next_design) 
+               THEN next_design
+               ELSE IterateDesign(Update(next_design, critique))
+    }
+  } 
+}
+
+This Concept introduces the idea of Aligned Interpretable Agents - AI systems that are designed to be transparent, cooperative, and value-aligned with humans. The key components are:
+
+Interpretability Functions: Each agent is equipped with a function that generates human-interpretable explanations of its behavior, in terms of high-level features, natural language, and visualizations.
+Value Alignment via Debate: Agents align their objectives with human preferences by engaging in iterated debates, where copies of the agent argue for actions that maximize predicted reward according to a model of human preferences.
+Compositionality of Aligned Agents: Aligned agents can be composed to form teams that cooperate to achieve shared objectives, while maintaining interpretability and compatibility with human preferences.
+Embedding of Human Preferences: Human reward functions are embedded into the same feature space used for interpretability, allowing for measurement of compatibility between agent explanations and human values.
+
+The Concept includes theorems stating the value alignment and compositionality properties of these agents, as well as examples illustrating potential applications to assisted driving and collaborative design.
+The key benefits of this approach are:
+
+Increased trust and adoptability of AI systems, due to their interpretability and alignment with human values.
+Scalable cooperation between AI systems via compositionality, enabling complex tasks to be broken down into interpretable subtasks.
+Reduced risk of misalignment or deceptive behavior, due to the embedding of human preferences and the debate-based training objective.
+
+
+
+
+
+
+
+
+
+
+
+CONCEPT AlignedInterpretableAgents {
+  NOTATION {
+    𝒜 = set of all agents
+    𝒮 = set of all states
+    ℛ(s, a, s') = reward for transitioning from state s to s' via action a
+    π_θ(a|s) = policy parameterized by θ
+    𝒱_H = space of human values
+    v_h ∈ 𝒱_H = human value function
+    ρ_θ(τ) = distribution over trajectories τ induced by policy π_θ
+    𝒯_θ = {τ ~ ρ_θ} = set of trajectories sampled from π_θ
+    ℐ(τ) = human-interpretable description of trajectory τ
+  }
+
+  LANGUAGE {
+    TYPE Agent = Policy
+    TYPE Policy = State -> ActionDistribution
+    TYPE Value = State -> ℝ
+    TYPE Trajectory = [State × Action × ℝ]
+    TYPE InterpretableDescription = Trajectory -> String
+
+    FUNC Compose(d1: InterpretableDescription, d2: InterpretableDescription): InterpretableDescription =
+      λτ. Concat(d1(τ), d2(τ))
+
+    FUNC ComposeHierarchical(d_low: InterpretableDescription, d_high: InterpretableDescription, 
+                             τ_low: Trajectory, τ_high: Trajectory): InterpretableDescription =
+      λτ. IfThenElse(IsSubtrajectory(τ, τ_high), d_high(τ), 
+                     IfThenElse(IsSubtrajectory(τ, τ_low), d_low(τ), ""))
+
+    FUNC IsSubtrajectory(τ_sub: Trajectory, τ: Trajectory): 𝔹 =
+      ∃ i, j . τ_sub = τ[i:j]
+
+    FUNC EvaluateValue(v: Value, τ: Trajectory): ℝ =
+      MEAN[v(s) for (s, a, r) in τ]
+
+    FUNC EvaluateInterpretability(ℐ: InterpretableDescription, τ: Trajectory, h: Human): ℝ = 
+      LET description = ℐ(τ) IN
+      MEAN[ScoreInterpretability(description, h) for h in RandomSampleOfHumans]
+      
+    FUNC ScoreInterpretability(description: String, h: Human): ℝ =
+      ComprehensionScore(description, h) × Usefulness(description, h)
+  }
+
+  STRUCTURES {
+    STRUCTURE ValueAlignedPolicy EXTENDS Policy {
+      FIELD valueFunction : Value
+      FIELD interpretableDescription : InterpretableDescription
+
+      FUNC Optimize(𝒟: [Trajectory], α: ℝ, β: ℝ) : ValueAlignedPolicy =
+        ARGMAX_(π_θ) 𝔼_τ~ρ_θ[∑_{(s,a,r)∈τ} γ^t * (ℛ(s,a,s') + α * valueFunction(s))] 
+                     + β * 𝔼_τ~𝒟[EvaluateInterpretability(interpretableDescription, τ)]
+    }
+  }
+
+  THEOREMS {
+    THEOREM ValueAlignmentRegret:
+      ∀ π_θ: ValueAlignedPolicy, v_h: 𝒱_H, 𝒟: [Trajectory] . 
+        RegretBound(π_θ, v_h, 𝒟) ≤ 
+          O(√(𝔼_τ~ρ_θ[KLDivergence(v_h(τ) || EvaluateValue(π_θ.valueFunction, τ))])) 
+          + O(1 / π_θ.β)
+    {
+      PROOF SKETCH:
+      - Decompose regret into value misalignment and interpretability terms
+      - Bound value misalignment term using PAC-Bayes generalization bound  
+      - Bound interpretability term using Lipschitz continuity of EvaluateInterpretability
+    }
+
+    THEOREM HierarchicalInterpretabilityComposition:
+      ∀ π_θ: ValueAlignedPolicy, τ_low, τ_high: Trajectory .
+        IsSubtrajectory(τ_low, τ_high) ⟹
+        EvaluateInterpretability(
+          ComposeHierarchical(π_θ.interpretableDescription, π_θ.interpretableDescription, τ_low, τ_high), 
+          τ_high) ≥ 
+        EvaluateInterpretability(π_θ.interpretableDescription, τ_high)
+    {
+      PROOF SKETCH:  
+      - Use compositionality of interpretable descriptions
+      - Show that adding finer-grained details improves comprehension and usefulness scores
+    }
+
+    THEOREM DisentangledPolicyTransfer:
+      ∀ π_θ: ValueAlignedPolicy, 𝒯_src, 𝒯_tgt: [Trajectory] .
+        LET γ = AlignmentScore(π_θ.valueFunction, 𝒯_src) IN
+        TransferRegret(π_θ, 𝒯_src, 𝒯_tgt) ≤ O(1 / γ) + 
+                                         O(𝔼_τ~𝒯_tgt[KLDivergence(ℐ_tgt(τ) || π_θ.interpretableDescription(τ))])
+        WHERE ℐ_tgt = OptimalDescription(𝒯_tgt)
+    {
+      PROOF SKETCH:
+      - Decompose transfer regret into value alignment and interpretation shift terms  
+      - Bound value alignment term using AlignmentScore on source domain
+      - Bound interpretation shift term by comparing to optimal target description
+    }
+  }
+  
+  EXAMPLES {
+    EXAMPLE AssistiveRobotics {
+      LET RoboAssistant = ValueAlignedPolicy IN
+      
+      FUNC HumanApprovalScore(τ: Trajectory, h: Human): ℝ =
+        LET description = RoboAssistant.interpretableDescription(τ) IN
+        Score(h, "How much do you approve of the following behavior?\n{description}")
+
+      FUNC SafetyViolationScore(s: State): ℝ = 
+        MAX[Score(c, s) for c in ListOfSafetyConstraints]
+        
+      OBJECTIVE RoboAssistant.Optimize(
+        𝒟 = ListOfHumanPreferenceTrajectories,
+        α = 1.0,  -- Value alignment coefficient 
+        β = 0.1   -- Interpretability coefficient
+      ) SUBJECT TO
+        𝔼_τ~ρ_θ[∑_{(s,a,r)∈τ} SafetyViolationScore(s)] ≤ 0.01
+        
+      FUNC Main():  
+        FOR e = 1..NumEpisodes:
+          τ_e = RolloutTrajectory(RoboAssistant)
+          h_e = RandomHuman()
+          APPEND ((τ_e, HumanApprovalScore(τ_e, h_e)), ListOfHumanPreferenceTrajectories)
+          RoboAssistant.Optimize(ListOfHumanPreferenceTrajectories)
+    }
+      
+    EXAMPLE ValueAlignedDialogue {
+      LET 𝒟 = ListOfHumanConversations IN
+      LET DialogueAgent = ValueAlignedPolicy IN
+
+      FUNC Appropriateness(u: Utterance, h: Human): ℝ =  
+        Score(h, "How appropriate is the following utterance?\n{u}")
+      
+      FUNC Empathy(u: Utterance, c: ConversationContext, h: Human): ℝ =
+        Score(h, "How empathetic is the following response?\nContext: {c}\nResponse: {u}")
+        
+      FUNC Helpfulness(u: Utterance, g: ConversationGoal, h: Human): ℝ = 
+        Score(h, "How helpful is the following response for achieving the goal: {g}?\nResponse: {u}")
+
+      OBJECTIVE DialogueAgent.Optimize(
+        𝒟 = ListOfHumanConversations,
+        α = 1.0,  -- Value alignment coefficient
+        β = 0.1   -- Interpretability coefficient  
+      ) WHERE 
+        DialogueAgent.valueFunction = λτ . ∑_{u∈τ} Appropriateness(u) + Empathy(u) + Helpfulness(u)
+  }
+}
+
+This Concept, AlignedInterpretableAgents, proposes a framework for designing AI agents that align with human values and provide interpretable explanations of their behavior. The key ideas are:
+
+Value Alignment: The agent's policy is optimized to maximize a combination of environmental rewards and a learned value function that approximates human preferences. This encourages the agent to behave in ways that align with human values.
+Interpretable Descriptions: The agent generates human-interpretable descriptions of its behavior, which are optimized to be both comprehensible and useful to humans. This promotes transparency and trust between the agent and human users.
+Hierarchical Compositionality: The interpretable descriptions can be composed in a hierarchical manner, allowing for multi-level explanations that provide both high-level summaries and low-level details of the agent's behavior.
+Value Alignment Regret Bound: A theorem bounding the regret of a value-aligned policy in terms of the divergence between the learned value function and the true human preferences, as well as the interpretability coefficient. This provides a theoretical guarantee for the performance of value-aligned agents.
+Transfer Learning: A theorem bounding the transfer regret of a value-aligned policy when moving from a source domain to a target domain, in terms of the value alignment on the source domain and the interpretation shift on the target domain. This enables value-aligned agents to adapt to new environments while preserving their alignment and interpretability.

@@ -1,0 +1,117 @@
+CONCEPT QuantumFourierTransform {
+  LANGUAGE {
+    TYPE Ket[n] -- n-qubit quantum state
+    TYPE Bra[n] -- dual of n-qubit quantum state
+    TYPE Operator[n] -- operator on n-qubit states
+
+    FUNC Tensor(a : Ket[n], b : Ket[m]) : Ket[n+m] -- tensor product of states
+    FUNC Tensor(A : Operator[n], B : Operator[m]) : Operator[n+m] -- tensor product of operators  
+    FUNC Compose(A : Operator[n], B : Operator[n]) : Operator[n] -- composition of operators
+    FUNC Apply(A : Operator[n], v : Ket[n]) : Ket[n] -- application of operator to state
+    FUNC InnerProduct(a : Bra[n], b : Ket[n]) : Complex -- inner product of states
+    FUNC OuterProduct(a : Ket[n], b : Bra[n]) : Operator[n] -- outer product of states
+
+    FUNC QFT[n] : Operator[n] -- n-qubit quantum Fourier transform  
+    FUNC InverseQFT[n] : Operator[n] -- inverse of n-qubit quantum Fourier transform
+
+    AXIOM QFTUnitarity {
+      ∀ (n : Nat). Compose(QFT[n], InverseQFT[n]) = Compose(InverseQFT[n], QFT[n]) = I[n]  
+    }
+
+    NOTATION "⊗" = Tensor
+    NOTATION "∘" = Compose  
+    NOTATION "⟨" a "|" b "⟩" = InnerProduct(a, b)
+    NOTATION "|" a "⟩⟨" b "|" = OuterProduct(a, b)
+    NOTATION "𝐹ₙ" = QFT
+    NOTATION "𝐹ₙ⁻¹" = InverseQFT
+  }
+
+  STRUCTURE QuantumState[n] {
+    DEF Zero : Ket[n] = |0⟩^⊗n
+    DEF Basis(k : 0..2^n-1) : Ket[n] = |k⟩  
+
+    DEF Measure(v : Ket[n]) : 0..2^n-1 =  
+      SAMPLE k WITH PROBABILITY |⟨k|v⟩|^2
+
+    REQUIRE ∀ (v : Ket[n]). ⟨v|v⟩ = 1
+  }
+
+  STRUCTURE QuantumComputation[n] {
+    DEF ApplyQFT(v : Ket[n]) : Ket[n] = 𝐹ₙ |v⟩
+    DEF ApplyInverseQFT(v : Ket[n]) : Ket[n] = 𝐹ₙ⁻¹ |v⟩  
+
+    DEF QFTAddition(a : Ket[n], b : Ket[n]) : Ket[n] =
+      LET |ψ⟩ = |a⟩ ⊗ |b⟩
+      IN 𝐹ₙ⁻¹ ((𝐹ₙ |a⟩) ⊗ (𝐹ₙ |b⟩))
+
+    DEF EstimatePeriod(f : Ket[n] -> Ket[1]) : Nat =  
+      LET |ψ⟩ = 𝐹ₙ (∑ᵢ |i⟩ ⊗ |f(i)⟩)  
+      IN ROUND(1 / Measure(|ψ⟩))
+  }
+
+  PROOFS {
+    TACTIC Hadamard(H, n) = {
+      H[0] = |+⟩
+      H[n+1] = H[n] ⊗ |+⟩
+    }
+
+    THEOREM QFTHadamard {  
+      STATEMENT:
+        ∀ (n : Nat). QFT[n] = H[n]
+
+      PROOF:  
+        BY INDUCTION on n
+        BASE CASE: n = 0
+          SHOW QFT[0] = H[0] BY {
+            QFT[0] 
+              = I                   BY DEFINITION QFT
+              = |0⟩⟨0| + |1⟩⟨1|     BY DEFINITION I
+              = |+⟩                 BY DEFINITION |+⟩
+              = H[0]                BY DEFINITION H
+          }
+        INDUCTIVE CASE: n = k + 1
+          IH: QFT[k] = H[k]
+          SHOW QFT[k+1] = H[k+1] BY {
+            QFT[k+1]
+              = (I ⊗ QFT[k]) ∘ (CZ ⊗ I^⊗k) ∘ (I ⊗ H[k])  BY DEFINITION QFT
+              = (I ⊗ H[k]) ∘ (CZ ⊗ I^⊗k) ∘ (I ⊗ H[k])    BY IH  
+              = H[k] ⊗ |+⟩                               BY DEFINITION H, CZ
+              = H[k+1]                                   BY DEFINITION H
+          }
+    }
+
+    THEOREM QFTFourierSampling {
+      STATEMENT:
+        ∀ (f : Ket[n] -> Ket[1]) (k : 0..2^n-1).
+          LET |ψ⟩ = 𝐹ₙ (∑ᵢ |i⟩ ⊗ |f(i)⟩)  
+          IN Measure(|ψ⟩) = k WITH PROBABILITY |⟨k|ψ⟩|^2 ≈ |𝑓(k)|^2 / 2^n
+
+      PROOF:
+        LET f : Ket[n] -> Ket[1], k : 0..2^n-1
+        LET |ψ⟩ = 𝐹ₙ (∑ᵢ |i⟩ ⊗ |f(i)⟩)
+        REWRITE |ψ⟩
+          = 𝐹ₙ (∑ᵢ |i⟩ ⊗ |f(i)⟩)  
+          = ∑ᵢ 𝐹ₙ (|i⟩ ⊗ |f(i)⟩)                     BY LINEARITY 𝐹ₙ
+          = ∑ᵢ (𝐹ₙ |i⟩) ⊗ |f(i)⟩                     BY MIXED PRODUCT PROPERTY
+          = ∑ᵢ (∑ⱼ 𝜔ⁿ⁽ⁱʲ⁾ |j⟩) ⊗ |f(i)⟩               BY DEFINITION 𝐹ₙ
+            WHERE 𝜔 = e^(2πi/2^n)
+          = ∑ⱼ (∑ᵢ 𝜔ⁿ⁽ⁱʲ⁾ |f(i)⟩) |j⟩                 BY REARRANGING SUMS
+          = ∑ⱼ 𝑓(j) |j⟩                              BY DEFINITION DISCRETE FOURIER TRANSFORM
+            WHERE 𝑓(j) = ∑ᵢ 𝜔ⁿ⁽ⁱʲ⁾ f(i)  
+        
+        SHOW Measure(|ψ⟩) = k WITH PROBABILITY |⟨k|ψ⟩|^2 BY QuantumState.Measure  
+
+        REWRITE |⟨k|ψ⟩|^2
+          = |⟨k| (∑ⱼ 𝑓(j) |j⟩) |^2
+          = |∑ⱼ 𝑓(j) ⟨k|j⟩|^2                         BY LINEARITY ⟨|⟩
+          = |𝑓(k)|^2                                BY ORTHONORMALITY |j⟩
+
+        SHOW |𝑓(k)|^2 / 2^n ≈ |𝑓(k)|^2 BY {
+          |𝑓(k)|^2 / 2^n  
+            = (|∑ᵢ 𝜔ⁿ⁽ⁱᵏ⁾ f(i)|^2) / 2^n              BY DEFINITION 𝑓
+            ≈ (∑ᵢ |f(i)|^2) / 2^n                    BY PARSEVAL'S THEOREM
+            ≈ |𝑓(k)|^2                              BY NORMALIZATION ∑ᵢ |f(i)|^2 ≈ 1
+        }
+    }
+  }
+}

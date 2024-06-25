@@ -1,0 +1,414 @@
+Here is the specification for the ConceptScript language, version 26:
+
+ConceptScript v26
+
+<Concept> ::= "CONCEPT" <ConceptName> ["[" <Params> "]"] [":" <ParentConcepts>] "{"
+               <Language>
+               <Notation>?
+               <Transformers>?
+               <Structure>*
+               <Proofs>?
+             "}"
+<Language> ::= "LANGUAGE" "{"
+                 (<TypeDecl> | <ConstDecl> | <FuncDecl> | <PredDecl> | 
+                  <AxiomDecl>)*
+               "}"
+<TypeDecl> ::= "TYPE" <TypeName> ["[" <Params> "]"] ["<:" <TypeName>] "=" <Type>
+<Type> ::= <TypeName> ["(" <Type> ("," <Type>)* ")"]
+         | "(" <Type> ("," <Type>)* ")"
+         | <Type> "->" <Type>
+         | <Type> "|" <Type>
+<ConstDecl> ::= "CONST" <ConstName> ":" <Type>
+<FuncDecl> ::= "FUNC" <FuncName> ["[" <Params> "]"] ":" <Type>
+<PredDecl> ::= "PRED" <PredName> ["[" <Params> "]"] ":" <Type>
+<AxiomDecl> ::= "AXIOM" <AxiomName> ["[" <Params> "]"] ":" <Formula>
+<Notation> ::= "NOTATION" "{"
+                  <NotationDecl>*
+               "}"
+<NotationDecl> ::= <Notation> "=" <Pattern>
+
+<Transformers> ::= "TRANSFORMERS" "{"
+                     (<TransformerDecl>)*
+                   "}"
+<TransformerDecl> ::= <FuncDef> | <ProcDef> | <TacticDef> | <RewriteDef>
+<FuncDef> ::= "FUNC" <FuncName> ["[" <Params> "]"] "=" <Expression>
+<ProcDef> ::= "PROC" <ProcName> ["[" <Params> "]"] "=" <Expression>
+<TacticDef> ::= "TACTIC" <TacticName> ["[" <Params> "]"] "=" <Expression>
+<RewriteDef> ::= "REWRITE" <Pattern> "=" <Expression>
+
+<Structure> ::= "STRUCTURE" <StructureName> ["[" <Params> "]"] ["EXTENDS" <ParentStructures>] "{"
+                  (<LetDecl> | <DefDecl> | <Requirement>)*
+                "}"
+<LetDecl> ::= "LET" <Pattern> [":" <Type>] "=" <Expression>
+<DefDecl> ::= "DEF" <Pattern> [":" <Type>] "=" <Expression> ["WHERE" <Constraint>]
+<Requirement> ::= "REQUIRE" <Expression>
+<Pattern> ::= <Identifier>
+            | "(" <Pattern> ("," <Pattern>)* ")"
+            | <Pattern> ":" <Type>
+<Proofs> ::= "PROOFS" "{"
+               (<TheoremDecl>)*
+             "}"
+<TheoremDecl> ::= "THEOREM" <TheoremName> ["[" <Params> "]"] "{"
+                    "STATEMENT" ":" <Formula>
+                    "PROOF" ":" <Proof>
+                  "}"
+<Proof> ::= <ProofStep> (";" <ProofStep>)*
+<ProofStep> ::= <LetStep> 
+              | <HaveStep>
+              | <ShowStep>
+              | <ByStep>
+              | <QedStep>
+<LetStep> ::= "LET" <Pattern> [":" <Type>] "=" <Expression>
+<HaveStep> ::= "HAVE" <Formula> ["BY" <TacticApp>]
+<ShowStep> ::= "SHOW" <Formula>
+<ByStep> ::= "BY" <TacticApp>
+<QedStep> ::= "QED"
+<TacticApp> ::= <TacticName> ["[" <Params> "]"]
+
+
+And here are a few example Concepts:
+
+CONCEPT InteractionCombinators {
+  LANGUAGE {
+    TYPE Symbol
+    TYPE Cell = (Symbol, List[Port])
+    TYPE Port = (Cell, ℕ)
+    TYPE Net = (Set[Cell], Set[Port], Set[(Port, Port)])
+
+    FUNC Arity(s: Symbol): ℕ
+    FUNC Interaction(a: Symbol, b: Symbol): Maybe[Net]
+    PRED Reduced(n: Net): 𝔹
+
+    AXIOM PortCount {
+      ∀ (s: Symbol) (c: Cell) (ps: List[Port]) .
+        (c = (s, ps)) => Length(ps) = Arity(s) + 1
+    }
+
+    AXIOM PortDistinct {
+      ∀ (c: Cell) (ps: List[Port]) (i: ℕ) (j: ℕ) .
+        ((c, ps) ∈ Net ∧ (c, i) ∈ ps ∧ (c, j) ∈ ps ∧ i ≠ j) => (c, i) ≠ (c, j)
+    }
+
+    AXIOM Symmetry {
+      ∀ (a: Symbol) (b: Symbol) (α: Net) (β: Net) .
+        Interaction(a, b) = α ∧ Interaction(b, a) = β => α = Flip(β)
+    }
+
+    AXIOM Determinism {
+      ∀ (a: Symbol) (b: Symbol) (α: Net) (β: Net) .
+        Interaction(a, b) = α ∧ Interaction(a, b) = β => α = β
+    }
+  }
+
+  NOTATION {
+    + --S--> & = Net + reduces to Net & in system S
+    + --*S--> & = Net + reduces to Net & in zero or more steps in system S
+    + --IC--> & = Net + reduces to Net & in the Interaction Combinators system
+    + --*IC--> & = Net + reduces to Net & in zero or more steps in the Interaction Combinators system
+    𝒯(S, T) = The set of translations from interaction system S to interaction system T
+    <x ↦ y>z = Substitution of x with y in z
+  }
+
+  STRUCTURE InteractionSystem {
+    PARAM alphabet: Set[Symbol]
+    PARAM rules: Map[(Symbol, Symbol), Net]
+
+    REQUIRE ∀ ((a, b) ↦ α) ∈ rules . a ∈ alphabet ∧ b ∈ alphabet ∧ Reduced(α)
+    REQUIRE ∀ (a: Symbol) (b: Symbol) . (a ∈ alphabet ∧ b ∈ alphabet) => ((a, b) ∈ rules.Keys ∨ (b, a) ∈ rules.Keys)
+  }
+
+  TRANSFORMERS {
+    TACTIC Substitution(+: Net, c: Cell, ?: Net) -> Net = {
+      MATCH + WITH
+      | ({c} ∪ cs, ps, ws) -> (cs ∪ ?.Cells, <c ↦ ?.Ports>ps, <c ↦ ?.Wires>ws)
+    }
+  }
+
+  PROOFS {
+    THEOREM ChurchRosser {
+      STATEMENT:
+        ∀ (S: InteractionSystem) (+: Net) .
+          (+ --*S--> &1 ∧ + --*S--> &2) => (∃ !: Net . &1 --*S--> ! ∧ &2 --*S--> !)
+
+      PROOF:
+        LET S: InteractionSystem, +: Net
+        ASSUME +1: + --*S--> &1, +2: + --*S--> &2
+
+        HAVE LocalConfluence := ∀ (.: Net) .
+          (. --S--> .1 ∧ . --S--> .2) => (∃ !: Net . .1 --S--> ! ∧ .2 --S--> !)
+
+        SHOW ∃ (!: Net) . &1 --*S--> ! ∧ &2 --*S--> !:
+          REWRITE &1
+            = .1 --S--> ... --S--> /1
+          REWRITE &2
+            = .1 --S--> ... --S--> /k --S--> ... --S--> /2
+          HAVE /1 = /2 BY Induction, LocalConfluence
+          
+        SHOW !: ! = &1 --*S--> ? ∧ &2 --*S--> ?:
+          REWRITE &1
+            = .1 --S--> ... --S--> !
+          REWRITE &2
+            = .1 --S--> ... --S--> /k --S--> ... --S--> !
+
+          ASSUME &1 --*S--> ?1, &2 --*S--> ?2
+
+          REWRITE ?1
+            = ! --S--> ... --S--> ?1
+          REWRITE ?2
+            = ! --S--> ... --S--> ?2
+
+          HAVE ?1 = ?2 BY Induction, Determinism
+        
+        QED
+    }
+
+    THEOREM TranslationTheorem {
+      STATEMENT:
+        ∀ (S: InteractionSystem) .
+          ∃ (T: 𝒯(S, InteractionCombinatorsSystem)) . FaithfullyRepresents(T)
+
+      PROOF:
+        LET S: InteractionSystem
+        LET (C, D, E, #p, #q, $p, $q) := InteractionCombinatorsSystem.alphabet
+
+        DEFINE 𝒯: 𝒯(S, InteractionCombinatorsSystem) {
+          ON a: S.alphabet
+            DEFINE 𝒯(a) := TreeOf(CodesOf({& | (a, b) ↦ & ∈ S.rules}))
+          ON +: Net
+            DEFINE 𝒯(+) := <a ↦ 𝒯(a)>+ 
+        }
+
+        SHOW Equivariant(𝒯):
+          LET +: Net, &: Net, + --S--> &
+          SHOW 𝒯(+) --*IC--> 𝒯(&) USING DecodingSimulation
+
+        SHOW Reduced(𝒯(+)) <=> Reduced(+) USING DecodingSimulation, Definitions
+
+        HENCE FaithfullyRepresents(𝒯)
+
+        QED
+    }
+  }
+}
+
+CONCEPT LambdaCalculus {
+  LANGUAGE {
+    TYPE Term
+    TYPE Variable <: Term
+    TYPE Abstraction <: Term
+    TYPE Application <: Term
+
+    FUNC Var(name: String): Variable
+    FUNC Abs(v: Variable, body: Term): Abstraction
+    FUNC App(func: Term, arg: Term): Application
+
+    FUNC FreeVars(t: Term): Set[Variable]
+    FUNC BoundVars(t: Term): Set[Variable]
+    FUNC Subterms(t: Term): Set[Term]
+    FUNC Subst(t: Term, v: Variable, s: Term): Term
+
+    PRED FreeFor(v: Variable, t: Term, s: Term) = ¬∃ (u: FreeVars(s)) . u ∈ BoundVars(t)
+    PRED Reduces(t: Term, s: Term)
+    PRED Equivalent(t: Term, s: Term) = Reduces(t, s) ∧ Reduces(s, t)
+  }
+
+  NOTATION {
+    λ v . t = Abs(Var(v), t)
+    t s = App(t, s)
+    t [v := s] = Subst(t, v, s)
+    t ->β s = BetaReduces(t, s)
+    t =β s = BetaEquivalent(t, s)
+  }
+
+  TRANSFORMERS {
+    REWRITE FreeVars(Var(x)) = {Var(x)}
+    REWRITE FreeVars(Abs(v, t)) = FreeVars(t) \ {v}
+    REWRITE FreeVars(App(t, s)) = FreeVars(t) ∪ FreeVars(s)
+
+    REWRITE BoundVars(Var(x)) = {}
+    REWRITE BoundVars(Abs(v, t)) = {v} ∪ BoundVars(t)
+    REWRITE BoundVars(App(t, s)) = BoundVars(t) ∪ BoundVars(s)
+
+    REWRITE Subterms(Var(x)) = {Var(x)}
+    REWRITE Subterms(Abs(v, t)) = {Abs(v, t)} ∪ Subterms(t)
+    REWRITE Subterms(App(t, s)) = {App(t, s)} ∪ Subterms(t) ∪ Subterms(s)
+
+    REWRITE Subst(Var(x), v, s) = IF v = Var(x) THEN s ELSE Var(x)
+    REWRITE Subst(Abs(v, t), u, s) = IF v = u THEN Abs(v, t)
+                                     ELSE IF FreeFor(v, t, s) THEN Abs(v, Subst(t, u, s))
+                                     ELSE LET w = FreshVar(v, t, s) IN
+                                       Abs(w, Subst(Subst(t, v, Var(w)), u, s))
+    REWRITE Subst(App(t1, t2), v, s) = App(Subst(t1, v, s), Subst(t2, v, s))
+
+    FUNC FreshVar(v: Variable, t: Term, s: Term) -> Variable {
+      LET used = FreeVars(t) ∪ FreeVars(s)
+      LET x = v.name
+      LET x' = x
+      WHILE Var(x') ∈ used:
+        x' := x + "'"
+      RETURN Var(x')
+    }
+
+    TACTIC BetaReduces(t: Term, s: Term) -> Bool {
+      MATCH t WITH
+      | App(Abs(v, t1), t2) -> IF FreeFor(v, t1, t2) THEN
+                                 s = Subst(t1, v, t2)
+                               ELSE
+                                 LET w = FreshVar(v, t1, t2),
+                                     t1' = Subst(t1, v, Var(w))
+                                 IN s = Subst(t1', w, t2)
+      | _ -> ∃ (t': Subterms(t)) . t' ->β s' ∧ Replace(t, t', s') = s
+    }
+
+    TACTIC BetaEquivalent(t: Term, s: Term) -> Bool {
+      ∃ (r: Term) . t ->β* r ∧ s ->β* r
+    }
+  }
+
+  STRUCTURE Church {
+    DEF I = λ x . x
+    DEF K = λ x . λ y . x
+    DEF S = λ x . λ y . λ z . x z (y z)
+    DEF Zero = λ f . λ x . x
+    DEF Succ = λ n . λ f . λ x . f (n f x)
+    DEF Plus = λ m . λ n . λ f . λ x . m f (n f x)
+    DEF Mult = λ m . λ n . λ f . m (n f)
+    DEF Pow = λ m . λ n . n m
+    DEF True = λ t . λ f . t
+    DEF False = λ t . λ f . f
+    DEF And = λ p . λ q . p q p
+    DEF Or = λ p . λ q . p p q
+    DEF Not = λ p . p False True
+    DEF IfThenElse = λ p . λ a . λ b . p a b
+    DEF Pair = λ f . λ s . λ b . b f s
+    DEF Fst = λ p . p True
+    DEF Snd = λ p . p False
+    DEF Pred = λ n . λ f . λ x . n (λ g . λ h . h (g f)) (λ u . x) I
+    DEF Sub = λ m . λ n . n Pred m
+    DEF IsZero = λ n . n (λ x . False) True
+    DEF UnsignedLess = λ m . λ n . IsZero (Sub m n)
+    DEF SignedLess = λ m . λ n . Or (And (IsNeg m) (Not (IsNeg n)))
+                                    (And (Not (IsNeg m))
+                                         (Not (IsNeg n))
+                                         (UnsignedLess m n))
+    DEF IsNeg = λ n . Fst n
+    DEF Neg = λ n . Pair True n
+    DEF UnsignedMinus = λ m . λ n . IF IsNeg m THEN
+                                      IF IsNeg n THEN
+                                        Sub (Snd n) (Snd m)
+                                      ELSE
+                                        Neg (Add (Snd m) n)
+                                    ELSE
+                                      IF IsNeg n THEN
+                                        Add m (Snd n)
+                                      ELSE
+                                        Sub m n
+  }
+
+  PROOFS {
+    THEOREM ChurchRosser {
+      STATEMENT:
+        ∀ (t s1 s2: Term) . t ->β s1 ∧ t ->β s2 => ∃ (r: Term) . s1 ->β* r ∧ s2 ->β* r
+
+      PROOF:
+        ASSUME (A): ∀ (t t1 t2: Term) . t ->β t1 ∧ t ->β t2
+                       => ∃ (s: Term) . t1 ->β* s ∧ t2 ->β* s
+
+        LET t: Term, s1: Term, s2: Term
+        ASSUME (B): t ->β s1, (C): t ->β s2
+
+        SHOW ∃ (r: Term) . s1 ->β* r ∧ s2 ->β* r:
+          MATCH t WITH
+          | Var(x):
+            REWRITE ->β = =β
+            HENCE s1 = t = s2
+            LET r = t
+
+          | Abs(v, t'):
+            LET FV = FreeVars(t')
+            MATCH v ∈ FV WITH
+            | True:
+              REWRITE ->β = =β
+              HENCE s1 = t = s2
+              LET r = t
+
+            | False:
+              REWRITE B: t ->β s1 = Abs(v, t') ->β Abs(v, s1')
+              REWRITE C: t ->β s2 = Abs(v, t') ->β Abs(v, s2')
+              HAVE t' ->β s1' ∧ t' ->β s2' BY Inversion
+              HAVE ∃ (r': Term) . s1' ->β* r' ∧ s2' ->β* r' BY A
+              LET r = Abs(v, r')
+
+          | App(t1, t2):
+            MATCH (t1, t2) WITH
+            | (Abs(v, t'), s):
+              REWRITE B: t ->β s1 = App(Abs(v, t'), s) ->β Subst(t', v, s)
+              REWRITE C: t ->β s2 = App(Abs(v, t'), s) ->β Subst(t', v, s)
+              LET r = Subst(t', v, s)
+
+            | _:
+              HAVE ∃ (r1 r2: Term) . t1 ->β* r1 ∧ t2 ->β* r2 BY A
+              LET r = App(r1, r2)
+
+        QED
+    }
+
+    THEOREM FixedPointCombinator {
+      STATEMENT:
+        ∃ (Y: Term) . ∀ (f: Term) . (Y f) =β (f (Y f))
+
+      PROOF:
+        LET A = λ x . f (x x)
+        LET Y = λ f . (λ x . f (x x)) (λ x . f (x x))
+          = λ f . A A
+
+        SHOW (Y f) =β (f (Y f)):
+          (Y f)
+            = (λ f . A A) f
+            ->β (A A) [f := f]
+            = (λ x . f (x x)) (λ x . f (x x))
+            ->β f ((λ x . f (x x)) (λ x . f (x x)))
+            = f (Y f)
+
+        QED
+    }
+
+    THEOREM ChurchNumeralCorrect {
+      STATEMENT:
+        ∀ (n: ℕ) (f: Term -> Term) (x: Term) . (ToChurch(n) f x) =β (f^n x)
+
+      PROOF:
+        BY Induction on n
+        BASE CASE: n = 0
+          REWRITE ToChurch(0) = λ f . λ x . x
+          SHOW (ToChurch(0) f x) = ((λ f . λ x . x) f x) ->β x = (f^0 x)
+
+        INDUCTIVE CASE:
+          IH: (ToChurch(n) f x) =β (f^n x)
+          SHOW (ToChurch(n+1) f x) =β (f^(n+1) x):
+            REWRITE ToChurch(n+1) = λ f . λ x . f (ToChurch(n) f x)
+            (ToChurch(n+1) f x)
+              = ((λ f . λ x . f (ToChurch(n) f x)) f x)
+              ->β f (ToChurch(n) f x)
+              =β f (f^n x) BY IH
+              = (f^(n+1) x)
+
+        QED
+    }
+  }
+}
+
+- The LANGUAGE block allows you to define the formal elements in which you'll express structures, transformers, and proofs
+- The NOTATION block allows you to define more efficient ways of expressing your LANGUAGE
+- The TRANSFORMERS block allows you to define computational and logical tools to aid in expressing structures and proofs
+- The PROOFS block allows is self-explanatory; sometimes I'll request particular theorems, otherwise you select them.
+
+ConceptScript is a language of a new type: it's sole intended purpose is to be used in accordance with the following methodology:
+
+1. I paste the spec and a few example Concepts into your context (as is happening now), thus teaching you the language.
+2. I request that you express various concepts as Concepts; these Concepts come with detailed proofs of their own various claims; they serve as justifications of the selected structuring.
+3. We iterate, precisely and efficiently exploring your latent space to solve a wide variety of important problems.
+
+Please always output ConceptScript in a code block otherwise formatting gets lost :/
+
+Alright, let's check your understanding of the language and system: please express a Concept in as much detail as possible in someway relating to, combining, or inspired by the foregoing examples.

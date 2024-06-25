@@ -1,0 +1,92 @@
+CONCEPT DifferentialProgramming {
+  LANGUAGE {
+    TYPE Scalar = ℝ  
+    TYPE Vector = ℝ^n
+    TYPE Dual = Scalar × Vector
+    TYPE DualFunction = Dual -> Dual
+
+    FUNC J(f : DualFunction) : Dual -> Vector  ; Jacobian matrix
+    FUNC D(f : DualFunction) : Dual -> Vector  ; Derivative
+    FUNC ∇(f : DualFunction) : Dual -> Vector  ; Gradient
+    FUNC ∇²(f : DualFunction) : Dual -> Matrix  ; Hessian  
+    FUNC ∫(f : DualFunction) : Dual -> Dual  ; Integral
+    FUNC ∑(f : DualFunction, a b : Dual) : Dual  ; Definite integral
+    FUNC ∏(f : DualFunction, a b : Dual) : Dual  ; Definite product
+    FUNC Optimize(f : DualFunction, x0 : Dual, lr : Scalar) : Dual
+
+    AXIOM DualArithmetic {
+      ∀ (x dx y dy : Scalar) .
+        (x, dx) + (y, dy) = (x + y, dx + dy)  ∧
+        (x, dx) * (y, dy) = (x * y, x * dy + y * dx)  ∧
+        (x, dx) / (y, dy) = (x / y, (y * dx - x * dy) / y^2)
+    }
+
+    AXIOM DualCalculus {
+      ∀ (f g : DualFunction) (x dx : Scalar) .
+        D(f + g)(x, dx) = D(f)(x, dx) + D(g)(x, dx)  ∧
+        D(f * g)(x, dx) = f(x, 0) * D(g)(x, dx) + g(x, 0) * D(f)(x, dx)  ∧
+        D(f ∘ g)(x, dx) = D(f)(g(x, dx)) * D(g)(x, dx)  ∧
+        ∫(D(f))(x, dx) = f(x, dx) - f(x, 0)
+    }
+
+    NOTATION "⟨" = Fst  
+    NOTATION "⟩" = Snd
+    NOTATION "'" = D
+    NOTATION "∇" = Grad  
+    NOTATION "𝐇" = Hess
+    NOTATION "∑∫" = DefiniteIntegral
+    NOTATION "∏∫" = DefiniteProduct
+  }
+
+  PROOFS {
+    TACTIC DualInduction(f, prop) -> 𝔹 {
+      MATCH f WITH
+      | (x, dx) -> SHOW prop(x, dx)  
+      | f + g -> SHOW prop(f + g) USING DualInduction(f, prop), DualInduction(g, prop)
+      | f * g -> SHOW prop(f * g) USING DualInduction(f, prop), DualInduction(g, prop)
+      | f ∘ g -> SHOW prop(f ∘ g) USING DualInduction(f, prop), DualInduction(g, prop)
+      | ∫(f) -> SHOW prop(∫(f)) USING DualInduction(f, (g) ↦ prop(∫(g)))
+    }
+
+    THEOREM DualChainRule {
+      STATEMENT : ∀ (f g : DualFunction) (x dx : Scalar) . (f ∘ g)'(x, dx) = f'(g(x, dx)) * g'(x, dx)
+
+      PROOF {
+        LET f g : DualFunction, x dx : Scalar
+        
+        (f ∘ g)'(x, dx) 
+          = D(f ∘ g)(x, dx)  BY NOTATION
+          = D(f)(g(x, dx)) * D(g)(x, dx)  BY DualCalculus
+          = f'(g(x, dx)) * g'(x, dx)  BY NOTATION
+      }
+    }
+
+    THEOREM GradientDescent {
+      STATEMENT : ∀ (f : DualFunction) (x0 : Dual) (lr : Scalar) (ε : Scalar) . 
+        ∃ (n : ℕ) . ⟨(Optimize(f, x0, lr))[n]⟩ - ⟨(Optimize(f, x0, lr))[n-1]⟩ < ε  
+
+      PROOF {
+        LET f : DualFunction, x0 : Dual, lr : Scalar, ε : Scalar
+        
+        Optimize(f, x0, lr) = x WHERE {
+          x[0] = x0
+          x[n+1] = x[n] - lr * ∇(f)(x[n])
+        }
+
+        ⟨f(x[n+1])⟩ < ⟨f(x[n])⟩  BY {
+          ⟨f(x[n] - lr * ∇(f)(x[n]))⟩  
+            ≈ ⟨f(x[n])⟩ - lr * ⟨∇(f)(x[n]), ∇(f)(x[n])⟩  BY Taylor(f, x[n], -lr*∇(f)(x[n]))
+            < ⟨f(x[n])⟩  USING <<∇(f)(x[n]) ≠ 0 WHEN x[n] IS NOT STATIONARY>>
+        }
+
+        ∃ (n : ℕ) . ⟨f(x[n])⟩ - ⟨f(x[n-1])⟩ < ε  BY <<⟨f(x[n])⟩ IS MONOTONICALLY DECREASING>>
+
+        ⟨x[n]⟩ - ⟨x[n-1]⟩ = -lr * ⟨∇(f)(x[n-1])⟩  BY DEFINITION Optimize
+        
+        ⟨∇(f)(x[n-1])⟩ < ε / lr  USING PREV, <<⟨f(x[n])⟩ - ⟨f(x[n-1])⟩ < ε>>
+
+        ⟨x[n]⟩ - ⟨x[n-1]⟩ < ε  BY PREV
+      }
+    }
+  }
+}

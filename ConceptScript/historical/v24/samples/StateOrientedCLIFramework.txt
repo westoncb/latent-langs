@@ -1,0 +1,356 @@
+CONCEPT StateOrientedCLIFramework {
+  LANGUAGE {
+    TYPE State
+    TYPE Command
+    TYPE Transition = State × Command -> State
+    TYPE Output
+    TYPE Rendering = State -> Output
+
+    FUNC InitialState() -> State
+    FUNC FinalState() -> State
+
+    PRED ValidState(s : State)
+    PRED ValidCommand(c : Command, s : State)
+    PRED ValidTransition(t : Transition)
+
+    FUNC Execute(s : State, c : Command) -> State
+    FUNC Render(s : State) -> Output
+
+    PRED Reachable(s : State, s' : State)
+    PRED Deterministic(s : State, c : Command)
+    PRED Terminating(s : State)
+  }
+
+  AXIOM {
+    ; Initial and final states are valid
+    ValidState(InitialState())
+    ValidState(FinalState())
+
+    ; Valid transitions preserve state validity
+    FORALL (s : State) (c : Command).
+      ValidState(s) AND ValidCommand(c, s) AND ValidTransition(Transition(s, c))
+        -> ValidState(Execute(s, c))
+
+    ; Reachability is reflexive and transitive
+    FORALL (s : State). Reachable(s, s)
+    FORALL (s1 : State) (s2 : State) (s3 : State).
+      Reachable(s1, s2) AND Reachable(s2, s3) -> Reachable(s1, s3)
+
+    ; Determinism: Same state and command always produce the same next state
+    FORALL (s : State) (c : Command) (s1 : State) (s2 : State).
+      Deterministic(s, c) AND Execute(s, c) = s1 AND Execute(s, c) = s2
+        -> s1 = s2
+
+    ; Termination: Final state has no outgoing transitions
+    FORALL (s : State) (c : Command).
+      Terminating(s) <-> (s = FinalState() OR NOT ValidTransition(Transition(s, c)))
+  }
+
+  PROOFS {
+    TACTIC ReachabilityAnalysis(s : State, s' : State) = {
+      ASSUME Reachable(InitialState(), s)
+      CASES Reachable(s, s')
+        CASE TRUE:
+          ASSERT Reachable(s, s')
+        CASE FALSE:
+          ASSUME EXISTS (c : Command). ValidCommand(c, s) AND Execute(s, c) = s'
+          ASSERT Reachable(s, Execute(s, c)) BY {
+            Reachable(s, s) BY AXIOM
+            Reachable(s, Execute(s, c)) BY DEFINITION
+          }
+          ASSERT Reachable(Execute(s, c), s') BY INDUCTION
+          ASSERT Reachable(s, s') BY {
+            Reachable(s, Execute(s, c)) AND Reachable(Execute(s, c), s')
+          }
+    }
+
+    TACTIC DeterminismAnalysis(s : State, c : Command) = {
+      ASSUME Deterministic(s, c)
+      LET s1 = Execute(s, c)
+      LET s2 = Execute(s, c)
+      SHOW s1 = s2 BY AXIOM
+    }
+
+    TACTIC TerminationAnalysis(s : State) = {
+      CASES s = FinalState()
+        CASE TRUE:
+          ASSERT Terminating(s) BY DEFINITION
+        CASE FALSE:
+          ASSUME FORALL (c : Command). NOT ValidTransition(Transition(s, c))
+          ASSERT Terminating(s) BY DEFINITION
+    }
+
+    TACTIC ValidStateAnalysis(s : State, s' : State, c : Command) = {
+      ASSUME ValidState(s), ValidCommand(c, s), ValidTransition(Transition(s, c))
+      SHOW ValidState(Execute(s, c)) BY AXIOM
+    }
+  }
+}
+
+
+
+
+CONCEPT StateOrientedCLIFramework {
+  LANGUAGE {
+    TYPE State
+    TYPE Command
+    TYPE Transition = State × Command -> State
+    TYPE Output
+    TYPE Rendering = State -> Output
+
+    FUNC InitialState() -> State
+    FUNC FinalState() -> State
+
+    PRED ValidState(s : State)
+    PRED ValidCommand(c : Command, s : State)
+    PRED ValidTransition(t : Transition)
+
+    FUNC Execute(s : State, c : Command) -> State
+    FUNC Render(s : State) -> Output
+
+    PRED Reachable(s : State, s' : State)
+    PRED Deterministic(s : State, c : Command)
+    PRED Terminating(s : State)
+  }
+
+  AXIOM {
+    ; Initial and final states are valid
+    ValidState(InitialState())
+    ValidState(FinalState())
+
+    ; Valid transitions preserve state validity
+    FORALL (s : State) (c : Command).
+      ValidState(s) AND ValidCommand(c, s) AND ValidTransition(Transition(s, c))
+        -> ValidState(Execute(s, c))
+
+    ; Reachability is reflexive and transitive
+    FORALL (s : State). Reachable(s, s)
+    FORALL (s1 : State) (s2 : State) (s3 : State).
+      Reachable(s1, s2) AND Reachable(s2, s3) -> Reachable(s1, s3)
+
+    ; Determinism: Same state and command always produce the same next state
+    FORALL (s : State) (c : Command) (s1 : State) (s2 : State).
+      Deterministic(s, c) AND Execute(s, c) = s1 AND Execute(s, c) = s2
+        -> s1 = s2
+
+    ; Termination: Final state has no outgoing transitions
+    FORALL (s : State) (c : Command).
+      Terminating(s) <-> (s = FinalState() OR NOT ValidTransition(Transition(s, c)))
+  }
+
+  STRUCTURE {
+    ; Define specific state, command, and transition types
+    TYPE LatentSpaceNavigatorState = {
+      currentConcept : ConceptID,
+      conceptDB : ConceptDB,
+      commandHistory : List(Command),
+      outputHistory : List(Output)
+    }
+
+    TYPE LatentSpaceNavigatorCommand =
+      | Sample(category : String, options : SampleOptions)
+      | Find(searchTerms : List(String), options : FindOptions)
+      | View(conceptName : String)
+      | Parts(conceptName : String)
+      | Follow(conceptName : String, partName : String, options : SampleOptions)
+      | Save(conceptName : String, options : SaveOptions)
+      | Back
+      | Forward
+      | Exit
+
+    TYPE SampleOptions = {
+      optimize : List((String, Real)),
+      constraints : List(String),
+      flavors : List((String, String)),
+      representation : String,
+      using : List((String, String))
+    }
+
+    TYPE FindOptions = {
+      tags : List(String),
+      notes : List(String)
+    }
+
+    TYPE SaveOptions = {
+      tags : List(String),
+      notes : List(String)
+    }
+
+    ; Define rendering function for CLI output
+    FUNC LatentSpaceNavigatorRendering(s : LatentSpaceNavigatorState) -> String = {
+      LET currentConcept = Lookup(s.conceptDB, s.currentConcept) IN
+      "Current Concept:\n" ++
+      RenderConcept(currentConcept) ++ "\n\n" ++
+      "Command History:\n" ++
+      RenderCommandHistory(s.commandHistory) ++ "\n\n" ++
+      "Output History:\n" ++
+      RenderOutputHistory(s.outputHistory)
+    }
+
+    ; Define transition function for command execution
+    FUNC LatentSpaceNavigatorExecute(
+      s : LatentSpaceNavigatorState,
+      c : LatentSpaceNavigatorCommand
+    ) -> LatentSpaceNavigatorState = {
+      MATCH c WITH
+        ; Sample command
+        | Sample(category, options) =>
+            LET generatedConcept = GenerateConcept(category, options) IN
+            {
+              currentConcept = generatedConcept.id,
+              conceptDB = Insert(s.conceptDB, generatedConcept.id, generatedConcept),
+              commandHistory = Append(s.commandHistory, c),
+              outputHistory = Append(s.outputHistory, RenderConcept(generatedConcept))
+            }
+
+        ; Find command
+        | Find(searchTerms, options) =>
+            LET matchingConcepts = SearchConcepts(s.conceptDB, searchTerms, options) IN
+            {
+              currentConcept = s.currentConcept,
+              conceptDB = s.conceptDB,
+              commandHistory = Append(s.commandHistory, c),
+              outputHistory = Append(s.outputHistory, RenderSearchResults(matchingConcepts))
+            }
+
+        ; View command
+        | View(conceptName) =>
+            LET conceptID = LookupConceptID(s.conceptDB, conceptName) IN
+            LET concept = Lookup(s.conceptDB, conceptID) IN
+            {
+              currentConcept = conceptID,
+              conceptDB = s.conceptDB,
+              commandHistory = Append(s.commandHistory, c),
+              outputHistory = Append(s.outputHistory, RenderConcept(concept))
+            }
+
+        ; Parts command
+        | Parts(conceptName) =>
+            LET conceptID = IF conceptName = "" THEN s.currentConcept ELSE LookupConceptID(s.conceptDB, conceptName) IN
+            LET concept = Lookup(s.conceptDB, conceptID) IN
+            LET parts = ExtractParts(concept) IN
+            {
+              currentConcept = conceptID,
+              conceptDB = s.conceptDB,
+              commandHistory = Append(s.commandHistory, c),
+              outputHistory = Append(s.outputHistory, RenderParts(parts))
+            }
+
+        ; Follow command
+        | Follow(conceptName, partName, options) =>
+            LET conceptID = IF conceptName = "" THEN s.currentConcept ELSE LookupConceptID(s.conceptDB, conceptName) IN
+            LET generatedConcept = GenerateConceptFromPart(s.conceptDB, conceptID, partName, options) IN
+            {
+              currentConcept = generatedConcept.id,
+              conceptDB = Insert(s.conceptDB, generatedConcept.id, generatedConcept),
+              commandHistory = Append(s.commandHistory, c),
+              outputHistory = Append(s.outputHistory, RenderConcept(generatedConcept))
+            }
+
+        ; Save command
+        | Save(conceptName, options) =>
+            LET conceptID = IF conceptName = "" THEN s.currentConcept ELSE LookupConceptID(s.conceptDB, conceptName) IN
+            LET updatedConcept = UpdateConceptMetadata(Lookup(s.conceptDB, conceptID), options) IN
+            {
+              currentConcept = conceptID,
+              conceptDB = Insert(s.conceptDB, conceptID, updatedConcept),
+              commandHistory = Append(s.commandHistory, c),
+              outputHistory = Append(s.outputHistory, "Concept saved: " ++ conceptName)
+            }
+
+        ; Back command
+        | Back =>
+            IF Length(s.commandHistory) > 1 THEN
+              LET prevState = Undo(s) IN
+              {
+                currentConcept = prevState.currentConcept,
+                conceptDB = prevState.conceptDB,
+                commandHistory = DropLast(s.commandHistory),
+                outputHistory = DropLast(s.outputHistory)
+              }
+            ELSE
+              s
+
+        ; Forward command
+        | Forward =>
+            IF Length(s.commandHistory) < Length(AllCommandHistory(s)) THEN
+              LET nextState = Redo(s) IN
+              {
+                currentConcept = nextState.currentConcept,
+                conceptDB = nextState.conceptDB,
+                commandHistory = Append(s.commandHistory, Last(AllCommandHistory(s))),
+                outputHistory = Append(s.outputHistory, Last(AllOutputHistory(s)))
+              }
+            ELSE
+              s
+
+        ; Exit command
+        | Exit => s
+    }
+
+    ; Helper functions for command execution
+    FUNC GenerateConcept(category : String, options : SampleOptions) -> Concept = {
+      ; Generate a new concept based on the given category and options
+      ; Implementation-specific
+    }
+
+    FUNC SearchConcepts(
+      conceptDB : ConceptDB,
+      searchTerms : List(String),
+      options : FindOptions
+    ) -> List(Concept) = {
+      ; Search for concepts in the database based on the given search terms and options
+      ; Implementation-specific
+    }
+
+    FUNC LookupConceptID(conceptDB : ConceptDB, conceptName : String) -> ConceptID = {
+      ; Look up the ID of a concept by its name in the concept database
+      ; Implementation-specific
+    }
+
+    FUNC ExtractParts(concept : Concept) -> List(String) = {
+      ; Extract the parts (key components) of a concept
+      ; Implementation-specific
+    }
+
+    FUNC GenerateConceptFromPart(
+      conceptDB : ConceptDB,
+      conceptID : ConceptID,
+      partName : String,
+      options : SampleOptions
+    ) -> Concept = {
+      ; Generate a new concept based on a specific part of an existing concept
+      ; Implementation-specific
+    }
+
+    FUNC UpdateConceptMetadata(concept : Concept, options : SaveOptions) -> Concept = {
+      ; Update the metadata (tags, notes) of a concept based on the given options
+      ; Implementation-specific
+    }
+
+    FUNC Undo(s : LatentSpaceNavigatorState) -> LatentSpaceNavigatorState = {
+      ; Undo the last command and return the previous state
+      ; Implementation-specific
+    }
+
+    FUNC Redo(s : LatentSpaceNavigatorState) -> LatentSpaceNavigatorState = {
+      ; Redo the next command and return the next state
+      ; Implementation-specific
+    }
+
+    FUNC AllCommandHistory(s : LatentSpaceNavigatorState) -> List(Command) = {
+      ; Return the complete command history, including undone commands
+      ; Implementation-specific
+    }
+
+    FUNC AllOutputHistory(s : LatentSpaceNavigatorState) -> List(Output) = {
+      ; Return the complete output history, including undone outputs
+      ; Implementation-specific
+    }
+  }
+
+  PROOFS {
+    ; Prove properties of the system using the defined axioms and structures
+    ; ...
+  }
+}

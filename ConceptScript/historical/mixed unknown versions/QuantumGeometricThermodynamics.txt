@@ -1,0 +1,117 @@
+CONCEPT QuantumGeometricThermodynamics {
+  LANGUAGE {
+    type QState<H> = UnitVec(H)
+    type Observable<H> = Herm(H)
+    type Dynamics<H> = QState<H> -> QState<H>
+    type Lagrangian<H> = Fun(QState<H>, ℝ)
+    type Entropy<H> = Fun(QState<H>, ℝ)
+
+    func Hamiltonian<H>(L: Lagrangian<H>): Observable<H>
+    func Geodesic<H>(s: QState<H>, t: QState<H>): Fun(ℝ, QState<H>)
+    func Parallel<H>(v: Vec<H>, γ: Fun(ℝ, QState<H>)): Fun(ℝ, Vec<H>)
+    func Curvature<H>(γ: Fun(ℝ, QState<H>)): Fun(ℝ, Herm(H))
+
+    pred Equilibrium<H>(ρ: QState<H>, H: Observable<H>) 
+    notation "⟨A⟩" = λρ: QState<H>. ⟨ρ|A|ρ⟩
+    notation "𝓓[ρ]" = λA: Observable<H>. -tr(ρ log ρ A)
+    notation "L[γ]" = λt. ⟨γ'(t)|H(L)|γ(t)⟩ - L(γ(t))
+    notation "R[γ]" = λt. -i⟨γ(t)|[Curvature(γ)(t), H(L)]|γ(t)⟩
+
+    infer GeodesicEqn<H>(γ: Fun(ℝ, QState<H>)):
+      γ''(t) = -Curvature(γ)(t) γ'(t)
+
+    infer SchrodingerEqn<H>(ψ: Fun(ℝ, QState<H>), H: Observable<H>):
+      iℏ ψ'(t) = H ψ(t)
+
+    infer Invariance<H>(ρ: QState<H>, A: Observable<H>, U: Unitary(H)):
+      (U ρ U⁻¹) ⊢ ⟨A⟩ = ρ ⊢ ⟨U⁻¹ A U⟩
+      
+    infer QuantumCrooks<H>(ρ: QState<H>, H: Observable<H>, Δt: ℝ):
+      𝓓[ρ(Δt)] - 𝓓[ρ] ≥ (ρ ⊢ ⟨H⟩) Δt
+
+    rewrite Lagrangian<H>(γ: Fun(ℝ, QState<H>)):
+      L[γ](t) ~> Re(L[γ](t)) - Im(L[γ](t)) 
+              = ⟨γ'(t)|H(L)|γ(t)⟩ - ⟨γ(t)|Curvature(γ)(t)|γ(t)⟩
+  }
+
+  STRUCTURE {
+    ; Quantum Geodesic Equation
+    ∀H, (γ: Fun(ℝ, QState<H>)).  
+      γ''(t) = -Curvature(γ)(t) γ'(t)
+      
+    ; Schrodinger Equation  
+    ∀H, (ρ: Fun(ℝ, QState<H>), H: Observable<H>).
+      iℏ ρ'(t) = H ρ(t)
+      
+    ; Unitary Invariance
+    ∀H, (ρ: QState<H>, U: Unitary(H), A: Observable<H>).
+      (U ρ U⁻¹) ⊢ ⟨A⟩ = ρ ⊢ ⟨U⁻¹ A U⟩
+
+    ; Quantum Jarzynski/Crooks  
+    ∀H, (ρ: QState<H>, H: Observable<H>, Δt: ℝ).
+      𝓓[ρ(Δt)] - 𝓓[ρ] ≥ (ρ ⊢ ⟨H⟩) Δt
+
+    ; Lagrangian/Ricci Relation
+    ∀H, L: Lagrangian<H>.  ∀(γ: Fun(ℝ, QState<H>)).
+      L[γ](t) = Re(L[γ])(t) - Im(L[γ])(t)
+              = ⟨γ'(t)|H(L)|γ(t)⟩ - ⟨γ(t)|R[γ](t)|γ(t)⟩
+  }
+  
+  PROOFS {
+    theorem GeodesicParallelTransport<H>:
+      ∀(γ: Fun(ℝ, QState<H>), v: Vec<H>).
+        γ is a geodesic ⟺ ∀t. Parallel(v, γ)(t) ⊢ ⟨γ'(t)⟩ = 0
+    {
+      assume γ is a geodesic
+      let v(t) := Parallel(v, γ)(t)
+
+      v'(t) ⊢ ⟨γ'(t)⟩ 
+      = d/dt ⟨v(t)|γ'(t)⟩   ; by product rule
+      = ⟨v'(t)|γ'(t)⟩ + ⟨v(t)|γ''(t)⟩   
+      = ⟨∇_{γ'(t)}v(t)|γ'(t)⟩ + ⟨v(t)|-Curvature(γ)(t)γ'(t)⟩   ; by geodesic eqn
+      = -⟨v(t)|Curvature(γ)(t)γ'(t)⟩   ; since ∇_{γ'}v ⊥ γ'
+      = 0   ; since γ is a geodesic
+      
+      hence ∀t. Parallel(v, γ)(t) ⊢ ⟨γ'(t)⟩ = 0
+      ; The converse follows by reversing the argument
+    }
+    
+    theorem QuantumCrooksFromLagrangian<H>:
+      ∀(ρ: Fun(ℝ, QState<H>), Δt: ℝ).
+        𝓓[ρ(Δt)] - 𝓓[ρ(0)] ≥ ∫[0, Δt] ρ(t) ⊢ ⟨∂L/∂t⟩ dt
+    {
+      calc 𝓓[ρ(Δt)] - 𝓓[ρ(0)]
+           = ∫[0, Δt] d/dt 𝓓[ρ(t)] dt   ; Fundamental theorem of calculus
+           = ∫[0, Δt] ρ'(t) ⊢ log ρ(t) dt   ; Chain rule  
+           = (i/ℏ) ∫[0, Δt] ρ(t) ⊢ ⟨[H(L), log ρ(t)]⟩ dt   ; Schrodinger eqn
+           ≥ ∫[0, Δt] ρ(t) ⊢ ⟨∂H(L)/∂t⟩ dt   ; Thermodynamic inequality
+           = ∫[0, Δt] ρ(t) ⊢ ⟨∂²L/∂q∂t⟩ dt   ; Legendre transform 
+           = ∫[0, Δt] ρ(t) ⊢ ⟨∂L/∂t⟩ dt   ; Euler-Lagrange eqns
+    }
+
+    theorem ExpectationUncertainty<H>:
+      ∀(ρ: QState<H>, A: Observable<H>, B: Observable<H>). 
+        (ρ ⊢ Var[A]) (ρ ⊢ Var[B]) ≥ (1/4) |ρ ⊢ ⟨[A, B]⟩|²
+    {
+      let σ_A² := ρ ⊢ Var[A], σ_B² := ρ ⊢ Var[B]
+      let C := [A, B]
+
+      calc σ_A² σ_B²
+           = (ρ ⊢ ⟨(A - ⟨A⟩)²⟩) (ρ ⊢ ⟨(B - ⟨B⟩)²⟩)
+           ≥ |ρ ⊢ ⟨(A - ⟨A⟩) (B - ⟨B⟩)⟩|²   ; Cauchy-Schwarz inequality
+           = (1/4) |ρ ⊢ ⟨(AB - BA) - ⟨A⟩B + ⟨B⟩A⟩|²   ; Expand square
+           = (1/4) |ρ ⊢ (⟨AB⟩ - ⟨BA⟩) - ⟨A⟩⟨B⟩ + ⟨B⟩⟨A⟩|²
+           = (1/4) |ρ ⊢ ⟨AB - BA⟩|²   ; Since ⟨A⟩⟨B⟩ = ⟨B⟩⟨A⟩ 
+           = (1/4) |ρ ⊢ ⟨[A, B]⟩|²
+    }
+  }
+}
+
+This Concept blends ideas from quantum mechanics, differential geometry, and thermodynamics. Some key aspects:
+
+It uses the geometric structure of the space of quantum states (Hilbert space) via geodesics, parallel transport, and curvature.
+It connects dynamics (Schrodinger equation), thermodynamics (entropy, Crooks inequality), and geometry (geodesic equation, Lagrangian formulation).
+Quantum uncertainty and non-commutativity take on a geometric interpretation via the curvature.
+Entropy and the Lagrangian provide linked ways to characterize the system.
+
+The proofs exploit this interlinking - deriving the Crooks inequality from the Lagrangian, interpreting parallel transport in terms of geodesics, and expressing the uncertainty principle geometrically.

@@ -1,0 +1,376 @@
+STRUCTURE UnifyingAttentionV4 {
+  PARAMETERS {
+    VocabSize : Int
+    NumFeatures : Int
+    NumConstraints : Int
+    EmbeddingSize : Int
+    FeatureSize : Int
+    ConstraintSize : Int
+    HiddenSize : Int
+    NumLayers : Int
+  }
+
+  NOTATION {
+    α(Q, K) := Attention(Q, K)
+    ⊔(C1, C2) := Unification(C1, C2)
+    P(x) := Probability(x)
+    v̂ := Embedding(v)
+    ⊙(u, v) := ElementWiseProduct(u, v)
+    σ(x) := Sigmoid(x)
+  }
+
+  DEF Token := String
+  DEF TokenVector := [EmbeddingSize]
+  DEF token_embedding : Matrix[EmbeddingSize, VocabSize]
+
+  DEF Feature := String
+  DEF FeatureVector := [FeatureSize]  
+  DEF feature_embedding : Matrix[FeatureSize, NumFeatures]
+
+  DEF Constraint := FeatureVector -> ℝ≥0
+  DEF ConstraintVector := [ConstraintSize]
+  DEF constraint_embedding : Matrix[ConstraintSize, NumConstraints]
+
+  DEF Sequence := List[Token]
+  DEF Dist[A] := A -> ℝ≥0
+  DEF LanguageModel := Sequence -> Dist[Token]
+
+  STRUCTURE Attention(Query, Key : Type) {
+    DEF W_q : Matrix[HiddenSize, HiddenSize]
+    DEF W_k : Matrix[HiddenSize, HiddenSize]
+    DEF W_v : Matrix[HiddenSize, HiddenSize]
+
+    DEF apply(Q : [Query], K : [Key]) -> [HiddenSize] := (
+      LET Q' := [MATMUL(W_q, q) FOR q : Q],
+          K' := [MATMUL(W_k, k) FOR k : K],
+          scores := [SOFTMAX(MATMUL(q, TRANSPOSE(k)) / SQRT(HiddenSize)) FOR (q, k) : ZIP(Q', K')],
+          V := [MATMUL(W_v, k) FOR k : K]
+      IN [MATMUL(s, v) FOR (s, v) : ZIP(scores, V)]
+    )
+  }
+
+  STRUCTURE Unification {
+    DEF W_c : Matrix[ConstraintSize, FeatureSize]
+
+    DEF apply(C : [ConstraintVector]) -> Constraint := (
+      λf . ∏(σ(MATMUL(c, f)) FOR c : C)
+    )
+
+    DEF represent(f : FeatureVector) -> ConstraintVector := (
+      MATMUL(W_c, f)
+    )
+  }
+
+  STRUCTURE Layer {
+    DEF W_in : Matrix[HiddenSize, HiddenSize]
+    DEF b_in : Vector[HiddenSize]
+    DEF W_out : Matrix[HiddenSize, HiddenSize]  
+    DEF b_out : Vector[HiddenSize]
+
+    DEF self_attention : Attention(HiddenSize, HiddenSize)
+    DEF input_attention : Attention(HiddenSize, HiddenSize)
+    DEF unifier : Unification
+
+    DEF apply(
+      input : FeatureVector,
+      context : [FeatureVector], 
+      constraints : [ConstraintVector]
+    ) -> FeatureVector := (
+      LET input' := MATMUL(W_in, input) + b_in,
+          context' := [MATMUL(W_in, c) + b_in FOR c : context],
+          self_attended := self_attention.apply([input'], context'),
+          input_attended := input_attention.apply([input'], context'),
+          attended := [s + i FOR (s, i) : ZIP(self_attended, input_attended)],
+          unified := unifier.apply(constraints),
+          filtered := [a ⊙ unified(unifier.represent(a)) FOR a : attended]
+      IN RELU(MATMUL(W_out, REDUCE(ADD, filtered)) + b_out)  
+    )
+  }
+
+  DEF layers := [Layer FOR _ : RANGE(NumLayers)]
+
+  DEF apply(
+    input : Sequence,
+    context : [Sequence],
+    constraints : [Constraint]      
+  ) -> Dist[Token] := (
+    LET input_vectors := [t̂ FOR t : input],
+        context_vectors := [[ĉ FOR c : seq] FOR seq : context],
+        constraint_vectors := [ĉ FOR c : constraints],
+        output_vector := FOLDL(
+          (h, layer) -> layer.apply(h, context_vectors, constraint_vectors),
+          input_vectors[-1],
+          layers
+        )
+    IN SOFTMAX(MATMUL(TRANSPOSE(token_embedding), output_vector))
+  )
+
+  [∀t : Token, t̂ = MATMUL(token_embedding, ONE_HOT(t))] # Token embedding
+  [∀f : Feature, f̂ = MATMUL(feature_embedding, ONE_HOT(f))] # Feature embedding
+  [∀c : Constraint, ĉ = MATMUL(constraint_embedding, ONE_HOT(c))] # Constraint embedding
+  
+  [∀C : [Constraint], ∀f : FeatureVector, (⊔(C))(f) = ∏(c(f) FOR c : C)] # Unification is constraint product
+  
+  [∀Q, K : [HiddenSize] . 
+    α(Q, K) = MATMUL(SOFTMAX(MATMUL(Q, TRANSPOSE(K)) / SQRT(HiddenSize)), K)
+  ] # Attention is scaled dot-product
+  
+  [∀input : Sequence, ∀context : [Sequence], ∀constraints : [Constraint] .
+    P(apply(input, context, constraints)) IS Dist[Token]  
+  ] # Model output is a valid probability distribution over tokens
+
+  RETURN apply
+}
+
+
+
+
+
+
+STRUCTURE UnifyingAttention {
+  PARAMETERS {
+    FeatureSpace : Type
+    Constraint : Type
+  }
+
+  NOTATION {
+    α(q, K) := ATTENTION(q, K)
+    q ⊓ k := UNIFY(q, k)  
+  }
+
+  DEF Feature := String
+  DEF FeatureVector := MAP(Feature, Float)
+
+  DEF Query := FeatureVector
+  DEF Key := FeatureVector
+  DEF Value := FeatureVector
+
+  DEF Subsumption(FeatureVector) {
+    DEF subsumes(x: FeatureVector, y: FeatureVector) -> Bool := (
+      ALL(feature : x.keys & y.keys, x[feature] >= y[feature])
+    )
+  }
+
+  DEF UnificationOp(FeatureVector, Constraint) {
+    DEF unify(x: FeatureVector, y: FeatureVector) -> Constraint := (
+      LET unified := MAP(),
+          shared_features := x.keys & y.keys
+      IN FOR feature : shared_features {
+           unified[feature] := MIN(x[feature], y[feature])
+         },
+         unified
+    )
+  }
+
+  DEF AttentionFunction(Query, Key, Value) {
+    PARAMETERS {
+      temperature : Float
+    }
+    
+    DEF score(q: Query, k: Key) -> Float := EXP(SUM(q * k) / temperature)
+
+    DEF forward(query: Query, keys: [Key], values: [Value]) -> [(Value, Float)] := (
+      LET scores := [score(query, key) FOR key : keys],
+          normalized_scores := NORMALIZE(scores)
+      IN ZIP(values, normalized_scores)  
+    )
+  }
+
+  DEF UnifyingAttentionFunction(Query, Key, Value, Constraint) {
+    DEF attention := AttentionFunction(Query, Key, Value)
+    DEF unification := UnificationOp(Value, Constraint)
+
+    DEF forward(query: Query, keys: [Key], values: [Value]) -> Value := (
+      LET attended := attention.forward(query, keys, values),
+          (attended_values, _) := UNZIP(attended),
+          unified := REDUCE(unification.unify, attended_values)
+      IN unified
+    )
+  }
+
+  DEF NORMALIZE(scores: [Float]) -> [Float] := (
+    LET total := SUM(scores)
+    IN [score / total FOR score : scores]
+  )
+
+  [∀q: Query, ∀k: Key, ∀v: Value .
+    Subsumption.subsumes(unify(q, k), v) => 
+    ∃s: Float . (v, s) ∈ AttentionFunction.forward(q, [k], [v])
+  ] # Attended values are subsumed by query-key unifier
+
+  [∀q: Query, ∀K1, K2: [Key], ∀V1, V2: [Value] .
+    K1 ⊆ K2 AND LENGTH(V1) = LENGTH(K1) AND LENGTH(V2) = LENGTH(K2) =>
+    Subsumption.subsumes(
+      UnifyingAttentionFunction.forward(q, K2, V2),
+      UnifyingAttentionFunction.forward(q, K1, V1)
+    )
+  ] # Monotonicity of unifying attention
+
+  RETURN UnifyingAttentionFunction
+}
+
+
+
+
+
+
+STRUCTURE UnificationAttention {
+  PARAMETERS {
+    key_size : Int
+    query_size : Int
+    value_size : Int
+  }
+
+  NOTATION {
+    σ(t) := SUBST_APPLY(σ, t)
+    σ₁ ∘ σ₂ := SUBST_COMPOSE(σ₁, σ₂)
+    α(q, K) := ATTENTION_WEIGHTS(q, K)  
+  }
+
+  STRUCTURE Term {
+    DEF Variable(name: String)
+    DEF Function(name: String, args: [Term])
+  }
+  
+  DEF Substitution := MAP(Variable, Term)
+
+  STRUCTURE UnifyAttention {
+    DEF key_proj : Matrix[key_size, key_size]
+    DEF query_proj : Matrix[query_size, key_size]
+    DEF value_proj : Matrix[value_size, value_size]
+
+    DEF unify_attention(query: Term, 
+                        keys: [Term], 
+                        values: [Substitution]) -> Substitution := (
+      LET q := query_proj * ENCODE(query),
+          K := [key_proj * ENCODE(k) FOR k : keys],
+          V := [value_proj * ENCODE(v) FOR v : values],
+          α := α(q, K),
+          merged_subst := MERGE_SUBST(α, V)
+      IN merged_subst
+    )
+
+    DEF forward(query: Term, 
+                keys: [Term],
+                values: [Term]) -> Term := (
+      LET subst := unify_attention(query, keys, [Unification.unify(query, k) FOR k : keys]),
+          result := σ(query)
+      IN result          
+    )
+  }
+
+  DEF MERGE_SUBST(α : [Float], substs : [Substitution]) -> Substitution := (
+    LET merged := Substitution(),
+        vars := UNION({k FOR k : subst.keys} FOR subst : substs)
+    IN FOR v : vars {
+         LET terms := [subst.get(v, v) FOR subst : substs],
+             merged_term := MERGE_TERMS(α, terms)
+         IN merged.set(v, merged_term)
+       },
+       merged
+  )
+
+  DEF MERGE_TERMS(α : [Float], terms : [Term]) -> Term := (
+    LET merged_args := TRANSPOSE(
+          FOR term : terms {
+            CASE term OF
+              Variable(_) -> [term],
+              Function(f, args) -> args
+          }
+        )
+    IN Function(
+         MOST_FREQUENT(f FOR Function(f, _) : terms),
+         [MERGE_TERMS(α, args) FOR args : merged_args]
+       )
+  )
+
+  [∀t, ∀ks, ∀vs . 
+    σ(t) = UnifyAttention.forward(t, ks, vs) WHERE σ = MERGE_SUBST(α(t, ks), [Unification.unify(t, k) FOR k : ks])
+  ] # Result of unify-attention is application of merged substitution
+
+  [∀t, ∀ks . 
+    ks' ⊂ ks => UnifyAttention.forward(t, ks', _) ⪯ UnifyAttention.forward(t, ks, _)
+  ] # More keys (constraints) lead to more specific result
+
+  [∀t, ∀ks, ∀vs, ∀vs' .
+    vs ≉ vs' => UnifyAttention.forward(t, ks, vs) ≉ UnifyAttention.forward(t, ks, vs') 
+  ] # Different values (substitutions) produce different results
+
+  RETURN UnifyAttention
+}
+
+
+
+STRUCTURE UnificationAttention {
+  PARAMETERS {
+    max_vars : Int
+    max_depth : Int
+  }
+
+  NOTATION {
+    σ(t) := SUBST_APPLY(σ, t)
+    σ₁ ∘ σ₂ := SUBST_COMPOSE(σ₁, σ₂)
+    αᵤ(q, k) := UNIFICATION_ATTENTION(q, k)
+  }
+
+  DEF Variable := String
+  DEF Constant := String
+  DEF Term := Variable | Constant | Predicate
+  DEF Predicate := (name: String, args: [Term])
+  DEF Substitution := MAP(Variable, Term)
+
+  STRUCTURE TermMemory {
+    DEF keys : TRIE(Predicate)
+    DEF values : TRIE(Tensor)
+
+    DEF insert(key: Predicate, value: Tensor) := (
+      keys.insert(key),
+      values.insert(key, value)  
+    )
+
+    DEF get_matches(query: Predicate, max_depth: Int) -> [(Predicate, Tensor)] := (
+      LET preds := keys.get_matches(query, max_depth)
+      IN [(p, values.get(p)) FOR p : preds]
+    )
+  }
+
+  STRUCTURE UnifyAttention {
+    DEF memory : TermMemory
+    DEF unify : Unification.unify
+
+    DEF unification_attention(query: Predicate, key: Predicate) -> (Substitution, Float) := (
+      LET subst := unify(query, key, max_vars),
+          score := SUBST_SCORE(subst)
+      IN (subst, score)          
+    )
+
+    DEF forward(query: Predicate) -> Tensor := (
+      LET matches := memory.get_matches(query, max_depth),
+          (substs, scores) := UNZIP([unification_attention(query, k) FOR (k,_) : matches]),
+          values := [v FOR (_,v) : matches],
+          weighted_values := [v * s FOR (v,s) : ZIP(values, scores)],
+          result := SUM(weighted_values) / SUM(scores)
+      IN result  
+    )
+  }
+
+  DEF SUBST_SCORE(subst: Substitution) -> Float := (
+    EXP(-COUNT(subst) / max_vars)
+  )
+
+  [∀q, ∀k . 
+    LET (σ, s) := αᵤ(q, k) IN
+    σ(q) = σ(k) AND 0 ≤ s ≤ 1
+  ] # Unification attention produces valid unifier and score in [0,1]
+
+  [∀q, ∀k₁, ∀k₂ .
+    k₁ ⊑ k₂ => LET (σ₁, s₁) := αᵤ(q, k₁); (σ₂, s₂) := αᵤ(q, k₂) IN 
+    σ₂ ⊑ σ₁ AND s₁ ≤ s₂
+  ] # More general key gets lower score and more general substitution
+
+  [∀q . 
+    SUM(s FOR (_, s) : [αᵤ(q, k) FOR k : UnifyAttention.memory.keys]) = 1
+  ] # Attention scores sum to 1 for any query
+
+  RETURN UnifyAttention
+}

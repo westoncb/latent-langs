@@ -1,0 +1,59 @@
+CONCEPT AdversarialRegularization:
+
+EXTEND MachineLearning:
+  Model := Function(Inputs, Parameters) → Outputs
+  Loss := Divergence(Outputs, GroundTruth)
+  Regularization := Constraint(Parameters)
+
+DEFINE AdversarialPerturbation(x) := 
+  argmax_{δ : ||δ|| ≤ ε} Loss(Model(x + δ))
+
+DEFINE AdversarialLoss(x, y) := 
+  Loss(Model(x), y) + λ * Loss(Model(x + AdversarialPerturbation(x)), y)
+
+ASSERT Observation(Models):
+  Vulnerability(AdversarialExamples) ⟹   
+  Phenomenon(AdversariallyRobust, False)
+
+THEOREM AdversarialRegularizationTheorem:
+  ∀(M : Model, D : Dataset):
+  TrainObjective(M) = E_{(x,y) ~ D} AdversarialLoss(x, y) ⟹
+  Phenomenon(AdversariallyRobust, M)
+  
+PROOF:
+  Denote θ the parameters of model M. 
+  The adversarial training objective is:
+    min_θ E_{(x,y)} [ Loss(M(x;θ), y) + λ * max_{||δ||≤ε} Loss(M(x+δ;θ), y) ]
+  
+  Gradient of inner max ∝ ∇_x Loss(M(x;θ), y).
+  So adversarial perturbation δ∗ approximates steepest ascent step:
+    δ∗ ≈ ε ∇_x Loss(M(x;θ), y) / ||∇_x Loss(M(x;θ), y)||
+  
+  Inner maximization amplifies loss in adversarial direction.
+  Outer minimization therefore shapes loss surface to reduce adversarial gradients.
+  
+  Thus the two opposing forces regularize the model to be robust:  
+  (1) Find worst-case perturbations δ that maximize loss.
+  (2) Adjust model parameters θ to minimize the adversarial loss.
+  
+  At convergence, loss is low even for worst-case δ within ε-ball.
+  Therefore, final model M(x;θ) is robust to adversarial attacks.
+  
+THEOREM LimitationsAndExtensions:
+  AdversarialRegularization ⟹
+    ↑ RobustnessGuarantees \* ↑ ComputationalCost   
+    
+  MultipleAdversarialLosses ∨ DomainAdaptation ∨ CertifiableDefenses ⟹
+    ↑ RobustnessGuarantees
+
+PROOF:  
+  Adversarial training provides empirical but not certified robustness.
+  Scales poorly to high dimensional data due to expensive inner maximization.
+  
+  Using multiple adversarial losses can improve robustness.
+  Adversarial domain adaptation can help model generalize across domains.
+  Certifiable defenses provide provable robustness guarantees.
+  
+  However, fundamental trade-off between robustness and accuracy exists.
+  Adversarial robustness is neither necessary nor sufficient for reliability.
+  Field still nascent, much work remains to enhance practicality and impact.

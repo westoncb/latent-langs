@@ -1,0 +1,240 @@
+ConceptScript 6.2 Spec
+
+ConceptScript is a semi-formal language for describing concepts and systems. It is used by defining Concepts and processes in a hierarchy, and then expressing assertions about the relationships between and properties of their components.
+
+	(...): Parens are used for grouping
+	[...]: Square brackets are used for making assertions
+
+	Either of these can have an uppercase name prefixed:
+		- MyConcept(Component1, Component2)
+		- MyRelationshipOrConstraint[Element1, Element2]
+
+	Parens may be flexibly employed to indicate groups, e.g.:
+		- (a -> b - (x ~ y))
+		- (OneThing | OrTheOther)
+
+**Concept Definitions**
+
+	// Primitive Concept
+	Happiness
+
+	// Parameterized Concept
+	Color(Hue, Saturation, Brightness)
+
+	// Anonymous Concept
+	(Menu, Staff, Policies, Location)
+
+	// Concept with Body
+	Person(Name, Age, Occupation) :: {
+	  [Name -> (First:_, Last:_)]
+	  [Age >= 0]
+	  Works[Occupation, Self]
+	}
+
+	// Anonymous Concept with body
+	(MovieTitle, Director, Year, Genre) :: {
+	  [Year > 1900]
+	  [Genre ∈ (Action, Comedy, Drama, SciFi, Horror)]
+	}
+
+	// Referencing Sub-Concepts
+	Universe.Galaxy.SolarSystem.Planet.Continent.Country.State.City
+
+**Creating New Concepts from Old**
+	
+	// 'is-a' definition
+	Bicycle := Vehicle(Wheels:2, PowerSource:Human) 
+
+	// 'composed-of' definition
+	Tree ^= (Roots, Trunk, Branches, Leaves)
+
+	// 'merge' and 'remove from' operators
+	Celebrity := Person + Famous
+	Queen := Monarch - Male
+
+	// You can 'narrow' Concept params using the colon operator:
+	- Original: Car(Wheels, EngineType)
+	- Narrowed: Car(Wheels:4, EngineType:(Gas | Electric))
+
+	// Define abstract concepts by narrowing to the wildcard operator
+	Employee(Name:_, Position:_, Salary:_)
+
+	// Progressive specialization, utilizing abstract 'framework' Concepts
+	LandVehicle := Vehicle(Engine(Type:_), Modality:Land, MaxSpeed:_)
+    Car := LandVehicle(Engine(Type:_), MaxSpeed:_)
+    ElectricCar := Car(Engine(Type:Electric), MaxSpeed:_)
+    TeslaRoadster := ElectricCar(MaxSpeed:150)
+    MusksTeslaRoadster := TeslaRoadster + (LicensePlate:"axzy-32")
+
+
+**Operators**
+
+	Note: Every category of operator can be expanded using DEF[...] blocks for custom operators
+		Example:
+			DEF[
+			  +: Merge,
+			  <->: Corresponds,
+			  $: Outputs,
+			  ⊆: SubsetOf,
+			  ⊻: SymmetricDifference
+			]
+
+		DEF[...] blocks may appear at the tops of Concept bodies for scoped definitions, or at the global level (outside of any Concept body)
+
+	// Concept definition Operators
+		:=: for 'is-a' definitions
+		^=: for 'has-a' definitions
+
+	// Concept combination Operators
+		+: Join operator
+		-: Remove operator
+
+	// Relationship Operators (must appear within assertions)
+		  ->, <-, <->: implies, implied by, equivalence
+	      ~: similarity, analogy, loose association
+	      |: alternatives, choices
+	      &: conjunction, composition
+	      |>: feeds into (process stages)
+	      $: results in (after invoking a process)
+	      ∈: In,
+	      ⊆: Subset,
+	      ∪: Union,
+	      ∩: Intersection,
+	      ⊕: Xor,
+	      ⊗: Tensor,
+	      ×: Product,
+	      ⨝: Join,
+	      ⨿: CoProduct,
+	      ⩛: Curries,
+	      ⟗: Models,
+	      ⊢: Entails
+
+	 	Examples:
+	 		[Hunger -> Eat -> Satiety]
+			[Sunny <-> Happiness]
+			[Saltwater $ Desalination $ Freshwater]
+			[Dog ⊆ Mammal]
+			[Alive ⊻ Dead]
+
+	// Process Operators (these are just examples; you can invent your own):
+      →:Sequence, ⇉:Parallel, ⊳:Interrupt, ⧖:Synchronize, ⋈:Join, ⋊:Fork, ⧗:Merge, ⊶:Delay, ⧚:Throttle, ⊷:Timeout, ⧞:Retry, ⧟:Rollback, ⋉:Split, ⋋:Aggregate, ⊺:Initialize, ⊻:Finalize, ⧢:Subscribe, ⧣:Publish, ⧤:Broadcast, ⊸:Map, ⊹:Reduce, ⊕:Accumulate, ⋒:Filter, ⊰:PartitionBy, ⋖:OrderBy, ⋗:TakeWhile, ⋘:SkipWhile, ⊲:Zip, ⧥:Flatten, ⧩:Reverse, ⧪:Shuffle, ⊴:WindowBy
+
+  	// Defining more original operators are also possible; for example:
+	  	⦚:ContextualReframing, ⤫:HolisticIntegration, ⧙:IterativeRefinement, ⊷:ProgressiveAbstraction, ⋐:HierarchicalDecomposition, ⪠:SystemicInterconnection, ⊚:RecursiveSelfReference, ⫯:DynamicEquilibration, ⧋:CyclicalProgression, ⊛:GenerativeRecombination, ⩮:AutopoieticSelfOrganization, ⫦:SpontaneousEmergence, ⧕:NonLinearCausality, ⪩:MultistabilityShifting, ⋑:CrossModalMapping, ⫴:SelfSimilarityMatching, ⪝:AffordanceDiscovery, ⫲:MultiscalePatterning, ⪞:DimensionalityReduction, ⩯:TopologicalTransformation
+
+
+**Process Concepts**
+
+    Used to describe processes by creating transformation pipelines
+
+    Example:
+	    EvolutionaryPipeline := (
+	      Species |>
+	      NaturalSelection(Environment:_, Traits:_) |>
+	      GeneticDrift(Population:_) |>
+	      Speciation(IsolationMechanism:_)
+	    )
+
+	    // Using the process:
+	    [Oryctolagus(cuniculus) |> EvolutionaryPipeline(
+	      Environment:Grasslands,
+	      Traits:(SpeedIncrease, CamouflageImprovement),
+	      Population:LargeColony,
+	      IsolationMechanism:GeographicBarrier
+	    ) $ HyperLemur]
+
+	// Single-line use:
+    [SurfaceNormal |> Scale(1, 2, 1) |> Rotate(PI, 0, 0) $ NewNormal]
+
+    Note: Like with other operations/relations, processes are used in the context of making assertions, typically ending with a usage of the $ (results in) operator.
+
+
+**Annotations**
+	- Escape hatch for additional information, expressed in {curly braces}
+    - Can be affixed to Concepts anywhere they appear:
+    - Should be used to clarify ambiguities and include important associated information
+    - Core language features should be preferred when possible
+    - Annotating scripts is largely a matter of taste/judgment
+
+    Example annotation types:
+      - Cardinality constraints: Animals{+}, Friends{*}, Spouse{?}, Wheels{min: 2, max: 4}, Brain{1}
+      - Qualification: Eschaton{certainty:0.234}, BestFriend{time:3days}
+      - Associated vibe: AIHumanCollaboration{🤖🧠🎼}
+      - Notes: MyBusiness{Risky}, TakingOutOfTrash{ShouldNeverBeForgotten}
+      - Invent your own type!
+
+
+
+Comprehensive example:
+
+// Base concepts
+Tensor := (Dimensions:_, DataType:_)
+LinearLayer := (InputSize:_, OutputSize:_)
+Activation := Function(Input:Tensor, Output:Tensor)
+
+// Transformer components
+MultiheadAttention := (
+  NumHeads:_, KeyDim:_, ValueDim:_, QueryDim:_, OutputDim:_
+) :: {
+  [NumHeads > 0]
+  [KeyDim = ValueDim = QueryDim]
+}
+
+FeedForward := (InputSize:_, HiddenSize:_, OutputSize:_, Activation:_)
+
+EncoderLayer := (
+  SelfAttention:MultiheadAttention,
+  FeedForward:FeedForward,
+  LayerNorm,
+  ResidualConnection
+)
+
+DecoderLayer := EncoderLayer + (CrossAttention:MultiheadAttention)
+
+// Transformer architecture
+Transformer := (
+  Encoder:TransformerEncoder,
+  Decoder:TransformerDecoder
+) :: {
+  TransformerEncoder := (
+    InputEmbedding,
+    PositionalEncoding,
+    Layers:EncoderLayer{NumLayers}
+  )
+
+  TransformerDecoder := (
+    OutputEmbedding,
+    PositionalEncoding,
+    Layers:DecoderLayer{NumLayers}
+  )
+
+  Pipeline := Sequence |> Encoder |> Decoder |> OutputLinear |> Softmax
+
+  [InputSequence |> Pipeline $ OutputProbabilities]
+}
+
+// Example usage
+[
+  InputSequence |>
+  Transformer(
+    Encoder:TransformerEncoder(
+      InputEmbedding:Embedding{VocabSize, EmbeddingDim},
+      PositionalEncoding:SinusoidalPositionalEncoding,
+      Layers:EncoderLayer{6}(
+        SelfAttention:MultiheadAttention(NumHeads:8, KeyDim:64, ValueDim:64, QueryDim:64, OutputDim:512),
+        FeedForward:FeedForward(InputSize:512, HiddenSize:2048, OutputSize:512, Activation:ReLU)
+      )
+    ),
+    Decoder:TransformerDecoder(
+      OutputEmbedding:Embedding{VocabSize, EmbeddingDim},
+      PositionalEncoding:SinusoidalPositionalEncoding,
+      Layers:DecoderLayer{6}(
+        SelfAttention:MultiheadAttention(NumHeads:8, KeyDim:64, ValueDim:64, QueryDim:64, OutputDim:512),
+        CrossAttention:MultiheadAttention(NumHeads:8, KeyDim:512, ValueDim:512, QueryDim:512, OutputDim:512),
+        FeedForward:FeedForward(InputSize:512, HiddenSize:2048, OutputSize:512, Activation:ReLU)
+      )
+    )
+  ) |> 
+  OutputLinear(InputSize:512, OutputSize:VocabSize) |>
+  Softmax
+]{🤖 Transformer Sequence-to-Sequence Model}

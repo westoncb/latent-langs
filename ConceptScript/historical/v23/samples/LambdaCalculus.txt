@@ -1,0 +1,63 @@
+CONCEPT LambdaCalculus {
+
+  LANGUAGE {
+    TYPE Term
+    CONST Var : ℕ -> Term
+    CONST Abs : ℕ -> Term -> Term
+    CONST App : Term -> Term -> Term
+
+    NOTATION "λ" = Abs
+    NOTATION "(" = App
+
+    REWRITE BetaReduction : (λ x . M) N => M[x := N]
+    REWRITE EtaReduction : (λ x . M x) => M
+
+    PRED Reducible : Term -> 𝔹
+    PRED BetaEquiv : Term -> Term -> 𝔹
+  }
+
+  STRUCTURE {
+    DEF FreeVars : Term -> 𝒫(ℕ) 
+      FreeVars (Var x) = {x}
+      FreeVars (Abs x M) = FreeVars(M) \ {x}
+      FreeVars (App M N) = FreeVars(M) ∪ FreeVars(N)
+    
+    DEF Substitution : Term -> ℕ -> Term -> Term
+      (Var x)[y := N] = if x = y then N else Var x
+      (Abs x M)[y := N] = if x = y then Abs x M 
+                           else Abs x (M[y := N])
+      (App M₁ M₂)[y := N] = App (M₁[y := N]) (M₂[y := N])
+      
+    DEF Reducible(M) : ∃ N . M => N
+
+    DEF BetaEquiv(M, N) : ∃ P . M =>* P ∧ N =>* P
+  }
+  
+  PROOFS {
+    THEOREM ChurchRosser {
+      STATEMENT : ∀ M N P . BetaEquiv(M, N) ∧ (M =>* P) -> ∃ Q . (N =>* Q) ∧ (P =>* Q)
+      
+      PROOF {
+        ASSUME [M N P] : BetaEquiv(M, N), (M =>* P)
+        
+        HAVE [R] : (M =>* R) ∧ (N =>* R) BY BetaEquiv
+        
+        SHOW ∃ Q . (N =>* Q) ∧ (P =>* Q) {
+          WITNESS R
+          HAVE : (N =>* R) BY ASSUMPTION
+          HAVE : (P =>* R) BY {
+            INDUCE ON (M =>* P) {
+              CASE M = P : (P =>* R) BY ASSUMPTION
+              CASE ∃ M' . (M =>* M') ∧ (M' => P) : 
+                ASSUME (M' =>* R)
+                SHOW (P =>* R) BY {
+                  HAVE : (M' => P) BY ASSUMPTION
+                  HAVE : (P =>* R) BY TRANSITIVITY
+                }
+            }
+          }
+        }
+      }
+    }
+  }
+}

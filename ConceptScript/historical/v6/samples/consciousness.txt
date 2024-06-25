@@ -1,0 +1,45 @@
+// Basic Concepts
+Emotion := (Valence, Arousal, Trigger)
+Thought := (Content, Associations, Originator) 
+Behavior := (Action, Intention, Context)
+
+// Modeling the concept of Consciousness
+Consciousness := (
+  Awareness,
+  (Thoughts + Emotions + Sensations + Memories + Beliefs + Desires),
+  SelfModel,
+  DecisionMaking  
+)
+
+// Awareness
+Awareness := (Attention + Perception + Introspection)
+  [Attention ⊆ (External | Internal)]
+  [Perception ⊆ (Sensation + Interpretation)]
+
+// Self-Model  
+SelfModel := (BodySchema, Autobiographical, Projections)
+  [BodySchema ⊆ (Sensorimotor + Physiological)]
+  [Autobiographical ⊆ (EpisodicMemories + SemanticMemories + Dispositions)] 
+  [Projections ⊆ (Goals + Fears + Values + Traits{mutable})]
+
+// Decision Making
+DecisionMaking := (
+  Deliberation(Thoughts, Projections, Emotions, Memories) |>
+  Volition{conscious} |>
+  Behavior $ Consequences
+)  
+
+// The stream of consciousness
+ConsciousnessStream := (
+  (Sensations | Thoughts | Emotions | Memories | Imaginations) |>
+  Awareness |>
+  SelfModelUpdate |>
+  DecisionMaking{?} |>
+  Behavior{?} |>
+  ConsciousnessStream  
+){recursive, continuous}
+
+// Altered States
+DreamState := Consciousness - Sensations{external} + Imaginations{vivid, bizarre} 
+MeditativeState := Consciousness + Awareness{intensified} - Thoughts{verbal, 🔇}   
+FlowState := Consciousness + Absorption + (Skill ⩛ Challenge) - SelfConsciousness

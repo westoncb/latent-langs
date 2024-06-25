@@ -1,0 +1,254 @@
+CONCEPT ComputationalTrinitarianism {
+  LANGUAGE {
+    TYPE Expr
+    TYPE Value <: Expr  
+    TYPE Term <: Expr
+    TYPE Type
+    TYPE Context = Map[String, Type]
+    TYPE Environment = Map[String, Value]
+    TYPE Perception
+    TYPE Intention
+    TYPE Action  
+    TYPE Agent = (Perception -> Intention, Intention -> Action)
+    TYPE World
+    TYPE Mind
+    TYPE Prop <: Expr
+    
+    FUNC typeOf(c : Context, e : Expr) : Maybe[Type]
+    PRED hasType(c : Context, e : Expr, t : Type) = typeOf(c, e) = Just(t)
+    
+    FUNC eval(env : Environment, e : Expr) : Value
+    PRED propHolds(env : Environment, p : Prop) = eval(env, p) = True
+    
+    FUNC perceive(w : World) : Perception
+    FUNC intend(m : Mind, p : Perception) : Intention  
+    FUNC act(i : Intention) : Action
+    
+    PRED knows(a : Agent, p : Prop) = ∀ (w : World) . propHolds(agentEnv(a, w), p)
+  }
+  
+  NOTATION {
+    "p <=> q" = "(p => q) ∧ (q => p)"
+  }
+  
+  TRANSFORMERS {
+    FUNC subexprs(e : Expr) -> List[Expr] = MATCH e WITH {
+      Value(v) => [],
+      Term(f, args@_) => args,
+      _ => []
+    }
+    
+    FUNC agentEnv(a : Agent, w : World) -> Environment = {
+      LET p = perceive(w)
+      LET i = intend(a.1, p)
+      LET v = eval(i)
+      ["perception" := p, "intention" := i, "action" := a.2(i)]
+    }
+  }
+  
+  PROOFS {
+    THEOREM Compositionality {
+      STATEMENT:
+        ∀ (e : Expr, env : Environment) .
+          eval(env, e) = eval(env, subexprs(e))
+          
+      PROOF:
+        BY Induction on e
+        CASE Value(v):
+          SHOW eval(env, Value(v)) = v = eval(env, [])
+        CASE Term(f, args):
+          ASSUME (H) : ∀ (arg ∈ args) . eval(env, arg) = eval(env, subexprs(arg))
+          SHOW eval(env, Term(f, args)) 
+               = f(eval(env, args))
+               = f(eval(env, subexprs(args))) BY H
+               = eval(env, subexprs(Term(f, args)))
+    }
+     
+    THEOREM Intensionality {
+      STATEMENT:  
+        ∃ (a : Agent, p q : Prop, w : World) .
+          (p <=> q) ∧ knows(a, p) ∧ ¬ knows(a, q)
+           
+      PROOF:
+        LET a = (
+          λ p . IF p = Red THEN Paint ELSE NoOp,
+          λ i . MATCH i WITH {
+                  Paint => paintRed    
+                }  
+        )
+        
+        LET p = "The object is red"
+        LET q = "The object has the color of my favorite fruit"
+        LET w = worldWithRedApple
+        
+        SHOW (p <=> q) IN w
+        SHOW knows(a, p) BY {
+          LET env = agentEnv(a, w)
+          REWRITE knows(a, p)
+            <=> ∀ (w : World) . propHolds(agentEnv(a, w), p)  
+            <=> propHolds(env, p)
+            <=> eval(env, p) = True
+          SHOW eval(env, p) = True BY simulation
+        }
+        SHOW ¬ knows(a, q) BY {
+          LET env = agentEnv(a, w)  
+          REWRITE knows(a, q)
+            <=> ∀ (w : World) . propHolds(agentEnv(a, w), q)
+            <=> propHolds(env, q) 
+            <=> eval(env, q) = True
+          SHOW eval(env, q) = False BY simulation
+        }
+    }
+      
+    THEOREM Goedel'sIncompletenessTheorem {
+      STATEMENT:
+        ∀ (T : Theory) . 
+          (Complete(T) ∧ Decidable(T)) => ¬ Consistent(T)
+      
+      PROOF:
+        LET T : Theory
+        ASSUME Complete(T), Decidable(T)
+        
+        LET e : Sentence = "This sentence is not provable in T"
+        
+        SHOW e ∈ T => ¬ Provable(T, e) BY {
+          ASSUME Provable(T, e)
+          HENCE Proves(T, Quote(e))
+          HENCE Proves(T, "Provable(T, Quote(e))")  
+          HENCE Proves(T, "¬ Provable(T, Quote(e))") BY Quoting(e)
+          HENCE Proves(T, "⊥") BY ExplosionPrinciple  
+          HENCE ¬ Consistent(T)
+          HENCE ¬ Provable(T, e)
+          HENCE ⊥   
+        }
+        
+        SHOW e ∉ T => ¬ Complete(T) BY {
+          ASSUME e ∉ T
+          LET p = Proves(T, "¬ Provable(T, Quote(e))")
+          LET q = ¬ Provable(T, e)  
+          SHOW p BY Assumption
+          SHOW q BY Provability
+          HENCE p ∧ q
+          HENCE ∃ φ . (φ ∉ T ∧ (φ ∨ ¬ φ))
+          HENCE ¬ Complete(T)
+          HENCE ⊥    
+        }
+        
+        HENCE ⊥
+        CONCLUDE ¬ (Complete(T) ∧ Decidable(T))
+      }
+    }
+  }
+}
+
+
+
+
+
+
+
+CONCEPT ComputationalTrinitarianism {
+  STRUCTURE Syntax {
+    LET Expr   
+    DEF Value <: Expr
+    DEF Term <: Expr
+    DEF Type
+    DEF Context = Map[String, Type]
+    
+    FUNC typeOf(c : Context, e : Expr) : Maybe[Type]
+    PRED hasType(c : Context, e : Expr, t : Type) = typeOf(c, e) = Just(t)  
+  }
+
+  STRUCTURE Semantics {
+    LET Value
+    DEF Environment = Map[String, Value]
+    
+    FUNC eval(env : Environment, e : Expr) : Value
+    PRED propHolds(env : Environment, p : Expr) = eval(env, p) = True
+  }
+   
+  STRUCTURE Pragmatics {
+    LET Intention
+    DEF Perception    
+    DEF Action
+    DEF Agent = (Perception -> Intention, Intention -> Action)
+    
+    FUNC perceive(w : World) : Perception
+    FUNC intend(m : Mind, p : Perception) : Intention
+    FUNC act(i : Intention) : Action
+    
+    PRED knows(a : Agent, p : Prop) = 
+      ∀ (w : World) . propHolds(agentEnv(a, w), p)  
+  }
+
+  PROOFS {
+    THEOREM Compositionality {
+      STATEMENT:
+        ∀ (e : Expr, env : Environment) .
+          eval(env, e) = eval(env, subexprs(e))
+          
+      PROOF:
+        BY Induction on structure of e
+    }
+     
+    THEOREM Intensionality {
+      STATEMENT:  
+        ∃ (a : Agent, p q : Prop, w : World) .
+          (p <=> q) ∧ knows(a, p) ∧ ¬ knows(a, q)
+           
+      PROOF:
+        LET a = (
+          λ p . IF p = Red THEN Paint ELSE NoOp,
+          λ i . MATCH i WITH
+                  Paint => paintRed    
+        )
+        
+        LET p = "The object is red"
+        LET q = "The object has the color of my favorite fruit"
+        LET w = worldWithRedApple
+        
+        SHOW (p <=> q) IN w
+        SHOW knows(a, p) BY simulation 
+        SHOW ¬ knows(a, q) BY simulation
+    }
+      
+    THEOREM Goedel'sIncompletenessTheorem {
+      STATEMENT:
+        ∀ (T : Theory) . 
+          (Complete(T) ∧ Decidable(T)) => ¬ Consistent(T)
+      
+      PROOF:
+        LET T : Theory
+        ASSUME Complete(T), Decidable(T)
+        
+        LET e : Sentence = "This sentence is not provable in T"
+        
+        SHOW e ∈ T => ¬ Provable(T, e) {
+          ASSUME Provable(T, e)
+          HENCE Proves(T, Quote(e))
+          HENCE Proves(T, "Provable(T, Quote(e))")  
+          HENCE Proves(T, "¬ Provable(T, Quote(e))") BY Quoting(e)
+          HENCE Proves(T, "⊥") BY ExplosionPrinciple  
+          HENCE ¬ Consistent(T)
+          HENCE ¬ Provable(T, e)
+          HENCE ⊥   
+        }
+        
+        SHOW e ∉ T => ¬ Complete(T) {
+          ASSUME e ∉ T
+          LET p = Proves(T, "¬ Provable(T, Quote(e))")
+          LET q = ¬ Provable(T, e)  
+          SHOW p BY Assumption
+          SHOW q BY Provability
+          HENCE p ∧ q
+          HENCE ∃ φ . (φ ∉ T ∧ (φ ∨ ¬ φ))
+          HENCE ¬ Complete(T)
+          HENCE ⊥    
+        }
+        
+        HENCE ⊥
+        CONCLUDE ¬ (Complete(T) ∧ Decidable(T))
+      }
+    }
+  }
+}

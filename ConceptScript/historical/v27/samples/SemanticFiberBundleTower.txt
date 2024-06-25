@@ -1,0 +1,241 @@
+CONCEPT SemanticFiberBundleTower {
+  NOTATION {
+    π_B,F(E) : FiberBundle(B, F) -> (E -> B) = Projection
+    ι^B,F_p(E) : FiberBundle(B, F) -> (Fiber(B, F, p) -> E) = Inclusion
+    𝒫_γ(E) : (e : E, γ : Curve[B], t : Real) -> E = ParallelTransport
+    ⇑_e(E) : (v : TangentVector[B, π(e)]) -> TangentVector[E, e] = HorizontalLift
+    𝒞_e(E) : E -> SubManifold(E) = PossibilityCone
+  }
+
+  LANGUAGE {
+    TYPE Tensor  
+    TYPE StructuralTensor <: Tensor
+    TYPE ContentTensor <: Tensor
+    TYPE Embedding <: Tensor
+    TYPE Manifold
+    TYPE TangentVector[M : Manifold, p : M]
+    TYPE TangentBundle[M : Manifold] = Bundle(M, (p : M) -> TangentSpace(M, p))
+    TYPE CotangentVector[M : Manifold, p : M]
+    TYPE CotangentBundle[M : Manifold] = Bundle(M, (p : M) -> CotangentSpace(M, p))
+    TYPE Fiber[B : Manifold, F : Manifold, p : B] <: Manifold
+    TYPE FiberBundle(B : Manifold, F : Manifold) <: Manifold
+    TYPE SemanticFrequency = Real
+    TYPE PartialConfig[F : Manifold](f : F)
+
+    FUNC Decode : Embedding -> String
+    FUNC Encode(s : String) : Embedding
+    FUNC Complexity(t : Tensor) : Real
+    FUNC Sparsity(t : StructuralTensor) : Real
+
+    AXIOM Projection = FORALL (B : Manifold) (F : Manifold) (E : FiberBundle(B, F)) (p : B) .
+      π_B,F(E)(ι^B,F_p(E)(Fiber(B, F, p))) = p
+        
+    AXIOM Embedding = FORALL (s : String) . Decode(Encode(s)) = s
+  }
+
+  STRUCTURES {
+    STRUCTURE EmbeddingSpace {
+      FIELD E : Manifold
+        REQUIRE FORALL (e : E) . e : Embedding
+
+      FIELD Distance : E × E -> Real
+        REQUIRE FORALL (e1 e2 : E) . Distance(e1, e2) ≥ 0
+        REQUIRE FORALL (e : E) . Distance(e, e) = 0  
+        REQUIRE FORALL (e1 e2 : E) . Distance(e1, e2) = Distance(e2, e1)
+        REQUIRE FORALL (e1 e2 e3 : E) . Distance(e1, e3) ≤ Distance(e1, e2) + Distance(e2, e3)
+    
+      COMPUTE Neighbor(e : E, r : Real) : Set(E) = {e' : E | Distance(e, e') < r}
+        
+      AXIOM NeighborhoodDecodePreserving = FORALL (e : E) (ε : Real) . EXISTS (δ : Real) .
+        FORALL (e' : E) . e' ∈ Neighbor(e, δ) IMPLIES Decode(e') ∈ Neighbor(Decode(e), ε)
+    }
+
+    STRUCTURE SemanticFiber[B : EmbeddingSpace, F : Manifold, p : B] {  
+      REQUIRE F : EmbeddingSpace
+      
+      COMPUTE Content(f : Fiber(B, F, p)) : ContentTensor = f
+      COMPUTE Structure(f : Fiber(B, F, p)) : StructuralTensor = π_B,F(f)
+    }
+
+    STRUCTURE SemanticBundle[B : EmbeddingSpace, F : Manifold] EXTENDS FiberBundle(B, F) { 
+      REQUIRE FORALL (p : B) . SemanticFiber(B, F, p)
+
+      FIELD freq : SemanticFrequency
+
+      COMPUTE ConfigureFiber[p : B](pc : PartialConfig[Fiber(B, F, p)], f : Fiber(B, F, p)) : Fiber(B, F, p)
+
+      AXIOM ParallelTransportContinuity = FORALL (e : E) (v : TangentVector[B, π(e)]) (ε : Real) . 
+        EXISTS (δ : Real) . FORALL (w : TangentVector[E, e]) .
+          Magnitude(w) < δ IMPLIES  
+          Distance(e, 𝒫_ExpGeodesic(π(e), v)(E)(e, ε)) < ε
+          
+      AXIOM PossibilityConeInBundle = FORALL (e : E) . 𝒞_e(E) ⊆ E
+    }
+
+    STRUCTURE TowerLevel[n : Nat] {
+      CASE n == 0 :
+        FIELD Base : EmbeddingSpace
+        
+      CASE n > 0 :
+        FIELD Below : TowerLevel[n-1] 
+        FIELD E : SemanticBundle[Below.Base, Manifold]
+
+        AXIOM IncreasingStructureContentRatio = FORALL (e : E) . 
+          LET struct_content_ratio = Complexity(Structure(e)) / Complexity(Content(e))
+          
+          struct_content_ratio > 1
+          AND struct_content_ratio > IF n == 1 THEN 1 ELSE Below.struct_content_ratio
+          
+        AXIOM IncreasingSparsity = FORALL (e : E) .
+          LET sparsity = Sparsity(Structure(e))
+
+          sparsity > 0  
+          AND sparsity > IF n == 1 THEN 0 ELSE Below.sparsity
+    }
+
+    STRUCTURE SFBT {
+      FUNC Parse(input : String) : Top =
+      LET fibers : [Fiber] = []
+      IN FOREACH (chunk, rest) IN Chunk(input) DO
+           LET embedding = Encode(chunk)
+           LET fiber = FIND (f : Fiber)  
+                         FROM (p : Base) IN Neighbor(embedding, δ)
+                         WHERE EXISTS (pc : PartialConfig(f)) . 
+                                 π_B,F(Levels[Length(fibers)].E)(
+                                   ConfigureFiber(Levels[Length(fibers)].E)(pc, ι^B,F_p(f))) = p
+           IN fibers := fibers + [fiber]
+      IN FollowFiber(Encode(input), fibers)
+             
+      FUNC Generate(e : Top, length : Nat) : String =
+        LET fibers = TraceBack(e)  
+        IN FOREACH (i, fiberTail) IN Enum(fibers) DO
+             LET level = Levels[Length(fibers) - 1 - i]
+             LET pc = FIND (pc : PartialConfig(level.E))
+                         WHERE π_B,F(level.E)(ConfigureFiber(level.E)(pc, ι^B,F_π(e)(level.Base)(π_B,F(e)))) 
+                                 ∈ 𝒞_(ι^B,F_π(e)(level.E)(e))(level.E) 
+             IN e := ConfigureFiber(level.E)(pc, e)
+        IN Decode(π_B,F(Base)(e))
+        
+      FUNC Analogy(t1 : StructuralTensor, t2 : StructuralTensor) : StructuralTensor =
+        LET (f1, ..., fn) = StructuralTensorFactorization(t1) 
+            (g1, ..., gm) = StructuralTensorFactorization(t2)
+            
+        IN FIND (h1, ..., hk) 
+             WHERE (f1, ..., fn) = Permute((h1, ..., hk), π1) 
+               AND (g1, ..., gm) = Permute((h1, ..., hk), π2)
+               AND Permute(f1, π1⁻¹) ⋅ Permute(g1, π2) in Levels[Length(h1, ..., hk)].E
+            
+      FUNC Generalization(ts : [StructuralTensor]) : StructuralTensor =
+        LET (f^i_1, ..., f^i_n) = StructuralTensorFactorization(ts_i) FOR EACH i
+            
+        IN FIND (h_1, ..., h_k)  
+             WHERE ForAll i . Exists (π_i) . (f^i_1, ..., f^i_n) = Permute((h_1, ..., h_k), π_i)
+             MAXIMIZE k
+            
+      FUNC Categorization(e : Embedding) : StructuralTensor =
+        LET (_, t) = TensorDecomposition(e) IN
+        FIND (b : Base) FROM (f : Fiber)  
+          WHERE b = π_B,F(Levels[n].E)(f) AND n = 
+                  MINIMIZE i SUBJECT_TO Complexity(LiftStructure(t, Base, Levels[i].E)) < ε
+     
+      FUNC Instantiation(t : StructuralTensor) : Embedding =
+        LET n = FIND (i) WHERE t in Levels[i].E
+        
+        IN FOREACH (i, ts) IN Enum(TraceBack(t)) FROM n-1 TO 0 DO
+             LET t = ts_i  
+             IN t := ConfigureFiber(Levels[i].E)(CHOOSE (pc) WHERE π_B,F(t) in 𝒞_t(Levels[i].E), t)
+               
+        IN t
+          
+      FUNC SemanticBlend(c1 : ContentTensor, c2 : ContentTensor) : ContentTensor =
+        LET (t1, _) = TensorDecomposition(c1)
+            (t2, _) = TensorDecomposition(c2)
+            t = Analogy(t1, t2)  
+            
+        IN ConfigureFiber(Levels[n].E)(c1, t) WHERE n = Length(TraceBack(t))
+    }
+  }
+
+  TRANSFORMERS {
+    -- Decomposition of Tensors
+
+    SIMPLIFY TensorDecomposition : 
+      Tensor -> (StructuralTensor, ContentTensor)
+      
+    SIMPLIFY StructuralTensorFactorization :  
+      StructuralTensor -> [StructuralTensor]
+      
+    -- Translation Between Adjacent Levels  
+ 
+    TACTIC LiftStructure(t : StructuralTensor, E_below : SemanticBundle, E : SemanticBundle) -> StructuralTensor = 
+      LET F_p = π_B,F(E_below)⁻¹(π_B,F(E)(t)) IN
+      LET f = ι^B,F_p(E_below)(SomeElement(F_p)) IN
+        π_B,F(E)(ConfigureFiber(E)(f, ι^B,F_p(E)(f)))
+
+    TACTIC ProjectContent(t : ContentTensor, E : SemanticBundle, E_below : SemanticBundle) -> ContentTensor =
+      LET f = ι^B,F_π(t)(E)(t) IN
+        Content(ι^B,F_π(π(t))(E_below)(π_B,F(E)(f)))
+  }  
+   
+  PROOFS {
+    THEOREM NavigationSymmetry = FORALL (t : Top) (fibers : [Fiber]) . 
+      FollowFiber(TraceBack(t), fibers) = FollowFiber(π_B,F(Top)(t), TraceBack(t) + fibers)
+    {
+      -- Prove by induction on the tower levels
+    }
+      
+    THEOREM BasePointFreeAnalogy = FORALL (t1 t2 : StructuralTensor) .
+      EXISTS (t1' t2' : StructuralTensor) (Y : SemanticBundle) .
+        t1' = LiftStructure(t1, Levels[n-1].E, Y) AND
+        t2' = LiftStructure(t2, Levels[n-1].E, Y) AND
+        Analogy(t1', t2') = Analogy(t1, t2)
+    {
+      -- Decompose t1 and t2 into factorized structural tensors 
+      -- Prove existence of Y by constructing pullback bundle
+      -- Use universality of pullback to define lifting of structural tensors
+      -- Apply Analogy on lifted tensors and show invariance     
+    }
+  }
+   
+  EXAMPLES {
+    EXAMPLE VisualAnalogyTask {
+      GIVEN t1 = Encode("king - man + woman")  -- Structural tensor encoding the analogy 
+            t2 = Encode("brother - boy")        -- Structural tensor to complete the analogy
+          
+      DEFINE Y = PullbackBundle(Levels[N-1].E)(Along(π_B,F(Levels[N-2].E), [t1, t2]))
+      DEFINE t1' = LiftStructure(t1, Levels[N-1].E, Y)
+      DEFINE t2' = LiftStructure(t2, Levels[N-1].E, Y)
+      DEFINE t3' = Analogy(t1', t2')
+      DEFINE t3 = ProjectContent(t3', Y, Levels[N-1].E)
+      
+      TEST Decode(t3) == "sister"
+    }  
+      
+    EXAMPLE VerbalAnalogyTask {
+      GIVEN t1 = Encode("pen : paper :: fork : ?")
+            options = ["spoon", "knife", "plate", "meat"]
+        
+      DEFINE Y = PullbackBundle(Levels[N-1].E)(Along(π_B,F(Levels[N-2].E), Map(Encode, options)))
+        
+      DEFINE structure = LiftStructure(t1, Levels[N-1].E, Y)  
+      DEFINE content = ProjectContent(Encode("plate"), Y, Levels[N-1].E)
+        
+      DEFINE analogy = ConfigureFiber(Y)(content, structure)
+        
+      TEST π_B,F(Y)(analogy) = Levels[N-2].Base.Neighbor(Encode("plate"), δ)
+    }
+      
+    EXAMPLE TextCategorization {
+      GIVEN d1 = "The quick brown fox jumps over the lazy dog"
+            d2 = "A quick brown fox once sat on a log"  
+            d3 = "The sun shines brightly in the clear blue sky"
+        
+      DEFINE t1 = Categorization(Encode(d1))
+      DEFINE t2 = Categorization(Encode(d2))
+      DEFINE t3 = Categorization(Encode(d3))
+        
+      TEST Generalization([t1, t2]) = Encode("animal")
+      TEST Generalization([t1, t3]) = Encode("phrase") 
+    }
+  }
+}

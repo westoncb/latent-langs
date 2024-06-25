@@ -1,0 +1,233 @@
+CONCEPT FiniteStateMachine {
+  PARAMETERS {
+    State : TYPE
+    Input : TYPE
+    Output : TYPE
+  }
+
+  CONTEXT {
+    TYPES {
+      FSM := STRUCTURE {
+        FIELD states : SET(State)
+        FIELD initial_state : State
+        FIELD final_states : SET(State)
+        FIELD transition : FUNC(State, Input) -> State
+        FIELD output : FUNC(State, Input) -> Output
+      }
+
+      Trace := List((State, Input, Output))
+
+      Language := SET(List(Input))
+    }
+
+    STRUCTURES {
+      STRUCTURE DFA EXTENDS FSM {
+        AXIOM Deterministic {
+          ∀ s : State, i : Input . 
+            ∃! s' : State . transition(s, i) = s'
+        }
+      }
+
+      STRUCTURE NFA EXTENDS FSM {
+        OVERRIDE transition : FUNC(State, Input) -> SET(State)
+
+        AXIOM NonDeterministic {
+          ∃ s : State, i : Input . 
+            |transition(s, i)| > 1
+        }
+      }
+
+      STRUCTURE MealyMachine EXTENDS FSM {
+        AXIOM OutputDependsOnInputAndState {
+          ∀ s : State, i : Input . 
+            ∃! o : Output . output(s, i) = o
+        }
+      }
+
+      STRUCTURE MooreMachine EXTENDS FSM {
+        OVERRIDE output : FUNC(State) -> Output
+
+        AXIOM OutputDependsOnlyOnState {
+          ∀ s : State . ∃! o : Output . output(s) = o
+        }
+      }
+    }
+
+    NOTATION {
+      s ~[i/o]~> s' := (transition(s, i) = s' ∧ output(s, i) = o)
+      L(M) := Language accepted by FSM M
+      ε := EmptyString
+      s ~[w]~> s' := s reaches s' on input word w
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE Determinize(nfa : NFA) -> DFA {
+      LET dfa = DFA {
+        states = PowerSet(nfa.states),
+        initial_state = {nfa.initial_state},
+        final_states = {S ∈ PowerSet(nfa.states) | S ∩ nfa.final_states ≠ ∅},
+        transition = λ S, i . ⋃_{s ∈ S} nfa.transition(s, i),
+        output = λ S, i . CHOOSE o . ∃ s ∈ S . nfa.output(s, i) = o
+      }
+      IN dfa
+    }
+
+    SIMPLIFY MinimizeDFA(dfa : DFA) -> DFA {
+      LET equivalent = λ s1, s2 . ∀ w : List(Input) . 
+                         (s1 ~[w]~> f1 ∈ dfa.final_states) ⇔ 
+                         (s2 ~[w]~> f2 ∈ dfa.final_states)
+      LET min_states = dfa.states / equivalent  -- Quotient set
+      IN DFA {
+        states = min_states,
+        initial_state = [dfa.initial_state],  -- Equivalence class of initial state
+        final_states = {[s] | s ∈ dfa.final_states},
+        transition = λ [s], i . [dfa.transition(s, i)],
+        output = λ [s], i . dfa.output(s, i)
+      }
+    }
+
+    REWRITE NFAtoDFA(nfa : NFA) -> DFA {
+      Determinize(nfa)
+    }
+
+    REWRITE MealyToMoore(mealy : MealyMachine) -> MooreMachine {
+      LET moore = MooreMachine {
+        states = {(s, i) | s ∈ mealy.states, i ∈ Input},
+        initial_state = (mealy.initial_state, CHOOSE i . i ∈ Input),
+        final_states = {(s, i) | s ∈ mealy.final_states, i ∈ Input},
+        transition = λ (s, i), i' . (mealy.transition(s, i'), i'),
+        output = λ (s, i) . mealy.output(s, i)
+      }
+      IN moore
+    }
+  }
+
+  PROOFS {
+    THEOREM NFAEquivalentToDFA {
+      ∀ nfa : NFA . ∃ dfa : DFA . L(nfa) = L(dfa)
+    }
+    PROOF {
+      GIVEN nfa : NFA
+      LET dfa = Determinize(nfa)
+      
+      <1>. SHOW ∀ w : List(Input) . w ∈ L(nfa) ⇔ w ∈ L(dfa)
+        <1>1. (⇒) ASSUME w ∈ L(nfa)
+          ∃ path in nfa accepting w
+          ⇒ ∃ corresponding path in dfa accepting w
+          ⇒ w ∈ L(dfa)
+        <1>2. (⇐) ASSUME w ∈ L(dfa)
+          ∃ path in dfa accepting w
+          ⇒ ∃ corresponding path in nfa accepting w
+          ⇒ w ∈ L(nfa)
+        <1>3. QED BY <1>1 AND <1>2
+      
+      <2>. CONCLUDE L(nfa) = L(dfa)
+      QED
+    }
+
+    THEOREM PumpingLemma {
+      ∀ M : DFA . ∃ n : Nat . ∀ w ∈ L(M) . 
+        |w| ≥ n ⇒ ∃ x, y, z : List(Input) . 
+          w = xyz ∧ 
+          y ≠ ε ∧ 
+          |xy| ≤ n ∧ 
+          ∀ i : Nat . xy^i z ∈ L(M)
+    }
+    PROOF {
+      GIVEN M : DFA
+      LET n = |M.states|
+      
+      <1>. ASSUME w ∈ L(M) AND |w| ≥ n
+      <2>. By pigeonhole principle, ∃ state visited twice in accepting run of w
+      <3>. LET x = prefix before first visit of repeated state
+           LET y = substring between first and second visit of repeated state
+           LET z = suffix after second visit of repeated state
+      <4>. SHOW w = xyz ∧ y ≠ ε ∧ |xy| ≤ n
+        BY construction in <3>
+      <5>. SHOW ∀ i : Nat . xy^i z ∈ L(M)
+        <5>1. i = 0: xz ∈ L(M) by skipping the loop
+        <5>2. i > 0: xy^i z ∈ L(M) by repeating the loop i times
+        <5>3. QED BY <5>1 AND <5>2
+      QED
+    }
+
+    THEOREM MealyMooreEquivalence {
+      ∀ mealy : MealyMachine . ∃ moore : MooreMachine . 
+        ∀ w : List(Input) . 
+          mealy.output(mealy.initial_state, w) = 
+          moore.output(moore.transition(moore.initial_state, w))
+    }
+    PROOF {
+      GIVEN mealy : MealyMachine
+      LET moore = MealyToMoore(mealy)
+      
+      <1>. SHOW ∀ w : List(Input) . 
+             mealy.output(mealy.initial_state, w) = 
+             moore.output(moore.transition(moore.initial_state, w))
+        BY INDUCTION on |w|
+        <1>1. BASE CASE: |w| = 0
+          moore.output(moore.initial_state) = 
+          mealy.output(mealy.initial_state, CHOOSE i . i ∈ Input)
+        <1>2. INDUCTIVE STEP: w = w' · a
+          ASSUME mealy.output(mealy.initial_state, w') = 
+                 moore.output(moore.transition(moore.initial_state, w'))
+          moore.output(moore.transition(moore.initial_state, w' · a)) =
+          mealy.output(mealy.transition(mealy.initial_state, w'), a) =
+          mealy.output(mealy.initial_state, w' · a)
+        <1>3. QED BY <1>1 AND <1>2
+      
+      <2>. CONCLUDE ∃ moore : MooreMachine . 
+             ∀ w : List(Input) . 
+               mealy.output(mealy.initial_state, w) = 
+               moore.output(moore.transition(moore.initial_state, w))
+      QED
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE BinaryParity {
+      LET M = DFA {
+        states = {Even, Odd},
+        initial_state = Even,
+        final_states = {Even},
+        transition = λ s, i . MATCH (s, i) WITH
+          | (Even, 0) => Even
+          | (Even, 1) => Odd
+          | (Odd, 0) => Odd
+          | (Odd, 1) => Even,
+        output = λ s, i . MATCH s WITH
+          | Even => "Even parity"
+          | Odd => "Odd parity"
+      }
+
+      ASSERT M.transition(Even, [1,1,0,1]) = Odd
+      ASSERT [0,1,1,0,1,1] ∈ L(M)
+      ASSERT [1,0,1] ∉ L(M)
+    }
+
+    EXAMPLE TuringMachineSimulator {
+      -- Simulating a simple Turing Machine that accepts the language a^n b^n
+      LET TM = NFA {
+        states = {q0, q1, q2, q3, q4},
+        initial_state = q0,
+        final_states = {q4},
+        transition = λ s, i . MATCH (s, i) WITH
+          | (q0, 'a') => {(q1, 'X', R)}  -- Replace 'a' with 'X', move right
+          | (q1, 'a') => {(q1, 'a', R)}  -- Move right over 'a's
+          | (q1, 'b') => {(q2, 'Y', L)}  -- Replace 'b' with 'Y', move left
+          | (q2, 'a') => {(q2, 'a', L)}  -- Move left over 'a's
+          | (q2, 'X') => {(q0, 'X', R)}  -- Found 'X', go back to start
+          | (q0, 'Y') => {(q3, 'Y', R)}  -- All 'a's matched, check remaining 'b's
+          | (q3, 'Y') => {(q3, 'Y', R)}  -- Move right over 'Y's
+          | (q3, ε) => {(q4, ε, R)},     -- Reached end, accept
+        output = λ s, i . MATCH s WITH
+          | q4 => "Accept"
+          | _ => "Reject"
+      }
+
+      ASSERT [a,a,b,b] ∈ L(TM)
+      ASSERT [a,a,a,b,b] ∉ L(TM)
+    }
+  }
+}

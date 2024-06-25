@@ -1,0 +1,198 @@
+CONCEPT HigherOrderStructure {
+  NOTATION {
+    S = system
+    P(S) = powerset of S
+    Π(S) = partitions of S
+    𝓟𝓞(S) = poset of subsets/partitions of S
+    D(S) = decomposition of S, a poset 𝓟𝓞(S)
+    Q(S) = macroscopic property of S
+    q(t) = microscopic contribution of part t ∈ D(S)
+    μ_D = Möbius function of decomposition poset D
+    f (S) = 
+P
+t≤S 
+g(t)  -- Macroscopic property as sum of micro contributions
+  }
+
+  LANGUAGE {
+    TYPE System
+    TYPE Decomposition = (System) -> PartialOrder
+    TYPE Property = (System) -> Real
+    TYPE Contribution = (Any) -> Real
+    
+    FUNC decompose(S: System, Q: Property) : (Decomposition, [Contribution]) = {
+      LET D = chooseDecomposition(S, Q)  -- Select decomposition based on system & property
+      LET contribs = [t => Q(S) for t in D(S)]  -- Initialize to macro property value
+      LET contribs = mobiusInvert(D, contribs)  -- Invert to get micro contributions
+      (D, contribs)
+    }
+    
+    FUNC mobiusInvert(D: Decomposition, f : [Contribution]) : [Contribution] =
+      [t => SUM[s <= t] mobius(D)(s, t) * f (s) for t in D(S)]
+
+    FUNC mobius(D: Decomposition) : ((Any, Any) -> Int) = MATCH D WITH
+      | PowersetLattice => (s, t) => IF s <= t THEN (-1)^(|t| - |s|) ELSE 0
+      | PartitionLattice => (s, t) => IF s <= t THEN (-1)^(|s| - 1) * (|s| - 1)! ELSE 0
+      | RedundancyPoset => redundancyMobius  -- Complicated, see PID paper
+      | _ => ABSTRACT  -- Unspecified for general partial orders
+      
+    AXIOM MobiusFundamentalTheorem: ∀ D: Decomposition, f , g: [Contribution] .
+      (∀t. f(t) = SUM[s <= t] g(s)) <=> (∀t. g(t) = SUM[s <= t] mobius(D)(s,t) * f(s))
+  }
+
+  TRANSFORMERS {
+    -- Approximations of q by truncating sums over D(S)
+    REWRITE LowestOrderApproximation : 
+      Q(S) -> SUM[t in AtomicParts(D(S))] q(t)
+      
+    REWRITE PairwiseApproximation :  
+      Q(S) -> SUM[t in AtomicParts(D(S)) | PairwiseParts(D(S))] q(t)
+
+    -- Exploiting symmetries/invariances of D(S) to simplify inversion 
+    REWRITE PartitionSymmetry : 
+      mobius(PartitionLattice)(π, 
+    ˆ
+    1) -> (-1)^(|π|-1) * (|π|-1)!
+          
+        REWRITE PartitionMobiusInversionFormula :
+          f (
+    ˆ
+    1) = SUM[π in PartitionLattice] g(π) <=> 
+          g(
+    ˆ
+    1) = SUM[π in PartitionLattice] mobius(π, 
+    ˆ
+    1) * f (π)
+  }
+
+  PROOFS {
+    THEOREM MobiusInversion: ∀ S: System, Q: Property . 
+      LET (D, q) = decompose(S, Q) IN
+        Q(S) == SUM[t in D(S)] q(t)
+    {
+      GIVEN S: System, Q: Property
+      LET (D, q) = decompose(S, Q)
+      
+      SUM[t in D(S)] q(t)
+        == SUM[t in D(S)] SUM[s <= t] mobius(D)(s, t) * Q(s)  BY DEF of q
+        == SUM[s in D(S)] Q(s) * SUM[t >= s] mobius(D)(s, t)  BY rearranging sums
+        == SUM[s in D(S)] Q(s) * kronecker(s, S)               BY MobiusFundamentalTheorem
+        == Q(S)                                                  
+      QED
+    }
+  }
+
+  EXAMPLES {
+    -- Statistics 
+    EXAMPLE Moments : HigherOrderStructure = {
+      S = RandomVariables,
+      D(S) = PowersetLattice(S),
+      Q(S) = ExpectedValue(PROD[X in S] X), -- Mixed moment
+      q = CentralMoments
+    }
+
+    EXAMPLE Cumulants : HigherOrderStructure = {
+      S = RandomVariables,  
+      D(S) = PartitionLattice(S),
+      Q(S) = ExpectedValue(PROD[X in S] X), -- Mixed moment
+      q = Cumulants
+    }
+
+    -- Information Theory
+    EXAMPLE MutualInformation : HigherOrderStructure = {
+      S = RandomVariables,
+      D(S) = PowersetLattice(S), 
+      Q(S) = JointEntropy(S),
+      q = InteractionInformation  
+    }
+
+    EXAMPLE PartialInformationDecomposition : HigherOrderStructure = {
+      S = (InputVariables, OutputVariable),
+      D(S) = RedundancyLattice(S), -- Lattice of antichains of input powerset  
+      Q(S) = MutualInformation(S),
+      q = PartialInformationAtoms
+    }
+
+    -- Biology
+    EXAMPLE GeneticInteractions : HigherOrderStructure = {
+      S = GeneticVariants,
+      D(S) = PowersetLattice(S),
+      Q(S) = Phenotype(VariantPresence(S)),
+      q = EpistaticInteractions  
+    }
+
+    EXAMPLE TranscriptomicInteractions : HigherOrderStructure = {
+      S = Genes, 
+      D(S) = PowersetLattice(S),
+      Q(S) = -Log(Probability(ExpressionPattern(S))),
+      q = TranscriptomicInteractions
+    }
+    
+    EXAMPLE SynergisticDrugEffects : HigherOrderStructure = {
+      S = Drugs,
+      D(S) = PowersetLattice(S),
+      Q(S) = ExpectedValue(TreatmentEffect(S)),  
+      q = SynergisticInteractions
+    }
+
+    -- Physics  
+    EXAMPLE IsingModel : HigherOrderStructure = {
+      S = SpinSites,
+      D(S) = PowersetLattice(S),
+      Q(S) = -Log(Probability(SpinConfiguration(S))), -- Energy 
+      q = SpinInteractions
+    }
+    
+    EXAMPLE nPointFunctions : HigherOrderStructure = {
+      S = PositionTimes,
+      D(S) = PartitionLattice(S),
+      Q(S) = VacuumExpectation(TimeOrderedProduct(FieldsAt(S))),
+      q = CumulantsGraphs -- Ursell functions/connected correlations
+    }
+
+    -- Chemistry
+    EXAMPLE MolecularProperty : HigherOrderStructure = {
+      S = MolecularStructure, 
+      D(S) = Subgraphs(S),
+      Q(S) = MolecularProperty(S),
+      q = FragmentContributions
+    }
+
+    EXAMPLE ChemicalSubstructureClusters : HigherOrderStructure = {
+      S = ChlorinationSites,
+      D(S) = ReactionPoset(S),  -- Poset of chlorination states
+      Q(S) = ChemicalProperty(S),
+      q = ClusterContributions 
+    }
+
+    -- Game Theory
+    EXAMPLE CoalitionSynergy : HigherOrderStructure = {
+      S = Players,
+      D(S) = PowersetLattice(S),
+      Q(S) = CoalitionValue(S), 
+      q = CoalitionSynergy
+    }
+
+    EXAMPLE ShapleyValues : HigherOrderStructure = {
+      S = Players,
+      D(S) = PowersetLattice(S),
+      Q(S) = PlayerPayoff(S),
+      q = AveragedMarginalContributions
+    }
+     
+    -- Machine Learning
+    EXAMPLE RBMFeatureInteractions : HigherOrderStructure = {
+      S = FeatureDetectors,
+      D(S) = PowersetLattice(S), 
+      Q(S) = -Log(Probability(FeatureActivationPattern(S))), -- Energy
+      q = FeatureInteractions  
+    }
+     
+    EXAMPLE PredictionFeatureContributions : HigherOrderStructure = {
+      S = Features,
+      D(S) = PowersetLattice(S),
+      Q(S) = Prediction(FeatureValues(S)),
+      q = FeatureContributions
+    }
+  }
+}

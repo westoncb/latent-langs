@@ -1,0 +1,119 @@
+CONCEPT CompressedSensingWithSparsity {
+  DECLARE {
+    Signal : TYPE
+    SparseSignal : TYPE = {s : Signal | ∃Ω ⊆ Domain(s). |Ω| ≪ |Domain(s)| ∧ ∀i ∉ Ω. s(i) = 0}
+    Measurement : TYPE = Signal -> ℝ
+    SensingMatrix : TYPE = ℝ^(m × n)
+    Dictionary : TYPE = ℝ^(n × p)
+    
+    L0Norm : TYPE = Signal -> ℕ
+    L1Norm : TYPE = Signal -> ℝ
+    L2Norm : TYPE = Signal -> ℝ
+    
+    MutualCoherence : TYPE = SensingMatrix × Dictionary -> ℝ
+    RestrictedIsometry : TYPE = SensingMatrix × ℕ -> 𝔹
+    
+    BasisPursuit : TYPE = [Measurement] × SensingMatrix -> Signal
+    OrthogonalMatchingPursuit : TYPE = [Measurement] × SensingMatrix × ℕ -> SparseSignal
+    
+    SparseRecovery : TYPE = SparseSignal × SensingMatrix × [Measurement] -> SparseSignal
+  }
+  
+  DEFINE {
+    ; L0 norm (sparsity) of a signal
+    L0Norm(s) ≜ |{i ∈ Domain(s) | s(i) ≠ 0}|
+    
+    ; L1 norm of a signal  
+    L1Norm(s) ≜ ∑{i ∈ Domain(s)} |s(i)|
+    
+    ; L2 norm (Euclidean) of a signal
+    L2Norm(s) ≜ √(∑{i ∈ Domain(s)} s(i)^2)
+    
+    ; Mutual coherence of a sensing matrix and dictionary
+    MutualCoherence(A, Ψ) ≜ max{⟨A_i, Ψ_j⟩ | i ∈ [m], j ∈ [p], i ≠ j} / (∥A_i∥_2 * ∥Ψ_j∥_2)
+    
+    ; Restricted isometry property of a sensing matrix
+    RestrictedIsometry(A, k) ≜ ∀s ∈ SparseSignal. L0Norm(s) ≤ k ⇒ 
+      (1 - δ_k) * ∥s∥_2^2 ≤ ∥A * s∥_2^2 ≤ (1 + δ_k) * ∥s∥_2^2
+    
+    ; Basis pursuit recovery algorithm
+    BasisPursuit(y, A) ≜ argmin{∥s∥_1 | A * s = y}
+    
+    ; Orthogonal matching pursuit recovery algorithm  
+    OrthogonalMatchingPursuit(y, A, k) ≜ {
+      let r = y
+      let Ω = {}
+      repeat k times {
+        let i = argmax{|⟨r, A_j⟩| | j ∈ [n]}
+        let Ω = Ω ∪ {i}
+        let P_Ω = A_Ω * (A_Ω^T * A_Ω)^(-1) * A_Ω^T
+        let r = (I - P_Ω) * y
+      }
+      return s with Support(s) = Ω and A_Ω * s_Ω = P_Ω * y
+    }
+  }
+  
+  AXIOM {
+    ; Sparse signals have small L0 norm
+    ∀s ∈ SparseSignal. L0Norm(s) ≪ |Domain(s)|
+    
+    ; L1 norm is a convex relaxation of L0 norm 
+    ∀s ∈ Signal. L1Norm(s) ≤ √(L0Norm(s)) * L2Norm(s)
+    
+    ; Mutual coherence bounds the restricted isometry constant
+    ∀A ∈ SensingMatrix, Ψ ∈ Dictionary, k ∈ ℕ.
+      MutualCoherence(A, Ψ) < 1 / (2 * k - 1) ⇒ RestrictedIsometry(A * Ψ, k)
+    
+    ; Sparse recovery is possible under restricted isometry
+    ∀s ∈ SparseSignal, A ∈ SensingMatrix, y ∈ [Measurement].
+      RestrictedIsometry(A, 2 * L0Norm(s)) ⇒ 
+      L2Norm(SparseRecovery(s, A, [⟨A_i, s⟩ | i ∈ [m]]) - s) ≤ C * L1Norm(s - s_k) / √k
+        where s_k = argmin{∥s - z∥_1 | L0Norm(z) ≤ k}
+  }
+  
+  THEOREM BasisPursuitRecovery {
+    PROOF {
+      assume s ∈ SparseSignal, A ∈ SensingMatrix, y = [⟨A_i, s⟩ | i ∈ [m]]
+      assume RestrictedIsometry(A, 2 * k) for k = L0Norm(s)
+      
+      let s' = BasisPursuit(y, A)
+      
+      have L1Norm(s') ≤ L1Norm(s) by optimality of basis pursuit
+      have L2Norm(s' - s) ≤ C * L1Norm(s - s_k) / √k for s_k = s by sparse recovery axiom
+      hence L2Norm(s' - s) ≤ C * 0 / √k = 0
+      
+      show s' = s by properties of L2 norm
+    }
+  }
+  
+  THEOREM OrthogonalMatchingPursuitRecovery {
+    PROOF {
+      assume s ∈ SparseSignal, A ∈ SensingMatrix, y = [⟨A_i, s⟩ | i ∈ [m]]
+      assume MutualCoherence(A, I) < 1 / (2 * k - 1) for k = L0Norm(s)
+      
+      let s' = OrthogonalMatchingPursuit(y, A, k)
+      
+      have Support(s') ⊆ Support(s) by construction of OMP
+      have A_Support(s') * s'_Support(s') = P_Support(s') * y by construction of OMP
+      hence A_Support(s') * s'_Support(s') = A_Support(s') * s_Support(s')
+      
+      have RestrictedIsometry(A, k) by mutual coherence axiom
+      hence (1 - δ_k) * ∥s'∥_2^2 ≤ ∥A * s'∥_2^2 ≤ (1 + δ_k) * ∥s'∥_2^2
+      have (1 - δ_k) * ∥s∥_2^2 ≤ ∥A * s∥_2^2 ≤ (1 + δ_k) * ∥s∥_2^2
+      
+      calc {
+        ∥s' - s∥_2^2 
+          = ∥s'∥_2^2 + ∥s∥_2^2 - 2 * ⟨s', s⟩
+          ≤ (1 + δ_k) / (1 - δ_k) * ∥s∥_2^2 + ∥s∥_2^2 - 2 * ⟨s'_Support(s), s_Support(s)⟩
+          = (1 + δ_k) / (1 - δ_k) * ∥s∥_2^2 +
+          = (1 + δ_k) / (1 - δ_k) * ∥s∥_2^2 + ∥s∥_2^2 - 2 * ⟨s'_Support(s), s_Support(s)⟩
+          = (1 + δ_k) / (1 - δ_k) * ∥s∥_2^2 + ∥s∥_2^2 - 2 * ∥s_Support(s)∥_2^2
+          = ((1 + δ_k) / (1 - δ_k) - 1) * ∥s∥_2^2
+          ≤ 4 * δ_k / (1 - δ_k) * ∥s∥_2^2
+          ≤ 8 * δ_k * ∥s∥_2^2  ; for δ_k ≤ 1/2
+      }
+      
+      show ∥s' - s∥_2 ≤ √(8 * δ_k) * ∥s∥_2 by properties of L2 norm
+    }
+  }
+}

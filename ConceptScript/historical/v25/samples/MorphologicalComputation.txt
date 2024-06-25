@@ -1,0 +1,141 @@
+CONCEPT MorphologicalComputation {
+  IMPORTS {
+    ShapeSpace
+  }
+
+  LANGUAGE {
+    TYPE Morphology <: Shape
+    TYPE Cell <: Shape
+    TYPE Tissue <: Shape
+    TYPE GeneExpression
+    TYPE BioelectricSignal
+    TYPE MorphogeneticField
+
+    FUNC Cells(M : Morphology) : List[Cell]
+    FUNC Tissues(M : Morphology) : List[Tissue]  
+    FUNC GeneExpr(C : Cell) : GeneExpression
+    FUNC VoltageGradient(T : Tissue) : BioelectricSignal
+    FUNC MorphField(M : Morphology) : MorphogeneticField
+
+    PRED Regenerates(M : Morphology, M' : Morphology) : 𝔹
+    PRED Develops(M : Morphology, M' : Morphology) : 𝔹
+    PRED Homeostasis(M : Morphology) : 𝔹
+
+    AXIOM MorphologicalInformation :
+      ∀ (M : Morphology) . 
+        PHTSheaf(M) ≃ Encode(GeneExpr(Cells(M)), VoltageGradient(Tissues(M)), MorphField(M))
+
+    AXIOM RegenerationStability :  
+      ∀ (M M' : Morphology) .
+        Regenerates(M, M') ⇒ ∃ (ε : R^>0) . M ≃[ε] M'
+
+    AXIOM DevelopmentDirectionality :
+      ∀ (M M' M'' : Morphology) .
+        Develops(M, M') ∧ Develops(M', M'') ⇒ 
+        InterleavingDist(PHTSheaf(M), PHTSheaf(M'')) > 
+        InterleavingDist(PHTSheaf(M), PHTSheaf(M'))
+        
+    AXIOM HomeostasisAttractor :
+      ∀ (M : Morphology) .
+        Homeostasis(M) ⇔ 
+        (∀ (ε : R^>0) . ∃ (δ : R^>0) . ∀ (M' : Morphology) . 
+           InterleavingDist(PHTSheaf(M), PHTSheaf(M')) < δ ⇒ 
+           ◇(InterleavingDist(PHTSheaf(M), PHTSheaf(M')) < ε))
+  }
+
+  STRUCTURE MorphologicallyComputedFunction {
+    FUNC Value(M : Morphology) : PHTData =
+      PHTSheaf(M)(Direction.ZERO)
+        WHERE Direction.ZERO is a distinguished "read-out" direction.
+
+    REQUIRE ∀ (M M' : Morphology) .
+      Develops(M, M') ⇒ Value(M') ≃ Apply(Value(M), MorphField(M'))
+        WHERE Apply is a computable function on PHTData  
+          representing the dynamics of the morphogenetic field.
+  }
+
+  PROOFS {
+    THEOREM RegenerationInvariance {  
+      STATEMENT:
+        ∀ (M M' : Morphology) (f : MorphologicallyComputedFunction) .
+          Regenerates(M, M') ⇒ f.Value(M) ≃ f.Value(M')  
+
+      PROOF:
+        LET M M' : Morphology SUCH THAT Regenerates(M, M')
+        
+        HAVE ∃ (ε : R^>0) . M ≃[ε] M'  
+          BY RegenerationStability
+        
+        HAVE PHTSheaf(M) ≃ PHTSheaf(M')
+          BY StabilityOfPHT
+        
+        HENCE f.Value(M) ≃ PHTSheaf(M)(Direction.ZERO) 
+                ≃ PHTSheaf(M')(Direction.ZERO) ≃ f.Value(M')
+          BY PHTSheaf properties and direction invariance under homotopy
+    }
+
+    THEOREM DevelopmentComputation {
+      STATEMENT:  
+        ∀ (M M' : Morphology) (f : MorphologicallyComputedFunction) .
+          Develops(M, M') ⇒ f.Value(M') ≃ Apply(f.Value(M), MorphField(M'))
+
+      PROOF:  
+        DIRECT CONSEQUENCE of MorphologicallyComputedFunction.REQUIRE
+    }
+    
+    THEOREM HomeostasisRobustness {
+      STATEMENT:
+        ∀ (M : Morphology) (f : MorphologicallyComputedFunction) .
+          Homeostasis(M) ⇒ 
+          ∀ (ε : R^>0) . ∃ (δ : R^>0) . ∀ (M' : Morphology) .
+            InterleavingDist(PHTSheaf(M), PHTSheaf(M')) < δ ⇒ 
+            InterleavingDist(f.Value(M), f.Value(M')) < ε
+
+      PROOF:
+        LET M : Morphology SUCH THAT Homeostasis(M)
+        LET f : MorphologicallyComputedFunction
+        LET ε : R^>0
+        
+        HAVE ∃ (δ : R^>0) . ∀ (M' : Morphology) .
+          InterleavingDist(PHTSheaf(M), PHTSheaf(M')) < δ ⇒
+          ◇(InterleavingDist(PHTSheaf(M), PHTSheaf(M')) < ε)
+            BY HomeostasisAttractor
+        
+        LET δ : R^>0 WITNESS the above  
+        
+        LET M' : Morphology SUCH THAT 
+          InterleavingDist(PHTSheaf(M), PHTSheaf(M')) < δ
+        
+        HENCE InterleavingDist(f.Value(M), f.Value(M')) =
+                InterleavingDist(PHTSheaf(M)(Direction.ZERO), PHTSheaf(M')(Direction.ZERO))
+              ≤ InterleavingDist(PHTSheaf(M), PHTSheaf(M'))  
+                BY PHTSheaf stability property
+              < ε  
+                BY choice of δ and M'
+    }
+  }
+}
+
+The key ideas are:
+
+We introduce types for Morphology (a subtype of Shape representing the shape of a biological system), Cell, Tissue, GeneExpression, BioelectricSignal, and MorphogeneticField.
+The Cells and Tissues functions decompose a Morphology into its constituent parts. The GeneExpr, VoltageGradient, and MorphField functions extract different types of information from a Morphology.
+The Regenerates, Develops, and Homeostasis predicates characterize key properties of morphological dynamics.
+The MorphologicalInformation axiom posits that the PHT sheaf of a Morphology encodes the relevant genetic, bioelectric, and morphogenetic information.
+The RegenerationStability axiom states that if a Morphology regenerates to another, they are homotopy equivalent (close in the ShapeSpace metric).
+The DevelopmentDirectionality axiom states that development proceeds in a direction of increasing distance in ShapeSpace.
+The HomeostasisAttractor axiom characterizes homeostasis as a kind of attractor in ShapeSpace: small perturbations are corrected over time.
+We define a MorphologicallyComputedFunction as a function whose value is read out from the PHT sheaf in a distinguished direction, and which commutes with morphological development.
+The RegenerationInvariance theorem states that morphologically computed functions are invariant under regeneration.
+The DevelopmentComputation theorem states that morphological development implements a computation on morphologically computed functions.
+The HomeostasisRobustness theorem states that morphologically computed functions are robust to small perturbations in homeostatic morphologies.
+
+This Concept illustrates how ShapeSpace and the PHT sheaf could provide a formal framework for expressing and reasoning about Levin's ideas on morphological computation.
+The key insights are:
+
+Morphological states (as characterized by the PHT sheaf) encode biologically relevant information.
+Morphological dynamics (development, regeneration, homeostasis) correspond to trajectories and attractors in ShapeSpace.
+Biological processes can be viewed as computations on morphological states.
+ShapeSpace provides a metric for quantifying the stability, directionality, and robustness of these morphological computations.
+
+Of course, this is a highly abstract and simplified model. Much work would be needed to connect these formal concepts to real biological systems. But it suggests some intriguing directions for formalizing and extending Levin's ideas using the tools of topological data analysis and sheaf theory.

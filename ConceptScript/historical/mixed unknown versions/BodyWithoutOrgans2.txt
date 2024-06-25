@@ -1,0 +1,182 @@
+CONCEPT BodyWithoutOrgans {
+  LANGUAGE {
+    type Intensity = Flow(String) | Sensation(String) | Affect(String)
+    type Multiplicity = Set(Intensity)
+    type Organ = Stratum(String) | PartialObject(String)
+    type Body = OrganicBody(Set(Organ)) | BodyWithoutOrgans(Multiplicity)
+
+    pred isSmooth(b: Body)
+    pred isStratified(b: Body)
+    pred isOrganized(b: Body)
+    pred hasFlows(b: Body)
+    pred hasSensations(b: Body)
+    pred hasAffects(b: Body)
+    pred isPlane(b: Body)
+    pred isImmanent(b: Body)
+    pred opposes(b1: Body, b2: Body)
+    pred transforms(b1: Body, b2: Body)
+
+    notation "b1 + b2" = Union(b1, b2)
+    notation "b1 - b2" = Difference(b1, b2)
+    notation "b1 × b2" = Product(b1, b2)
+
+    func destratify(b: Body): Body
+    func restratify(b: Body): Body
+
+    infer Destratification(b: Body):
+      isStratified(b) --> isSmooth(destratify(b))
+
+    infer Restratification(b: Body):
+      isSmooth(b) --> isStratified(restratify(b))
+
+    infer SmoothImmanence(b: Body):
+      isSmooth(b) --> isPlane(b) ∧ isImmanent(b)
+
+    infer StratifiedTranscendence(b: Body):
+      isStratified(b) --> ¬isPlane(b) ∧ ¬isImmanent(b)
+
+    infer OrganicStratification(b: Body):
+      isOrganized(b) --> isStratified(b)
+
+    infer AnOrganicDestratification(b: Body):
+      ¬isOrganized(b) --> isSmooth(b)
+
+    rewrite IntensityFlow(i: Intensity):
+      hasFlows(BodyWithoutOrgans(Multiplicity(i))) ~> i is Flow
+
+    rewrite IntensitySensation(i: Intensity):
+      hasSensations(BodyWithoutOrgans(Multiplicity(i))) ~> i is Sensation
+
+    rewrite IntensityAffect(i: Intensity):
+      hasAffects(BodyWithoutOrgans(Multiplicity(i))) ~> i is Affect
+  }
+
+  STRUCTURE {
+    isSmooth(BodyWithoutOrgans(m)) ⟺ ∀i ∈ m. i is Flow ∨ i is Sensation ∨ i is Affect
+    isStratified(OrganicBody(o)) ⟺ ∀x ∈ o. x is Stratum
+    isOrganized(OrganicBody(o)) ⟺ ∀x ∈ o. x is Organ
+    hasFlows(BodyWithoutOrgans(m)) ⟺ ∃i ∈ m. i is Flow
+    hasSensations(BodyWithoutOrgans(m)) ⟺ ∃i ∈ m. i is Sensation
+    hasAffects(BodyWithoutOrgans(m)) ⟺ ∃i ∈ m. i is Affect
+    isPlane(BodyWithoutOrgans(_)) ⟺ ⊤
+    isImmanent(BodyWithoutOrgans(_)) ⟺ ⊤
+    opposes(BodyWithoutOrgans(_), OrganicBody(_)) ⟺ ⊤
+    transforms(b1, b2) ⟺ ∃m. b2 = destratify(restratify(b1) + OrganicBody(m))
+  }
+
+  PROOFS {
+    theorem AnOrganicBodyWithoutOrgans: ∀b: Body. ¬isOrganized(b) ⟺ isSmooth(b) ∧ hasFlows(b) ∧ hasSensations(b) ∧ hasAffects(b)
+    {
+      assume b: Body
+
+      ; Prove the forward direction
+      by AnOrganicDestratification have ¬isOrganized(b) ⟹ isSmooth(b)
+
+      assume ¬isOrganized(b)
+      assume isSmooth(b)
+
+      b is BodyWithoutOrgans(m) for some m: Multiplicity by {
+        b is OrganicBody(o) for some o: Set(Organ) ⟹ isOrganized(b)
+        hence ¬(b is OrganicBody)
+        hence b is BodyWithoutOrgans
+      }
+
+      let m: Multiplicity such that b = BodyWithoutOrgans(m)
+
+      ∀i ∈ m. i is Flow ∨ i is Sensation ∨ i is Affect by {
+        isSmooth(BodyWithoutOrgans(m)) ⟺ ∀i ∈ m. i is Flow ∨ i is Sensation ∨ i is Affect
+      }
+
+      hence hasFlows(b) ∧ hasSensations(b) ∧ hasAffects(b)
+
+      ; Prove the backward direction
+      assume isSmooth(b) ∧ hasFlows(b) ∧ hasSensations(b) ∧ hasAffects(b)
+
+      b is BodyWithoutOrgans(m) for some m: Multiplicity by {
+        isSmooth(b) ⟺ b is BodyWithoutOrgans
+      }
+
+      let m: Multiplicity such that b = BodyWithoutOrgans(m)
+
+      ¬isOrganized(b) by {
+        isOrganized(b) ⟹ b is OrganicBody
+        b is OrganicBody ⟹ ¬isSmooth(b)
+        hence ¬isOrganized(b)
+      }
+    }
+
+    theorem BodyWithoutOrgansImmanence: ∀b: Body. isSmooth(b) ⟺ isPlane(b) ∧ isImmanent(b)
+    {
+      by SmoothImmanence, StratifiedTranscendence
+    }
+
+    theorem OrganicBodyStratification: ∀b: Body. isOrganized(b) ⟺ isStratified(b)
+    {
+      by OrganicStratification, AnOrganicDestratification
+    }
+
+    theorem BodyWithoutOrgansOpposition: ∀b1, b2: Body. opposes(b1, b2) ⟺ isSmooth(b1) ∧ isStratified(b2)
+    {
+      assume b1, b2: Body
+
+      ; Prove the forward direction
+      assume opposes(b1, b2)
+
+      b1 is BodyWithoutOrgans and b2 is OrganicBody by {
+        opposes(BodyWithoutOrgans(_), OrganicBody(_)) ⟺ ⊤
+      }
+
+      isSmooth(b1) by {
+        b1 is BodyWithoutOrgans ⟹ isSmooth(b1)
+      }
+
+      isStratified(b2) by {
+        b2 is OrganicBody ⟹ isOrganized(b2) ⟹ isStratified(b2)
+      }
+
+      ; Prove the backward direction  
+      assume isSmooth(b1) ∧ isStratified(b2)
+
+      b1 is BodyWithoutOrgans by {
+        isSmooth(b1) ⟹ b1 is BodyWithoutOrgans
+      }
+
+      b2 is OrganicBody by {
+        isStratified(b2) ⟹ ¬isSmooth(b2)
+        ¬isSmooth(b2) ⟹ b2 is OrganicBody
+      }
+
+      hence opposes(b1, b2)
+    }
+
+    theorem BodyTransformation: ∀b1, b2: Body. transforms(b1, b2) ⟺ ∃o: Set(Organ). b2 = destratify(restratify(b1) + OrganicBody(o))
+    {
+      assume b1, b2: Body
+
+      ; Prove the forward direction
+      assume transforms(b1, b2)
+
+      ∃m. b2 = destratify(restratify(b1) + OrganicBody(m)) by {
+        transforms(b1, b2) ⟺ ∃m. b2 = destratify(restratify(b1) + OrganicBody(m))
+      }
+
+      let m such that b2 = destratify(restratify(b1) + OrganicBody(m))
+
+      m: Set(Organ) by {
+        OrganicBody(m) is OrganicBody
+        m: Set(Organ)
+      }
+
+      ; Prove the backward direction
+      assume ∃o: Set(Organ). b2 = destratify(restratify(b1) + OrganicBody(o))
+
+      let o: Set(Organ) such that b2 = destratify(restratify(b1) + OrganicBody(o))
+
+      transforms(b1, b2) by {
+        b2 = destratify(restratify(b1) + OrganicBody(o))
+        ⟹ ∃m. b2 = destratify(restratify(b1) + OrganicBody(m))
+        ⟹ transforms(b1, b2)
+      }
+    }
+  }
+}

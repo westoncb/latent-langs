@@ -1,0 +1,233 @@
+CONCEPT Metaphor {
+  PARAMETERS {
+    Language : TYPE
+    Concept : TYPE
+    Context : TYPE
+  }
+
+  CONTEXT {
+    TYPES {
+      Domain := SET(Concept)
+      
+      ConceptualMapping := FUNC(Concept, Domain) -> Concept
+      
+      MetaphorStructure := STRUCTURE {
+        FIELD source : Domain
+        FIELD target : Domain
+        FIELD mapping : ConceptualMapping
+      }
+      
+      LinguisticExpression := FUNC(Language, Context) -> String
+      
+      ConceptualMetaphor := STRUCTURE {
+        FIELD name : String
+        FIELD structure : MetaphorStructure
+        FIELD expressions : SET(LinguisticExpression)
+      }
+      
+      MetaphorComprehension := FUNC(LinguisticExpression, Context) -> ConceptualMetaphor
+      
+      MetaphorGeneration := FUNC(ConceptualMetaphor, Context) -> LinguisticExpression
+      
+      Entailment := FUNC(ConceptualMetaphor) -> SET(Concept)
+      
+      BlendedSpace := STRUCTURE {
+        FIELD input_spaces : SET(Domain)
+        FIELD generic_space : Domain
+        FIELD blended_space : Domain
+        FIELD composition : FUNC(SET(Domain)) -> Domain
+        FIELD completion : FUNC(Domain) -> Domain
+        FIELD elaboration : FUNC(Domain) -> Domain
+      }
+    }
+
+    STRUCTURES {
+      STRUCTURE ImageSchema {
+        FIELD name : String
+        FIELD structure : FUNC(Concept) -> Bool
+        
+        FUNC instantiate(c : Concept) -> Bool {
+          RETURN structure(c)
+        }
+      }
+      
+      STRUCTURE ConceptualIntegrationNetwork {
+        FIELD input_spaces : SET(Domain)
+        FIELD generic_space : Domain
+        FIELD blended_space : BlendedSpace
+        FIELD cross_space_mappings : SET((Domain, Domain, ConceptualMapping))
+        
+        FUNC blend() -> Domain {
+          LET composed = blended_space.composition(input_spaces)
+          LET completed = blended_space.completion(composed)
+          RETURN blended_space.elaboration(completed)
+        }
+      }
+    }
+
+    ASSERTIONS {
+      AXIOM InvariantStructure {
+        FORALL (m : ConceptualMetaphor) .
+          EXIST (schema : ImageSchema) .
+            schema.instantiate(m.structure.source) AND
+            schema.instantiate(m.structure.target)
+      }
+      
+      AXIOM PartialMapping {
+        FORALL (m : ConceptualMetaphor) .
+          |DOMAIN(m.structure.mapping)| < |m.structure.source|
+      }
+      
+      AXIOM UnidirectionalMapping {
+        FORALL (m : ConceptualMetaphor) .
+          NOT EXIST (inverse_m : ConceptualMetaphor) .
+            inverse_m.structure.source = m.structure.target AND
+            inverse_m.structure.target = m.structure.source
+      }
+    }
+
+    NOTATION {
+      source IS target := ConceptualMetaphor with source and target domains
+      A -> B := ConceptualMapping from A to B
+      blend(X, Y) := Blended space of X and Y
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE ExtendMetaphor(m : ConceptualMetaphor, new_mapping : ConceptualMapping) -> ConceptualMetaphor {
+      LET extended_mapping = λ c, d . 
+        IF c IN DOMAIN(new_mapping) THEN new_mapping(c, d)
+        ELSE m.structure.mapping(c, d)
+      RETURN ConceptualMetaphor {
+        name = m.name + "_extended",
+        structure = MetaphorStructure {
+          source = m.structure.source,
+          target = m.structure.target,
+          mapping = extended_mapping
+        },
+        expressions = m.expressions  -- May need to be updated based on new mapping
+      }
+    }
+    
+    SIMPLIFY ComposeMetaphors(m1 : ConceptualMetaphor, m2 : ConceptualMetaphor) -> ConceptualMetaphor {
+      REQUIRE m1.structure.target = m2.structure.source
+      RETURN ConceptualMetaphor {
+        name = m1.name + "_" + m2.name,
+        structure = MetaphorStructure {
+          source = m1.structure.source,
+          target = m2.structure.target,
+          mapping = λ c, d . m2.structure.mapping(m1.structure.mapping(c, m1.structure.target), d)
+        },
+        expressions = m1.expressions ∪ m2.expressions  -- Simplified union, may need refinement
+      }
+    }
+  }
+
+  PROOFS {
+    THEOREM MetaphorCreativity {
+      FORALL (m : ConceptualMetaphor, c : Context) .
+        EXIST (e : LinguisticExpression) .
+          e IN m.expressions AND
+          NOT PreviouslyObserved(e, c)
+    }
+    PROOF {
+      GIVEN m : ConceptualMetaphor, c : Context
+      
+      <1>. LET novel_concept = FindNovelMapping(m.structure.mapping, c)
+      <2>. LET novel_expression = MetaphorGeneration(m, c, novel_concept)
+      <3>. novel_expression IN m.expressions BY definition of MetaphorGeneration
+      <4>. NOT PreviouslyObserved(novel_expression, c) BY novelty of mapping
+      <5>. HENCE e = novel_expression satisfies the theorem
+      
+      QED
+    }
+
+    THEOREM ConceptualBlendingEmergence {
+      FORALL (cin : ConceptualIntegrationNetwork) .
+        EXIST (concept : Concept) .
+          concept IN cin.blend() AND
+          FORALL (space : Domain) . space IN cin.input_spaces =>
+            concept NOT IN space
+    }
+    PROOF {
+      GIVEN cin : ConceptualIntegrationNetwork
+      
+      <1>. LET blended = cin.blend()
+      <2>. blended includes composition, completion, and elaboration steps
+      <3>. completion introduces background knowledge not in input spaces
+      <4>. elaboration can produce novel inferences
+      <5>. LET novel_concept = FirstNovelConcept(blended, cin.input_spaces)
+      <6>. novel_concept IN blended BY <5>
+      <7>. FORALL (space : Domain) . space IN cin.input_spaces =>
+             novel_concept NOT IN space BY definition of FirstNovelConcept
+      <8>. HENCE concept = novel_concept satisfies the theorem
+      
+      QED
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE LoveIsJourney {
+      LET love_journey = ConceptualMetaphor {
+        name = "LOVE_IS_A_JOURNEY",
+        structure = MetaphorStructure {
+          source = {traveler, vehicle, destination, obstacles},
+          target = {lover, relationship, goals, difficulties},
+          mapping = {
+            traveler -> lover,
+            vehicle -> relationship,
+            destination -> relationship_goals,
+            obstacles -> relationship_difficulties
+          }
+        },
+        expressions = {
+          λ lang, ctx . "We've come a long way",
+          λ lang, ctx . "We're at a crossroads",
+          λ lang, ctx . "Look how far we've come",
+          λ lang, ctx . "It's been a bumpy road"
+        }
+      }
+      
+      COMPUTE entailments = Entailment(love_journey)
+      ASSERT "progress_in_journey" -> "progress_in_relationship" IN entailments
+      
+      LET context = Context { language = "English", culture = "Western" }
+      COMPUTE novel_expression = MetaphorGeneration(love_journey, context)
+      ASSERT NOT PreviouslyObserved(novel_expression, context)
+      
+      VISUALIZE ConceptualMappingDiagram(love_journey) 
+        AS "LOVE IS A JOURNEY Conceptual Mapping"
+    }
+    
+    EXAMPLE TimeIsMoneyBlend {
+      LET time_domain = Domain { time, duration, activities }
+      LET money_domain = Domain { money, quantity, transactions }
+      
+      LET time_is_money = ConceptualIntegrationNetwork {
+        input_spaces = {time_domain, money_domain},
+        generic_space = { resource, amount, use },
+        blended_space = BlendedSpace {
+          input_spaces = {time_domain, money_domain},
+          generic_space = { resource, amount, use },
+          blended_space = { },  -- To be filled by blend operation
+          composition = λ spaces . UnionOf(spaces),
+          completion = λ space . AddBackgroundKnowledge(space, "economic_principles"),
+          elaboration = λ space . InferNovelConcepts(space)
+        },
+        cross_space_mappings = {
+          (time_domain, money_domain, { time -> money, duration -> quantity, activities -> transactions })
+        }
+      }
+      
+      COMPUTE blended_concepts = time_is_money.blend()
+      ASSERT "time_investment" IN blended_concepts
+      ASSERT "time_investment" NOT IN time_domain AND "time_investment" NOT IN money_domain
+      
+      LET novel_expression = MetaphorGeneration(time_is_money, Context { language = "English" })
+      ASSERT IsMetaphorical(novel_expression)
+      
+      VISUALIZE ConceptualIntegrationNetwork(time_is_money) 
+        AS "TIME IS MONEY Conceptual Integration Network"
+    }
+  }
+}

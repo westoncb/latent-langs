@@ -1,0 +1,2189 @@
+CONCEPT InteractionNetworks {
+  LANGUAGE {
+    -- Basic definitions of nets, agents, ports, wires, and types (from InteractionNetFoundations)
+    ...
+
+    -- New constructs for distributed and adaptive computation
+    TYPE Location -- Represents a physical or virtual location where agents reside
+    TYPE MobileAgent <: Agent -- An agent that can move between locations
+    TYPE AdaptiveAgent <: Agent -- An agent that can change its behavior based on interactions
+    
+    FUNC Location : Agent -> Location -- The location of an agent
+    FUNC Move : (MobileAgent, Location) -> MobileAgent -- Move an agent to a new location
+    FUNC Adapt : (AdaptiveAgent, Interaction) -> AdaptiveAgent -- Update an agent's behavior based on an interaction
+
+    -- Operations for distributed computation
+    FUNC Spawn : (Agent, Location) -> Agent -- Create a new agent at a location
+    FUNC Send : (Agent, Message, Location) -> Agent -- Send a message to an agent at a location
+    FUNC Receive : (Agent, Message) -> Agent -- Receive a message from another agent
+
+    -- Predictive and reinforcement learning primitives
+    FUNC PredictedInteraction : (Agent, Context) -> Interaction -- Predict the next interaction based on context  
+    FUNC UpdatePredictionModel : (Agent, Interaction, Feedback) -> Agent -- Update an agent's prediction model
+    FUNC ReinforceDecision : (Agent, Decision, Reward) -> Agent -- Reinforce an agent's decision based on a reward signal
+  }
+
+  TRANSFORMS {
+    -- Reduction rules for concurrent and distributed interactions
+    RULE RemoteInteraction : 
+      (a1 : Agent) @ l1 | (a2 : Agent) @ l2 ~~> (a1' : Agent) @ l1 | (a2' : Agent) @ l2
+        WHEN Interact(a1, a2) = (a1', a2')
+
+    RULE MobilityReduction :
+      Move(a, l) @ l1 ~~> a @ l  
+
+    -- Adaptive and predictive transformation rules
+    RULE PredictiveReduction :
+      a @ l ~~> Adapt(a, PredictedInteraction(a, Context(l))) @ l
+
+    RULE ReinforcementLearning :
+      a1 @ l1 | a2 @ l2 ~~> ReinforceDecision(a1, d1, r1) @ l1 | ReinforceDecision(a2, d2, r2) @ l2
+        WHEN Interact(a1, a2) = (a1', a2') AND 
+             Decision(a1) = d1 AND Reward(a1', Context(l1)) = r1 AND
+             Decision(a2) = d2 AND Reward(a2', Context(l2)) = r2
+  }
+
+  PROOFS {
+    -- Proving properties of the extended system, such as:
+    -- - Confluence of the reduction system with remote interactions and mobility
+    -- - Termination of the adaptive and predictive reduction rules  
+    -- - Convergence of the reinforcement learning process
+    -- - Correctness and efficiency of the distributed computation primitives
+    ...
+  }
+
+  EXAMPLES {
+    -- Modeling a distributed, adaptive multi-agent system
+    -- Implementing a concurrent, predictive data processing pipeline
+    -- Designing a self-optimizing, reinforcement learning-based compiler  
+    ...
+  }
+}
+
+
+
+
+CONCEPT InteractionCore {
+  SYNTAX {
+    -- Terms
+    t ::= x                   -- Variables
+        | λx:A.t              -- Abstraction
+        | t t                 -- Application
+        | <t, t>              -- Pair
+        | t ⊗ t               -- Tensor
+        | t ⊕ t               -- Choice
+        | !t                  -- Replication
+        | t || t              -- Parallel composition
+        | (t)                 -- Grouping
+        | let x = t in t      -- Let binding
+        | case t of           -- Pattern matching
+            | <x, y> -> t
+            | x ⊗ y -> t
+            | x ⊕ y -> t
+      
+    -- Types  
+    A ::= X                   -- Type variables
+        | 1                   -- Unit type
+        | A ⊸ B               -- Linear function type
+        | A & B               -- With (product) type
+        | A ⊗ B               -- Tensor (multiplicative conjunction) type  
+        | A ⊕ B               -- Plus (additive disjunction) type
+        | !A                  -- Of course (exponential) type
+        | ?A                  -- Why not (exponential) type
+
+    -- Interaction Nets
+    n ::= x                   -- Wire links  
+        | [t]                 -- Nodes
+        | n || n              -- Parallel composition 
+        | (n)                 -- Grouping
+        | ?                   -- Holes
+
+    -- Interaction Rules
+    r ::= n ~> n              -- Binary interaction
+        | <n> ~> n            -- Unary interaction  
+        | x ~> t              -- η-expansion
+  }
+  
+  TYPING {
+    -- Typing judgments
+    Γ ⊢ t : A   -- Term t has type A under context Γ
+    
+    -- Interaction Net Typing
+    Γ ⊢ₙ n : A   -- Net n has type A under context Γ
+
+    -- Typing rules for terms (similar to CoreInteractionCalculus)  
+    ...
+
+    -- Typing rules for interaction nets
+    x: ⊢ₙ x: ?                                 -- Wire
+
+    Γ ⊢ t: A     
+    ------------------- [t]  
+    Γ ⊢ₙ [t]: A
+
+    Γ ⊢ₙ n: A   Δ ⊢ₙ m: B
+    --------------------- (|| Par)   
+    Γ,Δ ⊢ₙ n || m: A ⊗ B
+
+    Γ ⊢ₙ n: A
+    ----------- (?)  
+    Γ ⊢ₙ ?: ?A
+      
+    -- Typing rules for interaction rules
+    Γ ⊢ₙ n: A   Δ ⊢ₙ m: A
+    --------------------- (~> Rule)  
+    Γ,Δ ⊢ₙ n ~> m: OK
+
+    Γ,x:A ⊢ₙ n: C
+    ------------------- (<> Rule)
+    Γ ⊢ₙ <n>: A ~> C
+
+    ----------- (Eta)
+    x: ⊢ₙ x ~> t: OK
+  }
+
+  TRANSLATION {
+    -- Translation from terms to interaction nets
+    [x] = x
+    [λx:A.t] = ?A || [t]  
+    [t u] = ([t] || [u]) ~> ?
+    [<t, u>] = [t] || [u]
+    [t ⊗ u] = [t] ⊗ [u]  
+    [t ⊕ u] = [t] ⊕ [u]
+    [!t] = ![t]
+    [t || u] = [t] || [u]  
+    [(t)] = ([t])
+    [let x = t in u] = <[t]> ~> [u]  
+    [case t of <x, y> -> u  
+             | x ⊗ y -> v  
+             | x ⊕ y -> w] = <[t]> ~> ([u] ⊕ [v] ⊕ [w])
+
+    -- Translation from interaction rules to term reductions
+    [n ~> m] = [n] ▷ [m]       -- Parallel one-step reduction  
+    [<n> ~> m] = [n] ▷ᵤ [m]    -- Unary one-step reduction
+    [x ~> t] = x ▷η t         -- η-reduction
+  }
+
+  ABSTRACT_MACHINE {
+    -- Interaction Abstract Machine (IAM)
+    iam ::= · ⊢ t ↓ [·]             -- Eval state (term and net context)  
+          | [n] ⊢ₙ c ↓ [m]         -- Interaction state (nets and net context)
+          | v ⊢ₙ c ↑ [m]           -- Return state (value and net context)
+    
+    c ::= □                       -- Hole  
+        | c || [n]                 -- Parallel net context
+        | <c>                      -- Unary net context
+    
+    v ::= λx:A.t                  -- Function value
+        | <v, v>                   -- Pair value
+
+    -- IAM transitions
+    · ⊢ t ↓ [·]                   ↦   [t] ⊢ₙ □ ↓ [·]                                      (Init)   
+    [x] ⊢ₙ c ↓ [m]                ↦   [m] ⊢ₙ c{x → m} ↓ [m]                               (Link)
+    [n] ⊢ₙ c ↓ [m]  n ~> n'       ↦   [n'] ⊢ₙ c ↓ [m]                                     (Reduce)
+    <[?A]> ⊢ₙ c ↓ [m]              ↦   [m] ⊢ₙ c ↑ λx:A.[m]                                 (Abstract)
+    ([n] || [m]) ⊢ₙ c ↓ [p]        ↦   [p] ⊢ₙ c ↓ [n || m]                                 (Join)
+    <?> ⊢ₙ c ↓ [m]                ↦   [m] ⊢ₙ c ↑ <v, v'>  where v ⊗ v' = [m]              (Split)
+    <[n ⊕ m]> ⊢ₙ c ↓ [p]          ↦   ([n] ⊢ₙ c ↓ [p]) ⊕ ([m] ⊢ₙ c ↓ [p])                 (Case)
+    ([!n]) ⊢ₙ c ↓ [m]              ↦   [n] ⊢ₙ c ↓ [!m]                                     (Promote)
+    v ⊢ₙ c ↑ [m]                 ↦   [m] ⊢ₙ c ↓ [v]                                      (Apply)
+    · ⊢ₙ □ ↑ v                    ↦   v                                                  (Final)
+  }
+
+  THEORY {
+    -- Theoretical properties and results
+    
+    -- Subject reduction: Well-typed terms reduce to well-typed terms
+    THEOREM Subject_Reduction {
+      ∀ t, t', A. · ⊢ t : A  ∧  t ▷ t'  ⇒  · ⊢ t' : A   
+    }
+
+    -- Progress: A well-typed closed term is either a value or can be reduced
+    THEOREM Progress {
+      ∀ t, A. · ⊢ t : A  ⇒  (Value(t) ∨ ∃ t'. t ▷ t')
+    }
+
+    -- Termination: IAM evaluation always terminates for well-typed terms 
+    THEOREM Termination {
+      ∀ t, A. · ⊢ t : A  ⇒  ∃ v. · ⊢ t ↓ [·] ↦* v
+    }
+
+    -- Soundness of Translation: Term reduction corresponds to net reduction
+    THEOREM Translation_Soundness {
+      ∀ t, u. t ▷ u  ⇔  ∃ c, [t] ⊢ₙ □ ↓ [·] ↦+ [u] ⊢ₙ c ↓ [·]
+    }
+
+    -- Completeness of Translation: Net reduction corresponds to term reduction
+    THEOREM Translation_Completeness {
+      ∀ n, m, c. [n] ⊢ₙ c ↓ [m]  ⇒  ∃ t, u. [t] = n ∧ [u] = m ∧ t ▷* u
+    }
+
+    -- Confluence: IAM evaluation is confluent
+    THEOREM Confluence {
+      ∀ t, v, v'. · ⊢ t ↓ [·] ↦* v  ∧  · ⊢ t ↓ [·] ↦* v'  ⇒  v = v'
+    }
+
+    -- Consistency: There are no closed proofs of contradiction
+    THEOREM Consistency { 
+      ∄ t. · ⊢ t : 0
+    }
+  }
+}
+
+This formalization of "InteractionCore" incorporates several key ideas and features:
+
+The syntax includes terms from CoreInteractionCalculus, with the addition of typing annotations on abstractions and a more general form of pattern matching. It also defines interaction nets and interaction rules, which are used to represent the computational behavior of terms.
+The typing rules ensure that terms and nets are well-typed according to a linear logic-based type system, with judgments for term typing (Γ ⊢ t : A) and net typing (Γ ⊢ₙ n : A). Interaction rules are also typed, ensuring that they preserve type correctness.
+The translation between terms and nets is defined inductively, with each term constructor mapped to a corresponding net structure. Interaction rules are also translated to term reductions, allowing for a tight correspondence between the two levels of representation.
+The operational semantics is defined using an Interaction Abstract Machine (IAM), which has three kinds of states: eval states for term evaluation, interaction states for net reduction, and return states for value propagation. The IAM transitions define the small-step behavior of the system, and are designed to ensure properties like termination, confluence, and consistency.
+The theoretical properties of the system are stated as a set of theorems, including subject reduction, progress, termination, soundness and completeness of translation, confluence, and consistency. These properties ensure that the system is well-behaved and can serve as a foundation for further study and application.
+
+Some key design decisions and innovations in this formalization include:
+
+The use of a more expressive type system based on linear logic, which allows for a wider range of types and type constructors, including multiplicative and additive connectives, and exponential modalities. This enables the system to capture more precise notions of resource usage and computational behavior.
+The introduction of a separate level of representation for interaction nets, which serves as an intermediate language between terms and low-level machine operations. This allows for a more fine-grained and flexible control over the computational process, and enables optimizations and analyses that are difficult or impossible at the term level.
+The use of an abstract machine semantics, which provides a clear and concise specification of the operational behavior of the system, and facilitates proofs of key properties like termination and confluence. The IAM also serves as a blueprint for efficient implementations of the language, using techniques like compilation, graph reduction, and parallel execution.
+The incorporation of η-reduction as a primitive interaction rule, which allows for more expressive and flexible pattern matching, and enables certain optimizations like function inlining and dead code elimination. This also simplifies the overall design of the system, by eliminating the need for separate constructs like case expressions and let bindings.
+
+
+
+
+
+
+
+
+CONCEPT CoreInteractionCalculus {
+  SYNTAX {
+    -- Terms
+    t ::= x                   -- Variables
+        | λx.t                -- Abstraction
+        | t t                 -- Application
+        | <t, t>              -- Pair
+        | t ⊗ t               -- Tensor
+        | t ⊕ t               -- Choice
+        | !t                  -- Replication
+        | t || t              -- Parallel composition
+        | (t)                 -- Grouping
+        | let x = t in t      -- Let binding
+        | case t of           -- Pattern matching
+            | <x, y> -> t
+            | x ⊗ y -> t
+            | x ⊕ y -> t
+      
+    -- Types  
+    A ::= X                   -- Type variables
+        | 1                   -- Unit type
+        | A ⊸ B               -- Linear function type
+        | A & B               -- Product type
+        | A ⊗ B               -- Tensor product type  
+        | A ⊕ B               -- Sum type
+        | !A                  -- Exponential (replication) type
+  }
+  
+  TYPING {
+    -- Typing judgments
+    Γ ⊢ t : A   -- Term t has type A under context Γ
+
+    -- Typing rules
+    ----------- (Var)
+    x : A ⊢ x : A
+
+    Γ, x : A ⊢ t : B   
+    ---------------------- (Abs)
+    Γ ⊢ λx.t : A ⊸ B
+
+    Γ ⊢ t : A ⊸ B   Δ ⊢ u : A
+    ----------------------------- (App)  
+    Γ, Δ ⊢ t u : B
+
+    Γ ⊢ t : A   Δ ⊢ u : B
+    ----------------------- (&-Intro)
+    Γ, Δ ⊢ <t, u> : A & B
+
+    Γ ⊢ t : A & B   
+    ---------------- (&-Elim1)
+    Γ ⊢ t.1 : A
+
+    Γ ⊢ t : A & B
+    ---------------- (&-Elim2)  
+    Γ ⊢ t.2 : B
+
+    Γ ⊢ t : A   Δ ⊢ u : B   
+    ----------------------- (⊗-Intro)
+    Γ, Δ ⊢ t ⊗ u : A ⊗ B
+
+    Γ ⊢ t : A ⊗ B   Δ, x : A, y : B ⊢ u : C  
+    ------------------------------------------- (⊗-Elim)
+    Γ, Δ ⊢ let x ⊗ y = t in u : C
+    
+    Γ ⊢ t : A
+    --------------- (⊕-Intro1)
+    Γ ⊢ inl t : A ⊕ B
+
+    Γ ⊢ t : B  
+    --------------- (⊕-Intro2)
+    Γ ⊢ inr t : A ⊕ B
+
+    Γ ⊢ t : A ⊕ B   Δ, x : A ⊢ u : C   Δ, y : B ⊢ v : C
+    ---------------------------------------------------- (⊕-Elim)
+    Γ, Δ ⊢ case t of inl x -> u | inr y -> v : C
+
+    Γ ⊢ t : A
+    ------------- (!-Intro)
+    Γ ⊢ !t : !A  
+
+    Γ, x : !A, y : !A ⊢ t : B
+    -------------------------- (!-Elim)
+    Γ, z : !A ⊢ let !x = z in let !y = z in t : B
+  }
+
+  REDUCTION {
+    -- Reduction rules  
+    (λx.t) u          ~> [u/x]t                        (β-reduction)
+    let <x, y> = t in u  ~>  [t.1/x, t.2/y]u          (&-reduction) 
+    let x ⊗ y = t ⊗ u in v  ~>  [t/x, u/y]v           (⊗-reduction)
+    case (inl t) of inl x -> u | inr y -> v  ~>  [t/x]u   (⊕-reduction1)
+    case (inr t) of inl x -> u | inr y -> v  ~>  [t/y]v   (⊕-reduction2)
+    let !x = !t in u  ~>  [t/x]u                    (!-reduction)
+  }
+  
+  THEORY {
+    -- Theoretical properties and results
+    
+    -- Subject reduction: Well-typed terms remain well-typed under reduction.
+    THEOREM SubjectReduction {
+      ∀ Γ, t, t', A. Γ ⊢ t : A  ∧  t ~> t'  ⇒  Γ ⊢ t' : A   
+    }
+
+    -- Strong normalization: Well-typed terms always terminate.
+    THEOREM StrongNormalization {
+      ∀ Γ, t, A. Γ ⊢ t : A  ⇒  ∃ n. t ~>ⁿ v  ∧  IsNormalForm(v)
+    }
+
+    -- Consistency: There are no closed proofs of contradiction.
+    THEOREM Consistency { 
+      ∄ t. ⊢ t : 1 ⊕ 1
+    }
+
+    -- Linear logic embedding: The type system corresponds to intuitionistic linear logic.
+    THEOREM LinearLogicCorrespondence {
+      Γ ⊢ t : A  ⇔  [Γ] ⊢ᴵᴸᴸ [t] : [A]
+      WHERE [Γ], [t], [A] = Translation from CoreInteractionCalculus to ILL
+    }
+  }
+}
+
+
+
+
+
+
+CONCEPT InteractionCore {
+  SYNTAX {
+    Type A, B ::= X | 1 | A ⊗ B | A ⅋ B | A ⊸ B
+    Agent X ::= [X] | [X](P*)
+    Port P ::= X.n | X:A.n
+    Wire W ::= (P, P)
+    Net α, β ::= ∅ | X(W*) | α ∥ β | (α)
+
+    NOTATION:
+      A, B, C      -- Types
+      X, Y, Z      -- Agent variables
+      x, y, z      -- Agent instances
+      p, q, r      -- Ports
+      n, m, k      -- Natural numbers
+      (p, q)       -- Wires
+      [X]          -- Agent definition
+      [X](p, q, r) -- Agent instance with ports
+      α ∥ β       -- Parallel composition of nets
+      (α)          -- Net grouping (association)
+  }
+  
+  TYPING {
+    Γ ⊢ A : Type
+    Γ ⊢ X : Type
+    Γ ⊢ P : A
+    Γ ⊢ W : 1
+    Γ ⊢ α : A
+
+    RULES:
+      ------------------- (T-Unit)
+      Γ ⊢ 1 : Type
+
+      Γ ⊢ A : Type   Γ ⊢ B : Type
+      ----------------------------- (T-Tensor)
+      Γ ⊢ A ⊗ B : Type
+
+      Γ ⊢ A : Type   Γ ⊢ B : Type
+      ----------------------------- (T-Par)
+      Γ ⊢ A ⅋ B : Type
+
+      Γ ⊢ A : Type   Γ ⊢ B : Type
+      ----------------------------- (T-Lolli)
+      Γ ⊢ A ⊸ B : Type
+
+      (X : A) ∈ Γ
+      ------------ (T-Agent)
+      Γ ⊢ X : A
+
+      Γ ⊢ X : A   Γ ⊢ n : Nat
+      ----------------------- (T-Port)
+      Γ ⊢ X.n : A
+
+      Γ ⊢ P : A   Γ ⊢ Q : A
+      ---------------------- (T-Wire)
+      Γ ⊢ (P, Q) : 1
+
+      ------------------------ (T-Empty)
+      Γ ⊢ ∅ : 1
+
+      Γ ⊢ X : A   Γ ⊢ W_i : 1
+      ------------------------ (T-AgentNet)
+      Γ ⊢ X(W_1, ..., W_n) : A
+
+      Γ ⊢ α : A   Γ ⊢ β : B  
+      ----------------------- (T-Parallel)
+      Γ ⊢ α ∥ β : A ⊗ B
+
+      Γ ⊢ α : A
+      ---------- (T-Grouping)  
+      Γ ⊢ (α) : A
+  }
+
+  REDUCTION {
+    α >~ β
+
+    RULES:
+      Id(A) >~ ∅
+
+      Cut(A)(Id(A).0, Id(A).1) >~ ∅
+
+      Tensor(A, B)(Neg(A).0, Neg(B).0, Par(A, B).0) >~ ∅
+
+      Par(A, B)(Tensor(A, B).1, Tensor(A, B).2, Neg(A ⊗ B).0) >~ ∅
+
+      α >~ α'
+      ------------------- (R-Parallel)
+      α ∥ β >~ α' ∥ β
+
+      α >~ α'   β >~ β'
+      ------------------- (R-ParallelPair)
+      α ∥ β >~ α' ∥ β'
+
+      α >~ α'
+      ------------------- (R-Grouping)
+      (α) >~ (α')
+  }
+
+  EQUIVALENCE {
+    α ≡ β
+
+    RULES:
+      -------------------- (E-Refl) 
+      α ≡ α
+      
+      α ≡ β
+      ----- (E-Symm)
+      β ≡ α
+
+      α ≡ β   β ≡ γ
+      --------------- (E-Trans)
+      α ≡ γ
+
+      α >~ β
+      ------- (E-Reduce)  
+      α ≡ β
+
+      α ≡ α'   β ≡ β'
+      --------------- (E-Parallel)
+      α ∥ β ≡ α' ∥ β'
+
+      α ∥ ∅ ≡ α                -- (E-ParallelUnit)
+
+      α ∥ β ≡ β ∥ α            -- (E-ParallelComm)
+
+      (α ∥ β) ∥ γ ≡ α ∥ (β ∥ γ)  -- (E-ParallelAssoc)
+
+      (α ∥ β) ⊗ γ ≡ α ⊗ (β ⊗ γ)  -- (E-TensorAssoc)  
+  }
+}
+
+
+
+
+
+CONCEPT InteractionCore {
+  LANGUAGE {
+    SYMBOL Agent, Port, Wire
+    SYMBOL Variable, Constant, Token
+
+    FORM A, B, C ::= X | 1 | A ⊗ B | A ⅋ B | A ⊸ B
+    FORM P ::= p | q | r | x.0 | x.1 | ...  
+    FORM W ::= P --- P | (P, P)
+    FORM α, β, γ ::= [X] with {W*} | α β | α >~ β
+
+    RULE Id(A) ≡ [Id_A] with {Id_A.0 --- Id_A.1}  
+    RULE Cut(A) ≡ [Cut_A] with {Cut_A.0 --- Cut_A.1}
+    RULE Tensor(A, B) ≡ [Tensor_AB] with {Tensor_AB.0 --- (Tensor_AB.1, Tensor_AB.2)}
+    RULE Par(A, B) ≡ [Par_AB] with {Par_AB.0 --- (Par_AB.1, Par_AB.2)}
+    RULE Neg(A) ≡ [Neg_A] with {Neg_A.0 --- Neg_A.1}
+  }
+
+  SEMANTICS {
+    AXIOM [Id_A] with {Id_A.0 --- Id_A.1} >~ [Id_A] with {}
+    AXIOM [Cut_A] with {Cut_A.0 --- Cut_A.1} >~ []
+    AXIOM [Tensor_AB] with {Tensor_AB.0 --- (Tensor_AB.1, Tensor_AB.2), Tensor_AB.1 --- P, Tensor_AB.2 --- Q} 
+      >~ [A][B] with {P --- A.0, Q --- B.0}
+    AXIOM [Par_AB] with {Par_AB.0 --- (Par_AB.1, Par_AB.2), Par_AB.1 --- P, Par_AB.2 --- Q}
+      >~ [A ⅋ B] with {A.0 --- P, B.0 --- Q}
+    AXIOM [Neg_A] with {Neg_A.0 --- P} >~ [A] with {A.0 --- P}
+  }
+
+  PROOFS {
+    THEOREM [α >~* α]
+      BY [Equality] α = α
+
+    THEOREM [α >~* γ] GIVEN α >~* β AND β >~* γ  
+      BY [Transitivity]
+        α >~* β  -- by hypothesis
+        β >~* γ  -- by hypothesis
+        α >~* γ  -- by transitivity of >~*
+
+    THEOREM [α β >~* α' β] GIVEN α >~* α'
+      BY [Congruence]
+        α >~* α'         -- by hypothesis
+        α β >~ α' β      -- by congruence of >~ under composition  
+        α' β >~* α' β    -- by reflexivity of >~*
+        α β >~* α' β     -- by transitivity of >~*
+  }
+}
+
+
+
+
+
+
+CONCEPT InteractionCalculus {
+  LANGUAGE {
+    SYMBOL Agent, Port, Wire
+    SYMBOL Variable, Constant, Token
+
+    FORM A, B, C ::= Agent(P*)
+    FORM P ::= Port(W*)
+    FORM W ::= Wire(V, V)
+    FORM V ::= Variable | Constant | Token
+    FORM T ::= Token(A, P, P)
+
+    FORM α, β, γ ::= A | P | W | T | α β | α[σ]
+    FORM σ ::= {V := V, ...}
+
+    SUGAR A(P1, ..., Pn) ≡ Agent(Port(Wire(T1, P1), ..., Wire(Tn, P1)), 
+                                 ..., 
+                                 Port(Wire(T1, Pn), ..., Wire(Tn, Pn)))
+            WHERE Ti = Token(A, Pi, Pj) for unique j
+
+    SUGAR α · β ≡ α[σ1] β[σ2] WHERE σ1, σ2 = Unify(Boundary(α), Boundary(β))
+    SUGAR α ~> β ≡ α · δ ~> γ · δ WHEN (δ, γ) = Match(α)
+  }
+
+  SEMANTICS {
+    DEF FreeVariables(α) = {x : Variable | x in α}
+    DEF BoundVariables(α) = {x : Variable | EXISTS σ . x in Dom(σ) AND σ in α}
+    DEF Boundary(α) = {p : Port | p in α AND 
+                        FORALL (w : Wire) . w in α IMPLIES (Source(w) = p OR Target(w) /= p)}
+
+    DEF Unify(P1, P2) = 
+      LET σ1 = {v := Fresh(Token) | v <- FreeVariables(P1)} IN
+      LET σ2 = {v := Fresh(Token) | v <- FreeVariables(P2)} IN
+      LET θ  = {t1 := t2 | Port(w1) in P1[σ1] AND Port(w2) in P2[σ2] AND 
+                            Wire(t1, _) = w1 AND Wire(t2, _) = w2} IN
+        (σ1 · θ, σ2 · θ)
+
+    DEF Match(α) = 
+      IF α is A(P1, ..., Pn) · B(Q1, ..., Qm) AND (A, B) in Rules THEN
+        LET γ = C(R1, ..., Rk) WHERE (A(P1, ..., Pn), B(Q1, ..., Qm)) ~> C(R1, ..., Rk) in Rules IN
+        LET δ = Boundary(α) - Boundary(A(P1, ..., Pn) · B(Q1, ..., Qm)) IN
+          (δ, γ · δ)
+      ELSE
+        (∅, α)
+      
+    AXIOM ChurchRosser :
+      FORALL (α β γ : FORM) . (α ~> β AND α ~> γ) IMPLIES 
+        EXISTS (δ : FORM) . (β ~>* δ AND γ ~>* δ)
+  }
+
+  LIBRARY {  
+    -- Some common agents and rules
+    
+    AGENT Duplicator(x, y, z) WITH RULES {
+      Duplicator(x, y, z) · Eraser(y) ~> Wire(x, z)
+    }
+
+    AGENT Eraser(x) WITH RULES {
+      Eraser(x) · Duplicator(y, x, z) ~> Wire(y, z)
+    }
+    
+    AGENT Successor(x, y) WITH RULES {
+      Successor(x, y) · Zero(x) ~> Wire(y, z) · Zero(z)
+      Successor(x, y) · Successor(z, x) ~> Successor(z, w) · Successor(w, y)
+    }
+
+    AGENT Zero(x)
+
+    AGENT Pair(x, y, z) WITH RULES {
+      Pair(x, y, z) · Left(z) ~> Wire(x, w)
+      Pair(x, y, z) · Right(z) ~> Wire(y, w)
+    }
+
+    AGENT Left(x)  
+    AGENT Right(x)
+  }
+
+  EXAMPLES {
+    -- Simple net to duplicate a token
+    DUP ≡ Agent(Port(Wire(a, x)), Port(Wire(a, y)), Port(Wire(a, z)))
+
+    Zero() · Duplicator(x, y, z) ~> Zero(v) · Wire(v, z) · Duplicator(x, y, v)
+                                  ~> Zero(v) · Wire(v, z)
+
+    -- Encoding lambda terms
+    FUNC Encode(t : Term) : Net
+      CASE Variable(x) => Agent(Port(Wire(Token(x), p)))
+      CASE Abstraction(x, t) => 
+        LET α = Encode(t) IN
+        LET p_x = Port(Wire(Token(x), _)) IN
+        LET β = α[p_x := q] IN
+          Agent(Port(Wire(a, p)), q) · β
+      CASE Application(t, u) =>
+        LET α = Encode(t) IN 
+        LET β = Encode(u) IN
+        LET p, q = FreshPorts() IN
+          α[Boundary(α) := {p}] · β[Boundary(β) := {q}] · Agent(p, q)
+
+    -- Church numerals
+    Zero ≡ Abstraction(f, Abstraction(x, Variable(x)))
+    Succ ≡ Abstraction(n, Abstraction(f, Abstraction(x, Application(Variable(f), Application(Application(Variable(n), Variable(f)), Variable(x))))))
+
+    DERIVE Encode(Zero) ~> 
+      Agent(Port(Wire(a, p1)), Port(Wire(b, p2))) ·
+      Agent(Port(Wire(b, p3)), Port(Wire(Token(x), p4)))
+
+    DERIVE Encode(Succ) ~>  
+      Agent(Port(Wire(a, p1)), 
+            Port(Wire(b, p2))) ·
+      Agent(Port(Wire(b, p3)), 
+            Port(Wire(c, p4))) ·  
+      Agent(Port(Wire(c, p5)), 
+            Port(Wire(d, p6)),
+            Port(Wire(e, p7)),
+            Port(Wire(f, p8))) ·
+      Agent(Port(Wire(d, p9))) · 
+      Agent(Port(Wire(e, p10)), Port(Wire(f, p11))) ·
+      Agent(Port(Wire(Token(x), p12)))
+  }
+
+  PROOFS {
+    THEOREM StrongNormalization :
+      FORALL (α : FORM) . EXISTS (β : FORM) . (α ~>* β AND IsNormalForm(β))
+    {
+      DEF SizeOf(α) = 
+        CASE α is A(P1, ..., Pn) => 1 + SizeOf(P1) + ... + SizeOf(Pn)
+        CASE α is Port(W1, ..., Wn) => 1 + SizeOf(W1) + ... + SizeOf(Wn)
+        CASE α is Wire(V1, V2) => 1
+        CASE α is Token(_) => 1
+        CASE α is β γ => SizeOf(β) + SizeOf(γ)
+        CASE α is β[σ] => SizeOf(β) + SizeOf(σ)
+
+      ASSUME FORALL (α : FORM) (r : Rule) . LHS(r) <= SizeOf(α) IMPLIES
+        EXISTS (β : FORM) . α ~[r]~> β AND SizeOf(β) < SizeOf(α)
+
+      PROVE FORALL (α : FORM) . EXISTS (β : FORM) . (α ~>* β AND IsNormalForm(β))
+        BY INDUCTION on SizeOf(α)
+        CASE SizeOf(α) = 0: VACUOUS
+        CASE SizeOf(α) = n+1:
+          ASSUME FORALL (γ : FORM) . SizeOf(γ) <= n IMPLIES 
+            EXISTS (δ : FORM) . (γ ~>* δ AND IsNormalForm(δ))
+          
+          IF IsRedex(α) THEN 
+            LET β = Contractum(α) IN 
+              SizeOf(β) < SizeOf(α) BY ASSUMPTION
+              EXISTS (γ : FORM) . (β ~>* γ AND IsNormalForm(γ)) BY IH
+              α ~> β ~>* γ AND IsNormalForm(γ)
+          ELSE
+            IsNormalForm(α)        
+      QED  
+    }
+
+    CLAIM EfficientCompilation :
+      FORALL (t : Term) (α β : Net) . 
+        (α ~>* β AND IsNormalForm(β)) IFF
+        (Encode(t) ~>* α AND Decode(α) = t AND IsNormalForm(β) AND Decode(β) = NormalForm(t))
+    {
+      -- Proof sketch:
+      -- => : By induction on the reduction sequence α ~>* β
+      --      Base case: α = β and both are in normal form, so Decode gives the same normal forms.
+      --      Inductive case: An initial reduction on α corresponds to a reduction on t, 
+      --      and the resulting net encodes the reduct of t by the inductive hypothesis.
+      -- 
+      -- <= : By induction on the reduction sequence Encode(t) ~>* α
+      --      Base case: Encode(t) = α, so α encodes t.
+      --      Inductive case: If Encode(t) ~> γ ~>* α, then γ encodes a reduct of t,
+      --      and α encodes the normal form of that reduct by the inductive hypothesis.
+    }
+  }
+}
+
+The key ideas in this Concept are:
+
+The LANGUAGE section defines the syntactic forms for agents, ports, wires, and tokens, as well as nets (α, β, γ) and substitutions (σ). There are two convenient SUGAR definitions:
+
+A(P1, ..., Pn) for defining agents with multiple numbered ports.
+α · β for connecting the boundary ports of two nets using unification.
+
+
+The SEMANTICS section defines key operations:
+
+Unify for merging two nets by connecting their boundary ports.
+Match for finding a redex in a net and replacing it with the corresponding contractum.
+The ChurchRosser axiom stating confluence of net reduction.
+
+
+The LIBRARY section defines some common agents and rules, such as Duplicator, Eraser, Successor, and Pair, which can be used as building blocks for encoding data structures and functions.
+The EXAMPLES section shows how to encode lambda terms into nets, and derives the encodings of Church numerals Zero and Succ. This illustrates the expressive power of interaction calculus.
+The PROOFS section states and proves the StrongNormalization theorem, using a measure on nets that strictly decreases with each reduction step. It also claims the equivalence between net reduction and lambda term reduction under the Efficient encoding, which establishes IC as a compact and normalizing language.
+
+The key benefits of this notation are:
+
+Visual clarity: Nets can be drawn as graphical structures, making the flow of information explicit.
+Compositionality: Nets can be easily combined using the plugging (·) operator and port unification.
+Efficiency: Reduction can be performed locally and asynchronously on nets, enabling parallel evaluation strategies.
+Expressiveness: Lambda terms and other formalisms can be encoded into nets, allowing IC to serve as a lingua franca.
+
+Of course, there are many details to be worked out, such as:
+
+Defining a type system for IC that ensures well-formedness and safety properties.
+Implementing an IC interpreter and compiler that can execute and optimize net reductions.
+Verifying the key metatheoretic properties of IC, such as confluence, normalization, and soundness.
+Applying IC to various domains, such as functional programming, process calculi, and proof assistants.
+
+
+
+
+CONCEPT InteractionNotation {
+  LANGUAGE {
+    SYMBOL Agent, Port, Wire
+    SYMBOL Principal, Auxiliary
+    SYMBOL Connection, Reduction
+    SYMBOL Identity, Cut, Tensor, Par, Negation
+    SYMBOL Axiom, Theorem, Proof
+
+    SYNTAX {
+      Agent = [Label]
+      Port = Agent.Label
+      Wire = (Port, Port)
+      
+      Principal(a) = a.0
+      Auxiliary(a) = a.1, a.2, ...
+
+      Connection = Port --- Port
+      Reduction = Net >~ Net
+
+      Identity(A) = [Id_A] with {Principal = Id_A.0, Auxiliary = Id_A.1}
+      Cut(A) = [Cut_A] with {Principal = Cut_A.0, Auxiliary = Cut_A.1, Cut_A.2}
+      Tensor(A, B) = [Tensor_AB] with {Principal = Tensor_AB.0, Auxiliary = Tensor_AB.1, Tensor_AB.2}  
+      Par(A, B) = [Par_AB] with {Principal = Par_AB.0, Auxiliary = Par_AB.1, Par_AB.2}
+      Negation(A) = [Neg_A] with {Principal = Neg_A.1, Auxiliary = Neg_A.0}
+
+      Axiom = Rule{Net >~ Net}
+      Theorem = Theorem{Formula} Proof{Reduction*}
+    }
+
+    NOTATION {
+      a, b, c           -- Agents
+      A, B, C           -- Agent types
+      x.0, x.1, x.2     -- Ports of agent x
+      (x.0 --- y.1)     -- Wire connecting ports x.0 and y.1
+      α >~ β            -- Net α reduces to net β
+      α >~* β           -- Net α reduces to net β in zero or more steps
+      Id(A), Cut(A)     -- Identity and cut agents for type A
+      Tensor(A, B)      -- Tensor product of A and B
+      Par(A, B)         -- Parallel composition of A and B
+      Neg(A)            -- Negation (dual) of A
+
+      -- Proof notation  
+      [Theorem]
+        [Hypothesis_1]
+        ...
+        [Hypothesis_n]
+      ------{Proof}  
+        [Conclusion]
+
+      -- Example proof
+      [Theorem]
+        α: Net, β: Net, α >~* β
+        β >~ γ
+      ------{
+        α >~* β   -- by hypothesis
+        β >~ γ    -- by hypothesis
+        α >~* γ   -- by transitivity of >~*
+      }
+        α >~* γ
+    }
+  }
+
+  EXAMPLES {    
+    EXAMPLE {
+      -- α reduces to β via communication rule
+      α = [A][B] with {A.0 --- B.0}
+      β = [C] with {}
+      -- Assumes: Axiom{[A][B] with {A.0 --- B.0} >~ [C] with {}}
+
+      [Proof]  
+        α >~ β
+      ------{
+        α = [A][B] with {A.0 --- B.0}  -- by definition
+        [A][B] with {A.0 --- B.0} >~ [C] with {}  -- by communication axiom
+        [C] with {} = β  -- by definition
+        α >~ β  -- by transitivity of equality
+      }
+    }
+
+    EXAMPLE {
+      -- Tensor vs Par  
+      A, B: Type
+      α = Tensor(A, B) with {Tensor_AB.1 --- Id(A).0, Tensor_AB.2 --- Id(B).0}
+      β = Par(Neg(A), Neg(B)) with {Par_AB.1 --- Cut(Neg(A)).2, Par_AB.2 --- Cut(Neg(B)).2}
+
+      [Theorem]
+        α >~* Id(Tensor(A, B))
+      ------{
+        α = Tensor(A, B) with {Tensor_AB.1 --- Id(A).0, Tensor_AB.2 --- Id(B).0}
+        >~ Tensor(A, B) with {Id(A).1 --- Id(A).0, Tensor_AB.2 --- Id(B).0}  -- by Id(A) axiom
+        >~ Tensor(A, B) with {Id(A).1 --- Id(A).0, Id(B).1 --- Id(B).0}  -- by Id(B) axiom
+        >~ Id(Tensor(A, B)) with {}  -- by Tensor axiom
+      }
+
+      [Theorem]
+        β >~* Cut(Par(Neg(A), Neg(B)))
+      ------{  
+        β = Par(Neg(A), Neg(B)) with {Par_AB.1 --- Cut(Neg(A)).2, Par_AB.2 --- Cut(Neg(B)).2}
+        >~ Par(Neg(A), Neg(B)) with {Cut(Neg(A)).1 --- Cut(Neg(A)).2, Par_AB.2 --- Cut(Neg(B)).2}  -- by Cut(Neg(A)) axiom
+        >~ Par(Neg(A), Neg(B)) with {Cut(Neg(A)).1 --- Cut(Neg(A)).2, Cut(Neg(B)).1 --- Cut(Neg(B)).2}  -- by Cut(Neg(B)) axiom
+        >~ Cut(Par(Neg(A), Neg(B))) with {}  -- by Par axiom
+      }
+    }
+  }
+}
+
+The key ideas in this notation are:
+
+Agents, ports, and wires are the basic building blocks, represented by symbolic identifiers and labels. Ports are referenced using dot notation (e.g., a.0 for the principal port of agent a).
+Connections between ports are represented using an infix --- symbol, forming a wire (e.g., x.0 --- y.1).
+Reductions are represented using a >~ symbol, which can be chained to represent multi-step reduction sequences (e.g., α >~ β >~ γ).
+Common agent types like identity, cut, tensor, par, and negation are represented using compact functional notation (e.g., Id(A), Tensor(A, B)), with their port structure specified declaratively.
+Axioms are introduced as named reduction rules, and theorems are stated as formulas with an accompanying proof expression that derives the conclusion from the hypotheses using a sequence of reductions and equalities.
+Proofs are written in a structured format, with hypotheses and conclusion separated by a horizontal line, and individual proof steps justified by axioms, definitions, or prior steps.
+
+The Examples section demonstrates how this notation can be used to express concrete nets, reductions, and proofs. The communication rule is shown as a simple axiom, while the tensor and par constructions are defined and related to identity and cut agents via characteristic reduction sequences.
+The goal of this notation is to provide a readable and writable format for expressing interaction net computations and reasoning, similar to how the lambda calculus serves as a convenient notation for functional computation. By combining compact symbolic representation with structured proof formatting, we can explore the properties and applications of interaction nets in a more accessible and intuitive way.
+
+
+
+
+
+CONCEPT OptimalLambdaReduction {
+  LANGUAGE {
+    TYPE Term
+    TYPE Lambda <: Term  
+    TYPE Application <: Term
+    TYPE Variable <: Term
+
+    TYPE Graph
+    TYPE Node
+    TYPE LambdaNode <: Node
+    TYPE ApplicationNode <: Node  
+    TYPE VariableNode <: Node
+    TYPE FanNode <: Node
+    TYPE BracketNode <: Node
+
+    FUNC Encode : Term -> Graph
+    FUNC Evaluate : Graph -> Graph
+    FUNC Decode : Graph -> Term
+
+    PRED BetaReduces : (Term, Term) -> Bool
+    PRED Reduces : (Graph, Graph) -> Bool
+    
+    PRED Represents : (Graph, Term) -> Bool
+    PRED SharesSubterm : (Graph, Graph) -> Bool
+
+    AXIOM Correctness : FORALL (t: Term) . 
+      Represents(Evaluate(Encode(t)), NormalForm(t))
+      
+    AXIOM Optimality : FORALL (t: Term) (g1: Graph) (g2: Graph) . 
+      (Represents(g1, t) AND SharesSubterm(g1, g2)) IMPLIES
+      EXISTS (g3: Graph) . Reduces(g1, g3) AND Reduces(g2, g3)
+  }
+
+  NOTATION {
+    Λ = "Lambda"
+    @ = "Application"
+    ▽ = "FanNode"
+    ○i = "OpenBracketNode with level i"  
+    ●i = "CloseBracketNode with level i"
+  }
+
+  STRUCTURES {
+    STRUCTURE LambdaGraph EXTENDS Graph {
+      FIELD Nodes : Set[Node]
+      FIELD Edges : Set[(Node, Node)]
+      
+      FIELD LambdaNodes : Set[LambdaNode] 
+      FIELD ApplicationNodes : Set[ApplicationNode]
+      FIELD VariableNodes : Set[VariableNode]  
+      FIELD FanNodes : Set[FanNode]
+      FIELD BracketNodes : Set[BracketNode]
+
+      FIELD Root : Node
+
+      REQUIRE LambdaNodes + ApplicationNodes + VariableNodes + FanNodes + BracketNodes = Nodes
+
+      AXIOM RootedAcyclic : IsRootedAcyclicGraph(Nodes, Edges, Root)
+
+      AXIOM LambdaVariablePairing : 
+        EXISTS (Pairs : Set[(LambdaNode, VariableNode)]) . 
+          (FORALL (λ: LambdaNode) . EXISTS! (v: VariableNode) . (λ, v) in Pairs) AND
+          (FORALL (v: VariableNode) . EXISTS! (λ: LambdaNode) . (λ, v) in Pairs)
+
+      AXIOM EnclosureNesting :
+        LET Enclosures = {(n1, n2) | Path(n1, n2) AND 
+                            (n1 in OpenBracketNode AND n2 in CloseBracketNode)} 
+        IN  IsProperlyNested(Enclosures)
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE BetaReduction : Λ(v, body) @ arg -> body[v := arg]
+
+    REWRITE FanDuplication : ▽(●i(t1), ○i(t2)) -> ▽(t1, t2)
+
+    REWRITE BracketElimination : ○i(●i(t)) -> t 
+
+    SIMPLIFY OptionalBrackets : ○0(●0(t)) -> t
+  }
+
+  PROOFS {
+    PROOF Transparency : FORALL (g: LambdaGraph) (λ: LambdaNode) (v: VariableNode) (n1: Node) (n2: Node) . 
+      (Path(λ, v) AND Path(n1, λ) AND Path(n2, λ)) IMPLIES
+      EquivalentContext(n1, n2)
+    {
+      -- Inductive proof showing bracketing maintains context transparency along paths
+    }
+
+    PROOF IndependentLevels : FORALL (g: LambdaGraph) (n1: Node) (n2: Node) .
+      SharesEnclosingLambda(n1, n2) IMPLIES  
+      EXISTS (i: Nat) . ●i(n1) AND ○i(n2) AND  
+        FORALL (j < i) . NOT ○j(n1) AND NOT ●j(n2)
+    {
+      -- Proof of independence of enclosing context levels  
+    }
+
+    PROOF SimulatesReduction : FORALL (t: Term) (g: Graph) . 
+      Reduces(t, t') IFF Reduces(Encode(t), Encode(t')) 
+    {
+      -- Proof that graphical reduction rules simulate lambda calculus reductions
+    }
+
+    PROOF OptimalityTheorem : FORALL (t: Term) (g1: Graph) (g2: Graph) .
+      (Represents(g1, t) AND SharesSubterm(g1, g2)) IMPLIES
+      EXISTS (g3: Graph) . Reduces(g1, g3) AND Reduces(g2, g3)
+    {
+      -- Proof using Lamping/Levy labeling and parallel reduction   
+    }
+  }
+}
+
+
+
+CONCEPT ComputationalGeometry {
+  LANGUAGE {
+    TYPE Object
+    TYPE Arrow
+    TYPE Space
+    TYPE Transformation
+    TYPE Field
+    TYPE Form
+
+    FUNC source : Arrow -> Object
+    FUNC target : Arrow -> Object
+    FUNC identity : Object -> Arrow
+    FUNC compose : (Arrow, Arrow) -> Arrow
+    FUNC inverse : Arrow -> Arrow
+    FUNC apply : (Transformation, Object) -> Object
+    FUNC pullback : (Transformation, Field) -> Field
+    FUNC pushforward : (Transformation, Field) -> Field
+    FUNC exterior_derivative : Form -> Form
+    FUNC interior_derivative : Form -> Form
+    FUNC wedge_product : (Form, Form) -> Form
+    FUNC contraction : (Field, Form) -> Form
+    
+    PRED is_object : Object -> Bool
+    PRED is_arrow : Arrow -> Bool
+    PRED is_space : Space -> Bool
+    PRED is_transformation : Transformation -> Bool
+    PRED is_field : Field -> Bool
+    PRED is_form : Form -> Bool
+    PRED is_derivation : (Arrow, Object, Object) -> Bool
+    PRED is_integral : (Form, Space) -> Bool
+
+    AXIOM ObjectsExist : EXISTS (x : Object) . is_object(x)
+    AXIOM ArrowsExist : EXISTS (f : Arrow) . is_arrow(f)
+    AXIOM SpacesExist : EXISTS (s : Space) . is_space(s)
+    AXIOM TransformationsExist : EXISTS (t : Transformation) . is_transformation(t)
+    AXIOM FieldsExist : EXISTS (x : Field) . is_field(x)
+    AXIOM FormsExist : EXISTS (ω : Form) . is_form(ω)
+
+    AXIOM IdentityArrow : FORALL (x : Object) . source(identity(x)) = x AND target(identity(x)) = x
+    AXIOM CompositionAssociative : FORALL (f g h : Arrow) . compose(compose(f, g), h) = compose(f, compose(g, h))
+    AXIOM InverseArrow : FORALL (f : Arrow) . compose(f, inverse(f)) = identity(target(f)) AND compose(inverse(f), f) = identity(source(f))
+
+    AXIOM PullbackFunctorial : FORALL (t u : Transformation) (x : Field) . pullback(compose(t, u), x) = pullback(u, pullback(t, x))
+    AXIOM PushforwardFunctorial : FORALL (t u : Transformation) (x : Field) . pushforward(compose(t, u), x) = pushforward(t, pushforward(u, x))
+  }
+  
+  NOTATION {
+    x : A = "object x of type A"
+    f : A -> B = "arrow f from A to B"
+    t : A ~~> B = "transformation t from A to B"
+    X : Space = "space X"
+    F : X -> Y = "field F from X to Y"
+    ω : Form[X] = "differential form ω on X"
+    d = "exterior derivative"
+    ∂ = "interior derivative"
+    ∧ = "wedge product"
+    ⌟ = "contraction"
+  }
+  
+  STRUCTURES {
+    STRUCTURE Category {
+      PROPERTY is_category : (Set[Object], Set[Arrow]) -> Bool
+      PROPERTY is_functor : (Category, Category, Map[Object, Object], Map[Arrow, Arrow]) -> Bool
+      PROPERTY is_natural_transformation : (Functor, Functor, Map[Object, Arrow]) -> Bool
+      -- Add more categorical properties and constructions as needed
+    }
+    
+    STRUCTURE Manifold EXTENDS Space {
+      PROPERTY is_smooth : (Object, Object) -> Bool
+      PROPERTY is_tangent_space : (Object, Space) -> Bool
+      PROPERTY is_cotangent_space : (Object, Space) -> Bool
+      PROPERTY is_riemannian : (Field[Arrow[Object, Object]]) -> Bool
+      PROPERTY is_symplectic : (Form[Space]) -> Bool
+      -- Add more differential geometric properties and structures as needed
+    }
+
+    STRUCTURE DifferentialOperator {
+      PROPERTY is_differential_operator : (Field, Field) -> Bool
+      PROPERTY is_connection : (Field[Arrow[Field, Field]]) -> Bool
+      PROPERTY is_curvature : (Field[Arrow[Field[Arrow[Field, Field]], Field[Arrow[Field, Field]]]]) -> Bool
+      -- Add more differential operators and related structures as needed
+    }
+
+    STRUCTURE GeometricComputation EXTENDS Category, Manifold, DifferentialOperator {
+      -- This structure unifies the computational and geometric primitives
+      -- It allows for the expression of computational processes as geometric operations
+      -- And for the study of the geometry induced by computational systems
+    }
+  }
+
+  TRANSFORMERS {
+    -- Define rewrite rules that correspond to geometric and computational operations
+    -- For example:
+    REWRITE CompositionAssociativity : compose(compose(f, g), h) ~> compose(f, compose(g, h))
+    REWRITE PullbackExteriorDerivative : pullback(t, exterior_derivative(ω)) ~> exterior_derivative(pullback(t, ω))
+    REWRITE PushforwardWedgeProduct : pushforward(t, wedge_product(ω, τ)) ~> wedge_product(pushforward(t, ω), pushforward(t, τ))
+    -- Add more rewrite rules encoding key geometric and computational equivalences
+  }
+
+  PROOFS {
+    THEOREM Functoriality {
+      STATEMENT : FORALL (C D : Category) (F : Functor[C, D]) (x y : C.Object) (f : C.Arrow[x, y]) .
+        F.onArrows(C.identity(x)) = D.identity(F.onObjects(x)) AND
+        F.onArrows(C.compose(f, g)) = D.compose(F.onArrows(f), F.onArrows(g))
+
+      -- Proof of the functoriality axioms for a generic functor F
+      -- This captures the preservation of identity and composition by functors
+    }
+
+    THEOREM NaturalTransformation {
+      STATEMENT : FORALL (C D : Category) (F G : Functor[C, D]) (η : NaturalTransformation[F, G]) (x y : C.Object) (f : C.Arrow[x, y]) .
+        D.compose(η[y], F.onArrows(f)) = D.compose(G.onArrows(f), η[x])
+
+      -- Proof of the naturality condition for a generic natural transformation η
+      -- This captures the commutativity of the naturality square
+    }
+
+    THEOREM StokesTheorem {
+      STATEMENT : FORALL (M : Manifold) (ω : Form[M]) (N : Submanifold[M]) .
+        integral(M, exterior_derivative(ω)) = integral(boundary(N), ω)
+
+      -- Proof of the Stokes theorem relating the integral of a form to the integral of its derivative
+      -- This is a fundamental result linking global and local properties in differential geometry
+    }
+
+    THEOREM ChurchRosser {
+      STATEMENT : FORALL (x y z : Object) . 
+        (x ~> y AND x ~> z) IMPLIES (EXISTS (w : Object) . y ~> w AND z ~> w)
+
+      -- Proof of the Church-Rosser property for an abstract rewriting system
+      -- This ensures the confluency of the rewriting process, leading to unique normal forms
+    }
+    
+    -- Add more theorems expressing key results in category theory, differential geometry, and rewriting systems
+    -- The goal is to unify and generalize these results in the context of computational geometry
+  }
+}
+
+
+
+
+CONCEPT GeometricComputation {
+  LANGUAGE {
+    TYPE Object
+    TYPE Arrow
+    TYPE System = (Object, Arrow, Composition, Identity)
+
+    FUNC Composition : (Arrow, Arrow) -> Arrow
+    FUNC Identity : Object -> Arrow
+
+    PRED Reducible : (Object, Rule) -> Bool
+    PRED Equivalent : (Object, Object) -> Bool
+    PRED Optimal : Object -> Bool
+
+    AXIOM Category : 
+      LET f : Arrow, g : Arrow, h : Arrow
+      (Composition(f, Identity(Source(f))) = f) AND
+      (Composition(Identity(Target(f)), f) = f) AND
+      (Composition(Composition(f, g), h) = Composition(f, Composition(g, h)))
+
+    AXIOM Normalization :
+      FORALL (a : Object) . EXISTS (n : Object) . 
+        (Optimal(n) AND Equivalent(a, n))
+        
+    AXIOM Confluence :
+      FORALL (a b c : Object) . 
+        ((Equivalent(a, b) AND Equivalent(a, c)) IMPLIES
+         EXISTS (d : Object) . (Equivalent(b, d) AND Equivalent(c, d)))
+  }
+
+  NOTATION {
+    α, β, γ = "objects"
+    f, g, h = "arrows"
+    α ~> β = "object α reduces to object β"
+    α <~> β = "objects α and β are equivalent"
+  }
+
+  STRUCTURES {
+    STRUCTURE Category {
+      FIELD Objects : Set[Object]
+      FIELD Arrows : Object -> Object -> Set[Arrow]  
+      
+      FUNC Compose (f : Arrows(α, β)) (g : Arrows(β, γ)) : Arrows(α, γ)
+      FUNC ID (α : Objects) : Arrows(α, α)
+      
+      AXIOM AssociativityOfComposition : FORALL (f : Arrows(α, β)) (g : Arrows(β, γ)) (h : Arrows(γ, δ)) .
+        Compose(Compose(f, g), h) = Compose(f, Compose(g, h))
+        
+      AXIOM IdentityLaws : FORALL (f : Arrows(α, β)) . 
+        (Compose(ID(α), f) = f) AND (Compose(f, ID(β)) = f)
+    }
+    
+    STRUCTURE RewriteSystem EXTENDS Category {
+      FIELD Rules : Set[(Object, Object)]
+      
+      PRED Reducible (α : Objects) (r : Rules) : Bool
+      
+      FUNC Reduce (α : Objects) : Objects = 
+        CHOOSE β : Objects . EXISTS (r : Rules) . (Reducible(α, r) AND r = (α, β))
+        
+      AXIOM ChurchRosser : 
+        FORALL (α β γ : Objects) . 
+          ((Reducible(α, (α, β)) AND Reducible(α, (α, γ))) IMPLIES 
+           EXISTS δ : Objects . (Reducible(β, (β, δ)) AND Reducible(γ, (γ, δ))))
+    }
+    
+    STRUCTURE DifferentialStructure EXTENDS Category {
+      FIELD Functions : Object -> Set[Arrow]
+      FIELD DifferentialForms : Object -> Set[Arrow]
+      FIELD VectorFields : Object -> Set[Arrow]
+      
+      FUNC Differential (f : Functions(α)) : DifferentialForms(α)
+      FUNC LieDerivative (X : VectorFields(α)) (ω : DifferentialForms(α)) : DifferentialForms(α)
+      
+      AXIOM StokesTheorem : 
+        FORALL (M : Objects) (ω : DifferentialForms(M)) . 
+          Integrate(Differential(ω), M) = Integrate(ω, Boundary(M))
+          
+      AXIOM CartanMagicFormula :
+        FORALL (X : VectorFields(α)) (ω : DifferentialForms(α)) .
+          LieDerivative(X)(ω) = Compose(Differential(ContractionProduct(X, ω)), ContractionProduct(X, Differential(ω))) 
+    }
+  }
+
+  THEOREMS {
+    THEOREM ComputationIsGeometric {
+      FORALL (S : RewriteSystem) . EXISTS (F : Functor(S, DifferentialStructure)) . Faithful(F)
+    }
+    
+    THEOREM GeometryIsComputational {
+      FORALL (D : DifferentialStructure) . EXISTS (S : RewriteSystem) (F : Functor(D, S)) .  FullyFaithful(F) 
+    }
+  }
+
+  PROOFS {
+    -- The proofs of the theorems would involve constructing the functors and showing their faithfulness properties.
+    -- This would require defining the categorical notions of functor, natural transformation, faithfulness, etc.
+    -- The key idea is to show that rewrite systems can be embedded into differential structures (and vice versa)
+    -- in a way that preserves the essential properties and operations.
+    -- This would establish a deep connection between computation and geometry.
+  }
+}
+
+
+
+
+CONCEPT InteractionNetFoundations {
+  LANGUAGE {
+    TYPE Net  -- An interaction net
+    TYPE Agent <: Net  -- A node in the net
+    TYPE Port <: Net  -- A connection point on an agent
+    TYPE Wire <: Net  -- Connects ports
+    TYPE Name  -- For naming agents and ports
+
+    TYPE Type
+    TYPE AtomicType <: Type
+    TYPE TensorType <: Type  -- A ⊗ B
+    TYPE LinearFunctionType <: Type  -- A ⊸ B
+
+    FUNC Agents : Net -> Set[Agent]  -- The agents in a net
+    FUNC Ports : Net -> Set[Port]    -- The ports in a net
+    FUNC Wires : Net -> Set[Wire]    -- The wires in a net
+    FUNC AgentType : Agent -> Type   -- The type of an agent
+    FUNC PortName : Port -> Name     -- The name of a port
+    FUNC PortOwner : Port -> Agent   -- The agent a port belongs to
+    FUNC PortType : Port -> Type     -- The type of a port
+    FUNC WireEnds : Wire -> (Port, Port)  -- The ports a wire connects
+
+    FUNC TensorProduct : (Type, Type) -> TensorType
+    FUNC LinearFunction : (Type, Type) -> LinearFunctionType
+    FUNC DualType : Type -> Type  -- The dual of a type
+
+    PRED PortsConnected : (Port, Port) -> Bool
+    PRED NetWellFormed : Net -> Bool
+    PRED NetReduces : (Net, Net) -> Bool
+
+    AXIOM PortConnectivity :
+      FORALL (p1 p2 : Port) . 
+        PortsConnected(p1, p2) IFF
+        EXISTS (w : Wire) . (WireEnds(w) = (p1, p2) OR WireEnds(w) = (p2, p1))
+
+    AXIOM WellFormedNet :
+      FORALL (net : Net) .
+        LET portsConnected = SETBUILDER (p1, p2) in (Ports(net) × Ports(net)) . PortsConnected(p1, p2)
+        IN  NetWellFormed(net) IFF
+            (FORALL (a : Agent) in Agents(net) . 
+              FORALL (p1 p2 : Port) in Ports(a) . (p1 != p2 IMPLIES NOT PortsConnected(p1, p2))) AND
+            (FORALL (p : Port) in Ports(net) . 
+              EXISTS (a : Agent) in Agents(net) . p in Ports(a)) AND
+            (IsSymmetric(portsConnected) AND IsIrreflexive(portsConnected))
+            
+    AXIOM TypeInversion :
+      FORALL (A B : Type) . DualType(DualType(A)) = A
+      
+    AXIOM TensorDuality :
+      FORALL (A B : Type) . DualType(TensorProduct(A, B)) = TensorProduct(DualType(A), DualType(B))
+      
+    AXIOM FunctionDuality :
+      FORALL (A B : Type) . DualType(LinearFunction(A, B)) = LinearFunction(DualType(B), DualType(A))
+  }
+
+  NOTATION {
+    A, B, C = "types"
+    a, b, c = "agents"
+    p, q, r = "ports"
+    x, y, z = "names"
+    net1 ~~> net2 = "net1 reduces to net2"
+    net1 ~~>* net2 = "net1 reduces to net2 in zero or more steps"
+    A ⊗ B = TensorProduct(A, B)
+    A ⊸ B = LinearFunction(A, B)
+    Aᵒ = DualType(A)
+    x:A = "a port named x of type A"
+  }
+
+  TRANSFORMS {
+    RULE AgentReduction :
+      (x:A)-a-(y:B) | (u:Aᵒ)-b-(v:Bᵒ) ~~> (y:B)----(v:Bᵒ) 
+        WHEN (AgentType(a) = AgentType(b)ᵒ) 
+
+    RULE TensorReduction :
+      (x:A⊗B)-TensorAgent-(y:A, z:B) | (u:Aᵒ, v:Bᵒ)-TensorAgentᵒ-(w:(A⊗B)ᵒ) ~~>
+        (y:A)----(u:Aᵒ) | (z:B)----(v:Bᵒ)
+      
+    RULE FunctionReduction :
+      (x:A)-FunctionAgent-(y:B, z:A⊸B) | (u:Bᵒ)-a-(v:Aᵒ) ~~> 
+        (v:Aᵒ)----(z:A⊸B) | (y:B)----(u:Bᵒ)
+      
+    RULE CommutativeConversions : 
+      (x:A, y:B)-a-(z:C) ~~> (y:B, x:A)-a-(z:C)
+      
+    RULE IdentityReduction :
+      (x:A)-IdentityAgent-(y:A) | (z:Aᵒ)-IdentityAgentᵒ-(w:Aᵒ) ~~> (x:A)----(w:Aᵒ)
+  }
+
+  PROOFS {
+    THEOREM ChurchRosser :
+      FORALL (net1 net2 net3 : Net) . 
+        (net1 ~~> net2 AND net1 ~~> net3) IMPLIES
+        EXISTS (net4 : Net) . (net2 ~~>* net4 AND net3 ~~>* net4)
+    {
+      -- Proof:
+      -- 1. Define a parallel reduction relation ▷ that reduces all redexes in a net simultaneously.
+      --    net1 ▷ net2 IFF 
+      --      EXISTS (redexes : Set[(Agent, Agent)]) .
+      --        (FORALL ((a1, a2) : (Agent, Agent)) in redexes . IsRedex(a1, a2, net1)) AND
+      --        (net2 = FOLDL (ReduceRedex, net1, redexes))
+      --    where 
+      --      IsRedex(a1, a2, net) IFF 
+      --        EXISTS (rule : Transform) . Matches(rule, (a1, a2), net)
+      --      ReduceRedex(net, (a1, a2)) = 
+      --        ApplyRule(CHOOSE (rule : Transform) . Matches(rule, (a1, a2), net), (a1, a2), net)
+      --
+      -- 2. Show that ~~> is a sub-relation of ▷, i.e., (net1 ~~> net2) IMPLIES (net1 ▷ net2).
+      --    - If net1 ~~> net2, then there exists a rule that applies to a redex (a1, a2) in net1,
+      --      and net2 is the result of applying that rule to net1.
+      --    - Then the set {(a1, a2)} satisfies the conditions for net1 ▷ net2.
+      --
+      -- 3. Prove the Diamond Property for ▷: 
+      --    (net1 ▷ net2) AND (net1 ▷ net3) IMPLIES (EXISTS net4 . (net2 ▷ net4) AND (net3 ▷ net4)).
+      --    - Let redexes1 and redexes2 be the sets of redexes reduced in the steps net1 ▷ net2 and net1 ▷ net3.
+      --    - Let redexes = redexes1 ∪ redexes2. This is the set of all redexes reduced in either step.
+      --    - Show that the redexes in redexes are mutually non-overlapping in net1. 
+      --      This follows from the specific forms of the reduction rules.
+      --    - Let net4 = FOLDL (ReduceRedex, net1, redexes). 
+      --      This is the net obtained by reducing all redexes in redexes simultaneously.
+      --    - Show that net2 ▷ net4 and net3 ▷ net4, using the fact that redexes1 ⊆ redexes and redexes2 ⊆ redexes.
+      --
+      -- 4. By induction on the length of the reduction sequence, using the Diamond Property for ▷, show:
+      --    (net1 ~~>* net2) AND (net1 ~~>* net3) IMPLIES (EXISTS net4 . (net2 ~~>* net4) AND (net3 ~~>* net4)).
+    }
+
+    LEMMA NetFinitelyBranching :
+      FORALL (net : Net) . IsFiniteSet({ net' : Net | net ~~> net' })
+    {
+      -- Proof:
+      -- 1. For each agent a in net, let Redexes(a, net) be the set of agents a' such that (a, a') forms a redex in net.
+      --    - For each reduction rule, the form of the left-hand side determines which agents can be paired with a to form a redex.
+      --    - There are finitely many agents in net, so Redexes(a, net) is finite.
+      --
+      -- 2. Let AllRedexes(net) = ⋃ (a in Agents(net)) { (a, a') | a' in Redexes(a, net) }.
+      --    - This is the set of all redexes in net.
+      --    - It is a finite union of finite sets, hence finite.
+      --
+      -- 3. Each net' such that net ~~> net' is obtained by applying a reduction rule to a redex in AllRedexes(net).
+      --    - For each redex, there is at most one applicable rule (by the non-overlapping property of the rules).
+      --    - Thus, there are at most |AllRedexes(net)| distinct nets net' such that net ~~> net'.
+      --
+      -- Therefore, { net' : Net | net ~~> net' } is a finite set.
+    }  
+
+    THEOREM WeakNormalization :
+      FORALL (net : Net) .
+        NetWellFormed(net) IMPLIES 
+        EXISTS (normalNet : Net) . (net ~~>* normalNet AND FORALL (net' : Net) . NOT (normalNet ~~> net'))
+    {
+      -- Proof:
+      -- 1. Suppose towards a contradiction that there exists a well-formed net with an infinite reduction sequence:
+      --    net = net0 ~~> net1 ~~> net2 ~~> ...
+      --
+      -- 2. Define a function Measure : Net -> Nat × Nat:
+      --    Measure(net) = (TotalSymbols(net), TotalRedexes(net))
+      --    where
+      --      TotalSymbols(net) is the total number of symbols (agents, ports, wires) in net, and
+      --      TotalRedexes(net) is the total number of redexes in net.
+      --
+      -- 3. Show that if net ~~> net', then Measure(net) > Measure(net') in the lexicographic order on Nat × Nat.
+      --    - Each reduction rule replaces a subgraph with a smaller subgraph, so TotalSymbols decreases.
+      --    - If TotalSymbols stays the same, then the rule must have eliminated a redex, so TotalRedexes decreases.
+      --
+      -- 4. Thus, the sequence Measure(net0), Measure(net1), Measure(net2), ... is a strictly decreasing sequence in Nat × Nat.
+      --
+      -- 5. However, there is no infinite strictly decreasing sequence in Nat × Nat, as it is well-founded under the lexicographic order.
+      --
+      -- 6. This contradicts the assumption of an infinite reduction sequence.
+      --
+      -- Therefore, every well-formed net reduces to a normal form in a finite number of steps.
+    }
+    
+    THEOREM StrongNormalization :
+      FORALL (net : Net) .
+        NetWellFormed(net) IMPLIES 
+        FORALL (reductionSequence : [Net]) . 
+          (reductionSequence[0] = net AND 
+           FORALL (i : Nat) . (i < LENGTH(reductionSequence) - 1 IMPLIES reductionSequence[i] ~~> reductionSequence[i+1])) 
+          IMPLIES IsFinite(reductionSequence)
+    {
+      -- Proof sketch:
+      -- By contradiction. Suppose there is a well-formed net with an infinite reduction sequence.
+      -- Associate to each net a multiset of the "weights" of its redexes, where the weight is a measure of the redex's complexity. 
+      -- This multiset decreases (in the multiset order) with each reduction step.
+      -- An infinite strictly decreasing sequence of multisets contradicts the well-foundedness of the multiset order.
+      -- 
+      -- Definition of weight:
+      -- - Each type A is assigned a natural number weight(A) recursively:
+      --   - weight(AtomicType) = 1
+      --   - weight(A ⊗ B) = weight(A) + weight(B) + 1
+      --   - weight(A ⊸ B) = weight(A) + weight(B) + 1
+      -- - The weight of a redex (a1, a2) is defined as:
+      --   - AgentReduction: weight(A) + weight(B), where AgentType(a1) = Aᵒ and AgentType(a2) = B
+      --   - TensorReduction: weight(A ⊗ B)
+      --   - FunctionReduction: weight(A ⊸ B)
+      --   - IdentityReduction: weight(A)
+      -- 
+      -- The multiset of redex weights strictly decreases with each reduction step:
+      -- - AgentReduction: Two weights (of A and B) are replaced by one (of B).
+      -- - TensorReduction: One weight (of A ⊗ B) is replaced by two smaller weights (of A and B).
+      -- - FunctionReduction: One weight (of A ⊸ B) is replaced by two smaller weights (of A and B).
+      -- - IdentityReduction: One weight (of A) is removed.
+      -- 
+      -- Therefore, there cannot be an infinite reduction sequence, as that would imply an infinite strictly
+      -- decreasing sequence of multisets, contradicting the well-foundedness of the multiset order.
+    }
+  }
+}
+
+CONCEPT FoundationsOfComputation {
+  LANGUAGE {
+    TYPE Term
+    TYPE Variable <: Term
+    TYPE Abstraction <: Term  -- λx.t
+    TYPE Application <: Term  -- t u
+    TYPE InteractionNet <: Term
+    TYPE Agent <: InteractionNet  -- Like a node in the graph
+    TYPE Port <: InteractionNet  -- A connection point on an agent
+    TYPE Wire <: InteractionNet  -- Connects ports
+
+    TYPE Type
+    TYPE AtomicType <: Type
+    TYPE FunctionType <: Type  -- A → B
+    TYPE TensorType <: Type  -- A ⊗ B
+    TYPE LinearType <: Type
+    TYPE AffineType <: Type
+
+    FUNC FreeVars : Term -> Set[Variable]
+    FUNC BoundVars : Term -> Set[Variable]
+    FUNC AgentType : Agent -> Type
+    FUNC PortType : Port -> Type
+
+    PRED Typed : Term -> Type -> Bool
+    PRED WellFormedNet : InteractionNet -> Bool
+    PRED HasPrincipalPort : Agent -> Port -> Bool
+    PRED ConnectedPorts : InteractionNet -> Port -> Port -> Bool
+    PRED Reduces : (Term, Term) -> Bool
+    PRED OptimallyReduces : (Term, Term) -> Bool  
+
+    AXIOM UniquePortTypes : 
+      FORALL (a : Agent) (p1 p2 : Port) . 
+        (HasPrincipalPort(a, p1) AND HasPrincipalPort(a, p2)) IMPLIES (p1 = p2)
+        
+    AXIOM PortConnectivity :
+      FORALL (net : InteractionNet) (p1 p2 : Port) .
+        ConnectedPorts(net, p1, p2) IFF 
+        EXISTS (w : Wire) . (w in net) AND (ConnectsTo(w, p1) AND ConnectsTo(w, p2))
+  }
+
+  NOTATION {
+    x, y, z = "variables"
+    t, u, v = "terms"
+    A, B, C = "types"
+    Γ = "typing context (set of variable : type pairs)"
+    Γ ⊢ t : A = "under context Γ, term t has type A"
+    t ~> u = "term t reduces to term u"
+    t ~~> u = "term t optimally reduces to term u"
+    a, b, c = "agents"
+    p, q, r = "ports"
+  }
+
+  STRUCTURES {
+    STRUCTURE AffineLogic {
+      FIELD Terms : Set[Term]
+      FIELD Types : Set[AffineType]
+      FIELD Axioms : Set[(InteractionNet, InteractionNet)]  -- Rewrite rules
+
+      AXIOM CutRule :
+        FORALL (Γ Δ : Context) (t u : Term) (A : Type) .
+          (Γ ⊢ t : A) AND (Δ, x : A ⊢ u : C) IMPLIES (Γ, Δ ⊢ [x -> t]u : C)
+
+      AXIOM TensorRule : 
+        FORALL (Γ Δ : Context) (t u : Term) (A B : Type) .
+          (Γ ⊢ t : A) AND (Δ ⊢ u : B) IMPLIES (Γ, Δ ⊢ (t ⊗ u) : (A ⊗ B))  
+
+      AXIOM LinearFunction :
+        FORALL (Γ : Context) (x : Variable) (t : Term) (A B : Type) .
+          (Γ, x : A ⊢ t : B) AND (x in FreeVars(t)) IMPLIES (Γ ⊢ (λx.t) : (A → B))
+
+      AXIOM Dereliction :
+        FORALL (Γ : Context) (x : Variable) (A : Type) .
+          (Γ, x : A ⊢ t : B) AND (x not in FreeVars(t)) IMPLIES (Γ ⊢ t : B)
+    }
+
+    STRUCTURE InteractionCombinatorsCalculus {
+      FIELD Agents : Set[Agent]
+      FIELD Axioms : Set[(InteractionNet, InteractionNet)]  -- Rewrite rules
+
+      AXIOM Annihilation : 
+        FORALL (a b : Agent) (p q : Port) .
+          HasPrincipalPort(a, p) AND HasPrincipalPort(b, q) AND
+          ConnectedPorts(net, p, q) AND (AgentType(a) = DualType(AgentType(b)))
+          IMPLIES ReducesToEmptyNet(net)
+
+      AXIOM Commutation :
+        FORALL (a b : Agent) (p1 p2 q1 q2 : Port) (net1 net2 : InteractionNet) . 
+          (net1 = Connect(a, p1, b, q1)) AND (net2 = Connect(a, p2, b, q2)) AND
+          (PortType(p1) = PortType(p2)) AND (PortType(q1) = PortType(q2))  
+          IMPLIES (net1 ~> net2)
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE CurryingElimination : ((A → B) → C) ~> (A ⊗ B → C)
+
+    REWRITE ConstantElimination : (K x y) ~> x
+
+    REWRITE CommutativeConversions : (A ⊗ B) ~> (B ⊗ A)  
+  }
+
+  PROOFS {
+    THEOREM ChurchRosserTheorem :
+      FORALL (t u v : Term) .
+        ((t ~~> u) AND (t ~~> v)) IMPLIES (EXISTS (w : Term) . (u ~~> w) AND (v ~~> w))
+    {
+      -- Proof sketch:
+      -- 1. Define a parallel reduction relation ▷ that reduces all redexes in a term simultaneously.
+      -- 2. Show that ~~> is a sub-relation of ▷, i.e., (t ~~> u) IMPLIES (t ▷ u).
+      -- 3. Prove the Diamond Property for ▷: (t ▷ u) AND (t ▷ v) IMPLIES (EXISTS w . (u ▷ w) AND (v ▷ w)).
+      -- 4. Conclude that the theorem holds, since ~~> is a sub-relation of ▷.
+    }  
+
+    THEOREM LinearConsistency :
+      FORALL (t : Term) (T : LinearType) . (⊢ t : T) IMPLIES Normalizable(t)
+    {
+      -- Proof sketch: 
+      -- 1. Define a weight function W from terms to natural numbers, such that:
+      --    - W(x) = 1 for variables
+      --    - W(λx.t) = W(t) + 1
+      --    - W(t u) = W(t) + W(u)
+      -- 2. Prove that if (t ~> u), then W(t) > W(u).
+      -- 3. Conclude that reduction decreases weight, so all reduction sequences terminate.
+    }
+
+    THEOREM Compositionality :
+      FORALL (t u : Term) (ctx : Term -> Term) . (t ~~> u) IMPLIES (ctx(t) ~~> ctx(u))  
+    {
+      -- Proof by induction on the structure of ctx:
+      -- - Base case: ctx = []. Trivial since t ~~> u implies ctx(t) = t ~~> u = ctx(u).
+      -- - Inductive cases:
+      --   - ctx = λx.C. Apply induction hypothesis to C.
+      --   - ctx = C v. If the reduction t ~~> u occurs inside C, apply IH. If it occurs at the root, 
+      --     use a Subcomposition Lemma: (t ~~> u) IMPLIES ((t v) ~~> (u v)).
+      --   - ctx = v C. Similar to previous case.
+    }
+  }
+}
+
+CONCEPT AbstractGeometricTheory {
+  LANGUAGE {
+    TYPE Point
+    TYPE Line
+    TYPE Plane
+    TYPE Space
+
+    PRED Incident : (Point, Line) -> Bool
+    PRED Parallel : (Line, Line) -> Bool
+    PRED Perpendicular : (Line, Line) -> Bool
+    PRED Between : (Point, Point, Point) -> Bool
+    PRED Congruent : (Line, Line) -> Bool
+
+    FUNC Intersection : (Line, Line) -> Point  -- Intersection of two lines
+    FUNC Line : (Point, Point) -> Line  -- Line passing through two points
+    FUNC Midpoint : (Point, Point) -> Point  -- Midpoint of two points
+
+    AXIOM Symmetry : FORALL (p q : Point) . Between(p, q, p) IMPLIES p = q
+    AXIOM Transitivity : FORALL (p q r s : Point) . (Between(p, q, r) AND Between(p, r, s)) IMPLIES Between(p, q, s)
+    AXIOM Euclid : FORALL (ℓ : Line) (p : Point) . (NOT Incident(p, ℓ)) IMPLIES 
+                     EXISTS! (m : Line) . (Incident(p, m) AND Parallel(m, ℓ))
+  }
+
+  NOTATION {
+    p, q, r, s = "points"
+    ℓ, m, n = "lines"
+    π = "plane"
+    σ = "space"
+    p ∈ ℓ = "point p is incident to line ℓ"
+    ℓ1 ∥ ℓ2 = "lines ℓ1 and ℓ2 are parallel"
+    ℓ1 ⊥ ℓ2 = "lines ℓ1 and ℓ2 are perpendicular"
+    p * q * r = "points p, q, r are collinear with q between p and r"
+    ℓ1 ≅ ℓ2 = "lines ℓ1 and ℓ2 are congruent"
+  }
+
+  STRUCTURES {
+    STRUCTURE EuclideanGeometry EXTENDS AbstractGeometricTheory {
+      AXIOM ParallelPostulate : FORALL (p : Point) (ℓ : Line) . (NOT Incident(p, ℓ)) IMPLIES
+                                  EXISTS! (m : Line) . (Incident(p, m) AND Parallel(m, ℓ))
+
+      AXIOM PerpendicularUniqueness : FORALL (p : Point) (ℓ : Line) . (Incident(p, ℓ)) IMPLIES
+                                        EXISTS! (m : Line) . (Incident(p, m) AND Perpendicular(m, ℓ))
+
+      THEOREM PythagoreanTheorem : FORALL (a b c : Point) . 
+        LET ℓ1 = Line(a, c), ℓ2 = Line(b, c), ℓ3 = Line(a, b) IN
+        (Perpendicular(ℓ1, ℓ2)) IMPLIES (Length(ℓ3)^2 = Length(ℓ1)^2 + Length(ℓ2)^2)
+    }
+
+    STRUCTURE HyperbolicGeometry EXTENDS AbstractGeometricTheory {
+      AXIOM HyperbolicParallel : FORALL (p : Point) (ℓ : Line) . (NOT Incident(p, ℓ)) IMPLIES
+                                   EXISTS (m n : Line) . (Incident(p, m) AND Incident(p, n) AND Parallel(m, ℓ) AND Parallel(n, ℓ) AND m != n)
+
+      AXIOM HyperbolicPerpendicular : FORALL (p : Point) (ℓ : Line) . (Incident(p, ℓ)) IMPLIES
+                                        EXISTS (m n : Line) . (Incident(p, m) AND Incident(p, n) AND Perpendicular(m, ℓ) AND Perpendicular(n, ℓ) AND m != n)
+
+      THEOREM GaussBolyaiTheorem : FORALL (t : Triangle) . (AngleSum(t) < 180)
+    }
+
+    STRUCTURE EllipticGeometry EXTENDS AbstractGeometricTheory {
+      AXIOM SphericalParallel : FORALL (ℓ : Line) . NOT EXISTS (m : Line) . (Parallel(m, ℓ) AND m != ℓ)
+
+      AXIOM SphericalPerpendicular : FORALL (p : Point) (ℓ : Line) . (Incident(p, ℓ)) IMPLIES
+                                       EXISTS! (m : Line) . (Incident(p, m) AND Perpendicular(m, ℓ))
+
+      THEOREM SphericalTriangleTheorem : FORALL (t : Triangle) . (AngleSum(t) > 180)
+    }
+
+    STRUCTURE ProjectiveGeometry EXTENDS AbstractGeometricTheory {
+      AXIOM ProjectiveIncidence : FORALL (p : Point) (ℓ : Line) . EXISTS! (q : Point) . (Incident(p, Line(p, q)) AND Incident(q, ℓ))
+
+      AXIOM ProjectiveDuality : FORALL (p : Point) (ℓ : Line) . (Incident(p, ℓ)) IFF (Incident(ℓ, p))
+
+      THEOREM DesarguesTheorem : FORALL (t1 t2 : Triangle) . 
+        LET a1, b1, c1 = Vertices(t1), a2, b2, c2 = Vertices(t2) IN
+        (Collinear(a1, a2, a3) AND Collinear(b1, b2, b3) AND Collinear(c1, c2, c3) AND a3 != b3 AND b3 != c3 AND c3 != a3)
+        IMPLIES Concurrent(Line(a1, a2), Line(b1, b2), Line(c1, c2))
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE PointLineIncidence : p ∈ ℓ <-> ℓ ∈ p
+    
+    REWRITE CollinearitySymmetry : (p * q * r) <-> (r * q * p)
+
+    REWRITE ParallelSymmetry : (ℓ1 ∥ ℓ2) <-> (ℓ2 ∥ ℓ1)
+
+    REWRITE PerpendicularSymmetry : (ℓ1 ⊥ ℓ2) <-> (ℓ2 ⊥ ℓ1)
+
+    REWRITE CongruentTransitivity : ((ℓ1 ≅ ℓ2) AND (ℓ2 ≅ ℓ3)) IMPLIES (ℓ1 ≅ ℓ3)
+  }
+
+  PROOFS {
+    THEOREM EquivalentEuclid :
+      FORALL (σ : EuclideanGeometry) .
+        Euclid IFF ParallelPostulate
+    {
+      -- Proof sketch:
+      -- 1. Assume Euclid holds. Let p be a point and ℓ a line not incident to p.
+      -- 2. By Euclid, there exists a unique line m incident to p and parallel to ℓ.
+      -- 3. This is exactly the statement of ParallelPostulate.
+      -- 4. Conversely, assume ParallelPostulate holds. Let ℓ be a line and p a point not incident to ℓ.
+      -- 5. By ParallelPostulate, there exists a unique line m incident to p and parallel to ℓ.
+      -- 6. This is exactly the statement of Euclid.
+      -- 7. Therefore, Euclid and ParallelPostulate are equivalent.
+    }
+
+    THEOREM HyperbolicParallelImpliesNotEuclid :
+      FORALL (σ : HyperbolicGeometry) .
+        (FORALL (p : Point) (ℓ : Line) . (NOT Incident(p, ℓ)) IMPLIES
+           EXISTS (m n : Line) . (Incident(p, m) AND Incident(p, n) AND Parallel(m, ℓ) AND Parallel(n, ℓ) AND m != n))
+        IMPLIES NOT Euclid
+    {
+      -- Proof sketch:
+      -- 1. Assume HyperbolicParallel holds. Let p be a point and ℓ a line not incident to p.
+      -- 2. By HyperbolicParallel, there exist distinct lines m and n incident to p and parallel to ℓ.
+      -- 3. But Euclid states that there should be a unique such line.
+      -- 4. Therefore, Euclid cannot hold in a geometry where HyperbolicParallel holds.
+    }
+
+    THEOREM ProjectiveDesargues :
+      FORALL (σ : ProjectiveGeometry) .
+        DesarguesTheorem
+    {
+      -- Proof sketch:
+      -- 1. Let t1 and t2 be two triangles with vertices a1, b1, c1 and a2, b2, c2 respectively.
+      -- 2. Assume a1, a2, a3 are collinear, b1, b2, b3 are collinear, c1, c2, c3 are collinear,
+      --    and a3, b3, c3 are distinct points.
+      -- 3. Let ℓa be the line through a1 and a2, ℓb the line through b1 and b2, ℓc the line through c1 and c2.
+      -- 4. By ProjectiveIncidence, there exists a unique point p incident to both ℓa and Line(a3, b3).
+      -- 5. Similarly, p is incident to both ℓb and Line(b3, c3), and to both ℓc and Line(c3, a3).
+      -- 6. Therefore, p is the unique point of concurrency of ℓa, ℓb, and ℓc.
+    }
+  }
+}
+
+
+
+CONCEPT AbstractRewritingSystems {
+  LANGUAGE {
+    TYPE Object
+    TYPE Arrow
+    TYPE Rule  -- A pair of Objects, representing a rewrite rule
+
+    FUNC Source : Arrow -> Object
+    FUNC Target : Arrow -> Object
+    FUNC Compose : (Arrow, Arrow) -> Arrow  -- f . g
+
+    PRED Reducible : (Object, Rule) -> Bool -- Object is reducible by Rule
+    PRED Reduces : (Object, Object) -> Bool  -- Reduces in one step
+    PRED OptimallyReduces : (Object, Object) -> Bool  -- Optimal multi-step reduction
+
+    AXIOM CategoryStructure :
+      FORALL (f g h : Arrow) .
+        Compose(f, Identity(Source(f))) = f  AND
+        Compose(Identity(Target(f)), f) = f  AND
+        Compose(Compose(f, g), h) = Compose(f, Compose(g, h))
+
+    AXIOM ReductionStructure :
+      FORALL (a b c : Object) (r : Rule) .
+        (Reduces(a, b) AND Reduces(b, c)) IMPLIES OptimallyReduces(a, c)
+  }
+
+  NOTATION {
+    a, b, c = "objects"
+    f, g, h = "arrows"
+    r, s, t = "rules"
+    a ~> b = "object a reduces to object b in one step"
+    a ~~> b = "object a optimally reduces to object b"
+  }
+
+  STRUCTURES {
+    STRUCTURE AbstractLambdaCalculus EXTENDS AbstractRewritingSystems {
+      FIELD Terms : Set[Object]
+      FIELD Variables : Set[Object]
+      FIELD Abstractions : Set[Arrow]
+      FIELD Applications : Set[Arrow]
+      FIELD BetaReduction : Rule
+
+      AXIOM VariablesAreTerms : Variables SUBSET Terms
+      AXIOM AbstractionsAreArrows : Abstractions SUBSET Arrow
+      AXIOM ApplicationsAreArrows : Applications SUBSET Arrow  
+
+      AXIOM BetaReductionRule :
+        FORALL (f : Abstractions) (a : Terms) .
+          LET fa = ApplyTo(f, a) IN
+          Reducible(fa, BetaReduction) AND
+          Reduces(fa, Substitute(BodyOf(f), ParameterOf(f), a))
+    }
+
+    STRUCTURE AbstractInteractionNets EXTENDS AbstractRewritingSystems {
+      FIELD Agents : Set[Object]
+      FIELD Ports : Set[Object]
+      FIELD Wires : Set[Arrow]  
+      FIELD Interactions : Set[Rule]
+
+      AXIOM PortsHaveUniqueAgents : 
+        FORALL (p : Ports) . EXISTS! (a : Agents) . ConnectsTo(p, a)
+
+      AXIOM InteractionRules :
+        FORALL (r : Interactions) .
+          EXISTS (a b : Agents) (p q : Ports) .
+            r = (ConnectPorts(p, q), DisconnectPorts(p, q))  AND
+            ConnectsTo(p, a) AND ConnectsTo(q, b) AND Complementary(a, b)
+    }
+
+    STRUCTURE AbstractGeometricTheory EXTENDS AbstractRewritingSystems {
+      FIELD Points : Set[Object]  
+      FIELD Lines : Set[Arrow]
+      FIELD IncidenceRules : Set[Rule]
+
+      AXIOM PointsIncidentToLines :
+        FORALL (ℓ : Lines) . 
+          EXISTS (p q : Points) . Source(ℓ) = p AND Target(ℓ) = q
+
+      AXIOM ParallelPostulate :
+        EXISTS (ℓ : Lines) (p : Points) . NOT Incident(p, ℓ) IMPLIES
+          FORALL (m : Lines) . Incident(p, m) IMPLIES 
+            (EXISTS (q : Points) . Incident(q, ℓ) AND Incident(q, m)) OR  
+            (FORALL (q : Points) . Incident(q, ℓ) IMPLIES NOT Incident(q, m))
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE CommutativeMonoid : (a + b) + c ~> a + (b + c)
+
+    REWRITE LeftIdentity : 0 + a ~> a
+
+    REWRITE RightIdentity : a + 0 ~> a
+
+    REWRITE GeometricDuality : point(ℓ) ~> line(p) WHEN Incident(p, ℓ)
+  }
+
+  PROOFS {
+    THEOREM ChurchRosser :
+      FORALL (a b c : Object) . 
+        (OptimallyReduces(a, b) AND OptimallyReduces(a, c)) 
+        IMPLIES (EXISTS (d : Object) . OptimallyReduces(b, d) AND OptimallyReduces(c, d))
+    {
+      -- Proof sketch:
+      -- 1. Define a relation ParallelReduces that applies all possible Rules simultaneously.
+      -- 2. Show that OptimallyReduces SUBSET ParallelReduces.
+      -- 3. Prove the Diamond Property for ParallelReduces:
+      --    (ParallelReduces(a, b) AND ParallelReduces(a, c))
+      --    IMPLIES (EXISTS (d : Object) . ParallelReduces(b, d) AND ParallelReduces(c, d))
+      -- 4. Conclude that ChurchRosser holds, since OptimallyReduces SUBSET ParallelReduces.
+    }
+
+    THEOREM Normalization :
+      FORALL (a : Object) . 
+        (FORALL (r : Rule) . Reducible(a, r) IMPLIES 
+          (EXISTS (b : Object) . Reduces(a, b) AND NOT Reducible(b, r))) 
+        IMPLIES (EXISTS (c : Object) . OptimallyReduces(a, c) AND IsNormalForm(c))
+    {
+      -- Proof sketch:
+      -- 1. Define a measure M on Objects that strictly decreases with each Rule application.
+      -- 2. Suppose a is an Object such that every Rule that applies to it leads to an irreducible Object.
+      -- 3. Let c be the Object obtained by applying some sequence of optimal reductions starting from a.
+      -- 4. If c is not a normal form, then some Rule r applies to it. 
+      -- 5. By assumption, r must lead to an irreducible Object d. But then M(d) < M(c), contradicting
+      --    the optimality of the reduction sequence from a to c.
+      -- 6. Therefore, c must be a normal form. Since the reduction from a to c is optimal, this concludes the proof.
+    }
+
+    THEOREM HoTTUnivalence :
+      FORALL (A B : Object) (f g : Arrow) .
+        (Source(f) = A AND Target(f) = B AND Source(g) = A AND Target(g) = B AND IsEquivalence(f) AND IsEquivalence(g))
+        IMPLIES PathOver(ObjectPaths(A, B), f, g)
+    {
+      -- Proof sketch:
+      -- This is a central but complex theorem from Homotopy Type Theory. The full proof requires
+      -- developing a significant amount of homotopy-theoretic machinery.
+      -- The key idea is that if f and g are equivalences (roughly, invertible mappings) between 
+      -- objects A and B, then f and g are connected by a path in the space of all mappings from A to B.
+      -- This captures the idea that equivalent objects are "the same" in a strong sense.
+      -- A full proof would involve:
+      -- 1. Defining homotopy levels and the notion of an n-type.
+      -- 2. Defining contractibility and showing that singletons are contractible.
+      -- 3. Defining equivalences in terms of contractible homotopy fibers.
+      -- 4. Proving that isContr(Singleton(a)) for all a : A implies A is a Proposition.
+      -- 5. Defining the notion of transport along paths and proving path induction.
+      -- 6. Defining a mapping from paths between equivalences to equivalences between path spaces.
+      -- 7. Proving that this mapping is an equivalence, yielding the Univalence Axiom.
+    }
+  }
+}
+
+
+
+
+
+
+
+CONCEPT FoundationsOfComputation {
+  LANGUAGE {
+    TYPE Term
+    TYPE InteractionNet <: Term
+    TYPE GraphReductionRule <: Term -> Term
+
+    TYPE Type
+    TYPE LinearType <: Type
+    TYPE AffineType <: Type
+
+    FUNC Typed : Term -> Type -> Bool
+    FUNC ValidTransformation : GraphReductionRule -> Bool
+
+    PRED Reduces : (Term, Term) -> Bool
+    PRED OptimallyReduces : (Term, Term) -> Bool  
+  }
+
+  NOTATION {
+    t : T = "term t has type T"
+    t ~> u = "term t reduces to term u"
+    t ~~> u = "term t optimally reduces to term u"
+  }
+
+  STRUCTURES {
+    STRUCTURE AffineLogic {
+      FIELD Terms : Set[Term]
+      FIELD Types : Set[AffineType]
+      FIELD Axioms : Set[GraphReductionRule]
+
+      AXIOM ValidRules : FORALL (rule : Axioms) . ValidTransformation(rule)
+
+      AXIOM Progress : FORALL (t : Terms) . 
+        (EXISTS (T : Types) . Typed(t, T)) IMPLIES
+        (t in NormalForm OR (EXISTS (u : Terms) . Reduces(t, u)))
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE CurryingElimination : ((a → b) → c) ~> (a ⊗ b → c)
+
+    REWRITE ConstantElimination : (K x y) ~> x
+
+    REWRITE CommutativeConversions : (A ⊗ B) ~> (B ⊗ A)  
+  }
+
+  PROOFS {
+    THEOREM ChurchRosserTheorem : FORALL (t u v : Term) . 
+      ((t ~~> u) AND (t ~~> v)) IMPLIES (EXISTS (w : Term) . (u ~~> w) AND (v ~~> w))
+
+    THEOREM LinearConsistency :
+      FORALL (t : Term) (T : LinearType) . Typed(t, T) IMPLIES Normalizable(t)  
+        
+    THEOREM Compositionality :
+      FORALL (t u : Term) (ctx : Term -> Term) . (t ~~> u) IMPLIES (ctx(t) ~~> ctx(u))
+  }
+}
+
+
+
+
+
+CONCEPT FoundationsOfComputation {
+  LANGUAGE {
+    TYPE Term
+    TYPE Function <: Term
+    TYPE Application <: Term
+    TYPE Variable <: Term
+
+    TYPE InteractionNet
+    TYPE Agent
+    TYPE InteractionRule
+
+    FUNC Reduce : Term -> Term
+    FUNC Evaluate : InteractionNet -> InteractionNet
+
+    PRED IsOptimal : (Term, Term) -> Bool
+    PRED IsEfficient : (InteractionNet, InteractionNet) -> Bool
+  }
+
+  STRUCTURES {
+    STRUCTURE AbstractAlgorithm {
+      FIELD AbstractFragment : Set[Term]
+
+      AXIOM Optimality : FORALL (t1: Term) (t2: Term) . 
+        (t1 in AbstractFragment AND Reduce(t1) = t2) IMPLIES IsOptimal(t1, t2)
+    }
+
+    STRUCTURE InteractionSystem {
+      FIELD Agents : Set[Agent]
+      FIELD Rules : Set[InteractionRule]
+
+      AXIOM Efficiency : FORALL (n1: InteractionNet) (n2: InteractionNet) .
+        (Evaluate(n1) = n2) IMPLIES IsEfficient(n1, n2)
+    }
+  }
+
+  THEOREMS {
+    THEOREM AbstractFragmentTheorem :
+      FORALL (t: Term) .
+        (t CAUSES_PARADOX) IMPLIES (t NOT_IN AbstractAlgorithm.AbstractFragment)
+
+    THEOREM InteractionNetCompleteness :
+      FORALL (t: Term) .
+        EXISTS (n: InteractionNet) . Represents(n, t)
+        
+    THEOREM InteractionNetEfficiency : 
+      FORALL (n1: InteractionNet) (n2: InteractionNet) .
+        (Represents(n1, t) AND Represents(n2, t)) IMPLIES
+        EXISTS (n3: InteractionNet) . 
+          (Evaluate(n1) = n3 AND Evaluate(n2) = n3 AND IsEfficient(n1, n3) AND IsEfficient(n2, n3))
+  }
+
+  PROOFS {
+    PROOF AbstractFragmentConsistency :
+      FORALL (T: Set[Term]) . 
+        (T SUBSET AbstractAlgorithm.AbstractFragment) IMPLIES Consistent(T)
+    {
+      -- Proof that abstract fragment avoids known paradoxes  
+    }
+      
+    PROOF InteractionNetNormalization :
+      FORALL (n: InteractionNet) .
+        EXISTS (n': InteractionNet) . Evaluate(n) = n' AND IsNormalForm(n')
+    {
+      -- Proof that interaction nets are strongly normalizing  
+    }
+  }
+}
+
+
+
+
+
+
+
+
+
+Randomly came across this comment, in a video about epicycles:
+
+> it's amazing how much simpler the truth can be than you trying to bend over backwards to make reality fit your preconceived notions
+
+By no means I'm saying that I'm right; I'm just offering you an unusual perspective. When I read that comment, I couldn't help but connect geocentrism to one modern concept:
+
+*the function*
+
+This isn't just about programming paradigms, it is broader than that. At the heart of mathematics lies the calculus, and, at its core, lies the function: a deeply ingrained, core axiom of all human sciences; a concept as universal and unescapable (for the modern mind) as the idea that the Earth was the center of the universe (for these back then).
+
+But what if functions are just... the wrong point-of-view?
+
+If you just go ahead and try to implement a "function evaluator", complexity and ugliness unavoidably emerge in ways that, to my eyes, look suspicious - not unlike epicycles. Despite decades of efforts, there isn't a single implementation of beta-reduction that feels canonical. From closures, to sharing graphs, to supercombinators or to bottom-up beta-reduction; it is hard to look at any of these and not feel like they're artificial, or, at the very least, human-engineered to an extent. What does that hint?
+
+There is an exception, though. In 1990, Lamping described an algorithm capable of evaluating λ-terms optimally, in the sense that it would always perform the minimal amount of beta-reductions. This algorithm was not just fast - it was elegant, beautiful and natural in a way that, to my eyes, felt canonical. Yet, it had one problem: in its most natural form, it didn't cover all λ-terms. Fortunately, Lamping himself found a solution; an extension to the "abstract" fragment of his algorithm, that allowed for full functional coverage. Yet, such extension made the system considerably more complex and, arguably, less elegant. What does that hint?
+
+Now, one could argue that implementation doesn't matter, and isn't an indicative of truth. Perhaps functions are just hard to compute fast, but, so what? They still are, mathematically, the right framework to model nature - right? That's a point of view that I think most mathematicians would hold. Yet, if that was the case, then, how came functions keep breaking math itself, over and over?
+
+In 1901, Russel discovered his infamous paradox, which broke the original set theory, showing that unrestricted comprehension was inconsistent. In 1931, Gödel's incompleteness theorems showed that any consistent formal system containing arithmetic is incomplete. In the 1930s, Church, Kleene and Rosser discovered the untyped lambda calculus was inconsistent. In the 1940s, Curry discovered a paradox in combinatory logic. In the 1970s, Girard discovered that the polymorphic lambda calculus, also known as System F, was inconsistent with unrestricted comprehension, leading to the development of predicative type theories.
+
+In fact, up to this date, modern proof assistants such as Lean and Coq now include a concept of "universes" - an annoying restriction that segments the language in many different layers, breaking modularity and making it terrible to work with in many occasions. I don't think anyone would argue they feel natural or welcome - rather, they're an ugly inconvenience we've learned to live with, as they're a solution to Russel's paradox. Even that isn't enough - positivity check, structural recursion. Many other "inconvenient restrictions" must be carefully placed to avoid breaking the universe and deriving an inconsistent type theory.
+
+But what does that all hint?
+
+Well, here's the thing - the amazing coincidence nobody talks about. All - absolutely all - the inconsistency proofs we found so far, when translated to type theory, map to a λ-term that lies, in an amazingly cosmical coincidence, in the set functions that can't be evaluated soundly by Lamping's abstract algorithm. To me, this feels surprisingly close to a civilization finally figuring out a way to model the solar system based on elegant elliptical orbits, but failing to get the hint that this implies the sun is at its center. So, they keep trying to make the geocentric model work by adding more and more complex epicycles, instead of considering that perhaps their fundamental assumption - that the Earth is the center of the universe - might be incorrect. 
+
+By all means, I could be wrong. Exploring this point of view did lead to HVM and Bend, but these still have a long, long way to go before they're stablished and respected as valuable alternatives to existing languages and architectures. From the mathematical standpoint, abandoning the full function in favor of lighter, affine variants (or, if you're brave, raw interaction combinators) would allow one to construct a consistent type theory with axioms that feel morally wrong, such as type-in-type, insanely dependent functions, and the most elegant proof of function extensionality that I've ever came across - although, at that point, I concede "function" might be a huge misnomer. Regardless, I do wonder if important discoveries would be unlocked once we look at this place, and I personally bet interaction combinators will be heavily important in the future, once we exhaust all ideas we have to making circular epicycles. But that's just my unorthodox point of view.
+
+
+
+
+
+
+
+
+scanstone
+@scanstone1
+·
+45m
+> I don't think anyone would argue [universes] feel natural or welcome
+
+I would! I mean, I would if I knew the right place to start. I think our options are:
+- Have a finite hierarchy (sets -> proper classes)
+- Have universes
+- Stay close to the ground (no detours thru ∞)
+Taelin
+@VictorTaelin
+·
+39m
+So, Coq, Agda and (I think?) Lean, right? (I'm not familiar with Lean's core, but I assume it avoids dependent types?) So, how does these restrictions don't look, well, arbitrary and artificial to you? If it was natural and canonical, we'd not have 3 options!
+Taelin
+@VictorTaelin
+·
+24m
+avoids dependent types as much as possible*
+Win Wang
+@Winium
+·
+48m
+interaction combinators can reduce to lambda calc tho? so they're at least as inconsistent?
+Taelin
+@VictorTaelin
+·
+45m
+Extended with Lamping's oracle, they can reduce the full λ-calculus. Without it, they can reduce a large, "efficient subset". I'm arguing precisely that this subset is the interesting one, since all issues arise precisely when we extend it, in an attempt to cover full functions.
+Win Wang
+@Winium
+·
+38m
+"Efficient subset" is pretty interesting, I'd have to read more about this subset.
+
+But STLC is consistent (and obviously comes with decidable typing).
+
+
+Zanzi Tangle, now at Monoidal Cafe
+@tangled_zans
+·
+49m
+Do you have this formalized? I'm curious to see this affine lambda calculus and the lamping translation on it
+Taelin
+@VictorTaelin
+·
+43m
+"this" - what exactly?
+Zanzi Tangle, now at Monoidal Cafe
+@tangled_zans
+·
+41m
+A typed lambda calculus corresponding to the subset of lambda terms that can be evaluated by Lamping's algorithm
+Taelin
+@VictorTaelin
+·
+37m
+How formal does formal need to be? I can briefly describe it, as you know: simply typed LC under EAL. (Which can then be extended to polymorphic types, dependent types, etc.)
+
+Or do you mean as in "that captures the entire set, rather than a subset, of Lamping-valid terms"?
+Zanzi Tangle, now at Monoidal Cafe
+@tangled_zans
+·
+30m
+I want to see this EAL-based type system and it's normalisation defined in Idris or Agda. Then I can study it and evaluate the claim that it's a good subset to work with. Otherwise it's too informal
+Taelin
+@VictorTaelin
+·
+28m
+We did formalize the "AL" part of EAL already, in Lean IIRC, and proven its normalization etc. - which should be obvious, but still. Going all way to EAL, though, is a lot of work. As in, $100k+ grant investment. Which HOC isn't in the scale to easily dispose yet.
+Zanzi Tangle, now at Monoidal Cafe
+@tangled_zans
+·
+27m
+Link to the AL part? And hmm what makes the full system so hard to encode?
+Ototao
+@Otota0
+·
+41m
+So basically functions are flawed & interaction combinators, could be better?
+@bluecow 🐮(schizo)
+@BLUECOW009
+·
+30m
+Great post!!!! Could you please recommend me a book about mathematics that will help me learn this things or be excited to learn more?
+fried6
+@ffffffried
+·
+38m
+And it's probably not going to stop with interaction nets either.
+
+In general the gap between algebraic expressions and their geometric representations is wide. What I mean by this is even though that things get mapped to an algebra with some formal ruleset, there is no actual
+Show more
+Debug Capital
+@Debug_Capital
+·
+27m
+flower of life? reminds me
+Jebrim
+@AgileJebrim
+·
+19m
+The Sun is not at the center of the Universe. If you place your frame of reference at the Milky Way center, you’ll see more of this pattern emerge again. If you place the center anywhere else beyond it, you’ll again see the same effect even further. Where that center goes is
+Show more
+James Payor ⏹️
+@jamespayor
+·
+27m
+I haven't formalized anything yet, but I have been thinking along similar lines, that you naturally subvert Lob/incompleteness/etc if your functions have "complexity" that is affine in the "complexity" of their inputs.
+Wild that this naturally arises from the IC viewpoint...
+
+Type in Type is self reference which sounds like you're asking for trouble.
+On the other hand, Tower of universes does seem like sweeping the problem under the rug.
+Liu Grey
+@Liu_eroteme
+·
+34m
+I'm glad I followed you.
+ajar mind
+@cobolmessiah
+·
+35m
+I just finished reading Girard’s « Le Fantome de la Transparence », and he resorts to the same analogy about epicycles when talking about misguided theories in logic that tried to make sense of oddities in eventually inadequate systems.
+Excellent post, keep up the good work

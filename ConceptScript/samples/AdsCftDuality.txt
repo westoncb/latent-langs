@@ -1,0 +1,150 @@
+CONCEPT AdsCftDuality {
+  PARAMETERS {
+    d : Nat -- Dimension of the CFT
+    N : Nat -- Rank of the gauge group SU(N)
+    R : Real -- AdS radius
+    α' : Real -- String scale squared
+    g_s : Real -- String coupling
+    l_p : Real -- Planck length
+  }
+
+  CONTEXT {
+    TYPES {
+      AdSSpace(n : Nat) {
+        SCALAR_FIELD Radius : Real
+        SCALAR_FIELD Cosmological_Constant : Real
+        TENSOR_FIELD Metric : Tensor(0, 2)
+        TENSOR_FIELD Ricci_Tensor : Tensor(0, 2)
+        AXIOM Radius = R
+        AXIOM Cosmological_Constant = -n(n-1) / (2 R^2)
+        AXIOM Ricci_Tensor = (n-1) / R^2 * Metric
+      }
+
+      CftOperator {
+        SCALAR_FIELD Conformal_Dimension : Real
+        SCALAR_FIELD R_Charge : Int
+        AXIOM Conformal_Dimension >= (d-2)/2
+        AXIOM R_Charge MOD 2 = Conformal_Dimension MOD 1
+      }
+      
+      CftCorrelator(n : Nat) {
+        SCALAR_FIELD Operators : FUNC(Fin(n), CftOperator)
+        SCALAR_FIELD Coordinates : FUNC(Fin(n), Real^d)
+        AXIOM Conformal_Invariance(τ : Conformal(d)) {
+          Correlator(Operators, Coordinates) = 
+            Correlator(τ(Operators), τ(Coordinates))
+        }
+      }
+    }
+
+    STRUCTURES {
+      STRUCTURE BasicQuantities {
+        SCALAR_FIELD Newton_Constant : Real
+        SCALAR_FIELD AdS_Radius : Real
+        SCALAR_FIELD Planck_Length : Real
+        SCALAR_FIELD CFT_Central_Charge : Real
+
+        AXIOM Newton_Constant = 8 π^(d-2) * l_p^(d-1)
+        AXIOM AdS_Radius = (4 π g_s N)^(1/4) * SQRT(α')
+        AXIOM Planck_Length = g_s^(1/(d-1)) * (α')^(1/2)
+        AXIOM CFT_Central_Charge = (R / l_p)^(d-1) / (G_N)
+      }
+
+      STRUCTURE HolographicReconstruction {
+        SCALAR_FIELD Boundary : FUNC(AdSSpace(d+1)) -> Real^d
+        SCALAR_FIELD Bulk_Field_Limit[Φ : FUNC(AdSSpace(d+1), Real), x : Real^d] : Real = 
+          lim_{r -> ∞} r^Δ Φ(r, x)
+        SCALAR_FIELD Boundary_Field[O : CftOperator, x : Real^d] : Real = 
+          ⟨O(x)⟩
+        AXIOM Bulk_Boundary_Correspondence {
+          FORALL (Φ : FUNC(AdSSpace(d+1), Real), O : CftOperator) {
+            IS_SOLUTION(Φ, Bulk_EOM(Φ, m^2)) AND Δ(Δ - d) = m^2 R^2
+            IFF
+            FORALL (x : Real^d) {
+              Bulk_Field_Limit[Φ, x] = Boundary_Field[O, x]  
+            }
+          }
+        }
+      }
+      
+      STRUCTURE PartitionFunctions {
+        SCALAR_FIELD CFT_Partition_Function[J : FUNC(Real^d, Real)] : Real =
+          ∫[Dϕ] exp(-S_CFT[ϕ] + ∫(d^d x) J(x) O(x))
+        SCALAR_FIELD Quantum_Gravity_Partition_Function[φ_0 : FUNC(Real^d, Real)] : Real =
+          ∫[Dφ] δ_Φ(φ|_∂ - φ_0) exp(-S_Gravity[φ])  
+
+        AXIOM Partition_Function_Equality {
+          FORALL (J : FUNC(Real^d, Real), φ_0 : FUNC(Real^d, Real)) {
+            J(x) = Bulk_Field_Limit[φ, x] WHERE φ|_∂ = φ_0
+            IFF
+            CFT_Partition_Function[J] = Quantum_Gravity_Partition_Function[φ_0]
+          }
+        }
+      }
+
+      STRUCTURE WilsonLoopObservables {
+        SCALAR_FIELD Wilson_Loop_VEV[C : FUNC(S1, Real^d)] : Real = 
+          ⟨Tr P exp(∮_C A)⟩
+        SCALAR_FIELD Minimal_Surface_Area[C : FUNC(S1, Real^d)] : Real = 
+          min_{D : Disk, ∂D = C} Area(D)
+
+        AXIOM Wilson_Loop_Area_Law {
+          FORALL (C : FUNC(S1, Real^d)) {
+            lim_{λ(g_s) -> 0} λ^(-2) log(Wilson_Loop_VEV[C]) = -Minimal_Surface_Area[C] / (2 π α')
+          }
+        }
+      }
+    }
+  }
+  
+  PROOFS {
+    THEOREM Maldacena {
+      R^4 / (α'^2) = g_YM^2 N = λ
+      R^4 / l_p^4 = N^2 / λ = N^2 / (g_YM^2 N)
+    }
+    PROOF {
+      R^4 / (α'^2) 
+        = (4 π g_s N)^(1/4) * SQRT(α') / (α'^(1/2))^4 [BY AdS_Radius, ARITHMETIC]
+        = 4 π g_s N [SIMPLIFY]
+        = λ [BY Coupling_Constant]
+      
+      R^4 / l_p^4
+        = R^4 / (g_s^(4/(d-1)) * α'^2) [BY Planck_Length]
+        = ((4 π g_s N)^(1/4) * SQRT(α'))^4 / (g_s^(4/(d-1)) * α'^2) [BY AdS_Radius]
+        = (4 π)^4 * (g_s N)^4 / (α'^2 g_s^(4/(d-1))) [EXPAND]
+        = (4 π)^4 * g_s^(4d/(d-1) - 4/(d-1)) * N^4 / α'^2 [REARRANGE]
+        = (4 π)^4 * g_s^(4(d-1)/(d-1)) * N^4 / α'^2 [SIMPLIFY]
+        = (4 π)^4 * g_s^4 * N^4 / α'^2 [SIMPLIFY]
+        = (4 π)^4 * λ^2 N^2 [SUBSTITUTE λ = g_s N] 
+        = N^2 / λ [DIVIDE_BY λ^2]
+    }
+
+    THEOREM Holographic_Entanglement_Entropy {
+      S_EE(A) = Area(m(A)) / (4 G_N)
+      WHERE 
+        A : SUBSET(CFT_Boundary)
+        m(A) : ARGMIN_{m : Surface, ∂m = ∂A} Area(m)
+    }  
+    PROOF {
+      ρ_A = Tr_AC(|ψ⟩⟨ψ|) [DEFINE]
+      S_EE(A) = -Tr(ρ_A log(ρ_A)) [DEFINE]
+      
+      ASSUME m IS_MINIMAL_SURFACE [∂m = ∂A]
+      
+      Z[A ∪ AC] 
+        = ∫[Dφ] exp(-S_Gravity[φ]) [Quantum_Gravity_Partition_Function]
+        = ∫[Dφ_A] ∫[Dφ_AC] exp(-S_Gravity[φ_A] - S_Gravity[φ_AC] - S_∂[φ_A, φ_AC]) [SPLIT_INTEGRAL]
+        = Z[A] Z[AC] exp(-S_∂[φ_A, φ_AC]) [FACTORIZE]
+        ≈ Z[A] Z[AC] exp(-Area(m) / 4G_N) [APPROXIMATE, Ryu_Takayanagi]
+      
+      log(ρ_A)
+        = log(Z[A] / Z[A ∪ AC])
+        = log(Z[A]) - log(Z[A ∪ AC])  
+        ≈ -Area(m) / 4G_N [SUBSTITUTE, EXPAND]
+      
+      S_EE(A)  
+        = -Tr(ρ_A log(ρ_A))
+        ≈ Area(m) / 4G_N [SUBSTITUTE]
+    }
+  }
+}

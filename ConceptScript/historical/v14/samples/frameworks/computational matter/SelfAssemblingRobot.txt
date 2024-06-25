@@ -1,0 +1,429 @@
+CONCEPT SelfAssemblingRobot {
+  IMPORT ComputationalMatter_v1.*
+
+  STRUCTURE {
+    RobotMatter := m(RobotStructure, RobotProgram, RobotActions)
+    
+    RobotStructure := s(
+      t(Modules, Connectors),
+      c(Actuation, (0, 180°)),
+      d(CubeGeometry(l), (Material.Flexible, Material.Conductive))
+    )
+    
+    Modules := {BaseModule, JointModule, SensorModule, EffectorModule}
+    
+    BaseModule := m{s(t(∅, ∅), ∅, d(Cube(2l), _)), p(∅, ∅)}
+    JointModule := m{s(t(∅, ∅), c(Rotation, _), d(Cube(l), _)), JointProgram}
+    SensorModule := m{s(t(∅, ∅), ∅, d(Cube(l), (_, Material.Sensor))), SensorProgram}
+    EffectorModule := m{s(t(∅, ∅), c(Extension, _), d(Cube(l), _)), EffectorProgram}
+    
+    Connectors := {MaleConnector, FemaleConnector}
+    MaleConnector := s(t(Nodes(+), ∅), ∅, d(Geometry.Male, _))
+    FemaleConnector := s(t(Nodes(-), ∅), ∅, d(Geometry.Female, _))
+    
+    RobotProgram := AssembleProgram ∥ BehaviorProgram
+    
+    AssembleProgram := p{
+      l(Rule.SelfAssembly, Objective.Stability),
+      f(Modules, Modules)
+    }
+    
+    BehaviorProgram := JointProgram ∥ SensorProgram ⟗ EffectorProgram
+    
+    JointProgram := p{
+      l(Rule.ActuateJoint, Objective.Locomotion), 
+      f(SensorModule, JointModule)
+    }
+    
+    SensorProgram := p(
+      l(Rule.SenseEnvironment, Objective.Navigation), 
+      ∅
+    )
+    
+    EffectorProgram := p{
+      l(Rule.Grasp, Objective.Manipulation),
+      f(SensorModule, EffectorModule)
+    }
+
+    RobotActions := {Assemble, Actuate, Sense, Grasp}
+    
+    Assemble := a(Energy.Low, U{ConnectInterface}, H{Stable})
+    Actuate := a(Energy.Medium, U{SensePosture}, H{AdjustPosture})
+    Sense := a(Energy.Low, ⊤, H{UpdateBelief})
+    Grasp := a(Energy.High, U{SenseObject, SensePosture}, H{HoldObject, AdjustPosture})
+  }
+  
+  PROOF {
+    theorem Reconfigurable{RobotMatter, RobotMatter'}
+    {  
+      ℝ := (BaseModule + 4 * JointModule + SensorModule + EffectorModule) * 4
+      RobotMatter := m(RobotStructure, RobotProgram, RobotActions)
+      RobotMatter' := m(RobotStructure', RobotProgram, RobotActions)
+      
+      RobotStructure' := s(T{RobotStructure} * T{ℝ}, C{RobotStructure}, D{RobotStructure})
+      
+      ⟨AssembleProgram⟩{RobotMatter, RobotStructure'} by {
+        T{RobotStructure} ⊆ T{RobotStructure'} 
+        ∀M ∈ Modules{RobotStructure}. ∃n. M ^ n ∈ Modules{RobotStructure'}
+        Modules{RobotStructure'} = Modules{ℝ}
+      }
+    }
+    
+    theorem Locomotes{RobotMatter} ⇔ ⟨BehaviorProgram⟩{RobotMatter, _}
+    {
+      assume ⟨BehaviorProgram⟩{RobotMatter, _}
+      
+      ⟨JointProgram⟩{RobotMatter, _} by ProgramParallelization{JointProgram, SensorProgram ⟗ EffectorProgram}
+      
+      S{RobotMatter} ⊨ U{Actuate} by {
+        SensePosture ∈ H{Sense}
+        ⟨SensorProgram⟩{RobotMatter, _}
+      }
+      
+      S{RobotMatter} ∪ H{Actuate} ⊨ H{Actuate} by {
+        AdjustPosture ∈ H{Actuate}
+      }
+      
+      hence Actionable{RobotMatter, Actuate}
+      hence Locomotes{RobotMatter}
+      
+      assume Locomotes{RobotMatter}
+      
+      ∃a ∈ RobotActions. E{a} > Energy.Low by {
+        Locomotion requires energy  
+      }
+      
+      a = Actuate by {
+        E{Assemble}, E{Sense} ≤ Energy.Low
+        E{Grasp} > E{Actuate}
+      }
+      
+      Actionable{RobotMatter, Actuate} by {
+        Locomotes{RobotMatter}
+      }
+      
+      hence ⟨JointProgram⟩{RobotMatter, _}
+      hence ⟨BehaviorProgram⟩{RobotMatter, _}
+    }
+      
+    theorem Efficient{RobotMatter, Energy.Low, AssembleBehavior}
+    {
+      AssembleBehavior := l(Rule.SelfAssembly, Objective.Stability)
+      
+      ∀a ∈ RobotActions. a = Assemble ⇒ E{a} = Energy.Low by {
+        E{Assemble} = Energy.Low
+      }
+      
+      ⟨AssembleProgram⟩{RobotMatter, _} by {
+        Modules ⊆ S{RobotMatter}
+        ⟨AssembleProgram⟩{RobotMatter, S{RobotMatter'}}
+      }
+      
+      time{RobotMatter, AssembleBehavior} ≤ T{Modules} by {
+        ∀M1, M2 ∈ Modules. f{AssembleProgram}(M1, M2) ≤ 1
+      }
+    }
+      
+    theorem Universal{RobotMatter, {Chain, Tree, Mesh}}
+    {
+      Chain := t(Modules, {(M1, M2) | M1 - M2 ∈ Connectors})
+      Tree := t(Modules, {(M, ∅) | M ∈ Modules} ∪ {(M1, M2) | M1 - M2 ∈ Connectors})
+      Mesh := t(Modules, {(M1, M2) | M1 - M2 ∈ Connectors ∨ M2 - M1 ∈ Connectors})
+      
+      ∀T ∈ {Chain, Tree, Mesh}. T ⊑ RobotStructure by {
+        Modules{T} ⊆ Modules{RobotStructure}
+        Connectors{T} ⊆ Connectors{RobotStructure}
+      }
+    }
+  }
+}
+
+In this Concept, we define a self-assembling modular robot using the ComputationalMatter_v1 framework. The robot is composed of various module types (base, joint, sensor, effector) connected via gendered interfaces.
+The robot's program consists of an AssembleProgram for self-assembly and a BehaviorProgram for locomotion, sensing, and manipulation. The actions correspond to these capabilities.
+We prove several properties of the robot:
+
+Reconfigurability: The robot can reconfigure into different structures by rearranging its modules.
+Locomotion: The robot can locomote if and only if its BehaviorProgram can actuate its joints based on sensory feedback.
+Efficiency: The self-assembly process is efficient, requiring only low energy and time proportional to the number of modules.
+Universality: The robot's modular architecture can realize various topologies like chains, trees, and meshes.
+
+
+
+
+
+CONCEPT CarrierBot_v1 {
+  IMPORT SelfAssemblingRobot_v1.*
+  
+  STRUCTURE {
+    BaseModule := m{s(t(∅, ∅), ∅, d(Cube(2l), (Material.Rigid, Material.Conductive))), p(∅, ∅)}
+    JointModule := m{s(t(∅, ∅), c(Rotation, (-90°, 90°)), d(Cube(l), (Material.Flexible, _))), JointProgram}
+    SensorModule := m{s(t(∅, ∅), ∅, d(Cube(l), (Material.Rigid, Material.IRSensor))), SensorProgram}
+    EffectorModule := m{s(t(∅, ∅), c(Extension, (0, l/2)), d(Cube(l), (Material.Flexible, Material.HighFriction))), EffectorProgram}
+    
+    CarrierBotStructure := s(
+      t({BaseModule, JointModule, JointModule, SensorModule, EffectorModule}, 
+        {BaseModule - JointModule, JointModule - JointModule, 
+         JointModule - SensorModule, JointModule - EffectorModule}),
+      c(Actuation, (0, 180°)) + c(Extension, (0, l/2)),  
+      d(CubeGeometry(l), (Material.Flexible, Material.Conductive, Material.Sensor, Material.HighFriction))
+    )
+    
+    CarrierBotProgram := AssembleProgram ∥ CarryProgram
+    
+    CarryProgram := p{
+      l(Rule.DetectObject, Rule.NavigateToObject, Rule.GraspObject, 
+        Rule.TransportObject, Rule.ReleaseObject, Objective.CollaborativeTransport),
+      f(SensorModule, EffectorModule, JointModule, BaseModule)  
+    }
+    
+    CarrierBotActions := {Assemble, Carry}
+    
+    Carry := a(Energy.High, 
+               U{DetectObject, NavigateToObject, GraspObject, TransportObject, ReleaseObject},
+               H{ObjectGrasped, ObjectTransported, ObjectReleased})
+  }
+  
+  PROOF {
+    theorem CanCarryObject{CarrierBot, Object}
+    {
+      CarrierBot := m(CarrierBotStructure, CarrierBotProgram, CarrierBotActions)
+      
+      ⟨CarryProgram⟩{CarrierBot, Object} by {
+        ⟨SensorProgram⟩{CarrierBot, Object} ⇒ DetectObject ∈ U{Carry}
+        ⟨JointProgram⟩{CarrierBot, Object} ⇒ NavigateToObject ∈ U{Carry}
+        ⟨EffectorProgram⟩{CarrierBot, Object} ⇒ GraspObject ∈ U{Carry}
+        ⟨JointProgram⟩{CarrierBot, _} ⇒ TransportObject ∈ U{Carry}
+        ⟨EffectorProgram⟩{CarrierBot, Object} ⇒ ReleaseObject ∈ U{Carry} 
+      }
+      
+      Actionable{CarrierBot, Carry} by {
+        U{Carry} ⊆ S{CarrierBot} 
+        S{CarrierBot} ∪ H{Carry} ⊨ H{Carry}
+      }
+    }
+    
+    theorem StableGrasp{CarrierBot, Object}
+    {
+      assume ObjectGrasped ∈ H{Carry}
+      assume Mass{Object} ≤ Mass{CarrierBot}
+      
+      StableGrasp{EffectorModule, Object} by {
+        c(Extension, (0, l/2)) ∈ C{EffectorModule}
+        Material.HighFriction ∈ D{EffectorModule}
+      }
+      
+      StableGrasp{CarrierBot, Object} by {
+        StableGrasp{EffectorModule, Object}
+        EffectorModule ∈ S{CarrierBot}
+      }
+    }
+      
+    theorem CollaborativeTransport{CarrierBot1, CarrierBot2, Object}
+    {  
+      assume Collaborative{CarrierBot1, CarrierBot2}
+      assume Mass{Object} ≤ Mass{CarrierBot1} + Mass{CarrierBot2}
+         
+      ObjectTransported ∈ H{CarrierBot1.Carry} 
+        ∧ ObjectTransported ∈ H{CarrierBot2.Carry} by {
+        CanCarryObject{CarrierBot1, Object}  
+        CanCarryObject{CarrierBot2, Object}
+        ⟨CarrierBot1.CarryProgram ∥ CarrierBot2.CarryProgram⟩{_, Object}
+      }
+    }
+  }
+}
+
+In this CarrierBot_v1 Concept, we define a specific self-assembling robot for collaborative object transport. The robot consists of a base module, two joint modules, a sensor module, and an effector module connected in a linear configuration.
+The CarrierBot's program includes an AssembleProgram (inherited from SelfAssemblingRobot_v1) and a CarryProgram that coordinates the robot's modules to detect, navigate to, grasp, transport, and release objects.
+We prove several key properties of the CarrierBot:
+
+Object Carrying Capability: The CarrierBot can carry an object if its CarryProgram can successfully coordinate its modules to perform the necessary actions.
+Stable Grasping: The CarrierBot can maintain a stable grasp on an object if the object's mass is within the robot's carrying capacity and its effector module has sufficient extension and friction.
+Collaborative Transport: Two CarrierBots can collaboratively transport an object if they can both carry the object individually and coordinate their CarryPrograms.
+
+
+
+
+
+
+CONCEPT ExplorerBot_v1 {
+  IMPORT SelfAssemblingRobot_v1.*
+
+  STRUCTURE {
+    ExplorerMatter := m(ExplorerStructure, ExplorerProgram, ExplorerActions)
+    
+    ExplorerStructure := s(
+      t(ExplorerModules, ExplorerConnectors),
+      c(Actuation, (-90°, 90°)),
+      d(CubeGeometry(0.1m), (Material.Titanium, Material.SolarCell))
+    )  
+    
+    ExplorerModules := {BaseModule, JointModule, SensorModule, EffectorModule, BatteryModule, ComputeModule}
+
+    BaseModule := m{s(t(∅, ∅), ∅, d(Cube(0.2m), (Material.Titanium, _))), p(∅, ∅)}
+    JointModule := m{s(t(∅, ∅), c(Rotation, _), d(Cube(0.1m), _)), ExplorerJointProgram}
+    SensorModule := m{s(t(∅, ∅), ∅, d(Cube(0.1m), (_, Material.Camera))), ExplorerSensorProgram}
+    EffectorModule := m{s(t(∅, ∅), c(Extension, (0, 0.3m)), d(Cube(0.1m), _)), ExplorerEffectorProgram}  
+    BatteryModule := m{s(t(∅, ∅), ∅, d(Cube(0.1m), (Material.Titanium, Material.LiIonBattery))), ExplorerBatteryProgram}
+    ComputeModule := m{s(t(∅, ∅), ∅, d(Cube(0.1m), (Material.Titanium, Material.Computer))), ExplorerComputeProgram}  
+    
+    ExplorerConnectors := {MagneticConnector}
+    MagneticConnector := s(t(Nodes(+), Nodes(-)), ∅, d(Geometry.Magnetic, _))
+    
+    ExplorerProgram := AssembleProgram ∥ ExplorerBehaviorProgram
+    
+    ExplorerBehaviorProgram := ExploreProgram ∥ ManipulateProgram ⟗ RechargeProgram
+    
+    ExploreProgram := p{
+      l(Rule.MoveToTarget, Objective.CollectSample),
+      f(SensorModule + ComputeModule, EffectorModule + JointModule)  
+    }
+    
+    ManipulateProgram := p{
+      l(Rule.GraspSample, Objective.TransferSample),
+      f(SensorModule, EffectorModule)
+    }
+    
+    RechargeProgram := p{
+      l(Rule.ReturnToBase, Objective.MaximizeBatteryLife),
+      f(BatteryModule, JointModule)
+    }
+    
+    ExplorerJointProgram := p{
+      l(Rule.ActuateJoint, (Objective.Locomotion, Objective.Manipulation)),
+      f(SensorModule + BatteryModule, JointModule)
+    }
+    
+    ExplorerSensorProgram := p(
+      l(Rule.SenseEnvironment, (Objective.DetectSample, Objective.DetectObstacle)),
+      f(ComputeModule, BatteryModule)  
+    )
+      
+    ExplorerEffectorProgram := p{
+      l(Rule.Grasp, Objective.CollectSample), 
+      f(SensorModule + BatteryModule, EffectorModule)
+    }
+    
+    ExplorerBatteryProgram := p{
+      l(Rule.ChargeBattery, Objective.MaximizeBatteryLife),
+      ∅  
+    }
+    
+    ExplorerComputeProgram := p{
+      l(Rule.ProcessSensorData, Objective.PlanMovement),
+      f(SensorModule, JointModule + EffectorModule)
+    }
+    
+    ExplorerActions := {Move, Grasp, Charge, Release}
+
+    Move := a(Energy.Medium, U{SenseLocation, SenseBattery}, H{AdjustPosture, TranslateCenter})
+    Grasp := a(Energy.Medium, U{SenseObject, SensePosture, SenseBattery}, H{ExtendEffector, HoldObject})  
+    Charge := a(Energy.Low, U{ConnectToBatterySource}, H{UpdateBatteryLevel})
+    Release := a(Energy.Medium, U{SensePosture, SenseBattery}, H{RetractEffector, ReleaseObject})
+  }
+  
+  PROOF {
+    theorem Explores{ExplorerMatter} ⇔ ⟨ExploreProgram⟩{ExplorerMatter, _}
+    {
+      assume ⟨ExploreProgram⟩{ExplorerMatter, _}
+
+      ⟨JointProgram⟩{ExplorerMatter, _} ∧ ⟨EffectorProgram⟩{ExplorerMatter, _} by {
+        ExploreProgram ⇒ f(SensorModule + ComputeModule, JointModule + EffectorModule)
+      }
+      
+      S{ExplorerMatter} ∪ H{Move} ⊨ TranslateCenter by {  
+        ⟨JointProgram⟩{ExplorerMatter, AdjustPosture}
+        AdjustPosture ∈ H{Move}
+      }
+      
+      S{ExplorerMatter} ∪ H{Grasp} ⊨ HoldObject by {
+        ⟨EffectorProgram⟩{ExplorerMatter, ExtendEffector}  
+        ExtendEffector ∈ H{Grasp}
+      }
+      
+      CollectSample ∈ Objective{ExploreProgram} ∧ 
+      TranslateCenter ∈ H{ExplorerMatter} ∧ HoldObject ∈ H{ExplorerMatter}
+      
+      hence Explores{ExplorerMatter}
+      
+      assume Explores{ExplorerMatter}
+      
+      ∃o ∈ {CollectSample, TransferSample}. o ∈ Objective{ExplorerMatter} by {
+        Objective.CollectSample ∈ Objective{ExploreProgram}  
+      }
+      
+      f{ExploreProgram}(SensorModule + ComputeModule, EffectorModule + JointModule) by {
+        CollectSample ⇒ Move + Grasp  
+      }
+
+      hence ⟨ExploreProgram⟩{ExplorerMatter, _}
+    }
+      
+    theorem ∀t. t ∈ {CollectSample, TransferSample, DetectObstacle} ⇒ ExplorerMatter ⊢ t  
+    {
+      fix t ∈ {CollectSample, TransferSample, DetectObstacle}
+      
+      ExplorerMatter ⊢ DetectSample by { 
+        ⟨ExplorerSensorProgram⟩{ExplorerMatter, _} ∧ DetectSample ∈ Objective{ExplorerSensorProgram}
+      }
+
+      ExplorerMatter ⊢ Locomotion ∧ ExplorerMatter ⊢ Manipulation by {
+        ⟨ExplorerJointProgram⟩{ExplorerMatter, _} ∧ {Locomotion, Manipulation} ⊆ Objective{ExplorerJointProgram} 
+      }
+
+      Explores{ExplorerMatter} ∧ Manipulates{ExplorerMatter} by {
+        ⟨ExploreProgram⟩{ExplorerMatter, _} ∧ ⟨ManipulateProgram⟩{ExplorerMatter, _}
+      }
+        
+      ExplorerMatter ⊢ CollectSample by {
+        CollectSample ∈ Objective{ExploreProgram}
+        Explores{ExplorerMatter}
+      }
+
+      ExplorerMatter ⊢ TransferSample by {
+        TransferSample ∈ Objective{ManipulateProgram}  
+        Manipulates{ExplorerMatter}
+      }
+
+      ExplorerMatter ⊢ DetectObstacle by {
+        DetectObstacle ∈ Objective{ExplorerSensorProgram}
+        ⟨ExplorerSensorProgram⟩{ExplorerMatter, _}
+      }
+      
+      hence ExplorerMatter ⊢ t
+    }
+      
+    theorem ∃e. ∀x ∈ ExplorerActions. E{x} ≤ Energy.Medium ⇒  
+                 Efficient{ExplorerMatter, e, ExplorerProgram}
+    {
+      ∀x ∈ ExplorerActions. E{x} ≤ Energy.Medium  
+      
+      ⟨ExplorerProgram⟩{ExplorerMatter, _} by {
+        ExplorerModules ⊆ S{ExplorerMatter}
+        ⟨AssembleProgram⟩{ExplorerMatter, S{ExplorerStructure}} ∧ 
+        ⟨ExplorerBehaviorProgram⟩{ExplorerMatter, _}
+      }
+
+      e := Energy.Medium
+      
+      ∀p ∈ {ExploreProgram, ManipulateProgram, RechargeProgram}. 
+        time{ExplorerMatter, p} ≤ T{ExplorerModules} by {
+          f{p}(_, _) ≤ 1
+        }
+
+      hence Efficient{ExplorerMatter, e, ExplorerProgram}  
+    }
+  }
+}
+
+The ExplorerBot is a planetary exploration robot that can navigate in unstructured environments, collect and transfer samples, and recharge its battery at a base station.
+Its structure includes additional module types (BatteryModule, ComputeModule) and a specific connector type (MagneticConnector) compared to the generic SelfAssemblingRobot.
+The ExplorerProgram comprises several subprograms for different behaviors: ExploreProgram for navigation and sample collection, ManipulateProgram for sample manipulation, and RechargeProgram for battery charging. Each module type also has its own program.
+The actions (Move, Grasp, Charge, Release) are tailored to the explorer's capabilities and include preconditions and effects relevant to the exploration tasks.
+We prove that:
+
+The ExplorerBot can explore its environment if and only if it can execute its ExploreProgram.
+The ExplorerBot can provably achieve various objectives related to sample collection, manipulation, and obstacle avoidance.
+The ExplorerBot's actions are efficient, requiring at most medium energy, and its programs have bounded execution time.
+
+This concrete instantiation of the SelfAssemblingRobot Concept showcases how the generic model can be adapted to a specific application with well-defined goals and constraints. The ExplorerBot's modular design, behavioral programs, and formal properties make it a robust and verifiable system for planetary exploration.

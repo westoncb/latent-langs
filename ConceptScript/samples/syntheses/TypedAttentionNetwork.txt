@@ -1,0 +1,242 @@
+CONCEPT TypedAttentionNetwork {
+  PARAMETERS {
+    d_model : Nat  -- Model dimension
+    h : Nat        -- Number of attention heads
+    N : Nat        -- Maximum sequence length
+  }
+
+  CONTEXT {
+    TYPES {
+      INDUCTIVE Type {
+        CASE Scalar
+        CASE Vector(n : Nat)
+        CASE Matrix(m : Nat, n : Nat)
+        CASE Tensor(dims : List(Nat))
+        CASE Function(Type, Type)
+      }
+
+      INDUCTIVE Term {
+        CASE Var(name : String)
+        CASE Const(value : Real)
+        CASE VectorLit(values : List(Term))
+        CASE MatrixLit(rows : List(List(Term)))
+        CASE TensorLit(elements : Nested(Term))
+        CASE App(func : Term, arg : Term)
+        CASE Abs(param : String, paramType : Type, body : Term)
+        CASE Let(name : String, value : Term, body : Term)
+        CASE Attention(query : Term, keys : Term, values : Term)
+        CASE MultiHeadAttention(queries : Term, keys : Term, values : Term)
+        CASE FeedForward(input : Term)
+      }
+
+      ENV := MAP(String, Type)
+      Shape := CS(ℝ^d_model)
+    }
+
+    NOTATION {
+      INFIX "->" := Function
+      INFIX "⊢" := TypeOf
+      PREFIX "λ" := Abs
+      INFIX "·" := App
+    }
+
+    STRUCTURES {
+      STRUCTURE Typing {
+        TypeOf(env : ENV, t : Term) -> Type
+          CASE Var(x) => env(x)
+          CASE Const(_) => Scalar
+          CASE VectorLit(vs) => Vector(LEN(vs))
+          CASE MatrixLit(rows) => Matrix(LEN(rows), LEN(rows[0]))
+          CASE TensorLit(elems) => Tensor(DIM(elems))
+          CASE App(f, x) => (
+            LET T1 -> T2 = TypeOf(env, f)
+            REQUIRE TypeOf(env, x) = T1
+            T2
+          )
+          CASE Abs(x, T, body) => T -> TypeOf(env ∪ {x : T}, body)
+          CASE Let(x, v, body) => TypeOf(env ∪ {x : TypeOf(env, v)}, body)
+          CASE Attention(q, k, v) => (
+            REQUIRE TypeOf(env, q) = Vector(d_model)
+            REQUIRE TypeOf(env, k) = Matrix(N, d_model)
+            REQUIRE TypeOf(env, v) = Matrix(N, d_model)
+            Vector(d_model)
+          )
+          CASE MultiHeadAttention(q, k, v) => (
+            REQUIRE TypeOf(env, q) = Matrix(N, d_model)
+            REQUIRE TypeOf(env, k) = Matrix(N, d_model)
+            REQUIRE TypeOf(env, v) = Matrix(N, d_model)
+            Matrix(N, d_model)
+          )
+          CASE FeedForward(x) => (
+            REQUIRE TypeOf(env, x) = Vector(d_model)
+            Vector(d_model)
+          )
+
+        AXIOM Preservation {
+          env ⊢ t : T ∧ t ~> t' ⇒ env ⊢ t' : T
+        }
+      }
+
+      STRUCTURE Semantics {
+        Eval(env : ENV, t : Term) -> Term
+          CASE Var(x) => env(x)
+          CASE Const(v) => Const(v)
+          CASE VectorLit(vs) => VectorLit(MAP(Eval(env, _), vs))
+          CASE MatrixLit(rows) => MatrixLit(MAP(MAP(Eval(env, _), _), rows))
+          CASE TensorLit(elems) => TensorLit(MAP_NESTED(Eval(env, _), elems))
+          CASE App(f, x) => (
+            LET f' = Eval(env, f)
+            LET x' = Eval(env, x)
+            CASE f' OF
+              Abs(param, _, body) => Eval(env ∪ {param : x'}, body)
+              _ => App(f', x')
+          )
+          CASE Abs(x, T, body) => Abs(x, T, body)
+          CASE Let(x, v, body) => Eval(env ∪ {x : Eval(env, v)}, body)
+          CASE Attention(q, k, v) => (
+            LET q' = Eval(env, q)
+            LET k' = Eval(env, k)
+            LET v' = Eval(env, v)
+            ComputeAttention(q', k', v')
+          )
+          CASE MultiHeadAttention(q, k, v) => (
+            LET q' = Eval(env, q)
+            LET k' = Eval(env, k)
+            LET v' = Eval(env, v)
+            ComputeMultiHeadAttention(q', k', v')
+          )
+          CASE FeedForward(x) => (
+            LET x' = Eval(env, x)
+            ComputeFeedForward(x')
+          )
+
+        ComputeAttention(q : Term, k : Term, v : Term) -> Term
+        ComputeMultiHeadAttention(q : Term, k : Term, v : Term) -> Term
+        ComputeFeedForward(x : Term) -> Term
+      }
+
+      STRUCTURE AttentionGeometry {
+        FIELD AttentionSpace := Shape
+        FIELD QueryEmbedding(q : Term) -> AttentionSpace
+        FIELD KeyEmbedding(k : Term) -> AttentionSpace
+        FIELD ValueEmbedding(v : Term) -> AttentionSpace
+
+        AXIOM EmbeddingConsistency {
+          ∀ q k v . 
+            DIM(QueryEmbedding(q)) = DIM(KeyEmbedding(k)) = 
+            DIM(ValueEmbedding(v)) = d_model
+        }
+
+        FIELD AttentionMap(q : AttentionSpace, k : AttentionSpace) -> Real
+          WHERE ∀ q k . 0 ≤ AttentionMap(q, k) ≤ 1
+
+        FIELD AttentionOutput(q : Term, ks : List(Term), vs : List(Term)) -> Term
+          WHERE LEN(ks) = LEN(vs) = N
+      }
+    }
+  }
+
+  TRANSFORMERS {
+    SIMPLIFY BetaReduction {
+      (λx:T.t) · s ~> t[x ↦ s]
+    }
+
+    REWRITE AttentionLinearityKeys {
+      Attention(q, a·k1 + b·k2, v) <=> a·Attention(q, k1, v) + b·Attention(q, k2, v)
+    }
+
+    REWRITE AttentionLinearityValues {
+      Attention(q, k, a·v1 + b·v2) <=> a·Attention(q, k, v1) + b·Attention(q, k, v2)
+    }
+
+    SIMPLIFY MultiHeadAttentionDecomposition {
+      MultiHeadAttention(q, k, v) <=> 
+        Concat(
+          [Attention(ProjectQuery(q, i), ProjectKey(k, i), ProjectValue(v, i)) 
+           for i in 1..h]
+        )
+    }
+  }
+
+  PROOFS {
+    THEOREM TypeSafety {
+      ∅ ⊢ t : T ⇒ (Eval(∅, t) = v ∧ ∅ ⊢ v : T) ∨ (t ↑)
+    }
+    PROOF {
+      ASSUME ∅ ⊢ t : T
+      
+      <1>. CASE Eval(∅, t) terminates with value v
+        <1>.1. SHOW ∅ ⊢ v : T
+          BY INDUCTION on evaluation steps using Preservation
+      
+      <2>. CASE Eval(∅, t) does not terminate
+        <2>.1. SHOW t ↑ TRIVIAL
+      
+      CONCLUDE (Eval(∅, t) = v ∧ ∅ ⊢ v : T) ∨ (t ↑)
+      QED
+    }
+
+    THEOREM AttentionConsistency {
+      ∀ q ks vs . 
+        TypeOf(∅, Attention(q, ks, vs)) = Vector(d_model) ⇒
+        DIM(AttentionGeometry.AttentionOutput(q, ks, vs)) = d_model
+    }
+    PROOF {
+      ASSUME q ks vs WHERE TypeOf(∅, Attention(q, ks, vs)) = Vector(d_model)
+      
+      <1>. TypeOf(∅, q) = Vector(d_model) 
+           ∧ TypeOf(∅, ks) = Matrix(N, d_model)
+           ∧ TypeOf(∅, vs) = Matrix(N, d_model)
+        BY Typing.TypeOf for Attention case
+
+      <2>. DIM(AttentionGeometry.QueryEmbedding(q)) = d_model
+           ∧ ∀ k ∈ ks . DIM(AttentionGeometry.KeyEmbedding(k)) = d_model
+           ∧ ∀ v ∈ vs . DIM(AttentionGeometry.ValueEmbedding(v)) = d_model
+        BY AttentionGeometry.EmbeddingConsistency
+
+      <3>. DIM(AttentionGeometry.AttentionOutput(q, ks, vs)) = d_model
+        BY <1>, <2>, AttentionGeometry.AttentionOutput type
+
+      CONCLUDE DIM(AttentionGeometry.AttentionOutput(q, ks, vs)) = d_model
+      QED
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE SelfAttention {
+      LET d_model = 512
+      LET h = 8
+      LET N = 100
+
+      LET x = Var("x")
+      LET self_attention = 
+        Abs("x", Matrix(N, d_model),
+          MultiHeadAttention(x, x, x))
+
+      THEN ∅ ⊢ self_attention : Matrix(N, d_model) -> Matrix(N, d_model)
+    }
+
+    EXAMPLE TransformerLayer {
+      LET d_model = 512
+      LET h = 8
+      LET N = 100
+
+      LET x = Var("x")
+      LET transformer_layer =
+        Abs("x", Matrix(N, d_model),
+          Let("attention_output",
+            MultiHeadAttention(x, x, x),
+            Let("normalized1",
+              LayerNorm(x + Var("attention_output")),
+              Let("ff_output",
+                FeedForward(Var("normalized1")),
+                LayerNorm(Var("normalized1") + Var("ff_output"))
+              )
+            )
+          )
+        )
+
+      THEN ∅ ⊢ transformer_layer : Matrix(N, d_model) -> Matrix(N, d_model)
+    }
+  }
+}

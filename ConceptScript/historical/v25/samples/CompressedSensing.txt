@@ -1,0 +1,134 @@
+CONCEPT CompressedSensing {
+  LANGUAGE {
+    TYPE Signal
+    TYPE SparseSignal <: Signal
+    TYPE Measurement
+    TYPE SensingMatrix
+    TYPE ReconstructionAlgorithm = (SensingMatrix, List[Measurement], Nat) -> Signal
+
+    FUNC NumMeasurements : Nat
+    FUNC SparsityLevel : Nat
+    FUNC SignalLength : Nat
+    
+    PRED Sparse : Signal -> Bool
+    PRED Coherent : SensingMatrix -> Bool
+    PRED RIP : SensingMatrix -> Bool  // Restricted Isometry Property
+    PRED Reconstructable : (SparseSignal, SensingMatrix, ReconstructionAlgorithm) -> Bool
+    
+    FUNC Measure : (Signal, SensingMatrix) -> List[Measurement]
+    FUNC Reconstruct : ReconstructionAlgorithm
+
+    AXIOM NumMeasurementsRequired {
+      FORALL (s : SparseSignal) (Φ : SensingMatrix) (R : ReconstructionAlgorithm).
+        Reconstructable(s, Φ, R) ->  
+        NumMeasurements >= O(SparsityLevel(s) * log(SignalLength(s)))
+    }
+  }
+
+  STRUCTURE SensingMatrixProperties {
+    REQUIRE FORALL (Φ : SensingMatrix).
+      Coherent(Φ) AND RIP(Φ)
+      
+    REQUIRE FORALL (Φ : SensingMatrix) (s : Signal).
+      LENGTH(Measure(s, Φ)) = NumMeasurements  
+  }
+  
+  STRUCTURE SignalReconstruction {
+    REQUIRE FORALL (s : SparseSignal) (Φ : SensingMatrix).
+      Sparse(s) AND Coherent(Φ) AND RIP(Φ) ->
+      Reconstructable(s, Φ, Reconstruct)
+
+    REQUIRE FORALL (s : SparseSignal) (Φ : SensingMatrix).  
+      LET y = Measure(s, Φ) IN
+      NORM(Reconstruct(Φ, y, SparsityLevel(s)) - s) <= O(NORM(NOISE(y)))
+  }
+
+  PROOFS {
+    THEOREM UniqueSparseReconstruction {
+      STATEMENT:
+        FORALL (s : SparseSignal) (Φ : SensingMatrix).
+          Sparse(s) AND Coherent(Φ) AND RIP(Φ) ->
+          EXISTS UNIQUE (s' : Signal).
+            Sparse(s') AND 
+            FORALL (y : List[Measurement]).
+              y = Measure(s, Φ) <-> y = Measure(s', Φ)
+              
+      PROOF:
+        LET s : SparseSignal, Φ : SensingMatrix
+        ASSUME Sparse(s), Coherent(Φ), RIP(Φ)
+        
+        DEFINE NullSpace(Φ) = { z : Signal | FORALL (i : 1..NumMeasurements). Φ[i] · z = 0 }
+        
+        HAVE NullSpace(Φ) ∩ SparseSignal = {0} BY {
+          ASSUME EXISTS (z : Signal). 
+            z ∈ NullSpace(Φ) AND z ∈ SparseSignal AND z ≠ 0
+          THEN LENGTH(z) > 2 * SparsityLevel(z) > 2 * SparsityLevel(s)
+          HENCE NORM(Φ · z) > 0 BY RIP  // Contradiction
+        }
+
+        LET y = Measure(s, Φ), s' : Signal
+        ASSUME y = Measure(s', Φ)
+        
+        HAVE s - s' ∈ NullSpace(Φ) BY {
+          FORALL (i : 1..NumMeasurements).
+            y[i] = Φ[i] · s = Φ[i] · s'  
+            HENCE Φ[i] · (s - s') = 0
+        }
+        
+        HAVE s = s' BY {
+          ASSUME s ≠ s'  
+          THEN s - s' ≠ 0 AND Sparse(s - s')
+          HENCE s - s' ∈ NullSpace(Φ) ∩ SparseSignal
+          CONTRADICTION  
+        }
+        
+        THUS EXISTS UNIQUE s' SUCH THAT
+          Sparse(s') AND
+          FORALL (y : List[Measurement]). y = Measure(s, Φ) <-> y = Measure(s', Φ)
+    }
+    
+    THEOREM RobustSparseReconstruction {
+      STATEMENT:
+        FORALL (s : SparseSignal) (Φ : SensingMatrix) (R : ReconstructionAlgorithm).
+          LET y = Measure(s, Φ),  
+              e = NOISE(y),
+              s' = R(Φ, y, SparsityLevel(s))
+          IN
+            Sparse(s) AND Coherent(Φ) AND RIP(Φ) ->
+            NORM(s' - s) <= O(NORM(e))
+              
+      PROOF:
+        LET s : SparseSignal, Φ : SensingMatrix, R : ReconstructionAlgorithm
+        LET y = Measure(s, Φ), e = NOISE(y), s' = R(Φ, y, SparsityLevel(s))
+        ASSUME Sparse(s), Coherent(Φ), RIP(Φ)
+        
+        DEFINE BestK-SparseApprox(x, k) = ARGMIN {z | Sparse(z) AND SparsityLevel(z) <= k} NORM(x - z)
+        DEFINE e_k = y - Measure(BestK-SparseApprox(s, SparsityLevel(s)), Φ)
+
+        HAVE NORM(s' - s) <= NORM(s' - BestK-SparseApprox(s, SparsityLevel(s))) + NORM(BestK-SparseApprox(s, SparsityLevel(s)) - s)
+          BY Triangle inequality
+        
+        HAVE NORM(s' - BestK-SparseApprox(s, SparsityLevel(s))) <= O(NORM(e_k)) BY {
+          NORM(Measure(s', Φ) - y)
+          = NORM(Measure(s', Φ) - Measure(s, Φ) - e)  
+          <= NORM(Measure(s', Φ) - Measure(BestK-SparseApprox(s, SparsityLevel(s)), Φ)) + NORM(e_k)
+          <= NORM(Φ) · NORM(s' - BestK-SparseApprox(s, SparsityLevel(s))) + NORM(e_k)
+          HENCE NORM(s' - BestK-SparseApprox(s, SparsityLevel(s))) <= O(NORM(e_k))
+            BY RIP property and definition of R
+        }
+          
+        HAVE NORM(BestK-SparseApprox(s, SparsityLevel(s)) - s) <= O(NORM(e)) BY {
+          LET s_k = BestK-SparseApprox(s, SparsityLevel(s)) IN
+          NORM(s_k - s) <= NORM(s_k) + NORM(s)
+          HAVE NORM(s_k) <= NORM(s) BY Optimality of s_k
+          HAVE NORM(s) <= NORM(y) / NORM(Φ) + NORM(e) / NORM(Φ)
+            BY NORM(y) = NORM(Measure(s, Φ) + e) >= NORM(Φ) · NORM(s) - NORM(e)
+          HENCE NORM(s_k - s) <= 2 · NORM(y) / NORM(Φ) + 2 · NORM(e) / NORM(Φ) = O(NORM(e))
+        }
+          
+        THUS NORM(s' - s) <= NORM(s' - BestK-SparseApprox(s, SparsityLevel(s))) + NORM(BestK-SparseApprox(s, SparsityLevel(s)) - s) 
+          <= O(NORM(e_k)) + O(NORM(e))
+          = O(NORM(e))
+    }
+  }
+}

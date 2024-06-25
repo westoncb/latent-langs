@@ -1,0 +1,53 @@
+MentalRepresentation {
+  STRUCTURE {
+    [MentalRepresentation := Symbolic | Distributed]
+    [Symbolic := LocalistRepresentation | CompositionalRepresentation]
+    [LocalistRepresentation := "∃!c ∈ Concept, ∃!s ∈ Symbol, (c ↦ s)"]
+    [CompositionalRepresentation := "∃C ⊆ Concept, ∃S ⊆ Symbol, ∀c ∈ C, ∃s ∈ S, (c ↦ s) ∧ structure(S) ≅ structure(C)"]
+    [Distributed := "∃C ⊆ Concept, ∃P ⊆ Pattern, ∀c ∈ C, ∃p ∈ P, (c ↦ p) ∧ ∀p ∈ P, ∃c1, c2 ∈ C, (c1 ↦ p) ∧ (c2 ↦ p)"]
+    [Concept := "Mental entity representing a category or idea"]
+    [Symbol := "Explicit, localized mental token"]
+    [Pattern := "Implicit, distributed activation across mental states"]
+  }
+
+  PROOFS {
+    theorem representation_grounding :
+      ∀r ∈ MentalRepresentation, ∃C ⊆ Concept, ∀c ∈ C, ∃e ∈ Experience, (c ↦ e)
+    {
+      assume r ∈ MentalRepresentation by hypothesis
+      case r ∈ Symbolic => {
+        r ∈ LocalistRepresentation ∨ r ∈ CompositionalRepresentation by definition
+        case r ∈ LocalistRepresentation => {
+          ∃!c ∈ Concept, ∃!s ∈ Symbol, (c ↦ s) by definition
+          ∃e ∈ Experience, (c ↦ e) by symbol_grounding_axiom
+        }
+        case r ∈ CompositionalRepresentation => {
+          ∃C ⊆ Concept, ∃S ⊆ Symbol, ∀c ∈ C, ∃s ∈ S, (c ↦ s) by definition
+          ∀c ∈ C, ∃e ∈ Experience, (c ↦ e) by symbol_grounding_axiom
+        }
+      }
+      case r ∈ Distributed => {
+        ∃C ⊆ Concept, ∃P ⊆ Pattern, ∀c ∈ C, ∃p ∈ P, (c ↦ p) by definition
+        ∀c ∈ C, ∃e ∈ Experience, (c ↦ e) by pattern_grounding_axiom
+      }
+    }
+  }
+
+  LANGUAGE {
+    type MentalRepresentation = Symbolic | Distributed
+    type Symbolic = LocalistRepresentation | CompositionalRepresentation
+    type LocalistRepresentation = (Concept, Symbol)
+    type CompositionalRepresentation = (Set(Concept), Set(Symbol))
+    type Distributed = (Set(Concept), Set(Pattern))
+    type Concept
+    type Symbol
+    type Pattern
+    type Experience
+
+    axiom symbol_grounding_axiom :
+      ∀c ∈ Concept, ∀s ∈ Symbol, (c ↦ s) ⇒ ∃e ∈ Experience, (c ↦ e)
+
+    axiom pattern_grounding_axiom :
+      ∀c ∈ Concept, ∀p ∈ Pattern, (c ↦ p) ⇒ ∃e ∈ Experience, (c ↦ e)
+  }
+}

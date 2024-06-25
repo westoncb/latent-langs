@@ -1,0 +1,158 @@
+CONCEPT AlzheimersMechanisms {
+  LANGUAGE {
+    TYPE Protein
+    TYPE Enzyme <: Protein
+    TYPE Peptide <: Protein
+    TYPE Neuron
+    TYPE Synapse
+    TYPE Microtubule
+    TYPE Tau <: Protein
+    TYPE Abeta <: Peptide
+    TYPE Oligomer
+    TYPE Plaque
+    TYPE Tangle
+    
+    FUNC Phosphorylate(t : Tau) : Tau
+    FUNC Aggregate(p : Protein) : Oligomer
+    FUNC Polymerize(o : Oligomer) : Plaque
+    FUNC Destabilize(m : Microtubule) : ()
+    FUNC Degenerate(n : Neuron) : ()
+    FUNC Dysfunction(s : Synapse) : ()
+    FUNC CascadeEffect(n : Neuron) : ()
+    
+    PRED IsHyperphosphorylated(t : Tau) : Bool
+    PRED IsMisfolded(p : Protein) : Bool
+    PRED IsOligomeric(o : Oligomer) : Bool
+    PRED IsFibrillar(p : Plaque) : Bool
+    PRED IsNeurotoxic(a : Abeta) : Bool
+    PRED IsSoluble(a : Abeta) : Bool
+    
+    AXIOM AmyloidCascadeHypothesis {
+      ∀ (n : Neuron) .
+        (∃ (a : Abeta) . IsNeurotoxic(a) ∧ IsSoluble(a)) 
+        => CascadeEffect(n)
+    }
+    
+    AXIOM TauHypothesis {
+      ∀ (n : Neuron) (t : Tau) .
+        IsHyperphosphorylated(t) 
+        => ∃ (m : Microtubule) . Destabilize(m) ∧ Degenerate(n)
+    }
+  }
+  
+  NOTATION {
+    "p-Tau" = Phosphorylate(Tau)
+    "Aβ" = Abeta
+    "Aβ_s" = {a : Abeta | IsSoluble(a)}
+    "Aβ_o" = {a : Abeta | IsOligomeric(Aggregate(a))}
+    "Aβ_f" = {a : Abeta | IsFibrillar(Polymerize(Aggregate(a)))}
+    "Aβ_t" = {a : Abeta | IsNeurotoxic(a)}
+    "NFT" = {t : Tangle | ∃ (p : p-Tau) . t = Aggregate(p)}
+  }
+  
+  TRANSFORMERS {
+    FUNC AbetaProduction(app : Protein, bace1 : Enzyme, psen1 : Protein) -> Abeta = {
+      LET c99 = Cleave(app, bace1)
+      LET ab = Cleave(c99, GammaSecretase(psen1))
+      RETURN ab
+    }
+    
+    PROC TauAggregation(t : Tau) -> Tangle = {
+      t := Phosphorylate(t)
+      WHILE IsSoluble(t):
+        t := Phosphorylate(t)
+      RETURN Aggregate(t)
+    }
+    
+    PROC SynapticDysfunction(s : Synapse, a : Abeta) -> () = {
+      IF IsNeurotoxic(a):
+        Dysfunction(s)
+        FOREACH n IN PostSynapticNeurons(s):
+          CascadeEffect(n)
+    }
+    
+    PROC NeuronalDegeneration(n : Neuron, t : Tangle) -> () = {
+      FOREACH m IN MicrotubulesOf(n):
+        Destabilize(m)
+      Degenerate(n)
+    }
+
+    TACTIC AbetaDrivenPathology(n : Neuron, a : Abeta) = {
+      IF IsNeurotoxic(a) ∧ IsSoluble(a):
+        FOREACH s IN SynapsesOf(n):
+          SynapticDysfunction(s, a)
+        CascadeEffect(n)
+      ELSE IF IsOligomeric(Aggregate(a)):
+        HAVE IsNeurotoxic(a) BY <Aβ oligomers are neurotoxic>
+        FOREACH s IN SynapsesOf(n):
+          SynapticDysfunction(s, a)
+        CascadeEffect(n)
+      ELSE IF IsFibrillar(Polymerize(Aggregate(a))):
+        HAVE ∃ (m : Microglia) . ActivateInflammation(m) BY <Aβ fibrils activate microglia>
+        FOREACH n_i IN NeuronsInPlaque(Polymerize(Aggregate(a))):
+          Degenerate(n_i)
+    }
+    
+    TACTIC TauDrivenPathology(n : Neuron, t : Tau) = {
+      IF IsHyperphosphorylated(t):
+        LET nt = TauAggregation(t)
+        NeuronalDegeneration(n, nt)
+      IF ∃ (nt : Tangle) . nt = Aggregate(Phosphorylate(t)):
+        NeuronalDegeneration(n, nt)
+    }
+  }
+  
+  PROOFS {
+    THEOREM AmyloidCascade {
+      STATEMENT:
+        ∀ (n : Neuron) .
+          (∃ (a : Aβ_t) . a ∈ Aβ_s) => CascadeEffect(n)
+            
+      PROOF:
+        LET n : Neuron
+        ASSUME (H) : ∃ (a : Aβ_t) . a ∈ Aβ_s
+        
+        TAKE a : Aβ_t SUCH THAT a ∈ Aβ_s HOLDS BY H
+        
+        AbetaDrivenPathology(n, a)
+        HENCE CascadeEffect(n)
+        
+        QED
+    }
+    
+    THEOREM TauPathology {
+      STATEMENT:
+        ∀ (n : Neuron) (t : Tau) .
+          IsHyperphosphorylated(t) => Degenerate(n)
+            
+      PROOF:
+        LET n : Neuron, t : Tau
+        ASSUME IsHyperphosphorylated(t)
+        
+        TauDrivenPathology(n, t)
+        HENCE Degenerate(n) THUS_DONE
+        
+        QED
+    }
+    
+    THEOREM DualPathwayInteraction {
+      STATEMENT:
+        ∀ (n : Neuron) (a : Aβ_t) (t : Tau) .
+          (a ∈ Aβ_s) ∧ IsHyperphosphorylated(t)
+          => CascadeEffect(n) ∧ Degenerate(n)
+            
+      PROOF:
+        LET n : Neuron, a : Aβ_t, t : Tau
+        ASSUME (H1) : a ∈ Aβ_s,
+               (H2) : IsHyperphosphorylated(t)
+               
+        AbetaDrivenPathology(n, a) BY H1
+        HENCE CascadeEffect(n)
+        
+        TauDrivenPathology(n, t) BY H2  
+        HENCE Degenerate(n)
+        
+        QED
+    }
+  }
+}

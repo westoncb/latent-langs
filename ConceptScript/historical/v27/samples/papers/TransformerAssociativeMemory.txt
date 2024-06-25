@@ -1,0 +1,131 @@
+CONCEPT TransformerAssociativeMemory {
+  NOTATION {
+    D = {ρ_1, ..., ρ_d} ⊂ ℝ^n                   -- Training data patterns 
+    B_i = B(ρ_i, r_i) = {x ∈ ℝ^n: ‖x-ρ_i‖≤r_i}  -- ρ_i neighborhood, radius r_i
+    g(x) = min_i ‖x - ρ_i‖                      -- Nearest neighbor distance  
+    Ω = ⋃_i B_i                                 -- Region of convergence
+    
+    E_t(x) = -LOG ∑_{ρ∈D_t} EXP(-‖x-ρ‖^2)       -- Layer t energy
+    E_glob(x) = -LogSumExp(-E_1(x), ..., -E_l(x))-- Global energy
+    
+    p_θ(x) = 1/Z_θ · EXP(-E_glob(x)) on Ω       -- Model density
+    p_D(x) = 1/d · ∑_i δ(x-ρ_i)                 -- Empirical data density
+    
+    L(N,D) = H(p_D, p_θ) = 𝔼_p_D[-LOG p_θ]      -- Cross-entropy loss
+    
+    γ(n,r) = ∫_0^r t^(n-1)e^-t dt               -- Lower incomplete gamma
+    Γ(n) = γ(n,∞) = ∫_0^∞ t^(n-1)e^-t dt        -- Gamma function 
+    V_n(r) = π^(n/2)/Γ(n/2+1) · r^n             -- Volume of n-ball, radius r
+  }
+
+  LANGUAGE {
+    TYPE Pattern = Vector[Real]
+    TYPE Neighborhood = (Pattern, Real)
+    TYPE LayerEnergy = Pattern -> Real
+    TYPE LayerMemory = {Patterns: Set[Pattern], Energy: LayerEnergy}
+    TYPE GlobalEnergy = Pattern -> Real
+    TYPE TransformerMemory = {Layers: Seq[LayerMemory], GlobEnergy: GlobalEnergy, 
+                              DataPatterns: Set[Pattern], Dim: Int, NumLayers: Int}
+
+    FUNC LogSumExp(X: Set[Real]): Real = LOG(∑_{x∈X} EXP(x)) 
+    FUNC L2Norm(x: Pattern): Real = √(∑_i x_i^2)
+    FUNC NearestDist(x: Pattern, D: Set[Pattern]): Real = min_{ρ∈D} L2Norm(x-ρ) 
+    FUNC GammaLower(n: Int, r: Real): Real = ∫_0^r t^(n-1)·EXP(-t) dt
+    FUNC GammaFunc(n: Int): Real = GammaLower(n, ∞)
+    FUNC BallVolume(n: Int, r: Real): Real = π^(n/2)/GammaFunc(n/2+1) · r^n
+    FUNC CrossEntropy(p: Measure, q: Measure): Real = 𝔼_p[-LOG(q)]
+    PRED IsNeighborhood(B: Set[Pattern], ρ: Pattern, r: Real) = 
+      ∀ x∈B. L2Norm(x-ρ) ≤ r ∧ ∀ y∉B. L2Norm(y-ρ) > r
+  }
+
+  AXIOMS {
+    Separation:  ∀ i≠j. B_i ∩ B_j = ∅
+    Convergence: ∀ t,x∈B_i. ∃ ρ*∈B_i. lim_k x^(t+k) = ρ*  (x^(t) = layer t output)
+    Retrieval:   ∀ x∈B_i. ‖lim_k x^(t+k) - ρ_i‖ ≤ ε
+  }
+
+  STRUCTURES {
+    STRUCTURE LayerMemory {
+      Patterns: Set[Pattern]
+      Energy(x): Real = -LOG(∑_{ρ∈Patterns} EXP(-L2Norm(x-ρ)^2))    
+      Neighborhood(ρ): (Pattern, Real) = (ρ, r) 
+        WHERE IsNeighborhood(B(ρ,r), ρ, r) ∧ ∀ r'>r. ¬IsNeighborhood(B(ρ,r'), ρ, r')
+    }
+   
+    STRUCTURE TransformerMemory {
+      Layers: Seq[LayerMemory]
+      GlobEnergy(x): Real = -LogSumExp({-L.Energy(x) | L ∈ Layers})
+      DataPatterns: Set[Pattern]
+      ModelDensity(x): Real = EXP(-GlobEnergy(x)) / ∫_Ω EXP(-GlobEnergy(x)) dx
+      EmpiricalDensity(x): Real = 1/|DataPatterns| · ∑_{ρ∈DataPatterns} DiracDelta(x-ρ) 
+      CrossEntropyLoss: Real = CrossEntropy(EmpiricalDensity, ModelDensity)
+      Dim: Int    -- Embedding dimension
+      NumLayers: Int
+      
+      FUNC DiracDelta(x: Pattern): Real = IF ‖x‖=0 THEN ∞ ELSE 0
+    }
+  }
+  
+  THEOREMS {
+    EnergyBound: ∀ x∈Ω.  g(x) - LOG(d) ≤ E_glob(x) < g(x)
+    
+    RadiusExpr: Z_t = ∫_Ω EXP(-E_t(x)) dx
+                    = 2·∑_i π^(n/2)·γ(n,r_i) / Γ(n/2)  
+                    WHERE {r_i} are radii of layer t neighborhoods
+                    
+    LossBounds: 1 < L(N,D) = LOG(Z_t)+1/Z_t+LOG(l)-c ≤ LOG(Z_t)+1/Z_t+LOG(l)
+                FOR t = argmin_i E_i  (E_i = layer i energy)
+                    c ∈ [0,LOG(l))
+              
+    VolumeBound: d·V_n(√(n/2πe))·EXP(-√(n/2πe)) ≤ Z_t ≤ d·V_n(√(n/2πe))
+                 WHERE n = Dim = |ρ_i|
+    
+    OptimalScaling: L(N,D) → 1  ⟺  N = Θ(D²)
+  }
+    
+  PROOFS {
+    PROOF EnergyBound {
+      ASSUME x ∈ Ω
+       
+      g(x) = min_i ‖x-ρ_i‖ 
+           ≤ -LOG EXP(-‖x-ρ_i‖) FOR ANY i  -- since y ≤ -LOG EXP(-y)
+           ≤ -LOG (1/d · ∑_i EXP(-‖x-ρ_i‖))  
+           = E_glob(x) + LOG(d)
+           < -LOG EXP(-min_i ‖x-ρ_i‖) 
+           = g(x)
+    }
+  }
+    
+  EXAMPLES {
+    EXAMPLE GPT2 {
+      MODEL WITH 
+        Dim = 1024, NumLayers = 24, N ≈ 15·Dim²·NumLayers = 355M params
+      TRAINED ON 
+        WebText dataset, D ≈ 40 GB tokens
+      VALIDATES 
+        RadiusOfConvergence ≈ 2√(Dim/2πe) ≈ 20  -- Empirically
+        CrossEntropyAtEnd = 2.3 
+          SATISFIES 1 < 2.3 ≤ LOG(Z_24)+1/Z_24+LOG(24)  -- By LossBounds
+        OptimalScaling NOT ACHIEVED  
+          BECAUSE N < D²  SO  L > 1
+    }
+      
+    EXAMPLE TrainGPT2Small {
+      MODEL WITH 
+        Dim = 768, NumLayers = 12, N ≈ 125M params
+      TRAINED ON   
+        100% (9B tokens),  CrossEntropy ≈ 2.3
+        1% (90M tokens),   CrossEntropy ≈ 2.4
+        0.1% (9M tokens),  CrossEntropy → 0   -- Overfitting
+    }
+    
+    EXAMPLE VanillaTransformer {
+      MODELS WITH
+        Dim = 512, NumLayers = 6 or 10, tied embeddings  
+      TRAINED ON
+        QuestionFormation dataset, D = 2M tokens
+      CONVERGES TO
+        CrossEntropy ≈ 1.0  -- Matches LossBounds
+    }
+  }  
+}

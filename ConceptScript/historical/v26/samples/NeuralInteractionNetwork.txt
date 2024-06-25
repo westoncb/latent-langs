@@ -1,0 +1,104 @@
+CONCEPT NeuralInteractionNetwork {
+  LANGUAGE {
+    TYPE Neuron
+    TYPE Synapse = (Neuron, Neuron, ℝ)  -- (source, target, weight)
+    TYPE NeuralNet = (Set[Neuron], Set[Synapse])
+    
+    FUNC Activate : Neuron -> ℝ -> ℝ
+    FUNC Forward(net : NeuralNet, input : ℝ^n) : ℝ^m
+    FUNC Backward(net : NeuralNet, input : ℝ^n, output : ℝ^m, target : ℝ^m) : NeuralNet
+    
+    PRED Trained : NeuralNet -> 𝔹
+  }
+
+  NOTATION {
+    "+" = "Interaction between neurons"
+    "Net --Fwd--> *" = "Neural net reduces via forward pass to output"
+    "f ∘ g" = compose(f, g)
+  }
+  
+  TRANSFORMERS {
+    TACTIC Optimize(net : NeuralNet) -> NeuralNet = SGD(net)
+    
+    REWRITE Forward(net, input) = Foldr[[n1, n2] -> n2 ∘ Activate(n1)](net.Neurons, input)
+
+    REWRITE Backward(net, input, output, target) 
+          = Foldl[[s1, s2] -> UpdateWeights(s2, δ(s1))](net.Synapses, output - target) 
+  }
+      
+  STRUCTURE NeuralInteractions {
+    DEF Interaction(n1 : Neuron, n2 : Neuron) : NeuralNet = {
+      LET w_init = RandomWeight()
+      ({n1, n2}, {(n1, n2, w_init)})  
+    }
+
+    DEF Reduction(net : NeuralNet) : NeuralNet = {
+      LET (neurons, synapses) = net
+      LET active = {n | n ∈ neurons, Activate(n) > 0}
+      LET new_syns = {Interaction(pre, post) | pre ∈ active, post ∈ neurons}
+      (neurons, synapses ∪ new_syns)
+    }
+      
+    DEF Eq(net1 net2 : NeuralNet) : net1 = net2 = {
+      LET iso1 : net1.Neurons -> net2.Neurons
+      LET iso2 : net1.Synapses -> net2.Synapses
+      ∀ (n1 n2 : Neuron) . (n1, n2, w) ∈ net1.Synapses <=> (iso1(n1), iso2(n2), w) ∈ net2.Synapses
+    }
+  }
+    
+  PROOFS {
+    THEOREM Universality {
+      STATEMENT:  
+        ∀ (f : ℝ^n -> ℝ^m) . ∃ (net : NeuralNet) . Trained(net) ∧ (∀ (input : ℝ^n) . Forward(net, input) = f(input))
+          
+      PROOF:
+        LET f : ℝ^n -> ℝ^m
+
+        DEF net_f : NeuralNet = {
+          LET init_net = CreateNetworkStructure(n, m)
+          FixedPoint(init_net, [net => Optimize(Backward(net, input, Forward(net, input), f(input)))])
+        }
+
+        SHOW Trained(net_f) BY {
+          LET (neurons, synapses) = net_f
+          ∀ (s : Synapse) . s ∈ synapses => Converged(s.weight) BY def. of FixedPoint
+        }
+
+        SHOW ∀ (input : ℝ^n) . Forward(net_f, input) = f(input) BY {
+          LET output = Forward(net_f, input)
+          output = f(input) BY def. of Backward, def. of FixedPoint
+        }
+          
+        QED
+    }
+
+    THEOREM InteractionEvolution {
+      STATEMENT:  
+        ∀ (net_0 net_t : NeuralNet) . net_0 --*Fwd--> net_t => ∃ (p : net_0 = net_t) . p ∈ PathSpace(NeuralNetSpace, net_0, net_t) 
+      
+      PROOF:
+        LET net_0 net_t : NeuralNet, net_0 --*Fwd--> net_t
+          
+        DEF path(step : ℕ) : NeuralNet = Reduction^step(net_0)
+          
+        SHOW ∀ (step : ℕ) . path(step) = Reduction(path(step-1)) BY def. of Iterate
+        SHOW path(0) = net_0 ∧ ∃ (t : ℕ) . path(t) = net_t BY def. of path, --*Fwd-->
+          
+        LET p : net_0 = net_t = FunctorialPath([step => Eq(path(step), path(step+1))])
+          
+        SHOW p ∈ PathSpace(NeuralNetSpace, net_0, net_t) BY def. of PathSpace, def. of Eq
+          
+        QED  
+    }
+  }
+}
+
+This Concept defines a NeuralInteractionNetwork, a type of neural network architecture where new connections (synapses) between neurons can form dynamically during the forward pass based on which neurons activate. The key ideas are:
+
+The network is defined as a set of neurons and synapses, similar to an interaction net in the Interaction Combinators model.
+During the forward pass, new synapses are added between all active neurons and all other neurons, allowing the network topology to evolve.
+The Reduction function defines a single iteration of this interactional forward pass. Multiple reductions form an evolutionary path in the space of neural nets.
+Training the network involves finding a fixpoint of iterated backward passes that minimize the output error. The Universality theorem states that this training process can approximate any function.
+Inspired by Homotopy Type Theory, the InteractionEvolution theorem shows that the sequential reductions of the network form a path in the space of neural networks connecting the initial and final network states. This provides a topological perspective on the network's evolution during inference.
+
+The core novelty is using dynamic interaction rules to evolve the network topology during inference, and analyzing this evolution through the lens of homotopy theory.

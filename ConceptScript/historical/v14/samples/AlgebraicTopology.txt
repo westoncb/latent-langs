@@ -1,0 +1,196 @@
+CONCEPT AlgebraicTopology {
+  LANGUAGE {
+    type Top = Space | Map | Homotopy
+    type Alg = Group | Ring | Module | Algebra | Operad
+    
+    type Space = {
+      Point,
+      Disk(n: ℕ), 
+      Sphere(n: ℕ), 
+      Torus(g: ℕ),
+      KleinBottle,
+      ProjectivePlane(ℝ | ℂ | ℍ)
+    }
+    
+    type Map = Continuous(X: Space, Y: Space)
+    
+    notation "f: X -> Y" = Map(X, Y)
+    notation "f ∘ g" = Compose(f: Map, g: Map)
+    notation "id_X" = Identity(X: Space)
+    notation "H: f ≃ g" = Homotopy(f: Map, g: Map)
+    
+    type ChainComplex = Sequence(C: Graded(Module), d: Differential(C))
+    notation "C•" = ChainComplex
+    notation "Hn(C•)" = Homology(C•: ChainComplex, n: ℤ)
+    
+    pred ModelFor(A: Alg, X: Space) 
+    notation "A ⊧ X" = ModelFor(A, X)
+  }
+
+  STRUCTURE {
+    HomotopyInvariance: {
+      f ≃ g ⇒ f*: Hn(X) -> Hn(Y) = g*  ; Homotopic maps induce equal homomorphisms
+    }
+    
+    HomologicalAlgebra: {
+      X: Space ⊧ C(X): ChainComplex   ; Singular chain complex
+      Hn(C(X)) = Hn(X)                ; Homology of space
+      (f: X -> Y) ⊧ (f#: C(X) -> C(Y)) ; Induced chain map
+    }
+
+    AlgebraicModels: {
+      Sphere(n) ⊧ Algebra(Generator[n], Relations[x^2 = 0])
+      Torus(g) ⊧ ExteriorAlgebra(Generator[a₁...a_g, b₁...b_g])
+      KleinBottle ⊧ Algebra(Generator[a, b], Relations[a^2 = b^2, ab = -ba]) 
+      X simply connected ⇒ 𝜋₁(X) ⊧ Group(Presentation(X))
+      𝜋*(X) ⊧ Operad   ; Homotopy groups form an operad
+    }
+  }
+
+  PROOFS {
+    notation "Sn" = Sphere(n: ℕ)
+    notation "Dn" = Disk(n: ℕ)
+    
+    tactic Exact(C: ChainComplex):
+      (C exact) ⊢ (Hn(C) = 0 for n ≠ 0)
+
+    tactic CellularApproximation(f: Map, X: Space, Y: Space):
+      (X, Y CW complexes) ⊢ (∃ g ≃ f cellular)
+
+    theorem PoincareLemma(U ⊆ ℝ^n: Space):
+      U contractible ⇒ Hn(U) = 0 for n > 0
+    {
+      have Dn contractible
+      have Hn(Dn) = 0 for n > 0  ; Homology of disk
+      let φ: U ≃ Dn              ; Contraction 
+      have φ*: Hn(U) = Hn(Dn)    ; Homotopy invariance
+      hence Hn(U) = 0 for n > 0
+    }
+    
+    theorem HomotopyInvariantHomology(f, g: Map, X, Y: Space):  
+      f ≃ g ⊢ f* = g*: Hn(X) -> Hn(Y)
+    {
+      assume f ≃ g
+      get H: f ≃ g  ; Homotopy between maps
+      H: X × I -> Y             ; Homotopy as map
+      Hn(X × I) = Hn(X)         ; Homotopy invariance of homology  
+      have H#: Hn(X × I) -> Hn(Y)  ; Induced map on homology
+      have f# = H#|_0, g# = H#|_1   ; Restrict to endpoints
+      hence f* = H#|_0 = H#|_1 = g* ; Composition equality
+    }
+    
+    theorem CellularHomology(X: Space):
+      X CW complex ⊢ Hn(X) = Hn(Cellular(X))
+    {
+      assume X CW complex
+      let i: Cellular(X) ↪ X             ; Inclusion of cellular chains
+      CellularApproximation(id_X, X, X)   
+      get g ≃ id_X cellular
+      have g ∘ i ≃ id, i ∘ g ≃ id        ; Homotopy equivalences
+      have (g ∘ i)* = id*, (i ∘ g)* = id* ; Homotopy invariance
+      hence i* iso, so Hn(X) = Hn(Cellular(X))      
+    }
+
+    theorem HopfInvariant(f: S³ -> S²):
+      deg(f) = Hopf(f)   ; Degree equals Hopf invariant 
+    {
+      S² ⊧ A = Algebra(x, [x²=0])    ; Algebraic model for S²
+      have C(S³) = (0 -> ℤ -> 0)     ; Cellular chain complex
+      f#: C(S³) -> C(A)              ; Induced chain map
+      f#[e³] = f*[S³] = d(f#[e³])    ; Fundamental class
+      f*[S³] = deg(f) x              ; Representing cocycle
+      have f#[e³] in Ker(d) = ℤ x    ; Cycles are scalar multiples
+      Hopf(f) := coefficient of x in f#[e³]
+      hence deg(f) = Hopf(f)
+    }
+  }
+}
+
+
+
+
+CONCEPT AlgebraicTopology {
+  LANGUAGE {
+    type TopologicalSpace = {points: Point*, neighborhoods: Point -> PowerSet(Point)*}
+    type Point = Primitive
+    type OpenSet = PowerSet(Point)
+
+    type Chain(S: TopologicalSpace, n: ℕ) = FormalSum(S.points^(n+1), 𝕀)
+    type Boundary(S: TopologicalSpace, n: ℕ) = LinearMap(Chain(S, n), Chain(S, n-1))
+
+    notation "Z(S, n)" = Cycles(S: TopologicalSpace, n: ℕ) = Ker(∂(S, n))  ; n-cycles
+    notation "B(S, n)" = Boundaries(S: TopologicalSpace, n: ℕ) = Im(∂(S, n+1))  ; n-boundaries 
+    notation "H(S, n)" = Homology(S: TopologicalSpace, n: ℕ) = Z(S, n) / B(S, n)  ; n-th homology
+
+    axiom PoincareLemma(S: SmoothManifold, ω: DifferentialForm):  
+      dω = 0 ⇒ ∃τ. ω = dτ   ; Closed forms are exact
+  }
+
+  STRUCTURE {  
+    [SimplicialComplex:
+      {pointSet: Point*, simplices: PowerSet(pointSet)*, 
+       ∀ σ ∈ simplices. τ ⊆ σ ⇒ τ ∈ simplices}
+    ]
+
+    [ChainComplex(S: TopologicalSpace):
+      ...->∂(n+1)->  Chain(S, n)  ->∂(n)→  Chain(S, n-1)  ->∂(n-1)→...
+      ∂(n) ∘ ∂(n+1) = 0  ;  Boundary of a boundary is zero
+    ]
+
+    [Homomorphism(f, X, Y): 
+      {X, Y: TopologicalSpace, f: X.points -> Y.points |
+       ∀ U ∈ Y.neighborhoods(f(x)). ∃ V ∈ X.neighborhoods(x). f(V) ⊆ U}
+      Functorial:  f_* ∘ ∂_X = ∂_Y ∘ f_*
+    ]
+  }
+
+  PROOFS {
+    tactic SplitExactSequence(C, D, E, i, f, g) = {
+      have 0 ->i→ C ->f→ D ->g→ E ->0→ 0  ; Short exact sequence
+      have Im(i) = Ker(f)  ; Exactness at C
+      have Im(f) = Ker(g)  ; Exactness at D
+      have D = Im(f) ⊕ X    ; Splitting lemma, for some X  
+    }
+
+    theorem DeRhamTheorem(M: SmoothManifold): 
+      H_dR(M) ≅ H_singular(M)  ; Isomorphism of cohomology theories
+    {
+      for n in 𝕆(N):  ; For each dimension n
+        let ω ∈ Z_dR(M, n)  ; Closed n-form
+        PoincareLemma(M, ω)  ; ω is exact
+        hence ω = dτ for some (n-1)-form τ
+        have [ω] = 0 in H_dR(M, n)  ; Exact forms are boundaries
+        hence Z_dR(M, n) = B_dR(M, n)  ; All closed forms are exact
+        hence H_dR(M, n) = 0
+        
+        let c ∈ Z_singular(M, n)  ; Singular n-cycle  
+        have ∫_c:Z_dR(M, n) -> 𝕀   ; Integration over cycles
+        have Ker(∫_c) = B_singular(M, n)  ; Stokes' theorem
+        hence ∫_c induces H_dR(M, n) -> H_singular(M, n)
+      
+      therefore, H_dR(M) ≅ H_singular(M)
+    }
+
+    theorem MayerVietoris(X, U, V: TopologicalSpace):  
+      X = U ∪ V ⇒ 
+        ... -> H(U∩V, n) ->Φ→ H(U, n) ⊕ H(V, n) ->Ψ→ H(X, n) ->Δ→ H(U∩V, n-1) -> ...
+    {
+      assume X = U ∪ V
+      let A = U ∩ V
+
+      have 0 -> C(A, n) ->i→ C(U, n) ⊕ C(V, n) ->j→ C(X, n) -> 0   ; Chain complex
+      SplitExactSequence(C(A, n), C(U, n) ⊕ C(V, n), C(X, n), i, j, 0)
+      
+      have H(X, n) ≅ H(C(X, n))  ; Homotopy invariance
+      have H(U, n) ⊕ H(V, n) ≅ H(C(U, n)) ⊕ H(C(V, n))  ; Homotopy invariance 
+      
+      have Φ: H(A, n) -> H(U, n) ⊕ H(V, n)  ; Induced map
+      have Ψ: H(U, n) ⊕ H(V, n) -> H(X, n)  ; Induced map
+      
+      have Δ: H(X, n) -> H(A, n-1)  ; Connecting homomorphism
+      have Im(Δ) = Ker(Φ)  ; Exactness at H(A, n-1)  
+      have Im(Φ) = Ker(Ψ)  ; Exactness at H(U, n) ⊕ H(V, n)
+      have Im(Ψ) = Ker(Δ)  ; Exactness at H(X, n)
+    }
+  }
+}

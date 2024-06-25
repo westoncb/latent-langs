@@ -1,0 +1,200 @@
+CONCEPT ProofTheoreticType {
+  LANGUAGE {
+    type Type = 
+      | Var(ℕ)           ; Type variable
+      | Arrow(Type, Type) ; Function type
+      | Prod(Type, Type)  ; Product type
+      | Sum(Type, Type)   ; Sum type
+      | Mu(ℕ, Type)       ; Recursive type
+      
+    type Term =  
+      | Var(ℕ)             ; Term variable
+      | Abs(ℕ, Type, Term) ; Lambda abstraction
+      | App(Term, Term)    ; Application
+      | Pair(Term, Term)   ; Pair  
+      | Fst(Term)          ; First projection
+      | Snd(Term)          ; Second projection
+      | Inl(Term)          ; Left injection
+      | Inr(Term)          ; Right injection
+      | Case(Term, ℕ, Term, ℕ, Term) ; Case analysis
+      | Roll(Term)         ; Recursive type introduction
+      | Unroll(Term)       ; Recursive type elimination
+      
+    notation "λ x : A . M" = Abs(x: ℕ, A: Type, M: Term)
+    notation "M N" = App(M: Term, N: Term)  
+    notation "⟨ M, N ⟩" = Pair(M: Term, N: Term)
+    notation "π₁ M" = Fst(M: Term)  
+    notation "π₂ M" = Snd(M: Term)
+    notation "inl M" = Inl(M: Term)
+    notation "inr M" = Inr(M: Term)
+    notation "case M of inl x ⇒ N | inr y ⇒ P" = Case(M: Term, x: ℕ, N: Term, y: ℕ, P: Term)
+    notation "roll M" = Roll(M: Term) 
+    notation "unroll M" = Unroll(M: Term)
+    
+    pred proves(A: Type, M: Term) = der([], M, A)   ; Provability relation
+    pred reduces(M: Term, N: Term) = eval(M) = N   ; Reduction relation
+    
+    notation "Γ ⊢ M : A" = der(Γ: List<Type>, M: Term, A: Type) 
+    notation "M ⇒ N" = reduces(M, N)
+  }
+  
+  STRUCTURE {
+    ProofRules: {
+      ――――――――――――― Var
+      Γ, x:A ⊢ x:A
+      
+      Γ, x:A ⊢ M:B   
+      ―――――――――――――― Abs
+      Γ ⊢ (λ x:A. M) : A → B
+      
+      Γ ⊢ M : A → B    Γ ⊢ N : A    
+      ――――――――――――――――――――――――――― App  
+            Γ ⊢ (M N) : B
+              
+      Γ ⊢ M : A    Γ ⊢ N : B
+      ――――――――――――――――――――――― Pair
+      Γ ⊢ ⟨ M, N ⟩ : A × B
+      
+      Γ ⊢ M : A × B
+      ――――――――――――― Fst
+      Γ ⊢ π₁ M : A
+      
+      Γ ⊢ M : A × B  
+      ――――――――――――― Snd
+      Γ ⊢ π₂ M : B
+      
+      Γ ⊢ M : A  
+      ―――――――――――― Inl
+      Γ ⊢ inl M : A + B
+      
+      Γ ⊢ M : B
+      ―――――――――――― Inr  
+      Γ ⊢ inr M : A + B
+      
+      Γ ⊢ L : A + B   Γ, x:A ⊢ M : C   Γ, y:B ⊢ N : C    
+      ――――――――――――――――――――――――――――――――――――――――――――― Case
+      Γ ⊢ case L of inl x ⇒ M | inr y ⇒ N : C
+      
+      Γ ⊢ M : [μ α. A / α] A
+      ―――――――――――――――――――――― Roll
+      Γ ⊢ roll M : μ α. A
+      
+      Γ ⊢ M : μ α. A
+      ―――――――――――――――――――――――――― Unroll
+      Γ ⊢ unroll M : [μ α. A / α] A
+    }
+    
+    ReductionRules: {
+      (λ x : A . M) N ⇒ [N / x] M                     ; β-reduction
+      π₁ ⟨ M, N ⟩ ⇒ M                                ; Product projection
+      π₂ ⟨ M, N ⟩ ⇒ N                  
+      case (inl M) of inl x ⇒ N | inr y ⇒ P ⇒ [M/x]N ; Case reduction
+      case (inr M) of inl x ⇒ N | inr y ⇒ P ⇒ [M/y]P          
+      unroll (roll M) ⇒ M                             ; μ-unrolling
+    }
+    
+    LFTerms: {
+      NatType = μ α . (1 + α)      ; Natural numbers  
+      ListType(A) = μ β . (1 + A × β)    ; Lists
+      TreeType(A) = μ γ . (A + γ × γ)    ; Binary trees
+    }
+  }
+  
+  PROOFS {  
+    tactic Induction(M: Term, α: ℕ, A: Type, prop): 
+      (∀ N. M ⇒* N ⊢ prop(N)) ⊢ prop(unroll (roll M))
+      
+    theorem CurryHoward(A: Type):  
+      (⊢ A) ⟺ ∃ M. (⊢ M : A)  ; Curry-Howard correspondence
+    {
+      assume ⊢ A
+      suffices to show ∃ M. ⊢ M : A by {
+        suppose ⊢ M : A 
+        obtain d: Derivation such that d :: (⊢ M : A)
+        hence ⊢ A by inversion on ProofRules
+      }
+      show ∃ M. ⊢ M : A by induction on the derivation of ⊢ A: {
+        case Axiom: A = α for some type variable α
+          exists x such that x : α ∈ Γ   ; By rule Var
+        
+        case Impl: A = B → C and ⊢ B → C derived from ⊢ C assuming B
+          by IH exists M such that B ⊢ M : C
+          suffices to show ⊢ (λ x:B. M) : B → C by rule Abs
+            assume x : B
+            show M : C by substitution on IH
+            
+        case Conj: A = B ∧ C and ⊢ B ∧ C derived from ⊢ B and ⊢ C  
+          by IH exists M, N such that ⊢ M : B and ⊢ N : C
+          show ⊢ ⟨ M, N ⟩ : B × C by rule Pair
+          
+        case Disj: A = B ∨ C and ⊢ B ∨ C derived from ⊢ B or ⊢ C
+          by IH exists M such that ⊢ M : B or ⊢ M : C
+          show ⊢ (inl M) : B + C or ⊢ (inr M) : B + C by rules Inl, Inr
+      }
+    }
+    
+    theorem Normalization(M: Term, A: Type): 
+      (⊢ M : A) ⇒ ∃ N. (M ⇒* N) ∧ (∀ P. N ⇏ P)   ; Normalization theorem
+    {  
+      assume ⊢ M : A
+      show ∃ N. (M ⇒* N) ∧ (∀ P. N ⇏ P) by induction on the derivation of ⊢ M : A: { 
+        case Var: M = x immediate
+        
+        case Abs: M = λ x:B. M' and A = B → C and ⊢ M' : C assuming x : B
+          by IH exists N' such that M' ⇒* N' and N' is normal
+          suffices to show (λ x:B. N') is normal by taking N = λ x:B. N' 
+          
+        case App: M = M₁ M₂ and ⊢ M₁ : B → A and ⊢ M₂ : B
+          by IH exists N₁, N₂ such that M₁ ⇒* N₁ and M₂ ⇒* N₂ and N₁, N₂ are normal
+          suffices to show ∀ P. (N₁ N₂) ⇏ P by cases:
+            suppose N₁ = λ x:B. N₁' then (N₁ N₂) ⇒ [(N₂/x)]N₁' and [(N₂/x)]N₁' is normal by IH
+            otherwise (N₁ N₂) is already normal
+        
+        case Pair, Fst, Snd, Inl, Inr, Case, Roll, Unroll: similar  
+      }
+    }
+    
+    theorem ParadoxFreePT(T: Type, M: Term):
+      ((T = ¬ T) ∧ (⊢ M : T)) ⇒ ⊥
+    {
+      assume T = ¬ T and ⊢ M : T
+      
+      have T = T → ⊥   ; By definition of ¬
+      hence ⊢ M : T → ⊥ ; By substitution
+      
+      suffices to show (⊢ M M : ⊥) ⇒ ⊥ by {  
+        have ⊢ M : T and ⊢ M : T → ⊥
+        hence ⊢ M M : ⊥ by rule App 
+      }
+      
+      assume ⊢ M M : ⊥
+      have ⊥ = 0  ; Empty type has no inhabitants
+      hence ⊢ M M : 0 by substitution
+      
+      obtain N such that (M M ⇒* N) and (∀ P. N ⇏ P) by Normalization on ⊢ M M : 0
+      
+      suffices to show ∀ P. N ⇏ P ⇏ 0 by {
+        have N : 0 by inversion on typing rules
+        hence contradiction 
+      }
+      
+      show ∀ P. N ⇏ P ⇏ 0 by cases on the shape of normal forms:
+        case λ x:A. N': 0 ≠ A → B for any A, B  
+        case ⟨ N₁, N₂ ⟩: 0 ≠ A × B for any A, B
+        case inl N': 0 ≠ A + B for any A, B
+        case inr N': 0 ≠ A + B for any A, B
+        case roll N': 0 ≠ μ α. A for any A
+    } 
+  }
+}
+
+This Concept introduces a simple type theory that extends lambda calculus with additional type constructors like function types, product types (pairs), sum types (tagged unions), and recursive types.
+The language section defines the syntax of types and terms, along with notations for common constructs like lambda abstraction, application, pair formation, case analysis, etc. It also defines the provability relation (⊢) using the predicate proves and the reduction relation (⇒) using reduces.
+The structure section lists the inference rules for deriving well-typed terms, as well as the reduction rules that define the operational semantics. It also includes some common type definitions for natural numbers, lists and trees using recursive types.
+The proofs section demonstrates several key theorems:
+
+Curry-Howard Correspondence: This theorem establishes the equivalence between logical proofs and well-typed lambda terms. It shows that a type A is inhabited (provable) iff there exists a term M such that M has type A. The proof proceeds by induction on the derivation of ⊢ A.
+Normalization Theorem: This states that every well-typed term reduces to a normal form (i.e., a term that cannot be reduced further). The proof is again by induction on the typing derivation, using the normalization property of subterms.
+Paradox-Free Proof Theory: This final theorem shows that the type theory is consistent, i.e., it cannot prove a contradiction. Specifically, it shows that if we assume a term M of type T where T is equivalent to its own negation (T = ¬T), then we can derive a contradiction (⊥). The proof works by using the Curry-Howard correspondence to construct a term (M M) of the empty type (0), and then arguing by cases on the possible normal forms of (M M) to derive a contradiction.
+
+The Concept aims to showcase the deep connections between lambda calculus, constructive logic, and type theory. It demonstrates how types can be used to enforce logical consistency and prevent paradoxes, while also enabling expressive formal reasoning about programs. The techniques of structural induction, case analysis, and normalization are central to the metatheory of type systems.

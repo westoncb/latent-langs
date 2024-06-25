@@ -1,0 +1,223 @@
+CONCEPT StableDiffusion {
+  PARAMETERS {
+    T : INT       -- Number of diffusion steps
+    β_min : REAL  -- Minimum noise schedule value
+    β_max : REAL  -- Maximum noise schedule value
+  }
+
+  CONTEXT {
+    TYPES {
+      Image := Tensor(3, H, W)  -- RGB image of height H and width W
+      Latent := Tensor(4, H/8, W/8)  -- Latent representation
+      Noise := Tensor(4, H/8, W/8)  -- Noise in latent space
+      Text := List(Token)
+      Condition := Vector(768)  -- CLIP text embedding
+
+      UNet := STRUCTURE {
+        encoder : List(ResnetBlock)
+        middle : SpatialTransformer
+        decoder : List(ResnetBlock)
+      }
+
+      VAE := STRUCTURE {
+        encoder : List(ConvBlock)
+        decoder : List(ConvBlock)
+      }
+
+      TextEncoder := STRUCTURE {  -- CLIP text encoder
+        transformer : TransformerArchitecture
+        token_embedding : Embedding
+        positional_encoding : PositionalEncoding
+      }
+
+      DiffusionSchedule := FUNC(INT) -> REAL
+
+      StableDiffusionModel := STRUCTURE {
+        unet : UNet
+        vae : VAE
+        text_encoder : TextEncoder
+        noise_schedule : DiffusionSchedule
+      }
+    }
+
+    STRUCTURES {
+      STRUCTURE DiffusionProcess {
+        FUNC forward_process(x_0 : Latent, t : INT) -> Latent {
+          α_t = CUMPROD([1 - noise_schedule(i) FOR i IN 1..t])
+          ε = SAMPLE_GAUSSIAN(0, 1, SHAPE(x_0))
+          RETURN SQRT(α_t) * x_0 + SQRT(1 - α_t) * ε
+        }
+
+        FUNC reverse_process(x_t : Latent, t : INT, ε_θ : Noise) -> Latent {
+          α_t = CUMPROD([1 - noise_schedule(i) FOR i IN 1..t])
+          RETURN (x_t - SQRT(1 - α_t) * ε_θ) / SQRT(α_t)
+        }
+
+        AXIOM NoiseScheduleMonotonicity {
+          ∀ t1, t2 : INT . t1 < t2 ⇒ noise_schedule(t1) < noise_schedule(t2)
+        }
+      }
+
+      // Commentary: The diffusion process gradually adds noise to the latent image
+      // representation in the forward process, and removes noise step by step in
+      // the reverse process, guided by the neural network's noise predictions.
+
+      STRUCTURE UNetImpl IMPLEMENTS UNet {
+        FUNC denoise(x_t : Latent, t : INT, c : Condition) -> Noise {
+          h = encoder(x_t)
+          h = middle(h, c)
+          RETURN decoder(h)
+        }
+
+        AXIOM UNetSymmetry {
+          LEN(encoder) = LEN(decoder)
+        }
+      }
+
+      // Commentary: The UNet serves as the backbone of the diffusion model,
+      // predicting the noise to be removed at each step. It incorporates
+      // the conditioning information through the middle SpatialTransformer block.
+
+      STRUCTURE VAEImpl IMPLEMENTS VAE {
+        FUNC encode(x : Image) -> Latent {
+          RETURN encoder(x)
+        }
+
+        FUNC decode(z : Latent) -> Image {
+          RETURN decoder(z)
+        }
+
+        AXIOM LatentSpaceCompression {
+          VOLUME(Latent) < VOLUME(Image)
+        }
+      }
+
+      // Commentary: The VAE compresses the image into a lower-dimensional latent
+      // space where the diffusion process operates, and then decodes the final
+      // latent representation back into an image.
+
+      STRUCTURE TextEncoderImpl IMPLEMENTS TextEncoder {
+        FUNC encode(text : Text) -> Condition {
+          embeddings = token_embedding(text) + positional_encoding(LEN(text))
+          RETURN transformer.encode(embeddings)[-1]  -- Use last token embedding
+        }
+      }
+
+      // Commentary: The text encoder (CLIP) converts the input text prompt into
+      // a fixed-size vector that conditions the diffusion process, guiding the
+      // image generation towards the desired content.
+
+      STRUCTURE StableDiffusionImpl IMPLEMENTS StableDiffusionModel {
+        FUNC generate_image(prompt : Text) -> Image {
+          c = text_encoder.encode(prompt)
+          z = SAMPLE_GAUSSIAN(0, 1, SHAPE(Latent))
+          FOR t IN REVERSE(1..T):
+            ε_θ = unet.denoise(z, t, c)
+            z = DiffusionProcess.reverse_process(z, t, ε_θ)
+          RETURN vae.decode(z)
+        }
+      }
+
+      // Commentary: The full Stable Diffusion pipeline combines all components
+      // to generate an image from a text prompt, starting from random noise and
+      // iteratively refining it based on the UNet's predictions and text conditioning.
+    }
+
+    NOTATION {
+      α := Noise level
+      β := Noise schedule
+      ε := Noise
+      θ := Model parameters
+    }
+
+    ASSERTIONS {
+      AXIOM LatentConsistency {
+        ∀ x : Image .
+          vae.decode(vae.encode(x)) ≈ x
+      }
+
+      // Commentary: This axiom ensures that the VAE can faithfully reconstruct
+      // images from their latent representations, which is crucial for the
+      // quality of generated images.
+
+      AXIOM TextEncoderSimilarity {
+        ∀ t1, t2 : Text .
+          SIMILARITY(t1, t2) ∝ COSINE_SIMILARITY(text_encoder.encode(t1), text_encoder.encode(t2))
+      }
+
+      // Commentary: This axiom relates the semantic similarity of text prompts
+      // to the similarity of their encoded representations, ensuring that similar
+      // prompts lead to similar image generations.
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE CosineNoiseSchedule(t : INT) -> REAL :=
+      β_min + 0.5 * (β_max - β_min) * (1 + COS(π * t / T))
+
+    // Commentary: The cosine noise schedule provides a smooth interpolation
+    // between β_min and β_max, which has been found to produce good results
+    // in practice.
+
+    SIMPLIFY ClassifierFreeGuidance(uncond : Condition, cond : Condition, w : REAL) -> Condition :=
+      uncond + w * (cond - uncond)
+
+    // Commentary: Classifier-free guidance allows for controlling the strength
+    // of the text conditioning, enabling a trade-off between image quality and
+    // text alignment.
+  }
+
+  PROOFS {
+    THEOREM DiffusionConvergence {
+      ∀ x_0 : Latent .
+        LIMIT(T -> ∞, forward_process(x_0, T)) = SAMPLE_GAUSSIAN(0, 1, SHAPE(x_0))
+    }
+    PROOF {
+      // Show that α_T approaches 0 as T increases
+      // Demonstrate that the contribution of x_0 vanishes
+      // Conclude that the result approaches a standard Gaussian
+      □
+    }
+
+    // Commentary: This theorem establishes that the forward process eventually
+    // converges to pure noise, ensuring that the reverse process can start from
+    // a completely random initialization.
+
+    THEOREM TextConditioningEffect {
+      ∀ prompt1, prompt2 : Text, z : Latent .
+        SIMILARITY(prompt1, prompt2) > threshold ⇒
+          SIMILARITY(generate_image(prompt1, z), generate_image(prompt2, z)) > image_threshold
+    }
+    PROOF {
+      // Use TextEncoderSimilarity axiom
+      // Show that similar text encodings lead to similar UNet outputs
+      // Demonstrate that this similarity persists through the reverse process
+      □
+    }
+
+    // Commentary: This theorem relates the similarity of input prompts to the
+    // similarity of generated images, providing a formal basis for the model's
+    // text-to-image alignment capabilities.
+  }
+
+  EXAMPLES {
+    EXAMPLE TextToImage {
+      LET model = StableDiffusionImpl {
+        unet = UNetImpl(...),
+        vae = VAEImpl(...),
+        text_encoder = TextEncoderImpl(...),
+        noise_schedule = CosineNoiseSchedule
+      }
+
+      LET prompt = ["A", "serene", "landscape", "with", "mountains", "and", "a", "lake"]
+      LET image = model.generate_image(prompt)
+
+      ASSERT SHAPE(image) = (3, 512, 512)  // RGB image of 512x512 pixels
+      ASSERT CONTENT_SCORE(image, prompt) > 0.8  // High relevance to prompt
+    }
+
+    // Commentary: This example demonstrates the basic usage of the Stable Diffusion
+    // model for text-to-image generation. It shows how a text prompt is converted
+    // into a high-quality image that matches the description.
+  }
+}

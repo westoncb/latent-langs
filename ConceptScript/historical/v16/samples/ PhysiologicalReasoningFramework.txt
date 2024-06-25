@@ -1,0 +1,251 @@
+CONCEPT PhysiologicalReasoningFramework {
+  LANGUAGE {
+    ; Physiological system components 
+    type S = A × T × P × M
+
+    ; Anatomical structures, tissues, physiological processes, and mechanisms
+    type A;  type T;  type P;  type M  
+
+    ; Structural and functional relations
+    pred PartOf ⊆ A × A;  pred ConnectedTo ⊆ A × A;  pred HasFunction ⊆ A × P
+    pred Enables ⊆ P × P;  pred Regulates ⊆ P × P
+
+    ; Physiological states, quantities, and dynamics
+    type State = A -> Value;  type Quantity;  type TimeCourse = Time -> Value
+    func At : T × Time -> State;  func MeasuredBy : State × Quantity -> Value  
+    func Increases, Decreases : Quantity -> TimeCourse -> P
+    func With : (T -> Bool) -> P -> P
+
+    ; Quantitative relations and parameters
+    func Rate : P -> Quantity;  func Threshold : P -> Value  
+    func Concentration : T × Substance -> Quantity
+    func Flow : T × Substance -> Quantity
+    func Pressure : T -> Quantity;  func Volume : T -> Quantity
+    func Resistance : T -> Quantity;  func Compliance : T -> Quantity
+
+    ; Temporal logic operators  
+    func Always, Eventually, Until : (Time -> Bool) -> Bool
+    func Happens : P -> Time -> Bool
+
+    ; Causal relations and mechanisms
+    pred Causes ⊆ P × P × (Quantity -> Quantity -> Bool)
+    pred CausesVia ⊆ P × M × P
+
+    ; Homeostasis and feedback mechanisms  
+    pred Homeostasis ⊆ P × (State -> Bool);  
+    pred NegativeFeedback, PositiveFeedback ⊆ P × P × (Quantity -> Quantity -> Bool)
+
+    ; Physiological reasoning rules
+    StructureToFunction: ∀x: A, p: P. PartOf(x, y) ∧ HasFunction(y, p) -> HasFunction(x, p)
+    FunctionToProcess: ∀x: A, p: P. HasFunction(x, p) ∧ Enables(p, q) -> Enables(HasFunction(x, _), q)  
+    ProcessToDynamics: ∀p: P, t: T, q: Quantity, v: Value, τ: Time. 
+                         p(At(t, τ)) ∧ MeasuredBy(At(t, τ), q) = v -> 
+                         (Increases(q) | Decreases(q))(λτ. MeasuredBy(At(τ, t), q))
+    QuantitativeRegulation: ∀p, q: P, r: Quantity -> Quantity -> Bool.
+                              Regulates(p, q) ∧ Causes(p, q, r) ->
+                              Always(λt. r(MeasuredBy(At(t, _), Rate(p)), MeasuredBy(At(t, _), Rate(q))))
+    FeedbackControl : ∀p, q: P, r: Quantity -> Quantity -> Bool. 
+                        NegativeFeedback(p, q, r) <->
+                        (Increases(MeasuredBy(At(_, _), Rate(p)))(Rate(q)) ∧ 
+                         Decreases(MeasuredBy(At(_, _), Rate(q)))(Rate(p)) ∧
+                         Always(λt. r(MeasuredBy(At(t, _), Rate(p)), MeasuredBy(At(t, _), Rate(q)))))
+    CausalChaining: ∀p, q, r: P, m: M. Causes(p, q, _) ∧ CausesVia(q, m, r) -> Causes(p, r, _)
+  }
+
+  STRUCTURE {
+    ; Anatomical structure is organized hierarchically
+    ∀x, y, z: A. PartOf(x, y) ∧ PartOf(y, z) -> PartOf(x, z)
+
+    ; Physiological processes enable and regulate each other  
+    ∀p, q, r: P. Enables(p, q) ∧ Enables(q, r) -> Enables(p, r)
+    ∀p, q: P, r: Quantity -> Quantity -> Bool. 
+        Regulates(p, q) ∧ Causes(p, q, r) -> 
+        Always(λt. r(MeasuredBy(At(t, _), Rate(p)), MeasuredBy(At(t, _), Rate(q))))
+
+    ; Homeostasis maintains physiological quantities within normal ranges
+    ∀p: P, s: State -> Bool, t: Time. 
+        Homeostasis(p, s) -> Always(λτ. s(At(t, τ)))
+  }
+  
+  PROOFS {
+    theorem FunctionLocalization: ∀x: A, p: P. HasFunction(x, p) -> ∃y. PartOf(y, x) ∧ HasFunction(y, p) {
+      assume x: A, p: P and HasFunction(x, p)
+      by StructureToFunction have ∃y. PartOf(y, x) ∧ HasFunction(y, p)
+    }
+
+    theorem ProcessCausesStateChange: ∀p: P, t1, t2: T, q: Quantity, v1, v2: Value.
+        p(At(t1, _)) ∧ MeasuredBy(At(t1, _), q) = v1 ∧ 
+        p(At(t2, _)) ∧ MeasuredBy(At(t2, _), q) = v2 ->
+        v1 ≠ v2 {
+      
+      assume p: P, t1, t2: T, q: Quantity, v1, v2: Value and
+             p(At(t1, _)), MeasuredBy(At(t1, _), q) = v1,
+             p(At(t2, _)), MeasuredBy(At(t2, _), q) = v2
+      
+      have (Increases(q) | Decreases(q))(λτ. MeasuredBy(At(τ, t1), q)) by ProcessToDynamics
+      have (Increases(q) | Decreases(q))(λτ. MeasuredBy(At(τ, t2), q)) by ProcessToDynamics
+      
+      assume v1 = v2
+      have MeasuredBy(At(t1, _), q) = MeasuredBy(At(t2, _), q)
+      contradiction  ; Dynamics imply change
+    }
+    
+    theorem RegulationPreventsRunaway: ∀p, q: P, r: Quantity -> Quantity -> Bool, t: Time. 
+        NegativeFeedback(p, q, r) ∧ 
+        Happens(p, t) ∧ Happens(q, t) ->
+        ∃d: Value. Always(λτ. |MeasuredBy(At(τ, _), Rate(p)) - MeasuredBy(At(τ, _), Rate(q))| < d) {
+
+      assume p, q: P, r: Quantity -> Quantity -> Bool, t: Time and  
+             NegativeFeedback(p, q, r),
+             Happens(p, t), Happens(q, t)
+
+      have Always(λτ. r(MeasuredBy(At(τ, _), Rate(p)), MeasuredBy(At(τ, _), Rate(q)))) by FeedbackControl
+      hence ∃d: Value. Always(λτ. |MeasuredBy(At(τ, _), Rate(p)) - MeasuredBy(At(τ, _), Rate(q))| < d)
+    }
+    
+    theorem CausalTransitivity: ∀p, q, r: P, m: M.
+        Causes(p, q, _) ∧ CausesVia(q, m, r) -> Causes(p, r, _) {
+      assume p, q, r: P, m: M and Causes(p, q, _), CausesVia(q, m, r)  
+      by CausalChaining have Causes(p, r, _)
+    }
+  }
+}
+
+The key changes and additions:
+
+Introduced quantitative types and functions for representing physiological quantities, rates, thresholds, concentrations, flows, pressures, volumes, etc. This allows modeling of more concrete biophysical relationships.
+Added temporal logic operators (Always, Eventually, Until, Happens) for reasoning about time-dependent properties and events.
+Refined the representation of causal relationships, distinguishing direct causes from mechanistically-mediated causal chains.
+Modified the feedback and regulation axioms to incorporate quantitative relationships between rates of change.
+Expanded the proof section with theorems about function localization, causal transitivity, and the quantitative dynamics of regulatory feedback control.
+
+These changes make the framework more expressive and better suited for modeling the kinds of quantitative, temporal, and mechanistic details that are essential for understanding complex physiological systems. The added specificity supports more precise and rigorous reasoning about the dynamics of health and disease.
+
+
+
+
+CONCEPT AlzheimersDisease {
+  LANGUAGE {
+    ; Anatomical structures 
+    type Neuron;  type Synapse;  type Hippocampus;  type CerebralCortex;  type CSF
+    
+    ; Proteins and molecules
+    type Aβ;  type Tau;  type ApoE4;  type Glutamate;  type Calcium;  type Cytokine  
+
+    ; Physiological processes
+    pred Aβ_Production ⊆ P;  pred Aβ_Clearance ⊆ P;  pred Tau_Phosphorylation ⊆ P
+    pred Synaptic_Plasticity ⊆ P;  pred Synaptic_Transmission ⊆ P;  pred Neuronal_Survival ⊆ P
+    pred Neuroinflammation ⊆ P;  pred Oxidative_Stress ⊆ P;  pred Calcium_Homeostasis ⊆ P
+
+    ; Pathological processes and mechanisms  
+    pred Aβ_Aggregation ⊆ P;  pred Aβ_Oligomerization ⊆ P;  pred Aβ_Plaque_Formation ⊆ P
+    pred Tau_Aggregation ⊆ P;  pred Neurofibrillary_Tangle_Formation ⊆ P
+    pred Synaptic_Dysfunction ⊆ P;  pred Synaptic_Loss ⊆ P;  pred Neuronal_Death ⊆ P
+    pred Microglial_Activation ⊆ P;  pred Astrocyte_Activation ⊆ P;  pred Cytokine_Release ⊆ P
+    pred Glutamate_Excitotoxicity ⊆ P;  pred Mitochondrial_Dysfunction ⊆ P
+
+    ; Genetic and environmental risk factors
+    pred ApoE4_Genotype ⊆ P;  pred Aging ⊆ P;  pred Traumatic_Brain_Injury ⊆ P
+    
+    ; Clinical manifestations
+    type Symptom = Memory_Loss | Language_Impairment | Visuospatial_Deficits | Executive_Dysfunction 
+    pred Causes ⊆ P × Symptom
+  }
+
+  STRUCTURE {
+    ; Brain regions affected in AD
+    PartOf(Hippocampus, CerebralCortex) ∧ PartOf(Neuron, Hippocampus) ∧ PartOf(Neuron, CerebralCortex)
+    ConnectedTo(Neuron, Neuron) ∧ PartOf(Synapse, Neuron)
+    
+    ; Physiological process relations  
+    Enables(Aβ_Production, Aβ_Aggregation) ∧ Enables(Aβ_Clearance, Aβ_Aggregation)
+    Enables(Tau_Phosphorylation, Tau_Aggregation)  
+    Enables(Synaptic_Plasticity, Synaptic_Transmission) ∧ Enables(Calcium_Homeostasis, Synaptic_Transmission)
+    Enables(Neuronal_Survival, Synaptic_Plasticity)
+
+    ; Pathological process relations
+    Causes(Aβ_Aggregation, Aβ_Oligomerization, λx y. Concentration(Aβ, x) > Threshold(Aβ_Oligomerization))
+    Causes(Aβ_Oligomerization, Synaptic_Dysfunction, λx y. Concentration(Aβ, x) > Threshold(Synaptic_Dysfunction))  
+    Causes(Aβ_Oligomerization, Aβ_Plaque_Formation, λx y. Concentration(Aβ, x) > Threshold(Aβ_Plaque_Formation))
+    Causes(Tau_Aggregation, Neurofibrillary_Tangle_Formation, λx y. Concentration(Tau, x) > Threshold(Neurofibrillary_Tangle_Formation))
+    Causes(Synaptic_Dysfunction, Synaptic_Loss, λx y. Duration(Synaptic_Dysfunction, x) > Threshold(Synaptic_Loss))
+    Causes(Aβ_Plaque_Formation, Microglial_Activation, λx y. Concentration(Aβ, x) > Threshold(Microglial_Activation))
+    Causes(Neurofibrillary_Tangle_Formation, Neuronal_Death, λx y. Volume(Neurofibrillary_Tangle, x) > Threshold(Neuronal_Death))
+    Causes(Microglial_Activation, Cytokine_Release, λx y. Concentration(Activated_Microglia, x) > Threshold(Cytokine_Release))  
+    Causes(Cytokine_Release, Neuroinflammation, λx y. Concentration(Cytokine, x) > Threshold(Neuroinflammation))
+    Causes(Neuroinflammation, Oxidative_Stress, λx y. Concentration(ROS, x) > Threshold(Oxidative_Stress))
+    Causes(Oxidative_Stress, Mitochondrial_Dysfunction, λx y. Concentration(ROS, x) > Threshold(Mitochondrial_Dysfunction))
+    Causes(Mitochondrial_Dysfunction, Synaptic_Dysfunction, λx y. ATP_Production(Mitochondria, x) < Threshold(Synaptic_Dysfunction))
+    Causes(Glutamate_Excitotoxicity, Calcium_Dysregulation, λx y. Concentration(Glutamate, x) > Threshold(Calcium_Dysregulation))  
+    Causes(Calcium_Dysregulation, Neuronal_Death, λx y. Concentration(Calcium, x) > Threshold(Neuronal_Death))
+
+    ; Risk factor effects
+    Enables(ApoE4_Genotype, Aβ_Aggregation) ∧ Enables(ApoE4_Genotype, Tau_Phosphorylation)
+    Enables(Aging, Aβ_Production) ∧ Enables(Aging, Oxidative_Stress) ∧ Enables(Aging, Neuroinflammation)
+    Enables(Traumatic_Brain_Injury, Aβ_Production) ∧ Enables(Traumatic_Brain_Injury, Tau_Phosphorylation)
+
+    ; Clinical manifestations
+    Causes(Synaptic_Loss, Memory_Loss) ∧ Causes(Synaptic_Loss, Language_Impairment) 
+    Causes(Neuronal_Death, Visuospatial_Deficits) ∧ Causes(Neuronal_Death, Executive_Dysfunction)
+  }
+
+  PROOFS {
+    theorem AmyloidCascadeHypothesis:
+      ∀t: Time. Always(λτ. 
+        Happens(With(λx. Concentration(Aβ, x) > Threshold(Aβ_Oligomerization)), Aβ_Aggregation, τ) ->
+        Eventually(λt'. Happens(Synaptic_Dysfunction, t') ∧ 
+                         Happens(Neuronal_Death, t') ∧
+                         Happens(Memory_Loss, t') ∧ Happens(Language_Impairment, t'), t, _)) {
+
+      assume t: Time
+      assume Always(λτ. Happens(With(λx. Concentration(Aβ, x) > Threshold(Aβ_Oligomerization)), Aβ_Aggregation, τ))
+      
+      have Causes(Aβ_Aggregation, Aβ_Oligomerization, λx y. Concentration(Aβ, x) > Threshold(Aβ_Oligomerization))
+      have Causes(Aβ_Oligomerization, Synaptic_Dysfunction, λx y. Concentration(Aβ, x) > Threshold(Synaptic_Dysfunction))
+      have Causes(Synaptic_Dysfunction, Synaptic_Loss, λx y. Duration(Synaptic_Dysfunction, x) > Threshold(Synaptic_Loss))
+      have Causes(Synaptic_Loss, Memory_Loss) and Causes(Synaptic_Loss, Language_Impairment)
+      
+      by CausalTransitivity have Causes(Aβ_Aggregation, Memory_Loss, _) and 
+                                  Causes(Aβ_Aggregation, Language_Impairment, _)
+      hence Eventually(λt'. Happens(Memory_Loss, t') ∧ Happens(Language_Impairment, t'), t, _)
+      
+      have Causes(Aβ_Oligomerization, Aβ_Plaque_Formation, λx y. Concentration(Aβ, x) > Threshold(Aβ_Plaque_Formation))
+      have Causes(Aβ_Plaque_Formation, Microglial_Activation, λx y. Concentration(Aβ, x) > Threshold(Microglial_Activation))
+      have Causes(Microglial_Activation, Cytokine_Release, λx y. Concentration(Activated_Microglia, x) > Threshold(Cytokine_Release))
+      have Causes(Cytokine_Release, Neuroinflammation, λx y. Concentration(Cytokine, x) > Threshold(Neuroinflammation))
+      have Causes(Neuroinflammation, Oxidative_Stress, λx y. Concentration(ROS, x) > Threshold(Oxidative_Stress))  
+      have Causes(Oxidative_Stress, Mitochondrial_Dysfunction, λx y. Concentration(ROS, x) > Threshold(Mitochondrial_Dysfunction))
+      have Causes(Mitochondrial_Dysfunction, Synaptic_Dysfunction, λx y. ATP_Production(Mitochondria, x) < Threshold(Synaptic_Dysfunction))
+      have Causes(Synaptic_Dysfunction, Neuronal_Death, _)
+      
+      by CausalTransitivity have Causes(Aβ_Aggregation, Neuronal_Death, _)
+      hence Eventually(λt'. Happens(Neuronal_Death, t'), t, _)
+      
+      hence Eventually(λt'. Happens(Synaptic_Dysfunction, t') ∧ 
+                            Happens(Neuronal_Death, t') ∧
+                            Happens(Memory_Loss, t') ∧ Happens(Language_Impairment, t'), t, _)
+    }
+    
+    theorem TauHypothesis:
+      ∀t: Time. Always(λτ. 
+        Happens(With(λx. Concentration(Phosphorylated_Tau, x) > Threshold(Tau_Aggregation)), Tau_Phosphorylation, τ) ->  
+        Eventually(λt'. Happens(Neuronal_Death, t') ∧
+                        Happens(Visuospatial_Deficits, t') ∧ Happens(Executive_Dysfunction, t'), t, _)) {
+                        
+      assume t: Time  
+      assume Always(λτ. Happens(With(λx. Concentration(Phosphorylated_Tau, x) > Threshold(Tau_Aggregation)), Tau_Phosphorylation, τ))
+      
+      have Causes(Tau_Phosphorylation, Tau_Aggregation, _)  
+      have Causes(Tau_Aggregation, Neurofibrillary_Tangle_Formation, λx y. Concentration(Tau, x) > Threshold(Neurofibrillary_Tangle_Formation))
+      have Causes(Neurofibrillary_Tangle_Formation, Neuronal_Death, λx y. Volume(Neurofibrillary_Tangle, x) > Threshold(Neuronal_Death))
+      have Causes(Neuronal_Death, Visuospatial_Deficits) and Causes(Neuronal_Death, Executive_Dysfunction)
+      
+      by CausalTransitivity have Causes(Tau_Phosphorylation, Neuronal_Death, _) and
+                                  Causes(Tau_Phosphorylation, Visuospatial_Deficits, _) and
+                                  Causes(Tau_Phosphorylation, Executive_Dysfunction, _)
+                                
+      hence Eventually(λt'. Happens(Neuronal_Death, t') ∧
+                            Happens(Visuospatial_Deficits, t') ∧ Happens(Executive_Dysfunction, t'), t, _)
+    }
+  }
+}

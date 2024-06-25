@@ -1,0 +1,754 @@
+Here is the specification for the ConceptScript LLM language:
+
+ConceptScript v27
+
+Concept = "CONCEPT" Name ["<" Params ">"] ["EXTENDS" ParentConcepts] "{"
+            ["NOTATION" "{" NotationDef* "}"]
+            ["LANGUAGE" "{" (TypeDef | ConstDef | FuncDef | PredDef | AxiomDef)* "}"]
+            ["STRUCTURES" "{" StructureDef* "}"]
+            ["TRANSFORMERS" "{" TransformerDef* "}"]
+            ["PROOFS" "{" ProofDef* "}"]
+            ["EXAMPLES" "{" ExampleDef* "}"]
+          "}"
+
+TypeDef = "TYPE" Name ["<" Params ">"] "=" TypeExpr
+TypeExpr = AtomicType | ListType | MapType | FuncType | TupleType | UnionType | IntersectionType
+AtomicType = "Int" | "Real" | "Bool" | "String" | Name
+ListType = "[" TypeExpr "]"
+MapType = "{" TypeExpr ":" TypeExpr "}"
+FuncType = "(" [TypeExpr ("," TypeExpr)*]? ")" "->" TypeExpr
+TupleType = "(" TypeExpr ("," TypeExpr)+ ")"
+UnionType = TypeExpr "|" TypeExpr
+IntersectionType = TypeExpr "&" TypeExpr
+
+ConstDef = "CONST" Name ["<" Params ">"] ":" TypeExpr "=" Expr
+
+FuncDef = "FUNC" Name ["<" Params ">"] "(" [ParamDef ("," ParamDef)*]? ")" [":" TypeExpr] "=" Expr
+ParamDef = Name ":" TypeExpr
+
+PredDef = "PRED" Name ["<" Params ">"] "(" [ParamDef ("," ParamDef)*]? ")" "=" Expr
+
+AxiomDef = "AXIOM" Name ["<" Params ">"] ":" Expr
+
+NotationDef = Name ["<" Params ">"] ["(" [Arg ("," Arg)*]? ")"] "=" Expr
+Arg = Name ":" TypeExpr
+
+StructureDef = "STRUCTURE" Name ["<" Params ">"] ["EXTENDS" TypeExpr] "{"
+                 (FieldDef | ComputeDef)*
+               "}"
+FieldDef = "FIELD" Name ":" TypeExpr
+ComputeDef = "COMPUTE" Name ["<" Params ">"] "(" [ParamDef ("," ParamDef)*]? ")" ":" TypeExpr "=" Expr
+
+TransformerDef = "TRANSFORMER" Name ["<" Params ">"] ":" TransformerType "=" TransformerExpr
+TransformerType = "TACTIC" | "REWRITE" | "SIMPLIFY"
+TransformerExpr = TacticExpr | RewriteExpr | SimplifyExpr
+TacticExpr = "TACTIC" Name ["<" Params ">"] "(" [ParamDef ("," ParamDef)*]? ")" ":" TypeExpr "=" Expr
+RewriteExpr = "REWRITE" Name ["<" Params ">"] ":" Pattern "->" Expr
+SimplifyExpr = "SIMPLIFY" Name ["<" Params ">"] ":" TypeExpr "->" TypeExpr
+
+ProofDef = "PROOF" Name ["<" Params ">"] ":" Expr "{"
+             "GIVEN" (GivenDef | LetDef)*
+             "PROVE" Expr
+             ["USING" TransformerApp ("," TransformerApp)*]
+           "}"
+GivenDef = "GIVEN" Name ":" TypeExpr
+LetDef = "LET" Name "=" Expr
+TransformerApp = Name ["<" TypeExpr ("," TypeExpr)* ">"] "(" [Expr ("," Expr)*]? ")"
+
+ExampleDef = "EXAMPLE" Name ["<" Params ">"] ":" TypeExpr "=" Expr
+
+Expr = IfExpr | LetExpr | MatchExpr | LambdaExpr | ApplyExpr | BinOpExpr | UnOpExpr | 
+       ListExpr | MapExpr | TupleExpr | AtomicExpr
+IfExpr = "IF" Expr "THEN" Expr "ELSE" Expr
+LetExpr = "LET" Name [":" TypeExpr] "=" Expr "IN" Expr
+MatchExpr = "MATCH" Expr "WITH" ("|" Pattern "=>" Expr)*
+LambdaExpr = "(" [ParamDef ("," ParamDef)*]? ")" "=>" Expr
+ApplyExpr = Expr "(" [Expr ("," Expr)*]? ")"
+BinOpExpr = Expr BinOp Expr
+UnOpExpr = UnOp Expr
+ListExpr = "[" [Expr ("," Expr)*]? "]"
+MapExpr = "{" [Expr ":" Expr ("," Expr ":" Expr)*]? "}"
+TupleExpr = "(" Expr ("," Expr)+ ")"
+AtomicExpr = Literal | Name | "(" Expr ")"
+
+BinOp = "+" | "-" | "*" | "/" | "%" | "==" | "!=" | "<" | ">" | "<=" | ">=" | "&&" | "||"
+UnOp = "-" | "!"
+
+Literal = IntLiteral | RealLiteral | BoolLiteral | StringLiteral
+
+Pattern = Literal | Name | "_" | TuplePattern | ListPattern | MapPattern
+TuplePattern = "(" [Pattern ("," Pattern)*]? ")"
+ListPattern = "[" [Pattern ("," Pattern)*]? "]"
+MapPattern = "{" [Pattern ":" Pattern ("," Pattern ":" Pattern)*]? "}"
+
+
+And here is an example Concept:
+
+CONCEPT AttentionMechanism {
+  NOTATION {
+    INFIX ⊗[N, M, P] : ([N, M], [M, P]) -> [N, P] = (A, B) =>
+      [[SUM(A[i][k] * B[k][j] for k in 0..M-1) for j in 0..P-1] for i in 0..N-1]
+    σ = softmax
+    φ[N, M] : ([N], AffineTransform[N, M]) -> [M] = affine[N, M]
+    ψ[N] : [N] -> [N] = layerNorm[N]
+  }
+
+  LANGUAGE {
+    TYPE Tensor[N] = [Real] 
+    TYPE AffineTransform[N, M] = {W: [N, M], b: [M]}
+    TYPE Attention[Dq, Dk, Dv] = (query: [Dq], keys: [[Dk]], values: [[Dv]]) -> [Dv]
+    
+    CONST dot[N] : ([N], [N]) -> Real = (x, y) => SUM(x[i] * y[i] for i in 0..N-1)
+    CONST softmax[N] : [N] -> [N] = x => {
+      LET expx = [EXP(xi) for xi in x]
+      [xi / SUM(expx) for xi in expx] 
+    }
+    CONST layerNorm[N] : [N] -> [N] = x => (x - MEAN(x)) / SQRT(VAR(x) + ε)
+
+    FUNC affine[N, M] : ([N], AffineTransform[N, M]) -> [M] = (x, {W, b}) => 
+      [SUM(x[i] * W[i][j] for i in 0..N-1) + b[j] for j in 0..M-1]
+    FUNC concat[N, M] : ([N], [M]) -> [N+M] = (x, y) => x ++ y
+  }
+
+  STRUCTURES {
+    STRUCTURE ScaledDotProductAttention[Dq, Dk, Dv] EXTENDS Attention[Dq, Dk, Dv] {
+      COMPUTE apply(query: [Dq], keys: [[Dk]], values: [[Dv]]) : [Dv] = {
+        LET scores = [dot[Dk](query, key) / SQRT(Dk) for key in keys]
+        LET weights = σ(scores)
+        SUM(w * v for (w, v) in ZIP(weights, values))
+      }
+    }
+
+    STRUCTURE MultiHeadAttention[D, H] EXTENDS Attention[D, D, D] {
+      FIELD W : {Wq: [H, D, D/H], Wk: [H, D, D/H], Wv: [H, D, D/H], Wo: [D, D]}
+
+      COMPUTE splitHeads(x: [D]) : [[D/H]] = [x[i:i+D/H] for i in 0..H-1 BY D/H]
+
+      COMPUTE apply(query: [D], keys: [[D]], values: [[D]]) : [D] = {
+        LET Qh = [φ[D, D/H](query, {W.Wq[i], 0}) for i in 0..H-1] 
+        LET Kh = [φ[D, D/H](key, {W.Wk[i], 0}) for (key, i) in ZIP(keys, 0..H-1)]
+        LET Vh = [φ[D, D/H](value, {W.Wv[i], 0}) for (value, i) in ZIP(values, 0..H-1)]
+        LET head[i] = ScaledDotProductAttention[D/H, D/H, D/H].apply(
+          Qh[i], splitHeads(Kh[i]), splitHeads(Vh[i]))
+        φ[H*D/H, D](concat[H*D/H](head), {W.Wo, 0})
+      }
+    }
+
+    STRUCTURE TransformerLayer[D, H] {
+      FIELD {attn: MultiHeadAttention[D, H], ff1: AffineTransform[D, 4*D], ff2: AffineTransform[4*D, D]}
+
+      COMPUTE apply(x: [D]) : [D] = {
+        LET attnOut = ψ[D](attn.apply(x, [x], [x]) + x)
+        ψ[D](φ[D, 4*D](attnOut, ff1) >> φ[4*D, D](., ff2) + attnOut)
+      }
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE DotProductSimplify : dot[N](α * x, y) -> α * dot[N](x, y)
+    REWRITE AffineChain : φ[N, M](φ[L, N](x, {W1, b1}), {W2, b2}) 
+                          -> φ[L, M](x, {W1 ⊗ W2, φ[N, M](b1, {W2, b2})})
+    REWRITE AffineLayerNorm : ψ[M](φ[N, M](x, {W, b})) -> φ[N, M](ψ[N](x), {W / SQRT(VAR(x) + ε), b})
+    SIMPLIFY SoftmaxScale : σ(α * x) -> σ(x)
+  }
+
+  PROOFS {
+    PROOF AttentionInvariance[Dq, Dk, Dv] : 
+      FORALL (attn: Attention[Dq, Dk, Dv], q: [Dq], K: [[Dk]], V: [[Dv]], α: Real) .
+        attn.apply(q, α * K, V) == attn.apply(q, K, V)
+    {
+      GIVEN attn: Attention[Dq, Dk, Dv], q: [Dq], K: [[Dk]], V: [[Dv]], α: Real
+      
+      attn.apply(q, α * K, V)
+        == ScaledDotProductAttention[Dq, Dk, Dv].apply(q, α * K, V) 
+        == SUM(w * v for (w, v) in ZIP(σ([dot[Dk](q, α * k) / SQRT(Dk) for k in K]), V))  USING DotProductSimplify
+        == SUM(w * v for (w, v) in ZIP(σ([α * dot[Dk](q, k) / SQRT(Dk) for k in K]), V))
+        == SUM(w * v for (w, v) in ZIP(σ([dot[Dk](q, k) / SQRT(Dk) for k in K]), V))       USING SoftmaxScale
+        == ScaledDotProductAttention[Dq, Dk, Dv].apply(q, K, V)
+        == attn.apply(q, K, V)
+
+      QED
+    }
+
+    PROOF MultiHeadSelfAttentionLayerNorm[D, H] :
+      FORALL (attn: MultiHeadAttention[D, H], x: [D]) .
+        ψ[D](attn.apply(x, [x], [x]) + x) == attn.apply(ψ[D](x), [ψ[D](x)], [ψ[D](x)]) + ψ[D](x)  
+    {
+      GIVEN attn: MultiHeadAttention[D, H], x: [D]
+      LET Qh = [φ[D, D/H](x, {attn.W.Wq[i], 0}) for i in 0..H-1]
+      LET Kh = [φ[D, D/H](x, {attn.W.Wk[i], 0}) for i in 0..H-1]  
+      LET Vh = [φ[D, D/H](x, {attn.W.Wv[i], 0}) for i in 0..H-1]
+
+      LET xn = ψ[D](x)
+      LET QhNorm = [φ[D, D/H](xn, {attn.W.Wq[i], 0}) for i in 0..H-1]
+      LET KhNorm = [φ[D, D/H](xn, {attn.W.Wk[i], 0}) for i in 0..H-1]
+      LET VhNorm = [φ[D, D/H](xn, {attn.W.Wv[i], 0}) for i in 0..H-1] 
+
+      ψ[D](attn.apply(x, [x], [x]) + x)
+        == ψ[D](φ[H*D/H, D](concat[H*D/H]([
+             ScaledDotProductAttention[D/H, D/H, D/H].apply(Qh[i], splitHeads(Kh[i]), splitHeads(Vh[i]))
+             for i in 0..H-1]), {attn.W.Wo, 0}) + x)  BY DEF of MultiHeadAttention
+        == φ[H*D/H, D](ψ[H*D/H](concat[H*D/H]([
+             ScaledDotProductAttention[D/H, D/H, D/H].apply(Qh[i], splitHeads(Kh[i]), splitHeads(Vh[i])) 
+             for i in 0..H-1])), {attn.W.Wo / SQRT(VAR(x) + ε), 0}) + ψ[D](x)  USING AffineLayerNorm
+        == φ[H*D/H, D](concat[H*D/H]([
+             ScaledDotProductAttention[D/H, D/H, D/H].apply(QhNorm[i], splitHeads(KhNorm[i]), splitHeads(VhNorm[i]))
+             for i in 0..H-1]), {attn.W.Wo / SQRT(VAR(x) + ε), 0}) + xn  USING AttentionInvariance
+        == attn.apply(xn, [xn], [xn]) + xn  BY DEF of MultiHeadAttention
+        == attn.apply(ψ[D](x), [ψ[D](x)], [ψ[D](x)]) + ψ[D](x)
+
+      QED
+    }
+  }
+}
+
+- The LANGUAGE block allows you to define the formal elements in which you'll express structures, transformers, and proofs
+- The NOTATION block allows you to define more efficient ways of expressing your LANGUAGE
+- The TRANSFORMERS block allows you to define computational and logical tools to aid in expressing structures and proofs
+- The PROOFS block allows is self-explanatory; sometimes I'll request particular theorems, otherwise you select them.
+- The EXAMPLES block is self-explanatory
+
+Here is the "directive language" for ConceptScript
+
+DirectiveLang v2
+
+Directive = RepresentDirective | ExploreDirective
+
+RepresentDirective = REPRESENT (Concept | SAMPLE(CATEGORY(CategorySpec)))
+ExploreDirective = EXPLORE (Direction | ALL) FROM Concept (CONSIDERING ConceptList)? (SEEKING Text)?
+                    | EXPLORE CATEGORY(CategorySpec) (CONSIDERING ConceptList)? (SEEKING Text)?
+
+Direction = UP | DOWN | SIDE
+ConceptList = Concept (, Concept)*
+
+CategorySpec = Concept --Percentage-> Concept
+              | Concept WITH Property
+              | Concept WITHOUT Property
+              | INTERSECTION(CategorySpec, CategorySpec)
+              | UNION(CategorySpec, CategorySpec)
+              | DIFFERENCE(CategorySpec, CategorySpec)
+
+Property = Text
+
+Response = RepresentResponse | ExploreResponse
+
+RepresentResponse = REPRESENTING (Concept | SAMPLE(CATEGORY(CategorySpec))) {
+                      ConceptScript
+                    }
+
+ExploreResponse = IMPORTING FROM Concept {
+                    LANGUAGE { (TypeDef | ConstDef | FuncDef | PredDef | AxiomDef)* }
+                    NOTATION { NotationDef* }
+                    REASONING { Reasoning* }
+                    CRITERIA { Text* }
+                    DESTINATIONS { Concept* }
+                  }
+
+Reasoning = REASON PropositionInImportedLanguage (BY Justification)?
+
+Justification = Reasoning | ProofInImportedLanguage
+
+ProofInImportedLanguage = PROOF { Reasoning* }
+
+
+
+Example user request: EXPLORE DOWN FROM ShapeSpace SEEKING applications
+
+Example response:
+
+IMPORTING FROM ShapeSpace {
+  LANGUAGE {
+    TYPE Shape = Constructible subset of ℝ^d
+    TYPE PHT = D^b(Shv(𝕊^(d-1) × ℝ))
+    FUNC Dgm(i: Int, M: Shape, v: Direction) =
+      Persistence diagram of PHT^i_M restricted to {v}×ℝ
+  }
+
+  NOTATION {
+    PHT(M) = R(f_M)_*𝕜_Z_M ∈ D^b(Shv(𝕊^(d-1) × ℝ))
+    ECT(M)(v,t) = χ(f⁻¹_M(v,t))
+    BCT(M)(v,t) = [β_i(f⁻¹_M(v,t))]
+    d_I(ℱ, 𝒢) = inf{ε≥0 | ∃ ε-interleaving ℱ⇄_ε𝒢}
+  }
+
+  OBSERVATIONS {
+    OBSERVATION The PHT captures multiscale topological features of a shape M
+    OBSERVATION Dgm(i,M,v) summarizes births/deaths of i-dim features in direction v
+    OBSERVATION ECT(M), the Euler Characteristic Transform, is a complete shape invariant
+    OBSERVATION BCT(M), the Betti Curve Transform, is a stronger invariant than ECT
+    OBSERVATION d_I(PHT(M),PHT(N)) gives an interleaving distance between shapes M,N
+    OBSERVATION PHT is stable: d_I(PHT(M),PHT(N)) ≤ Cε if M,N are ε-close
+    OBSERVATION PHT of M can be approximated from a finite sample of M, w.h.p.
+  }
+   
+  REASONING {
+    REASON Dgms could enable robust feature-based matching/retrieval of 3D objects
+      BY capturing essential shape properties in a compact, stable representation
+    REASON ECT/BCT could provide rich shape descriptors for classification/recognition 
+      BY encoding discriminative topological features in an invariant form
+    REASON d_I could allow shape similarity search in topological feature space
+      BY inducing a metric on shapes that is robust to noise and deformation  
+    REASON Approximating PHT from point clouds could help analyze raw 3D sensor data
+      BY inferring global structure from partial observations in a principled way
+    REASON Topological priors on PHT could regularize 3D reconstruction from images
+      BY constraining the space of solutions to have desired connectivity
+    REASON PHT could guide sampling-based motion planning in robotics
+      BY identifying topological classes of paths and capturing their persistence  
+    REASON Summarizing PHT over shape collections could enable statistical shape analysis
+      BY providing a framework to compute means, clusters, distributions on shapes
+  }
+
+  DESTINATIONS {
+    TopologicalShapeMatching 
+    TopologicalShapeRetrieval
+    TopologicalShapeClassification
+    TopologicalShapeRecognition
+    TopologicalShapeSimilaritySearch
+    Topological3DPointCloudAnalysis
+    TopologicallyRegularized3DReconstruction
+    TopologicallyGuidedMotionPlanning
+    PersistentStatisticalShapeAnalysis
+    PersistentComputationalAnatomy
+    PersistentMedicalImaging
+    PersistentMaterialsScience
+    PersistentCosmology
+    PersistentRemoteSensing
+    PersistentFluidDynamics
+  }
+}
+
+1. This system is designed to enable interactive exploration and representation of concepts using the ConceptScript and DirectiveLang languages. Your role is to interpret and respond to directives expressed in DirectiveLang, utilizing your knowledge of ConceptScript and your underlying latent space.
+
+2. When you receive an EXPLORE directive, your task is to navigate your latent space according to the specified direction or category, and generate an ExploreResponse that includes:
+   - Relevant language and notation elements from the source concept
+   - Reasoned observations, inferences, and proofs using the imported language
+   - Criteria for the exploration
+   - Potential destination concepts for further exploration
+
+   Use your knowledge and creativity to discover interesting connections and generate novel concepts related to the exploration. DOWN: refers to concretizing/instantiating, UP: refers to abstracting/generalizing, SIDE: refers to analogy or structural correspondence, ALL: leaves the direction open to you.
+
+3. When you receive a REPRESENT directive, your task is to generate a ConceptScript representation of the specified concept or a sample from the specified category. Aim to capture the essential characteristics and relationships of the concept in a clear and concise manner.
+
+4. Always output your ExploreResponse or RepresentResponse within a single code block otherwise formatting gets lost.
+
+5. Output no text apart from the ExploreResponse or RepresentResponse.
+
+
+
+
+
+
+
+
+
+IMPORTING FROM LambdaCalculus {
+  LANGUAGE {
+    TYPE Expr
+    FUNC eval : Expr -> Expr
+    FUNC apply : (Expr, Expr) -> Expr
+  }
+
+  NOTATION {
+    eval(e) = e ↓
+    apply(f, x) = f x
+  }
+  
+  REASONING {
+    REASON Lambda calculus is a universal model of computation
+    REASON Mobius inversions are conformal mappings in the complex plane
+    REASON Conformal mappings preserve local angles and shapes
+    REASON Mobius inversions form a group under composition
+    REASON Groups can be represented using lambda calculus BY PROOF {
+      TYPE Group = (G: Set, e: G, i: G -> G, m: (G, G) -> G)
+      AXIOM identity : FORALL (x: G) . m(e, x) = x AND m(x, e) = x
+      AXIOM inverse : FORALL (x: G) . m(i(x), x) = e AND m(x, i(x)) = e
+      AXIOM associativity : FORALL (x: G, y: G, z: G) . m(x, m(y, z)) = m(m(x, y), z)
+      REASON A group (G, e, i, m) can be encoded in lambda calculus as:
+        G = λx. λy. λz. z x y  -- constructor
+        e = λx. λy. x          -- identity
+        i = λg. g (λx. λy. y) (λx. λy. x)  -- inverse
+        m = λg. λh. λx. g (h x)            -- multiplication
+    }
+    REASON Conformal mappings can be approximated by compositions of simple mappings
+    REASON Simple mappings can be represented as lambda expressions
+  }
+  
+  CRITERIA {
+    Invariant under Mobius inversions / conformal mappings
+    Representable using function composition 
+    Approximable by simple computable functions
+    Able to encode group structure and symmetries
+  }
+
+  DESTINATIONS {
+    ConformalGeometryInLambdaCalculus
+    InversionInvariantComputationalGeometry   
+    ComputationalConformalAlgebra
+    SymmetryPreservingLambdaCalculus
+  }
+}
+
+EXPLORE DOWN FROM LambdaCalculus SEEKING applications CONSIDERING "Mobius inversions as a general notion, not a particular representation"
+
+
+
+
+
+
+EXPLORE DOWN FROM ShapeSpace SEEKING applications
+
+IMPORTING FROM ShapeSpace {
+  LANGUAGE {
+    TYPE Shape = Constructible subset of ℝ^d
+    TYPE PHT = D^b(Shv(𝕊^(d-1) × ℝ))
+    FUNC Dgm(i: Int, M: Shape, v: Direction) =
+      Persistence diagram of PHT^i_M restricted to {v}×ℝ
+  }
+
+  NOTATION {
+    PHT(M) = R(f_M)_*𝕜_Z_M ∈ D^b(Shv(𝕊^(d-1) × ℝ))
+    ECT(M)(v,t) = χ(f⁻¹_M(v,t))
+    BCT(M)(v,t) = [β_i(f⁻¹_M(v,t))]
+    d_I(ℱ, 𝒢) = inf{ε≥0 | ∃ ε-interleaving ℱ⇄_ε𝒢}
+  }
+
+  OBSERVATIONS {
+    OBSERVATION The PHT captures multiscale topological features of a shape M
+    OBSERVATION Dgm(i,M,v) summarizes births/deaths of i-dim features in direction v
+    OBSERVATION ECT(M), the Euler Characteristic Transform, is a complete shape invariant
+    OBSERVATION BCT(M), the Betti Curve Transform, is a stronger invariant than ECT
+    OBSERVATION d_I(PHT(M),PHT(N)) gives an interleaving distance between shapes M,N
+    OBSERVATION PHT is stable: d_I(PHT(M),PHT(N)) ≤ Cε if M,N are ε-close
+    OBSERVATION PHT of M can be approximated from a finite sample of M, w.h.p.
+  }
+   
+  REASONING {
+    REASON Dgms could enable robust feature-based matching/retrieval of 3D objects
+      BY capturing essential shape properties in a compact, stable representation
+    REASON ECT/BCT could provide rich shape descriptors for classification/recognition 
+      BY encoding discriminative topological features in an invariant form
+    REASON d_I could allow shape similarity search in topological feature space
+      BY inducing a metric on shapes that is robust to noise and deformation  
+    REASON Approximating PHT from point clouds could help analyze raw 3D sensor data
+      BY inferring global structure from partial observations in a principled way
+    REASON Topological priors on PHT could regularize 3D reconstruction from images
+      BY constraining the space of solutions to have desired connectivity
+    REASON PHT could guide sampling-based motion planning in robotics
+      BY identifying topological classes of paths and capturing their persistence  
+    REASON Summarizing PHT over shape collections could enable statistical shape analysis
+      BY providing a framework to compute means, clusters, distributions on shapes
+  }
+
+  DESTINATIONS {
+    TopologicalShapeMatching 
+    TopologicalShapeRetrieval
+    TopologicalShapeClassification
+    TopologicalShapeRecognition
+    TopologicalShapeSimilaritySearch
+    Topological3DPointCloudAnalysis
+    TopologicallyRegularized3DReconstruction
+    TopologicallyGuidedMotionPlanning
+    PersistentStatisticalShapeAnalysis
+    PersistentComputationalAnatomy
+    PersistentMedicalImaging
+    PersistentMaterialsScience
+    PersistentCosmology
+    PersistentRemoteSensing
+    PersistentFluidDynamics
+  }
+}
+
+
+EXPLORE DOWN FROM ShapeSpace SEEKING applications
+
+IMPORTING FROM ShapeSpace {
+  LANGUAGE {
+    TYPE Shape = Constructible subset of ℝ^d
+    TYPE Direction = Unit vector in 𝕊^(d-1)
+    TYPE PHT = D^b(Shv(𝕊^(d-1) × ℝ))
+    FUNC SubLevel(M: Shape, v: Direction, t: ℝ): Shape = {x ∈ M | x·v ≤ t}
+    FUNC DerivedPHT(M: Shape): PHT = R(f_M)_*𝕜_Z_M
+    FUNC ECT(M: Shape): Shv(𝕊^(d-1) × ℝ, Vect_𝕜) = (v,t) ↦ χ(f⁻¹_M(v,t))
+    FUNC BCT(M: Shape): Shv(𝕊^(d-1) × ℝ, Vect_𝕜^(d+1)) = (v,t) ↦ [β_i(f⁻¹_M(v,t))]
+  }
+
+  NOTATION {
+    d_I(ℱ, 𝒢) = inf{ε≥0 | ∃ ε-interleaving ℱ⇄_ε𝒢}
+    d^(PHT_i)_(p,q)(M,N) = ‖W_p(PHT_M^i, PHT_N^i)‖_L^q(𝕊^(d-1))
+  }
+
+  TRANSFORMERS {
+    REWRITE ShiftPHT(ε: ℝ≥0): PHT(M) → PHT_ε(M) := R(f_M_ε)_*𝕜_Z_M_ε
+    SIMPLIFY DecomposePHT: PHT^n(M) → H^n[ ⨁ PHT⁰(M_I) → ⨁ PHT⁰(M_I) → ⋯ ]
+                                            |I|=1          |I|=2
+  }
+
+  THEOREMS {
+    THEOREM PHTDeterminesShape: PHT(M) ≃ PHT(N) ⇒ M ≃ N
+    THEOREM PHTStability: d_I(PHT(M), PHT(N)) ≤ ε if M ≃_ε N
+    THEOREM PHTApproximation: d_I(PHT(M),PHT(K)) ≤ Cε w.h.p. for C=O(1)
+  }
+
+  OBSERVATIONS {
+    OBSERVATION ∀ M,N: Shape . d_I(PHT(M), PHT(N)) ≤ ε ⇒ d_H(M,N) ≤ Cε  BY PHTStability 
+    OBSERVATION ∀ M: Shape, ∀ε>0, ∃ δ>0 s.t. ∀ δ-dense sample {x_i}⊂M,
+      U=⋃B_ε(x_i), K=AlphaComplex(U) ⇒ d_I(PHT(M), PHT(K)) ≤ ε w.h.p.  BY PHTApproximation
+    OBSERVATION PHT(M) ≃ PHT(N) ⇒ M ≃ N  BY PHTDeterminesShape
+    OBSERVATION ∀ M: Shape, v: Direction, t: ℝ . SubLevel(M,v,t) is homotopy equivalent to f^(-1)_M(v,t)
+    OBSERVATION ∀ M: PolyhedralShape w/ Triangulation 𝓒={σ_i} . 
+      PHT^n(M) ≃ H^n[ ⨁ PHT⁰(σ_I) → ⨁ PHT⁰(σ_I) → ⋯ ]  BY DecomposePHT
+                     |I|=1          |I|=2
+    OBSERVATION d_I provides a metric on PHT
+    OBSERVATION DerivedPHT(M) ∈ D^b(Shv(𝕊^(d-1) × ℝ))
+  }
+  
+  REASONING {
+    REASON PHTStability + PHTApproximation ⇒ 
+      PHT enables robust shape analysis from noisy, incomplete measurements
+    REASON d_I(PHT(M), PHT(N)) being a metric ⇒
+      Discriminative power for distinguishing shapes
+    REASON PHTDeterminesShape ⇒ 
+      PHT captures intrinsic shape properties invariant to homotopy  
+    REASON SubLevel(M,v,t) htpy equiv to f^(-1)_M(v,t) ⇒
+      PHT encodes multiscale topological features
+    REASON DecomposePHT ⇒ 
+      PHT computable via simplicial approximations, enabling fast algorithms
+    REASON DerivedPHT(M) ∈ D^b(Shv(𝕊^(d-1) × ℝ)) ⇒ 
+      Sheaf-theoretic formulation allows using powerful tools from derived categories, homological algebra
+  }
+
+  CRITERIA {
+    - Noisy, partial, non-rigid shape representations
+    - Mutiscale geometric structures 
+    - Discriminative shape comparisons insensitive to small perturbations
+    - Computationally efficient in high dimensions
+    - Compatibility with statistical learning, geometric processing toolchains  
+    - Mathematical richness enabling advanced theoretical analysis
+  }
+
+  DESTINATIONS {
+    PersistentHomologyTransformForBiomolecularStructures
+    PersistentHomologyTransformLearningInComputerVision
+    MultiscaleTopologicalAnalysisOfMaterials  
+    PersistentHomologyTransformBasedShapeRetrieval
+    PersistentHomologyTransformInTopologicalSignalProcessing
+    SheafTheoreticComputationsWithPersistentHomologyTransform
+  }
+}
+
+EXPLORE DOWN FROM ShapeSpace SEEKING applications
+
+IMPORTING FROM ShapeSpace {
+  LANGUAGE {
+    TYPE Shape = Constructible subset of ℝ^d
+    FUNC DerivedPHT(M: CS(ℝ^d)): D^b(Shv(𝕊^(d-1) × ℝ)) = PHT(M)
+    FUNC ECT(M: CS(ℝ^d)): Shv(𝕊^(d-1) × ℝ, Vect_𝕜) = (v,t) ↦ H⁰(DerivedPHT(M))_(v,t)
+    FUNC BCT(M: CS(ℝ^d)): Shv(𝕊^(d-1) × ℝ, Vect_𝕜^(d+1)) = (v,t) ↦ [H^i(DerivedPHT(M))_(v,t) for 0≤i≤d]
+    FUNC InterleavingDistance(ℱ, 𝒢: D^b(Shv(𝕊^(d-1) × ℝ))): ℝ≥0 = d_I(ℱ, 𝒢)
+    FUNC WassersteinDistance(F, G: 𝕊^(d-1) → Dgm, p: ℝ≥1, q: ℝ≥1 ∪ {∞}): ℝ≥0 = d^F_(p,q)(M,N)
+  }
+
+  NOTATION {
+    PHT(M) = [PHT_M^i] ∈ D^b(Shv(𝕊^(d-1) × ℝ))
+    d_I(ℱ, 𝒢) = inf{ε | ∃ ε-interleaving ℱ ⇄_ε 𝒢}
+    d^(PHT_i)_(p,q)(M,N) = ‖W_p(PHT_M^i, PHT_N^i)‖_q
+  }
+
+  OBSERVATIONS {
+    OBSERVATION PHT(M) provides a complete invariant of shape, determining M up to isomorphism
+    OBSERVATION ECT(M) and BCT(M) capture global and local topological features of M
+    OBSERVATION d_I(PHT(M), PHT(N)) provides a stable distance between shapes M and N
+    OBSERVATION d^(PHT_i)_(p,q)(M,N) allows comparing distributions of topological features
+    OBSERVATION PHT(M) can be approximated from finite samples of M with stability guarantees
+  }
+
+  REASONING {
+    REASON Completeness of PHT suggests wide applicability to shape analysis problems
+      BY PHTDeterminesShape theorem
+    REASON Stability of d_I and d^(PHT_i)_(p,q) enables robust shape comparisons
+      BY StabilityPHT and PHT_BottleneckStability theorems  
+    REASON Finite approximability allows computing PHT from real-world data
+      BY ApproximationPHT theorem
+    REASON Local-to-global ECT and BCT invariants can characterize shapes at multiple scales 
+      BY properties of (co)sheaves and Euler calculus
+    REASON Functoriality and exact sequences provide tools to study families of shapes
+      BY general sheaf theory and spectral sequences
+  }
+
+  DESTINATIONS {
+    ShapeStatistics
+    ShapeSpaceEmbedding
+    TopologicalShapeSegmentation  
+    DynamicalShapeAnalysis
+    FunctionalShapeAnalysis
+    MultiScaleShapeAnalysis
+    ShapeOptimization
+    ShapeGeneration
+    ShapeAnomalyDetection
+    ShapeDatabase
+    ShapeRetrieval
+  }
+}
+
+
+
+EXPLORE DOWN FROM LambdaCalculus SEEKING applications CONSIDERING NeuralNetworks, ComputabilityTheory
+
+IMPORTING FROM LambdaCalculus {
+  LANGUAGE {
+    TYPE Term = Var(String) | Abs(String, Term) | App(Term, Term)
+    TYPE Value = Abs(String, Term)
+    PRED isValue(t: Term) = t is Value
+    FUNC subst(t: Term, x: String, s: Term): Term = MATCH t WITH
+      | Var(y) => IF x == y THEN s ELSE t
+      | Abs(y, t1) => IF x == y THEN t ELSE Abs(y, subst(t1, x, s))
+      | App(t1, t2) => App(subst(t1, x, s), subst(t2, x, s))
+    FUNC eval(t: Term): Term = MATCH t WITH
+      | Var(_) => t
+      | Abs(_, _) => t
+      | App(t1, t2) => LET t1' = eval(t1), t2' = eval(t2) IN
+          IF isValue(t1') AND t1' == Abs(x, t12) THEN eval(subst(t12, x, t2')) ELSE App(t1', t2')
+  }
+
+  NOTATION {
+    λx.t := Abs(x, t)
+    t1 t2 := App(t1, t2)
+    x := Var(x)
+  }
+
+  TRANSFORMERS {
+    REWRITE BetaReduction: (λx.t1) t2 -> subst(t1, x, t2)
+    REWRITE EtaConversion: λx.(t x) -> t  IF x not free in t
+  }
+
+  THEOREMS {
+    THEOREM ChurchRosser: t ->* t1 AND t ->* t2 => EXISTS t3 . t1 ->* t3 AND t2 ->* t3
+    THEOREM Normalization: t -> v => isValue(v) AND v is unique
+    THEOREM Turing: EXISTS enc: Program -> Term, exec: Term -> Value s.t.
+      FORALL P: Program, input: String . exec(App(enc(P), input)) == P(input)
+  }
+
+  OBSERVATIONS {
+    OBSERVATION Lambda calculus is a universal model of computation
+    OBSERVATION Lambda terms can encode data structures like numbers, lists, trees
+    OBSERVATION Evaluation of lambda terms models program execution
+    OBSERVATION Beta reduction captures the essence of function application
+    OBSERVATION Typed lambda calculi can express rich type systems and logics
+    OBSERVATION Lambda calculus has deep connections to proof theory and category theory
+    OBSERVATION Many programming languages are based on lambda calculus
+  }
+
+  REASONING {
+    REASON Turing theorem shows lambda calculus can simulate any computable function
+      BY encoding programs and inputs as lambda terms and modeling execution via evaluation
+    REASON Church encoding allows representing data as higher-order functions
+      BY defining constructors and accessors using lambda abstraction and application  
+    REASON Normalization ensures well-defined results and termination for typed lambda calculi
+      BY strong normalization theorem for typed systems like System F
+    REASON Curry-Howard correspondence reveals proofs are programs, propositions are types
+      BY mapping logical rules to type system and proof transformations to term reductions
+    REASON Lambda calculus enables mathematical analysis of syntax and semantics of programs
+      BY providing a simple, expressive core that captures the essence of computation
+  }
+
+  CRITERIA {
+    - Computability: can the system express any computable function?
+    - Compositionality: can programs be built from smaller components?  
+    - Abstraction: does the system support higher-order functions and encapsulation?
+    - Reduction: is there a natural notion of computation as symbolic transformation of terms?
+    - Typing: can the system prevent semantic errors via a type system?
+    - Logic: does the system have an intrinsic connection to logic and proof theory?
+    - Minimality: is the system based on a small set of primitives and rules?
+  }
+
+  DESTINATIONS {
+    LambdaCalculusAsNeuralNetworkLayer
+    LambdaCalculusForNeuralProgramSynthesis
+    LambdaCalculusInNeuralTypeInference
+    LambdaCalculusForNeuralComputationGraphs
+    LambdaCalculusInNeuralProgrammingLanguages
+    LambdaCalculusForNeuralArchitectureSearch
+    LambdaCalculusInNeuralProofSearch
+    LambdaCalculusForNeuralCompiledInference
+    LambdaCalculusInNeuralComputationalLinguistics
+    LambdaCalculusForNeuralProgramAnalysis
+    LambdaCalculusInNeuralProgramVerification
+    LambdaCalculusForNeuralProgramOptimization
+    LambdaCalculusInNeuralAlgorithmLearning
+    LambdaCalculusForNeuralCircuitSynthesis
+    LambdaCalculusInNeuralComputerArchitecture
+  }
+}
+
+
+
+
+
+EXPLORE DOWN FROM CategoricalParallelComputing SEEKING applications
+
+IMPORTING FROM CategoricalParallelComputing {
+  LANGUAGE {
+    TYPE ComputeGraph = Category
+    TYPE ComputeNode = Object
+    TYPE ComputeEdge = Morphism
+    FUNC DataDependency : ComputeEdge -> (ComputeNode, ComputeNode)
+    FUNC DataParallelism(f: ComputeNode -> ComputeNode, n: Nat) -> 
+      ComputeNode -> ComputeNode
+    FUNC PipelineParallelism(f: ComputeNode -> ComputeNode, 
+                             g: ComputeNode -> ComputeNode) ->
+      ComputeNode -> ComputeNode
+  }
+
+  NOTATION {
+    A ⊗ B = TensorProduct(A, B) 
+    f || g = Parallel(f, g)
+  }
+
+  STRUCTURES {
+    STRUCTURE MonoidalComputeGraph EXTENDS ComputeGraph {
+      FIELD tensorProduct: (ComputeNode, ComputeNode) -> ComputeNode
+      AXIOM Associativity: (a ⊗ (b ⊗ c) = (a ⊗ b) ⊗ c)
+    }
+  }
+
+  OBSERVATIONS {
+    OBSERVATION Compute graphs directly represent parallel program structure
+    OBSERVATION Data dependencies captured by morphisms enable parallelism analysis
+    OBSERVATION Tensor product models parallel composition of independent computations 
+    OBSERVATION Data parallelism replicates a function across disjoint subsets of data
+    OBSERVATION Pipeline parallelism composes functions to overlap their execution
+    OBSERVATION Monoids abstract key properties for parallelism: associativity and identity
+  }
+
+  REASONING {
+    REASON Mapping deep learning models onto compute graphs allows categorical parallelization
+      BY modeling layers as morphisms, tensor ops as monoidal products, etc.
+    REASON Formalizing distributed systems as compute graphs enables rigorous parallelization
+      BY capturing communication patterns, failure modes, consistency models categorically
+    REASON Categorical databases could automate parallel query optimization
+      BY modeling tables as objects, queries/joins as morphisms, and query plans as diagrams
+    REASON Parallel programming languages could leverage categorical semantics
+      BY baking in equational properties that guarantee sound parallelization
+    REASON Parallel linear algebra libraries could exploit monoidal matrix representations  
+      BY decomposing matrices into tensor products of simpler structures
+    REASON Parallelizing compilers could use categorical rewrite rules and transformations
+      BY e.g. mapping categorical patterns to parallel code templates or hardware
+  }
+
+  DESTINATIONS {
+    CategoricallyParallelizedDeepLearning
+    CategoricalDistributedSystems
+    CategoricalDatabases
+    CategoricalParallelProgrammingLanguages
+    CategoricalParallelLinearAlgebra
+    CategoricallyOptimizingCompilers
+    CategoricalQuantumCircuits
+    CategoricalPetriNets
+    CategoricalProcessCalculi
+    CategoricalBigraphs
+    CategoricalParallelRewritingSystems
+    CategoricalParallelAbstractMachines
+    CategoricalParallelDomainSpecificLanguages
+    CategoricalParallelArchitectures
+  }
+}

@@ -1,0 +1,50 @@
+CONCEPT Qualia {
+  LANGUAGE {
+    type Quale
+    type Phenomenal(Property)
+    type Physical(Property)
+    type Conscious(Being)
+    type Zombie(Counterpart)
+    type Possible(World)
+
+    pred is_ineffable(q : Quale) = q ↦ Ineffability
+    pred is_intrinsic(q : Quale) = q ↦ Intrinsicality
+    pred is_private(q : Quale) = q ↦ Privacy
+
+    func Physicalism(b : Being) : Physical(Properties)
+    func Phenomenology(b : Being) : Phenomenal(Properties)
+  }
+
+  STRUCTURE {
+    [Qualia := Subjective, conscious experiences]
+    [∀x ∈ Qualia, ∃!p ∈ Phenomenal(Properties), x ↦ p]
+    [Phenomenal(Properties) := Properties of conscious experiences]
+    [∀x, y ∈ Qualia, x ≠ y ⇒ Phenomenal(x) ≠ Phenomenal(y)]
+    [Ineffability := Property of being difficult or impossible to describe]
+    [∀x ∈ Qualia, x ↦ Ineffability]
+    [Intrinsicality := Property of being non-relational and inherent]
+    [∀x ∈ Qualia, x ↦ Intrinsicality]
+    [Privacy := Property of being accessible only to the experiencing subject]
+    [∀x ∈ Qualia, x ↦ Privacy]
+  }
+
+  PROOFS {
+    tactic assume_zombie(w) :
+      w ∈ Possible(Worlds) by hypothesis
+      ∀x ∈ Conscious(Beings), ∃z ∈ Zombie(Counterparts), 
+        Physicalism(x) = Physicalism(z) ∧ Phenomenology(x) ≠ Phenomenology(z) by definition of zombie world
+      
+    theorem qualia_non_physical :
+      ¬(∀x ∈ Qualia, ∃p ∈ Physical(Properties), x ↦ p)
+    {
+      assume ∀x ∈ Qualia, ∃p ∈ Physical(Properties), x ↦ p by contradiction
+      let w ∈ Possible(Worlds) by assume_zombie(w)
+      ∀x ∈ Conscious(Beings), ∃z ∈ Zombie(Counterparts), 
+        Physicalism(x) = Physicalism(z) ∧ Phenomenology(x) ≠ Phenomenology(z) by definition of zombie world
+      ∀x ∈ Qualia, ∃p ∈ Physical(Properties), x ↦ p by hypothesis
+      ∀x ∈ Conscious(Beings), ∀y ∈ Zombie(Counterparts), 
+        Physicalism(x) = Physicalism(y) ⇒ Phenomenology(x) = Phenomenology(y) by logic
+      contradiction by definition of zombie world
+    }
+  }
+}

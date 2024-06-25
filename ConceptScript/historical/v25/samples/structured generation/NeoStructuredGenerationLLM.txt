@@ -1,0 +1,3151 @@
+CONCEPT TheoreticalFoundationsForOutlinesV2 {
+  LANGUAGE {
+    -- Basic Types
+    TYPE Token
+    TYPE Sequence = List[Token]
+    TYPE Dist[A] = A -> ℝ≥0
+
+    -- Language Models
+    TYPE LanguageModel = Sequence -> Dist[Token]
+    FUNC Perplexity(lm : LanguageModel, seq : Sequence) : ℝ≥0
+    FUNC KLDivergence(lm1 : LanguageModel, lm2 : LanguageModel) : ℝ≥0
+
+    -- Grammars and Semantics
+    TYPE Nonterminal
+    TYPE Terminal <: Token
+    TYPE Symbol = Nonterminal | Terminal
+    TYPE Rule = (Nonterminal, List[Symbol], Semantics)
+
+    TYPE Grammar = {
+      Nonterminals : Set[Nonterminal],
+      Terminals : Set[Terminal],
+      Rules : Set[Rule],
+      Start : Nonterminal
+    }
+
+    TYPE Semantics = (Env, List[Value]) -> Value
+    TYPE Env = String -> Value
+    TYPE Value
+
+    FUNC Interpret(g : Grammar, seq : Sequence) : Value
+    FUNC IsValid(g : Grammar, seq : Sequence) : Bool
+
+    -- Types and Templates
+    TYPE Type
+    TYPE Template = (Env, List[Hole]) -> Dist[Sequence]
+    TYPE Hole = (String, Type)
+
+    TYPE TypeSystem = {
+      Types : Set[Type],
+      Rules : Set[(Env, Type, Type, Bool)]
+    }
+
+    FUNC TypeOf(ts : TypeSystem, env : Env, seq : Sequence) : Type
+    FUNC Subtype(ts : TypeSystem, env : Env, t1 : Type, t2 : Type) : Bool  
+
+    FUNC FillHoles(t : Template, lm : LanguageModel, env : Env) : Dist[Sequence]
+
+    -- Prompt DSL
+    TYPE Prompt = Block
+    TYPE Block = Text | Cond | Loop | Hole
+
+    TYPE Text = String
+    TYPE Cond = (Expr, Block, Block)
+    TYPE Loop = (String, List[Value], Block)
+    TYPE Expr = (Op, List[Expr]) | Var | Value
+
+    TYPE Op = "==" | "!=" | "<" | ">" | "in"
+    TYPE Var = String
+
+    FUNC Render(p : Prompt, env : Env) : Sequence
+
+    -- Generation
+    FUNC StructuredGeneration(
+      g : Grammar,
+      ts : TypeSystem, 
+      t : Template,
+      p : Prompt,
+      lm : LanguageModel,
+      env : Env  
+    ) : Dist[Sequence]
+
+    FUNC StructuredGeneration(g, ts, t, p, lm, env) = 
+      LET seq_dist = FillHoles(t, lm, env) IN
+      LET seq_probs = MAP(seq -> 
+        IF IsValid(g, seq) AND Subtype(ts, env, TypeOf(ts, env, seq), t.Type) 
+        THEN lm(Render(p, env + seq))
+        ELSE 0
+      , Support(seq_dist)) IN
+      LAMBDA seq. seq_dist(seq) * seq_probs(seq)
+  }
+
+  PROOFS {
+    THEOREM InterpretationSoundness {
+      FORALL (g : Grammar) (seq : Sequence).
+        IsValid(g, seq) => Interpret(g, seq) != Null
+    }
+
+    THEOREM TypeSystemSoundness {
+      FORALL (ts : TypeSystem) (env : Env) (seq : Sequence).
+        TypeOf(ts, env, seq) != Null => IsValid(ts, seq)
+    }
+    
+    THEOREM TemplateConsistency {
+      FORALL (t : Template) (lm : LanguageModel) (env : Env) (seq : Sequence).
+        seq ∈ Support(FillHoles(t, lm, env)) => 
+        FORALL (hole : Hole) in t.Holes.
+          env(hole.Name) = Substr(seq, hole.Position, hole.Length)
+    }
+
+    THEOREM StructuredGenerationCorrectness {
+      FORALL (g : Grammar) (ts : TypeSystem) (t : Template) (p : Prompt) (lm : LanguageModel) (env : Env).
+        FORALL (seq : Sequence) in Support(StructuredGeneration(g, ts, t, p, lm, env)).
+          IsValid(g, seq) AND Subtype(ts, env, TypeOf(ts, env, seq), t.Type) AND
+          lm(Render(p, env + seq)) > 0
+    }
+    
+    THEOREM StructuredGenerationOptimality {
+      FORALL (g : Grammar) (ts : TypeSystem) (t : Template) (p : Prompt) (lm : LanguageModel) (env : Env).
+        LET gen = StructuredGeneration(g, ts, t, p, lm, env),
+            unconstrained = FillHoles(t, lm, env) IN
+        KLDivergence(gen, unconstrained) ≤ 
+          KLDivergence(constrained, unconstrained)
+        FORALL (constrained : Dist[Sequence]).
+          Support(constrained) ⊆ {seq | IsValid(g, seq) AND Subtype(ts, env, TypeOf(ts, env, seq), t.Type)}
+    }
+  }
+}
+
+
+
+
+
+
+
+CONCEPT AdvancedStructuredGeneration {
+  LANGUAGE {
+    -- Basic Types
+    TYPE Sequence = List[Token]
+    TYPE Token
+    TYPE Vocab <: Token
+
+    -- Algebraic Structures
+    TYPE Semiring(A) {
+      zero : A
+      one : A
+      (+) : A -> A -> A
+      (*) : A -> A -> A
+
+      LAWS {
+        Associativity(+)
+        Commutativity(+)
+        Identity(zero, +)
+        Associativity(*)
+        Identity(one, *)
+        Distributivity(*, +)
+      }
+    }
+
+    TYPE Species {
+      UNIT : Species
+      CONST(A) : Species -> Species
+      (+) : Species -> Species -> Species
+      (*) : Species -> Species -> Species
+      COMP : Species -> (Set -> Species) -> Species
+    }
+
+    -- Grammars and Parse Trees
+    TYPE Grammar[S : Species] <: Species
+    TYPE ParseTree[S : Species, n : Nat] <: Tree[Token] 
+
+    FUNC Unparse[S : Species](t : ParseTree[S, n]) : Sequence
+    FUNC Parse[S : Species](seq : Sequence, g : Grammar[S]) : ParseTree[S, Length(seq)]
+
+    -- Distributions and Probabilities
+    TYPE Dist[A] = A -> ℝ≥0
+    FUNC Normalize[A](d : A -> ℝ≥0) : Dist[A]
+    FUNC Sample[A](d : Dist[A]) : A
+    FUNC Expect[A](d : Dist[A], f : A -> ℝ) : ℝ
+    FUNC KL[A](d1 : Dist[A], d2 : Dist[A]) : ℝ≥0
+
+    TYPE LanguageModel = Sequence -> Dist[Token]
+    FUNC Perplexity(lm : LanguageModel, seq : Sequence) : ℝ≥0
+    FUNC CrossEntropy(lm : LanguageModel, seq : Sequence) : ℝ≥0
+
+    -- Semantics and Interpretation
+    TYPE SemanticType
+    TYPE SemanticObject[A : SemanticType]
+    TYPE Denotation[S : Species, n : Nat] = ParseTree[S, n] -> SemanticObject[Meaning[S, n]]
+
+    FUNC Meaning[S : Species, n : Nat] : SemanticType
+    FUNC Interpret[S : Species](t : ParseTree[S, n], den : Denotation[S, n]) : SemanticObject[Meaning[S, n]]
+
+    -- Tensor Expressions and Neural Networks
+    TYPE Tensor[A : Type, n : Nat] = (Index[n] -> A) 
+    TYPE Index[n : Nat] = Vec[Nat, n]
+
+    TYPE TensorExpr[A : Type, B : Type] = Tensor[A, _] -> Tensor[B, _]
+    TYPE NeuralNetwork[A : Type, B : Type] <: TensorExpr[A, B]
+
+    FUNC Param[A : Type](name : String, shape : List[Nat]) : Tensor[A, Length(shape)]
+    FUNC MatMul[A : Type](x : Tensor[A, n], y : Tensor[A, m]) : Tensor[A, n * m]
+    FUNC Sigmoid[A : Type](x : Tensor[A, n]) : Tensor[ℝ, n]
+    FUNC Tanh[A : Type](x : Tensor[A, n]) : Tensor[ℝ, n]
+
+    TYPE LSTM <: NeuralNetwork[ℝ, ℝ]
+    TYPE Transformer <: NeuralNetwork[ℝ, ℝ]
+  }
+
+  THEOREMS {
+    THEOREM UnparseOfParseIsIdentity {
+      FORALL (S : Species) (g : Grammar[S]) (seq : Sequence).
+        GIVEN parse = Parse(seq, g)
+        Unparse(parse) = seq  
+    }
+
+    THEOREM InterpretationIsCompositional {
+      FORALL (S : Species) (t : ParseTree[S, n]) (den : Denotation[S, n]). 
+        MAP(Interpret(_, den), Subtrees(t)) = Interpret(t, den)
+    }
+
+    THEOREM PerplexityIsExponentialCrossEntropy {
+      FORALL (lm : LanguageModel) (seq : Sequence).
+        Perplexity(lm, seq) = exp(CrossEntropy(lm, seq))
+    }
+
+    THEOREM KLDivergenceIsNonNegative {
+      FORALL (A : Type) (d1 : Dist[A]) (d2 : Dist[A]).
+        KL(d1, d2) ≥ 0
+    }
+
+    THEOREM LSTMApproximatesLM {
+      FORALL (lm : LanguageModel) (ε : ℝ>0).
+        EXISTS (lstm : LSTM).
+          FORALL (seq : Sequence). 
+            ABS(Perplexity(lm, seq) - Perplexity(Eval(lstm), seq)) ≤ ε
+    }
+  }
+
+  STRUCTURE GenerativeModel {
+    S : Species
+    γ : ℝ>0  -- Concentration parameter
+    baseMeasure : Dist[Grammar[S]]
+
+    lm : LanguageModel
+    den : Denotation[S, _]
+
+    -- Generative Process  
+    FUNC Generate(n : Nat) : (ParseTree[S, n], SemanticObject[Meaning[S, n]]) {
+      SAMPLE g ~ DirichletProcess(γ, baseMeasure)
+      SAMPLE t ~ PosteriorSample(lm, g, den, n)
+      RETURN (t, Interpret(t, den))
+    }
+
+    -- Inference
+    FUNC PosteriorSample(n : Nat) : ParseTree[S, n] {
+      SAMPLE seq ~ Prefix(lm, n) 
+      RETURN MAP(Parse(_, PosteriorGrammar(lm, γ, baseMeasure)), seq)
+    }
+  }
+}
+
+
+
+
+
+CONCEPT AdvancedStructuredGeneration {
+  LANGUAGE {
+    INCLUDE StructuredGenerationTheory
+
+    TYPE TensorExpr = 
+      Tensor[Vocab]
+      | TensorExpr + TensorExpr  -- Addition 
+      | TensorExpr * TensorExpr  -- Multiplication
+      | TensorExpr ⊗ TensorExpr  -- Kronecker product
+      | TensorExpr ∘ TensorExpr  -- Function composition
+      | MapTensor(TensorExpr, Token -> Token)  -- Element-wise mapping
+      | ReduceTensor(TensorExpr, (Token, Token) -> Token)  -- Reduction along dimensions
+    
+    TYPE DependentType = 
+      TOKEN(t : Token)  -- Singleton type for a specific token
+      | RULE(r : Rule)  -- Type for sequences matching a grammar rule
+      | ARR(a : DependentType, b : DependentType)  -- Function type
+      | TENSOR(ts : List[DependentType])  -- Tensor type
+      
+    TYPE InferenceRule =
+      SEQ(Γ, a, b) : (Γ ⊢ a <: ARR(_, b)) -> (Γ ⊢ SEQ(a, b))  -- Sequence typing
+      | CALL(Γ, f, a) : (Γ ⊢ f <: ARR(a, _)) -> (Γ ⊢ CALL(f, a))  -- Function application typing
+      | TENSOR(Γ, ts) : (∀t ∈ ts. Γ ⊢ t) -> (Γ ⊢ TENSOR(ts))  -- Tensor typing
+
+    FUNC TensorSample(expr : TensorExpr) : Sequence
+    FUNC TensorScore(expr : TensorExpr, seq : Sequence) : [0, 1]
+    FUNC TypeInfer(env : TypeEnvironment, expr : TensorExpr) : DependentType
+    FUNC TypeCheck(env : TypeEnvironment, expr : TensorExpr, type : DependentType) : Bool
+
+    FUNC GrammarInference(samples : List[Sequence], 
+                          initialGrammar : Grammar,
+                          typeSystem : (TypeEnvironment, List[InferenceRule])) 
+      : (Grammar, TypeEnvironment)
+
+    FUNC StructuredGeneratorV2(
+      lm : LanguageModel,
+      g : Grammar,
+      env : TypeEnvironment,
+      prompt : Sequence,
+      maxLen : Nat  
+    ) : Sequence =
+      LETREC StrGen(prompt, maxLen) =
+        IF maxLen = 0 THEN
+          RETURN prompt
+        ELSE
+          LET expr = lm(prompt)  -- Construct a tensor expression from the language model
+          LET type = TypeInfer(env, expr)  -- Infer the type of the tensor expression
+          LET filteredExpr = FilterValid(expr, g, type)  -- Filter the tensor using the grammar and type
+          LET nextTokens = TensorSample(filteredExpr)  -- Sample a sequence from the filtered tensor
+          LET nextToken = Head(nextTokens)  -- Take the first token in the sequence
+          StrGen(Concat(prompt, nextToken), maxLen - 1)
+        
+      StrGen(prompt, maxLen)
+  }
+
+  THEOREMS {
+    THEOREM TensorCorrectness {
+      FORALL (expr : TensorExpr) (seq : Sequence).
+        TensorScore(expr, seq) = PosteriorProb(lm, g, env, seq)
+          WHERE (lm, g, env) = (LAMBDA _. expr, _, _)  -- Treat the tensor expr as a language model
+    }
+
+    THEOREM TypeSoundness {
+      FORALL (env : TypeEnvironment) (expr : TensorExpr) (type : DependentType).
+        (TypeCheck(env, expr, type) AND TensorSample(expr) = seq) => SeqHasType(env, seq, type)
+    }
+    
+    THEOREM GrammarInferenceConvergence {
+      FORALL (trueGrammar : Grammar) (trueTypes : TypeEnvironment) (samples : List[Sequence]).
+        LET (learnedGrammar, learnedTypes) = GrammarInference(samples, Grammar(), (TypeEnvironment(), [])) 
+        IN
+          (Limit(Length(samples) -> Infinity, PosteriorProb(lm, learnedGrammar, learnedTypes, _))  
+           = PosteriorProb(lm, trueGrammar, trueTypes, _))
+            WHERE lm = LAMBDA _. Tensor([1, ..., 1])  -- Uniform language model
+    }
+
+    THEOREM StructuredGeneratorV2Correctness {
+      FORALL (lm : LanguageModel) (g : Grammar) (env : TypeEnvironment) 
+             (prompt : Sequence) (maxLen : Nat).
+        LET genSeq = StructuredGeneratorV2(lm, g, env, prompt, maxLen)
+        IN
+          IsValid(g, genSeq) AND SeqHasType(env, genSeq)
+    }
+  }
+  
+  PROOFS {
+    THEOREM TensorCorrectness {
+      -- Proof sketch:
+      -- 1. Show that each tensor operation corresponds to a valid manipulation of the 
+      --    posterior distribution (e.g., addition = union, multiplication = intersection, 
+      --    Kronecker product = sequence concatenation).
+      -- 2. Prove by induction on the structure of the tensor expression that the resulting
+      --    tensor encodes the correct posterior distribution.
+    }
+    
+    THEOREM TypeSoundness {
+      -- Proof sketch:  
+      -- 1. Define a denotational semantics that interprets types as sets of sequences and
+      --    tensor expressions as distributions over sequences.
+      -- 2. Show that each type inference rule corresponds to a valid logical deduction about
+      --    the set of sequences that a tensor expression can generate.
+      -- 3. Prove by induction on the type derivation that if an expression type checks with
+      --    a given type, then the sequences it generates will belong to the denotation of that type.
+    }
+    
+    THEOREM GrammarInferenceConvergence {
+      -- Proof sketch:
+      -- 1. Define a probabilistic model for generating samples from a grammar and type system.
+      -- 2. Show that grammar inference can be formulated as Bayesian inference over this model,
+      --    with the initial grammar and type system acting as a prior.
+      -- 3. Apply convergence results from Bayesian nonparametrics to show that as the number 
+      --    of samples goes to infinity, the inferred grammar and type system will converge to  
+      --    the true grammar and type system under a uniform language model.
+    }
+    
+    THEOREM StructuredGeneratorV2Correctness {
+      -- Proof sketch:
+      -- 1. Observe that StructuredGeneratorV2 maintains the invariant that the prompt is always
+      --    a valid and well-typed sequence.
+      -- 2. Show that the tensor expression constructed by the language model generates a 
+      --    distribution over next tokens that is consistent with the grammar and type system.  
+      -- 3. Prove by induction on maxLen that filtering and sampling from this distribution
+      --    preserves validity and well-typedness.
+    }
+  }
+}
+
+CONCEPT StructuredGenerationTheory {
+  LANGUAGE {
+    TYPE Tree[A] = μ X. Leaf(A) | Node(X, X)  -- Representing trees using HOAS
+
+    TYPE Rule[A, B] = Tree[A] -> Tree[B]  -- Rules as tree transformations
+    
+    TYPE GrammarSpecies[A, B] = Species(Rule[A, B])  -- Grammar as a species of rules
+
+    TYPE ParseTree[G : GrammarSpecies[Token, Semantics]] = 
+      ∃ (X : Species). 
+        (G ≅ X ∘ ParseTree[G]) ∧ 
+        (X ≅ Leaf + G ∘ (id + ParseTree[G]))  
+        -- Parse trees as the fixpoint of a species equation
+
+    TYPE TensorNetwork[S, T] = 
+      Σ (N : Set[Tensor[S]]) (E : Set[Tensor[S × S]]).
+        (∀ e ∈ E. ∃ i j. e_i ∈ N ∧ e_j ∈ N) ∧
+        (∃! t ∈ N. t ∈ Tensor[T])
+        -- Tensor networks with a distinguished root tensor
+
+    FUNC TensorParser[G : GrammarSpecies[Token, Semantics]] :
+      TensorNetwork[ParseTree[G], ParseTree[G]] -> Measure[ParseTree[G]]
+    FUNC TensorParser[G](tn) = 
+      λ E. ∫ (t : ParseTree[G]). I{t ∈ E} * Contract(tn, t)
+      -- Parsing as contraction of a tensor network
+      
+    FUNC DifferentiableGrammar[G : GrammarSpecies[Token, Semantics], θ : Params] : 
+      GrammarSpecies[Token, Semantics]
+    FUNC DifferentiableGrammar[G, θ] =
+      λ R. λ t. exp(θ_R · Features(t)) * G(R)(t) 
+      -- Differentiable relaxation of a grammar using soft constraints
+  }
+
+  PROOFS {
+    THEOREM StructuredGeneratorCorrectness {
+      STATEMENT:
+        ∀ (lm : SequenceMeasure) (G : DirichletProcessGrammar[Token, Semantics]) (prompt : List[Token]) (n : ℕ).
+        LET genMeasure = λ E. ∫ (T ~ G | Length(Yield(T)) ≤ n). lm(Yield(T)) * I{Yield(T) ∈ {Concat(prompt, s) | s ∈ E}} IN
+        genMeasure ≪ PosteriorMeasure(lm, G)
+      
+      PROOF:
+        -- Key ideas: 
+        -- 1. Use the properties of Dirichlet Process Grammars to show that the posterior 
+        --    concentrates on a countable set of parse trees.
+        -- 2. Show that the structured generator assigns positive probability to each of these trees.
+        -- 3. Use the dominated convergence theorem to show that the generated distribution converges
+        --    to the posterior.
+    }
+    
+    THEOREM StructuredGeneratorConvergence {
+      STATEMENT:
+        ∀ (lm : SequenceMeasure) (G : GrammarSpecies[Token, Semantics]) (tn : TensorNetwork[ParseTree[G], ParseTree[G]]) (prompt : List[Token]) (ε : ℝ>0).
+        LET genMeasure(n) = λ E. TensorParser[G](Contract(tn, n))(λ t. Yield(t) ∈ {Concat(prompt, s) | s ∈ E}) IN
+        ∃ (N : ℕ) (C : ℝ>0) (ρ : ℝ ∈ (0, 1)). 
+          ∀ (n : ℕ) (E : Event[List[Token]]). 
+            |genMeasure(n)(E) - PosteriorMeasure(lm, G)(E)| ≤ C * ρ^n
+            
+      PROOF:
+        -- Key ideas:
+        -- 1. Use the combinatorial properties of the grammar species to bound the number of parse trees
+        --    of a given size.
+        -- 2. Use the contraction properties of tensor networks to show that the generated distribution
+        --    is a finite-rank approximation to the posterior.
+        -- 3. Use spectral theory to bound the error in this approximation as a function of the bond dimensions.
+    }
+    
+    THEOREM StructuredGeneratorEfficiency {
+      STATEMENT:
+        ∀ (lm : SequenceMeasure) (G : GrammarSpecies[Token, Semantics]) (θ : Params) (prompt : List[Token]).
+        LET G' = DifferentiableGrammar[G, θ] IN
+        LET genMeasure(n) = λ E. ∫ (T ~ G' | Length(Yield(T)) ≤ n). lm(Yield(T)) * I{Yield(T) ∈ {Concat(prompt, s) | s ∈ E}} IN
+        ∃ (C : ℝ>0). ∀ (ε : ℝ>0).
+          sampleComplexity(genMeasure, ε) ≤ C * sampleComplexity(PosteriorMeasure(lm, G), ε)
+          
+      PROOF:
+        -- Key ideas:
+        -- 1. Use the differentiability of G' to bound its KL divergence from G in terms of the 
+        --    gradient of the log-likelihood.
+        -- 2. Show that the gradient can be efficiently estimated using samples from G'.
+        -- 3. Use PAC-Bayes bounds to relate the sample complexity of G' to that of G.
+    }
+  }
+}
+
+
+
+CONCEPT StructuredGenerationTheory {
+  LANGUAGE {
+    TYPE Nonterminal
+    TYPE Rule = Σ (A : Nonterminal) (B : List[Nonterminal ⊎ Token]). (A, B)
+    TYPE Grammar = Σ (N : Set[Nonterminal]) 
+                     (T : Set[Token])
+                     (R : Set[Rule])
+                     (S : Nonterminal). 
+                     (∀ r ∈ R. π_1(r) ∈ N ∧ π_2(r) ⊆ N ⊎ T) ∧ S ∈ N
+
+    TYPE ParseTree[g : Grammar] = μ (X : Nonterminal[g] -> Type) . 
+                                   Σ (A : Nonterminal[g]) 
+                                     (R : Rule[g, A]) 
+                                     (C : List[(T : Token) ⊎ (X(π_1(T)))]). 
+                                   (A, R, C)
+
+    FUNC Yield[g : Grammar] : ParseTree[g] -> List[Token]
+    FUNC Yield[g : Grammar] = 
+      λ (t : ParseTree[g]) .
+        MATCH t WITH
+        | (A, R, []) => []
+        | (A, R, (inl T) :: C) => [T] ++ Yield(A, R, C)
+        | (A, R, (inr t') :: C) => Yield(t') ++ Yield(A, R, C)
+
+    TYPE SemanticType
+    TYPE Denotation[g : Grammar] = 
+      Σ (X : Nonterminal[g] -> SemanticType)
+        (Y : (A : Nonterminal[g]) -> (R : Rule[g, A]) -> List[X(π_1(T)) | (T : Token)]).
+      (∀ (A : Nonterminal[g]) (R : Rule[g, A]) . Y(A, R) ∈ List[X(A)])
+
+    FUNC Semantics[g : Grammar, d : Denotation[g]] : ParseTree[g] -> SemanticType[g, d]
+    FUNC Semantics[g : Grammar, d : Denotation[g]] =
+      λ (t : ParseTree[g]) .
+        MATCH t WITH
+        | (A, R, []) => π_2(d)(A, R, [])
+        | (A, R, (inl T) :: C) => π_2(d)(A, R, ((π_1(d)(A)) :: Semantics(A, R, C)))  
+        | (A, R, (inr t') :: C) => π_2(d)(A, R, (Semantics(t') :: Semantics(A, R, C)))
+
+    TYPE SequenceMeasure = Σ (M : Measure[List[Token]]) 
+                              (p : (s : List[Token]) -> [0, 1]). 
+                           (∀ s. M(Cylinder(s)) = p(s)) ∧ 
+                           (∀ s t. p(s ++ t) = p(s) * p(t | s))
+
+    FUNC PosteriorMeasure(lm : SequenceMeasure, g : Grammar, d : Denotation[g]) : Measure[ParseTree[g]]
+    FUNC PosteriorMeasure(lm, g, d) = 
+      λ (E : Event[ParseTree[g]]) .
+        ∫ (t : ParseTree[g]) . I{t ∈ E} * p_lm(Yield(t)) * exp(Score(Semantics(t)))
+  }
+
+  PROOFS {
+    THEOREM StructuredGeneratorCorrectness {
+      STATEMENT:
+        ∀ (lm : SequenceMeasure) (g : Grammar) (d : Denotation[g]) (prompt : List[Token]) (n : ℕ).
+        LET genMeasure = λ E. PosteriorMeasure(lm, g, d)(λ t. Yield(t) ∈ {Concat(prompt, s) | s ∈ E ∧ Length(s) ≤ n}) IN
+        genMeasure ≪ PosteriorMeasure(lm, g, d) -- genMeasure is absolutely continuous w.r.t the posterior
+      
+      PROOF:
+        -- Key idea: Use the fact that the types guarantee well-formedness of the parse trees.
+        -- Then show that the measure of each parse tree is proportional to its posterior probability.
+        -- Absolute continuity follows from the fact that parse trees with zero posterior probability
+        -- are never generated by the structured generator.
+        -- (Details to be filled in, using the properties of the SequenceMeasure and Denotation types)
+    }
+
+    THEOREM StructuredGeneratorConvergence {
+      STATEMENT:
+        ∀ (lm : SequenceMeasure) (g : Grammar) (d : Denotation[g]) (prompt : List[Token]) (ε : ℝ>0).
+        LET genMeasure(n) = λ E. PosteriorMeasure(lm, g, d)(λ t. Yield(t) ∈ {Concat(prompt, s) | s ∈ E ∧ Length(s) ≤ n}) IN
+        ∃ (N : ℕ) (C : ℝ>0) (ρ : ℝ ∈ (0, 1)). 
+          ∀ (n : ℕ) (E : Event[List[Token]]). 
+            |genMeasure(n)(E) - PosteriorMeasure(lm, g, d)(E)| ≤ C * ρ^n
+      
+      PROOF:
+        -- Key idea: Define a Markov chain on the space of parse trees, where each transition
+        -- corresponds to expanding a nonterminal node according to the grammar and denotation.
+        -- Show that this Markov chain is ergodic with stationary distribution given by the posterior.
+        -- Use spectral theory to bound the mixing time in terms of the second eigenvalue of the transition matrix.
+        -- Relate the mixing time to the convergence rate using standard results from Markov chain theory.
+        -- (Details to be filled in, using the properties of the grammar and denotation categories)
+    }
+
+    THEOREM StructuredGeneratorEfficiency {
+      STATEMENT:
+        ∀ (lm : SequenceMeasure) (g : Grammar) (d : Denotation[g]) (prompt : List[Token]).
+        LET genMeasure(n) = λ E. PosteriorMeasure(lm, g, d)(λ t. Yield(t) ∈ {Concat(prompt, s) | s ∈ E ∧ Length(s) ≤ n}) IN
+        LET sampleComplexity(M, ε) = Min{n | ∀ E. |M(1..n)(E) - M(E)| ≤ ε} IN
+        ∃ (C : ℝ>0). ∀ (ε : ℝ>0).
+          sampleComplexity(genMeasure, ε) ≤ C * sampleComplexity(SequenceMeasure, ε)
+      
+      PROOF:
+        -- Key idea: Use the fact that the structured generator only considers grammatically valid 
+        -- and well-typed sequences, while the language model may assign probability to invalid sequences.
+        -- Bound the KL divergence between the structured generator and the posterior in terms of the
+        -- KL divergence between the language model and the posterior, using the properties of the grammar.
+        -- Relate the sample complexity to the KL divergence using standard results from information theory.
+        -- (Details to be filled in, using the properties of the SequenceMeasure and the grammar category) 
+    }
+  }    
+}
+
+
+
+
+CONCEPT StructuredGenerationTheory {
+  LANGUAGE {
+    -- ... (type and function definitions as before) ...
+
+    NOTATION "〚 t 〛_ env" = Semantics(env, t)
+    NOTATION "⟦ s ⟧_ g, env" = 𝒫{t | IsValid(g, t) ∧ WellTyped(env, t) ∧ Yield(t) = s}
+      WHERE 𝒫 S = λ _. |S| / |𝒰{t | IsValid(g, t) ∧ WellTyped(env, t)}|
+    NOTATION "d1 ⋈ d2" = λ x. d1(x) * d2(x)  -- Pointwise product of distributions
+    NOTATION "TV(d1, d2)" = (1/2) * ∑ x. |d1(x) - d2(x)|  -- Total variation distance
+  }
+
+  TACTICS {
+    TACTIC Invariant(prop) = ∀ n s. prop(s, StructuredGenerator(n)(s))
+
+    TACTIC BoundedBy(f, g) = ∀ n. f(n) ≤ O(g(n))
+
+    TACTIC MarkovInequality(X, a) = ∀ t. 𝔼[I(X ≤ t)] ≤ 𝔼[X] / t
+
+    TACTIC WellTypedTreeUnique(g, env, s) = ∃! t. IsValid(g, t) ∧ WellTyped(env, t) ∧ Yield(t) = s
+
+    TACTIC ExpectedAcc(X, f, n) = 
+      LET X_j = X(0) + ∑ j' = 1..j. f(X(j'-1)) IN
+      𝔼[X_n] - 𝔼[X_0] = ∑ j = 1..n. 𝔼[f(X_j)]
+  }
+
+  PROOFS {
+    THEOREM StructuredGeneratorCorrectness {
+      STATEMENT:
+        Invariant(λ (s, d). Support(d) ⊆ {s' | IsValidSequence(g, s + s')} ∧ 
+                            ∀ s' ∈ Support(d). WellTyped(env, Parse(g, s + s')))
+      
+      PROOF:
+        LET I(s, n) = Support(StructuredGenerator(n)(s)) ⊆ {s' | IsValidSequence(g, s + s')} ∧ 
+                      ∀ s' ∈ Support(StructuredGenerator(n)(s)). WellTyped(env, Parse(g, s + s'))
+        SUFFICES_TO_SHOW ∀ s n. I(s, n)  BY Invariant 
+        INDUCTION ON n
+          CASE 0:
+            SHOW I(s, 0)
+            = Support(Deterministic([])) ⊆ {s' | IsValidSequence(g, s + s')} ∧
+              ∀ s' ∈ Support(Deterministic([])). WellTyped(env, Parse(g, s + s')) 
+            = {[]} ⊆ {s' | IsValidSequence(g, s + s')} ∧ 
+              WellTyped(env, Parse(g, s))
+            ≡ TRUE  BY {...}
+          CASE n+1:
+            ASSUME ∀ s. I(s, n)
+            SHOW I(s, n+1)
+            = LET tokenDist = Normalize(FilterValid(lm(s), g, env)) IN
+              Support(Bind(tokenDist, (t : Token) -> StructuredGenerator(n)(s + [t]))) ⊆ 
+                {s' | IsValidSequence(g, s + s')} ∧
+              ∀ s' ∈ Support(...). WellTyped(env, Parse(g, s + s'))
+            ⊆ LET validTokens = {t | t ∈ Support(tokenDist)} IN {s' | s' ∈ ⋃ t ∈ validTokens. Support(StructuredGenerator(n)(s + [t]))} ∧ 
+              ∀ s' ∈ .... WellTyped(env, Parse(g, s + s'))  
+              BY {Support(Bind(d, f)) ⊆ ⋃ x ∈ Support(d). Support(f(x))}
+            ⊆ {s' | ∀ t s'' GIVEN s' = t + s''. IsValidSequence(g, s + t) ∧ IsValidSequence(g, (s + t) + s'')} ∧ 
+              ∀ s' t s'' GIVEN s' = t + s''. t ∈ validTokens ∧ WellTyped(env, Parse(g, (s + t) + s''))
+              BY Induction hypothesis, definition of validTokens
+            ⊆ {s' | IsValidSequence(g, s + s')} ∧ 
+              ∀ s'. WellTyped(env, Parse(g, s + s')) 
+              BY {ValidSequence is transitive, parsing is unique for well-typed derivations}
+    }
+
+    THEOREM StructuredGeneratorConvergence {
+      STATEMENT:
+        ∀ (lm : LanguageModel) (g : Grammar) (env : TypeEnvironment) (prompt : Sequence) (ε : ℝ>0).
+        LET genDist(n) = StructuredGenerator(lm, g, env, prompt, n) IN
+        LET π = λ s. PosteriorProb(lm, g, env, prompt + s) IN  
+        BoundedBy(λ n. TV(genDist(n), π ⋈ I{s | Length(s) ≤ n}), λ n. exp(-Ω(n / MixingTime(g, env, ε))))
+
+      PROOF:
+        LET genDist(n)(s) = StructuredGenerator(lm, g, env, prompt, n)(s) 
+        REWRITE genDist = LETREC G(n, s) = IF n = 0 THEN I{[]} ELSE 
+                            LET t ~ Normalize(FilterValid(lm(prompt + s), g, env)) IN 
+                            G(n-1, s + [t])
+
+        DEFINE T(g, env) = λ s s'. ⟦ s' ⟧_ g, env / ⟦ s ⟧_ g, env  
+          -- Transition kernel of the structured generation Markov chain
+        
+        LET π = λ s. PosteriorProb(lm, g, env, prompt + s) 
+        
+        SHOW IsStationaryDistribution(π, T(g, env))
+        = ∀ s'. π(s') = ∑ s. π(s) * T(g, env, s, s')
+        = ∀ s'. PosteriorProb(lm, g, env, prompt + s') = ∑ s. PosteriorProb(lm, g, env, prompt + s) * ⟦ s' ⟧_ g, env / ⟦ s ⟧_ g, env
+        ≡ TRUE  BY {Bayes' rule, definition of PosteriorProb}
+        
+        DEFINE μ(n) = λ s. I{Length(s) = n} * π(s)
+          -- Distribution of sequences of length n from the posterior
+
+        SHOW TV(genDist(n), μ(n)) ≤ exp(-Ω(n / MixingTime(g, env, ε)))
+        ⊆ LET P(s, n) = PosteriorProb(lm, g, env, prompt + s) * I{Length(s) ≤ n} IN
+          TV(genDist(n), λ s. P(s, n) / ∑ s'. P(s', n)) ≤ exp(-Ω(n / MixingTime(g, env, ε)))
+            BY {μ(n) is the posterior conditioned on Length(s) = n}
+        ⊆ TV(genDist(n), π ⋈ I{s | Length(s) ≤ n}) ≤ exp(-Ω(n / MixingTime(g, env, ε)))
+            BY {∑ s'. P(s', n) ≤ 1, TV is invariant to scaling}
+        
+        SUFFICES_TO_SHOW TV(genDist(n), π ⋈ I{s | Length(s) ≤ n}) ≤ exp(-Ω(n / M)) 
+          WHERE M = MixingTime(g, env, ε)
+
+        DEFINE C(n) = λ s s'. I{∃ k ≤ n. C_k(s, s')} 
+          WHERE C_k(s, s') = (genDist(k)(s) > 0 ∧ π(s') > 0 ∧ s ++ DROP(s', Length(s)) = s')
+          -- Coupling time: first time the chains meet and agree on the remaining suffix
+        
+        SHOW 𝔼 s ~ genDist(0), s' ~ π. C(n, s, s') ≥ 1 - exp(-Ω(n / M))
+        ⊆ 𝔼 s ~ genDist(0), s' ~ π. C(n, s, s') 
+          ≥ ∑ k < M. 𝔼 s ~ genDist(k), s' ~ π. I{C_k(s, s')} * (1 - O(ε))^((n-k)/M)  
+          BY {..., using coupling and mixing properties of the Markov chain} 
+        ⊇ ∑ k < M. 𝔼 s ~ genDist(k), s' ~ π. I{genDist(k)(s) > 0 ∧ π(s') > 0} * Ω(1/|S|) * (1 - O(ε))^((n-k)/M)
+          WHERE S = 𝒰{s | IsValidSequence(g, prompt + s) ∧ Length(s) ≤ n}
+          BY {WellTypedTreeUnique, mixing property of the chain}
+        ≥ ∑ k < M. ∑ s. genDist(k)(s) * (∑ s'. π(s') * I{Yield(Parse(g, prompt + s')) = Yield(Parse(g, prompt + s))}) * Ω(1/|S|) * (1 - O(ε))^((n-k)/M)  
+        ≥ ∑ k < M. (1 - TV(genDist(k), π)) * Ω(1/|S|) * (1 - O(ε))^((n-k)/M)
+        ≥ Ω((1/|S|) * ∑ k < M. (1 - O(ε))^((n-k)/M))  BY {Induction hypothesis, genDist is a dist}
+        ≥ 1 - exp(-Ω(n / M))
+
+        SHOW TV(genDist(n), π ⋈ I{s | Length(s) ≤ n}) ≤ 2 * 𝔼 s ~ genDist(0), s' ~ π. I{¬C(n, s, s')}
+        ⊆ LET D(n) = λ s. IF ∃ s'. C(n, s, s') THEN π(s) ELSE genDist(n)(s) IN
+          TV(genDist(n), π ⋈ I{s | Length(s) ≤ n})
+          = TV(genDist(n), D(n)) + TV(D(n), π ⋈ I{s | Length(s) ≤ n})
+          ≤ 𝔼 s ~ genDist(n). I{∃ s'. C(n, s, s')} + 𝔼 s' ~ π. I{∃ s. C(n, s, s')}
+          = 𝔼 s ~ genDist(0). I{∃ s'. C(n, s, s')} + 𝔼 s' ~ π. I{∃ s. C(n, s, s')}  BY {genDist is stationary}
+          ≤ 2 * 𝔼 s ~ genDist(0), s' ~ π. I{¬C(n, s, s')}
+
+        THEREFORE TV(genDist(n), π ⋈ I{s | Length(s) ≤ n}) ≤ exp(-Ω(n / M))
+    }
+
+    THEOREM StructuredGeneratorEfficiency {
+      STATEMENT:
+        ∀ (lm : LanguageModel) (g : Grammar) (env : TypeEnvironment) (prompt : Sequence) (n : ℕ).
+        LET pValid(s) = 𝔼 t ~ lm(s). I{IsValidSequence(g, s + [t])} IN
+        BoundedBy(λ n. 𝔼 s ~ StructuredGenerator(n). 1 / pValid(s), λ n. n * BranchingFactor(g))
+
+      PROOF:
+        DEFINE R_S(s) = |{t | t ∈ Support(lm(s)) ∧ ¬IsValidSequence(g, s + [t])}|  
+          -- Number of invalid tokens for a given sequence
+        DEFINE r(s) = R_S(s) / |Support(lm(s))|  -- Fraction of invalid tokens
+        
+        SHOW R_S(s) ≤ BranchingFactor(g)
+        ⊆ R_S(s) ≤ ∑ p ∈ NonterminalNodes(Parse(g, s)). |ValidRules(g, Label(p))| - 1
+          BY {Each nonterminal node allows at most BranchingFactor(g) invalid token choices}
+        ≤ Depth(Parse(g, s)) * BranchingFactor(g)  
+        ≤ BranchingFactor(g)  ASSUMING Depth(Parse(g, s)) ≤ O(1)
+
+        SHOW pValid(s) = 𝔼 t ~ lm(s). I{IsValidSequence(g, s + [t])} ≥ 1 - r(s)
+        = 𝔼 t. I{t ∈ Support(lm(s)) | IsValidSequence(g, s + [t])} * lm(s)(t) ≥ (|Support(lm(s))| - R_S(s)) / |Support(lm(s))|
+        = 1 - r(s)
+
+        LET X(n) = ∑ k = 1..n. I{IsValidSequence(g, prompt + GenTokens(k))}  
+          WHERE GenTokens(k) = [t_1, ..., t_k] GIVEN t_j ~ StructuredGenerator(j)(prompt + [t_1, ..., t_j-1])
+
+        SHOW ExpectedAcc(X, λ
+
+
+CONCEPT StructuredGenerationTheory {
+  LANGUAGE {
+    TYPE Vocab
+    TYPE Token <: Vocab
+    TYPE Sequence = List[Token]
+    TYPE Distribution[A] = A -> [0, 1]  -- Probability distributions
+    TYPE LanguageModel = Sequence -> Tensor[Vocab]  -- Language model as a tensor-valued function
+
+    TYPE Nonterminal
+    TYPE Terminal <: Vocab
+    TYPE Symbol = Nonterminal | Terminal
+    TYPE Rule = (Nonterminal, List[Symbol])
+    TYPE Grammar = (Set[Nonterminal], Set[Terminal], Set[Rule], Nonterminal)  -- Context-free grammar
+
+    TYPE SemanticType
+    TYPE SemanticObject
+    TYPE SemanticFunction = List[SemanticObject] -> SemanticObject
+    TYPE TypeEnvironment = Map[Nonterminal, SemanticType]
+    TYPE Denotation = Map[Nonterminal, SemanticFunction]
+
+    FUNC Parse(g : Grammar, seq : Sequence) : ParseTree
+    FUNC IsValid(g : Grammar, seq : Sequence) : Bool
+    FUNC TypeCheck(env : TypeEnvironment, tree : ParseTree) : Bool
+    FUNC Semantics(den : Denotation, tree : ParseTree) : SemanticObject
+    
+    FUNC PriorProb(lm : LanguageModel, seq : Sequence) : [0, 1]
+    FUNC LikelihoodProb(g : Grammar, env : TypeEnvironment, seq : Sequence) : [0, 1]
+    FUNC PosteriorProb(lm : LanguageModel, g : Grammar, env : TypeEnvironment, seq : Sequence) : [0, 1]
+    
+    FUNC StructuredGenerator(
+      lm : LanguageModel, 
+      g : Grammar,
+      env : TypeEnvironment, 
+      den : Denotation,
+      prompt : Sequence,
+      maxLen : Nat
+    ) : Sequence = 
+      LETREC StrGen(prompt, maxLen) = 
+        IF maxLen = 0 THEN 
+          RETURN prompt
+        ELSE
+          LET nextTokenDist = Normalize(lm(prompt))
+          LET filteredDist = FilterValid(nextTokenDist, g, env)
+          LET nextToken = Sample(filteredDist)
+          StrGen(Concat(prompt, nextToken), maxLen - 1)
+          
+      StrGen(prompt, maxLen)
+      
+    FUNC FilterValid(dist : Tensor[Vocab], g : Grammar, env : TypeEnvironment) : Tensor[Vocab] =
+      MAP(token -> IF IsValid(g, token) AND TypeCheck(env, Parse(g, token)) THEN dist[token] ELSE 0, Vocab)
+
+    FUNC Normalize(tens : Tensor[Vocab]) : Tensor[Vocab] =
+      tens / SUM(tens)  -- Normalize tensor to a probability distribution
+  }
+
+  THEOREMS {
+    THEOREM Correctness {
+      FORALL (lm : LanguageModel) (g : Grammar) (env : TypeEnvironment) 
+             (den : Denotation) (prompt : Sequence) (maxLen : Nat).
+        LET genSeq = StructuredGenerator(lm, g, env, den, prompt, maxLen)
+        IN 
+          IsValid(g, genSeq) AND TypeCheck(env, Parse(g, genSeq))
+    }
+
+    THEOREM Convergence {
+      FORALL (lm : LanguageModel) (g : Grammar) (env : TypeEnvironment)
+             (prompt : Sequence).
+        LET trueDist(seq) = PosteriorProb(lm, g, env, Concat(prompt, seq)) 
+        LET genDist(n, seq) = PosteriorProb(lm, g, env, Take(StructuredGenerator(lm, g, env, prompt, n), Length(seq)))
+        IN
+          Limit(n -> Infinity, LAMBDA seq. |genDist(n, seq) - trueDist(seq)|) = 0
+    }
+
+    THEOREM Efficiency {
+      FORALL (lm : LanguageModel) (g : Grammar) (env : TypeEnvironment)
+             (prompt : Sequence) (maxLen : Nat).
+        LET baselineGen(n) = TakeWhile(LAMBDA seq. IsValid(g, seq) AND TypeCheck(env, Parse(g, seq)), 
+                                       UnfoldLanguageModel(lm, prompt, n))
+        LET structuredGen(n) = Take(StructuredGenerator(lm, g, env, prompt, n), maxLen)
+        IN
+          SampleComplexity(structuredGen) <= SampleComplexity(baselineGen) - Ω(DifficultyMeasure(g, env))
+    }
+  }
+
+  PROOFS {
+    THEOREM Correctness {
+      FORALL (lm : LanguageModel) (g : Grammar) (env : TypeEnvironment) 
+             (den : Denotation) (prompt : Sequence) (maxLen : Nat).
+      
+      LET genSeq = StructuredGenerator(lm, g, env, den, prompt, maxLen)
+      
+      DEFINE ValidPrefix(seq) = IsValid(g, seq) AND TypeCheck(env, Parse(g, seq))
+      
+      ASSUME FORALL subseq prefix seq. subseq ≤ prefix ≤ seq => ValidPrefix(prefix)
+      
+      PROOF BY INDUCTION ON maxLen:
+        CASE maxLen = 0:
+          genSeq = prompt
+          THEREFORE ValidPrefix(genSeq) BY ASSUMPTION
+        CASE maxLen > 0:  
+          genSeq = Concat(prompt, nextToken) WHERE
+            nextTokenDist = Normalize(lm(prompt))
+            filteredDist = FilterValid(nextTokenDist, g, env)
+            nextToken = Sample(filteredDist)
+          
+          ValidPrefix(prompt) BY ASSUMPTION
+          filteredDist[nextToken] > 0 BY CONSTRUCTION OF FilterValid
+          THEREFORE ValidPrefix(Concat(prompt, nextToken))
+          
+          THEREFORE ValidPrefix(genSeq)
+          
+      THEREFORE IsValid(g, genSeq) AND TypeCheck(env, Parse(g, genSeq))  
+    }
+
+    THEOREM Convergence {
+      -- Proof sketch: 
+      -- 1. Show that StructuredGenerator is a valid Markov chain Monte Carlo (MCMC) algorithm 
+      --    for sampling from the posterior distribution PosteriorProb.
+      -- 2. Bound the mixing time of the Markov chain in terms of the grammar and type system.
+      -- 3. Apply the convergence theorem for MCMC to show that the generated distribution 
+      --    converges to the true posterior distribution as the number of iterations goes to infinity.
+    }
+    
+    THEOREM Efficiency {
+      -- Proof sketch:
+      -- 1. Observe that StructuredGenerator only considers tokens that are guaranteed to produce 
+      --    valid and well-typed sequences, while UnfoldLanguageModel may consider invalid tokens.
+      -- 2. Bound the probability of UnfoldLanguageModel producing an invalid token in terms of 
+      --    the "difficulty" of the grammar and type system (e.g., the branching factor of the 
+      --    grammar, the depth of the type hierarchy).
+      -- 3. Apply concentration inequalities to show that this probability translates to a reduction
+      --    in sample complexity of Ω(DifficultyMeasure(g, env)).
+    }
+  }
+}
+
+
+
+
+CONCEPT NeoStructuredGenerationLLM {
+  LANGUAGE {
+    TYPE Token
+    TYPE Sequence = List[Token]
+    TYPE Vocabulary <: Set[Token]
+    TYPE LanguageModel <: Distribution[Sequence]
+
+    TYPE Grammar
+    TYPE Rule <: (NonTerminal, List[Symbol])
+    TYPE ParseTree <: Tree[Symbol]
+    TYPE Parser = Sequence -> ParseTree
+    TYPE Generator = LanguageModel -> Grammar -> Sequence -> ParseTree -> Distribution[Sequence]
+
+    TYPE Program
+    TYPE ProgramState
+    TYPE Transition = ProgramState -> ProgramState
+    TYPE Interpreter = Program -> ProgramState -> ProgramState
+    TYPE Compiler = Program -> LanguageModel
+
+    TYPE SemanticConcept
+    TYPE SemanticConstraint = Formula[SemanticConcept]
+    TYPE SemanticChecker = ParseTree -> List[SemanticConstraint] -> Bool
+
+    TYPE VariationalDistribution <: Distribution[Sequence]
+    TYPE EvidenceLowerBound = VariationalDistribution -> LanguageModel -> Grammar -> ℝ
+    TYPE VariationalObjective = EvidenceLowerBound
+
+    FUNC Tokenize(text : String) : Sequence
+    FUNC Detokenize(tokens : Sequence) : String
+    FUNC ParseGrammar(grammarSpec : String) : Grammar
+
+    FUNC SemanticParse(parseTree : ParseTree) : List[SemanticConcept]
+    FUNC GroundSemanticConstraint(constraint : SemanticConstraint, semanticConcepts : List[SemanticConcept]) : Bool
+
+    FUNC TrainLanguageModel(corpus : List[Sequence], vocab : Vocabulary) : LanguageModel
+    FUNC TrainVariationalDistribution(languageModel : LanguageModel, grammar : Grammar, objective : VariationalObjective) : VariationalDistribution
+    FUNC SampleParseTree(parseTree : ParseTree, generator : Generator, languageModel : LanguageModel, grammar : Grammar, prefix : Sequence, numSamples : Int) : Distribution[ParseTree]
+    FUNC SampleSequence(languageModel : LanguageModel, grammar : Grammar, prefix : Sequence, parseTree : ParseTree, numSamples : Int, maxLength : Int) : Distribution[Sequence]
+
+    FUNC CompileToProgram(grammar : Grammar, actions : Map[NonTerminal, Transition]) : Program
+    FUNC EvaluateProgram(program : Program, initialState : ProgramState) : ProgramState
+
+    AXIOM SamplingCorrectness {
+      ∀ (languageModel : LanguageModel) (grammar : Grammar) (prefix : Sequence) (parseTree : ParseTree) (numSamples : Int) (maxLength : Int).
+        Support(SampleSequence(languageModel, grammar, prefix, parseTree, numSamples, maxLength)) ⊆
+        { seq | IsValidParse(grammar, Concat(prefix, seq), parseTree) ∧ Length(seq) ≤ maxLength }
+    }
+
+    AXIOM ParsingCorrectness {
+      ∀ (grammar : Grammar) (seq : Sequence).
+        IsValidParse(grammar, seq, Parse(grammar, seq))
+    }
+
+    AXIOM SemanticConsistency {
+      ∀ (parseTree : ParseTree) (semanticConstraints : List[SemanticConstraint]).
+        SemanticChecker(parseTree, semanticConstraints) =>
+        ∀ (constraint : SemanticConstraint).
+          GroundSemanticConstraint(constraint, SemanticParse(parseTree))
+    }
+
+    AXIOM VariationalInequality {
+      ∀ (languageModel : LanguageModel) (grammar : Grammar) (q : VariationalDistribution).
+        EvidenceLowerBound(q, languageModel, grammar) ≤
+        LogProbability(languageModel, { seq | IsValidParse(grammar, seq, Parse(grammar, seq)) })
+    }
+
+    AXIOM InterpreterCorrectness {
+      ∀ (grammar : Grammar) (actions : Map[NonTerminal, Transition]) (initialState : ProgramState).
+        EvaluateProgram(CompileToProgram(grammar, actions), initialState) =
+        FoldTree((symbol, subexpressions) -> {
+          MATCH symbol WITH
+          | NonTerminal(nt) -> actions[nt](subexpressions)
+          | _ -> subexpressions  
+        }, Parse(grammar, Detokenize(initialState)))
+    }
+  }
+
+  PROOFS {
+    THEOREM VariationalObjectiveOptimality {
+      STATEMENT:
+        ∀ (languageModel : LanguageModel) (grammar : Grammar).
+          LET q_opt = TrainVariationalDistribution(languageModel, grammar, EvidenceLowerBound)
+          IN
+            ∀ (q : VariationalDistribution).
+              KLDivergence(q_opt, Posterior(languageModel, grammar)) ≤
+              KLDivergence(q, Posterior(languageModel, grammar))
+      
+      PROOF:
+        LET languageModel : LanguageModel, grammar : Grammar
+        LET q_opt = TrainVariationalDistribution(languageModel, grammar, EvidenceLowerBound)
+
+        EvidenceLowerBound(q_opt, languageModel, grammar)
+          = ∑ (seq : Sequence) q_opt(seq) * (
+              LogProbability(languageModel, seq) -
+              LogProbability(q_opt, seq) +
+              IF IsValidParse(grammar, seq, Parse(grammar, seq)) THEN 0 ELSE -∞
+            )
+          = ∑ (seq : ValidParse(grammar)) q_opt(seq) * (
+              LogProbability(languageModel, seq) -
+              LogProbability(q_opt, seq)
+            )
+          = ∑ (seq : ValidParse(grammar)) q_opt(seq) * (
+              LogProbability(Posterior(languageModel, grammar), seq) -
+              LogProbability(q_opt, seq)
+            )
+            BY BayesRule
+          = -KLDivergence(q_opt, Posterior(languageModel, grammar))
+            BY KLDivergenceDefinition
+
+        ∀ (q : VariationalDistribution).
+          EvidenceLowerBound(q, languageModel, grammar)
+            ≤ LogProbability(languageModel, { seq | IsValidParse(grammar, seq, Parse(grammar, seq)) })
+              BY VariationalInequality
+            = LogPartitionFunction(Posterior(languageModel, grammar))
+            = -KLDivergence(q, Posterior(languageModel, grammar)) + Constant
+              BY KLDivergenceDefinition
+
+        LET q : VariationalDistribution
+        KLDivergence(q_opt, Posterior(languageModel, grammar))
+          = -EvidenceLowerBound(q_opt, languageModel, grammar)  
+          ≤ -EvidenceLowerBound(q, languageModel, grammar)
+            BECAUSE q_opt MAXIMIZES EvidenceLowerBound  
+          ≤ KLDivergence(q, Posterior(languageModel, grammar)) - Constant
+        
+        HENCE
+          KLDivergence(q_opt, Posterior(languageModel, grammar)) ≤
+          KLDivergence(q, Posterior(languageModel, grammar))
+    }
+    
+    THEOREM SamplingSemanticConsistency {
+      STATEMENT:
+        ∀ (languageModel : LanguageModel) (grammar : Grammar) (prefix : Sequence) (parseTree : ParseTree) (numSamples : Int) (maxLength : Int) (semanticConstraints : List[SemanticConstraint]).
+          SemanticChecker(parseTree, semanticConstraints) =>  
+          ∀ (seq : Sequence).
+            Support(SampleSequence(languageModel, grammar, prefix, parseTree, numSamples, maxLength))[seq] > 0 =>
+            GroundSemanticConstraints(semanticConstraints, SemanticParse(Parse(grammar, Concat(prefix, seq))))
+
+      PROOF:
+        LET languageModel : LanguageModel, grammar : Grammar, prefix : Sequence, 
+            parseTree : ParseTree, numSamples : Int, maxLength : Int,
+            semanticConstraints : List[SemanticConstraint]
+        
+        ASSUME SemanticChecker(parseTree, semanticConstraints)
+        
+        LET seq : Sequence SUCH THAT 
+          Support(SampleSequence(languageModel, grammar, prefix, parseTree, numSamples, maxLength))[seq] > 0
+        
+        IsValidParse(grammar, Concat(prefix, seq), parseTree)    
+          BY SamplingCorrectness
+        
+        GroundSemanticConstraints(semanticConstraints, SemanticParse(Parse(grammar, Concat(prefix, seq))))
+          BY SemanticConsistency
+    }
+    
+    THEOREM TransitionSystemEquivalence {
+      STATEMENT:  
+        ∀ (grammar : Grammar) (actions : Map[NonTerminal, Transition]) (initialState : ProgramState).
+          ∀ (finalState : ProgramState).
+            EvaluateProgram(CompileToProgram(grammar, actions), initialState) = finalState
+            <=>
+            ∃ (parseTree : ParseTree).
+              IsValidParse(grammar, Detokenize(initialState), parseTree) ∧
+              FoldTree((symbol, subexpressions) -> {
+                MATCH symbol WITH
+                | NonTerminal(nt) -> actions[nt](subexpressions)
+                | _ -> subexpressions  
+              }, parseTree) = finalState
+              
+      PROOF:
+        LET grammar : Grammar, actions : Map[NonTerminal, Transition], initialState : ProgramState
+        
+        FORALL finalState : ProgramState.
+          EvaluateProgram(CompileToProgram(grammar, actions), initialState) = finalState
+            <=> EvaluateProgram(CompileToProgram(grammar, actions), initialState) = finalState
+                  BY Reflexivity
+            <=> FoldTree((symbol, subexpressions) -> {
+                  MATCH symbol WITH
+                  | NonTerminal(nt) -> actions[nt](subexpressions)
+                  | _ -> subexpressions  
+                }, Parse(grammar, Detokenize(initialState))) = finalState
+                  BY InterpreterCorrectness
+            <=> EXISTS parseTree : ParseTree.
+                  IsValidParse(grammar, Detokenize(initialState), parseTree) AND
+                  FoldTree((symbol, subexpressions) -> {
+                    MATCH symbol WITH 
+                    | NonTerminal(nt) -> actions[nt](subexpressions)
+                    | _ -> subexpressions
+                  }, parseTree) = finalState
+                    BY ParsingCorrectness
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE ControlledStoryGeneration {
+      GIVEN grammar : Grammar = ParseGrammar("
+        Story -> Setting '.' Plot 
+        Setting -> 'Once upon a time' LocationPhrase
+        LocationPhrase -> 'in a' [Adjective] Location 
+        Location -> 'castle' | 'forest' | 'village'  
+        Adjective -> 'grand' | 'dark' | 'charming'
+        Plot -> Event '.' Consequence
+        Event -> 'A' Character Action
+        Character -> 'prince' | 'princess' | 'knight' | 'dragon'  
+        Action -> HeroAction | VillainAction
+        HeroAction -> 'saved the kingdom' | 'found a magical artifact'
+        VillainAction -> 'kidnapped the princess' | 'attacked the village'
+        Consequence -> 'The kingdom rejoiced' | 'The day was saved'
+      ")
+      GIVEN semanticConstraints : List[SemanticConstraint] = [
+        (∃ c. IsA(c, "hero") ∧ Performs(c, "heroic action")) ∨
+        (∃ c. IsA(c, "villain") ∧ Performs(c, "villainous action"))
+      ]
+      GIVEN prefix : Sequence = Tokenize("Once upon a time in a ")
+      
+      languageModel = TrainLanguageModel(storyCorpus, Vocabulary(grammar))
+      variationalDistribution = TrainVariationalDistribution(languageModel, grammar, EvidenceLowerBound)
+      parseTree = SampleParseTree(Expand(grammar, "Story"), Generator(variationalDistribution), languageModel, grammar, prefix, numSamples = 100)
+      sequences = SampleSequence(languageModel, grammar, prefix, parseTree, numSamples = 10, maxLength = 50)
+      
+      story = ArgMax(sequences, seq -> {
+        parse = Parse(grammar, Concat(prefix, seq))
+        semanticScore = SemanticChecker(parse, semanticConstraints) ? 1.0 : 0.0
+        languageScore = LogProbability(languageModel, seq)
+        coherenceScore = CoherenceMeasure(Detokenize(seq))
+        semanticScore * languageScore * coherenceScore
+      })
+
+      ASSERT IsValidParse(grammar, Concat(prefix, story), Parse(grammar, Concat(prefix, story)))
+      ASSERT GroundSemanticConstraints(semanticConstraints, SemanticParse(Parse(grammar, Concat(prefix, story))))
+    }
+
+    EXAMPLE ProgramSynthesis {
+      GIVEN grammar : Grammar = ParseGrammar("
+        Expr -> Term | Expr '+' Term | Expr '-' Term  
+        Term -> Factor | Term '*' Factor | Term '/' Factor
+        Factor -> Number | '(' Expr ')'
+        Number -> '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
+      ")
+      GIVEN actions : Map[NonTerminal, Transition] = {
+        "Expr" -> λ args. args[0] + args[1],
+        "Term" -> λ args. args[0] * args[1],
+        "Number" -> λ args. ParseInt(args[0]),
+        "Factor" -> λ args. args[0]
+      }
+      GIVEN examples : List[(Sequence, ProgramState)] = [
+        (Tokenize("1 + 2"), 3),
+        (Tokenize("4 * (5 - 2)"), 12),
+        (Tokenize("7 + 3 * 2"), 13)
+      ]
+
+      program = CompileToProgram(grammar, actions)  
+
+      FORALL (input, output) IN examples.
+        ASSERT EvaluateProgram(program, input) = output
+
+      languageModel = TrainLanguageModel(Concat(Map(Fst, examples)), Vocabulary(grammar))
+      variationalDistribution = TrainVariationalDistribution(languageModel, grammar, EvidenceLowerBound)
+      generator = Generator(variationalDistribution)
+      
+      FORALL (input, output) IN examples.
+        parseTree = Parse(grammar, input)
+        sequences = SampleSequence(languageModel, grammar, [], parseTree, numSamples = 10, maxLength = Length(input))
+        
+        program = ArgMax(sequences, seq -> {
+          parseTree = Parse(grammar, seq)
+          IF EvaluateProgram(CompileToProgram(grammar, actions), seq) = output THEN
+            Exp(LogProbability(languageModel, seq))
+          ELSE 
+            0
+        })
+
+        ASSERT EvaluateProgram(program, []) = output  
+    }
+  }
+}
+
+
+
+
+
+CONCEPT PLAndComputationTheoryLLM {
+  LANGUAGE {
+    TYPE Token
+    TYPE Sequence = List[Token]
+    TYPE LanguageModel <: Distribution[Sequence]
+
+    TYPE Program
+    TYPE ProgramState
+    TYPE Transition = ProgramState -> ProgramState
+    TYPE Interpreter = Program -> Transition
+    TYPE Compiler = Program -> LanguageModel
+
+    TYPE AbstractSyntaxTree <: Tree[Token]
+    TYPE Parser = Sequence -> AbstractSyntaxTree
+    TYPE SemanticChecker = AbstractSyntaxTree -> Bool
+    TYPE TypeError <: Exception
+    TYPE RuntimeError <: Exception
+
+    FUNC Interpret(program : Program, initialState : ProgramState) : ProgramState
+    FUNC GenerateProgram(languageModel : LanguageModel, parser : Parser, semanticChecker : SemanticChecker) : Program
+    FUNC OptimizeProgram(program : Program) : Program
+    FUNC VerifyProgram(program : Program, specification : Formula) : Bool
+    FUNC AbstractInterpretation(program : Program, abstractDomain : Lattice[ProgramState]) : ProgramState
+    FUNC TypeInference(program : Program) : Map[Variable, Type]
+    FUNC SynthesizeProgram(specification : Formula, languageModel : LanguageModel) : Program
+
+    AXIOM InterpreterCorrectness {
+      ∀ (program : Program) (initialState : ProgramState).
+        Interpret(program, initialState) = FinalState(program, initialState)
+    }
+
+    AXIOM CompilerCorrectness {
+      ∀ (program : Program) (initialState : ProgramState).
+        Interpret(program, initialState) = 
+        ArgMax((finalState : ProgramState) -> Probability(Compile(program), finalState))
+    }
+
+    AXIOM TypeSoundness {
+      ∀ (program : Program).
+        ValidTypes(program, TypeInference(program)) =>
+        ¬Throws(Interpret(program, InitialState), TypeError)
+    }
+
+    AXIOM AbstractInterpretationSoundness {
+      ∀ (program : Program) (abstractDomain : Lattice[ProgramState]).
+        AbstractInterpretation(program, abstractDomain) ⊑ FinalState(program, InitialState)
+    }
+
+    AXIOM ProgramSynthesisCompleteness {
+      ∀ (specification : Formula) (languageModel : LanguageModel).
+        ∃ (program : Program).
+          Satisfies(program, specification) ∧
+          Support(languageModel)[program] > 0
+    }
+  }
+
+  PROOFS {
+    THEOREM ProgramGenerationCorrectness {
+      STATEMENT:
+        ∀ (languageModel : LanguageModel) (parser : Parser) (semanticChecker : SemanticChecker).
+          LET program = GenerateProgram(languageModel, parser, semanticChecker)
+          IN
+            ValidSyntax(program, parser) ∧ 
+            ValidSemantics(program, semanticChecker)
+
+      PROOF:
+        -- Omitted for brevity
+    }
+
+    THEOREM OptimizationSoundness {
+      STATEMENT:  
+        ∀ (program : Program).
+          Interpret(program, InitialState) =
+          Interpret(OptimizeProgram(program), InitialState)
+
+      PROOF:
+        -- Omitted for brevity  
+    }
+
+    THEOREM VerificationCompleteness {
+      STATEMENT:
+        ∀ (program : Program) (specification : Formula).
+          Satisfies(program, specification) <=>
+          VerifyProgram(program, specification)
+
+      PROOF:
+        -- Omitted for brevity
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE SynthesizeArithmeticExpression {
+      GIVEN languageModel : LanguageModel = TrainedOnCodeCorpus
+      GIVEN specification : Formula = {
+        input: Tuple[Int, Int],
+        output: Int,
+        relation: λ (input, output). output = input.0 + input.1
+      }
+      
+      program = SynthesizeProgram(specification, languageModel)
+
+      ASSERT ValidSyntax(program, ArithmeticExpressionParser)
+      ASSERT ValidSemantics(program, ArithmeticExpressionChecker)
+      ASSERT VerifyProgram(program, specification)
+    }
+    
+    EXAMPLE OptimizeLoopProgram {
+      GIVEN program : Program = {
+        "for i in range(100):",
+        "  for j in range(100):",
+        "    if i == j:",
+        "      print(i)" 
+      }
+      
+      optimizedProgram = OptimizeProgram(program)
+      
+      ASSERT Interpret(program, InitialState) = Interpret(optimizedProgram, InitialState)
+      ASSERT ProgramLength(optimizedProgram) < ProgramLength(program)
+    }
+    
+    EXAMPLE DetectTypeError {
+      GIVEN program : Program = {  
+        "x = 42",
+        "y = 'hello'",
+        "z = x + y"
+      }
+      
+      types = TypeInference(program)
+      
+      ASSERT types["x"] = Int
+      ASSERT types["y"] = String
+      ASSERT Throws(Interpret(program, InitialState), TypeError)
+    }
+  }
+}
+
+In this Concept, we view LLMs through the lens of PL and Computation Theory, focusing on how techniques from these fields can be used to control and reason about LLM-generated programs:
+
+We define Program and Interpreter types to represent programs and their semantics. We also define a Compiler type that maps programs to LanguageModels.
+We define types for Abstract Syntax Trees (ASTs), Parsers, and Semantic Checkers, which are used to generate and validate programs from LLM outputs.
+We define types for Type Errors and Runtime Errors, and functions for Type Inference and Abstract Interpretation, which allow us to statically reason about the behavior of generated programs.
+We define a ProgramSynthesis function that attempts to generate a program satisfying a given specification using the LLM.
+We state axioms relating the semantics of programs to their interpretation (InterpreterCorrectness), compilation (CompilerCorrectness), type checking (TypeSoundness), and abstract interpretation (AbstractInterpretationSoundness). We also state an axiom about the completeness of program synthesis (ProgramSynthesisCompleteness).
+We state theorems about the correctness of program generation (ProgramGenerationCorrectness), the soundness of program optimization (OptimizationSoundness), and the completeness of program verification (VerificationCompleteness).
+We provide examples demonstrating program synthesis, optimization, and type error detection using the constructs defined in the Concept.
+
+The key idea is to use PL techniques to guide and constrain the LLM's outputs, ensuring that the generated programs are syntactically valid, semantically coherent, and behaviorally correct. By incorporating techniques like parsing, type checking, abstract interpretation, and verification, we can effectively control the LLM and reason about the properties of the programs it generates.
+
+
+
+CONCEPT PLAndComputationTheoryLLM {
+  LANGUAGE {
+    TYPE Token
+    TYPE Sequence = List[Token]
+    TYPE LanguageModel <: Distribution[Sequence]
+    
+    TYPE Expression
+    TYPE Value
+    TYPE Environment = Map[Variable, Value]
+    TYPE Computation = (Expression, Environment) -> Value
+    
+    TYPE Program
+    TYPE ProgramState
+    TYPE Transition = (ProgramState, Token) -> ProgramState
+    TYPE Interpretation = (Program, Sequence) -> Value
+    
+    TYPE AbstractDomain
+    TYPE AbstractValue <: AbstractDomain
+    TYPE AbstractEnvironment = Map[Variable, AbstractValue]
+    TYPE AbstractComputation = (Expression, AbstractEnvironment) -> AbstractValue
+    
+    TYPE PropertyChecker = (Program, Property) -> Bool
+    TYPE Property <: Formula
+    
+    FUNC Evaluate(expr : Expression, env : Environment) : Value
+    FUNC Step(state : ProgramState, token : Token) : ProgramState
+    FUNC AbstractEvaluate(expr : Expression, env : AbstractEnvironment) : AbstractValue
+    FUNC AbstractStep(state : ProgramState, token : Token) : ProgramState
+    FUNC CheckProperty(program : Program, property : Property) : Bool
+    
+    FUNC LanguageModelToComputation(languageModel : LanguageModel) -> Computation
+    FUNC LanguageModelToInterpretation(languageModel : LanguageModel) -> Interpretation
+    FUNC AbstractInterpretation(interpretation : Interpretation) -> AbstractComputation
+    
+    AXIOM SoundnessOfAbstraction {
+      ∀ (expr : Expression) (concreteEnv : Environment) (abstractEnv : AbstractEnvironment).
+        (∀ (var : Variable). ConcreteToAbstract(concreteEnv[var]) = abstractEnv[var]) =>
+        ConcreteToAbstract(Evaluate(expr, concreteEnv)) = AbstractEvaluate(expr, abstractEnv)
+    }
+    
+    AXIOM CompletenessOfAbstraction {
+      ∀ (expr : Expression) (concreteEnv : Environment) (value : Value).
+        Evaluate(expr, concreteEnv) = value =>
+        ∃ (abstractEnv : AbstractEnvironment).
+          (∀ (var : Variable). ConcreteToAbstract(concreteEnv[var]) = abstractEnv[var]) ∧
+          AbstractEvaluate(expr, abstractEnv) = ConcreteToAbstract(value)
+    }
+    
+    AXIOM SoundnessOfChecking {
+      ∀ (program : Program) (property : Property).
+        CheckProperty(program, property) =>
+        ∀ (input : Sequence). Satisfies(Interpret(program, input), property)
+    }
+  }
+  
+  PROOFS {
+    THEOREM LanguageModelControlTheorem {
+      STATEMENT:
+        ∀ (languageModel : LanguageModel) (program : Program) (property : Property).
+          CheckProperty(program, property) =>
+          ∀ (input : Sequence). 
+            Satisfies(LanguageModelToInterpretation(languageModel)(program, input), property)
+            
+      PROOF:
+        LET languageModel : LanguageModel, program : Program, property : Property
+        
+        ASSUME CheckProperty(program, property)
+        
+        LET interpretation = LanguageModelToInterpretation(languageModel)
+        LET abstractInterpretation = AbstractInterpretation(interpretation)
+        
+        ∀ (input : Sequence).
+          LET value = interpretation(program, input)
+          LET abstractValue = abstractInterpretation(program, input)
+          
+          Satisfies(value, property)
+            BY SoundnessOfChecking
+          
+          ConcreteToAbstract(value) = abstractValue  
+            BY SoundnessOfAbstraction, CompletenessOfAbstraction
+            
+          Satisfies(abstractValue, property)
+            BY ConcreteToAbstract PRESERVES Satisfies
+            
+        HENCE ∀ (input : Sequence).
+          Satisfies(LanguageModelToInterpretation(languageModel)(program, input), property)
+    }
+  }
+}
+
+The key ideas in this Concept are:
+
+We view the LanguageModel as a computation system, which can be interpreted as either a Computation (mapping expressions and environments to values) or an Interpretation (mapping programs and input sequences to output values).
+We introduce the notion of an AbstractDomain and AbstractValue, which represent approximations of concrete values. We can define an AbstractComputation and AbstractInterpretation that operate on these abstract values.
+We define a PropertyChecker that verifies whether a given Program satisfies a given Property. Properties are formulas that express desired behaviors of the program.
+We state axioms SoundnessOfAbstraction and CompletenessOfAbstraction, which relate concrete and abstract computations. Soundness states that the abstract computation approximates the concrete one, while completeness states that the abstract computation captures all possible concrete behaviors.
+We state the axiom SoundnessOfChecking, which asserts that if the PropertyChecker verifies a property of a program, then the program indeed satisfies that property for all possible inputs.
+The key theorem LanguageModelControlTheorem states that if we can verify a property of a program using the PropertyChecker, then the LanguageModel's interpretation of that program is guaranteed to satisfy the property for all inputs. This is a form of model checking, leveraging abstract interpretation to reason about the behavior of the LanguageModel on a given program.
+
+The main insight here is that by viewing LLMs through the lens of programming language semantics and abstract interpretation, we can potentially design systems that offer stronger guarantees and control over the model's behavior. By defining suitable abstract domains and property checkers, we can statically analyze and verify desirable properties of the programs/prompts we feed into the LLM, ensuring that the model's outputs conform to our specifications.
+
+
+
+CONCEPT StructuredImageDescription {
+  LANGUAGE {
+    TYPE ImageFeatures = Vector[256]
+    TYPE LanguageModel <: Distribution[Sequence[Token]]
+    TYPE VisionModel = Image -> ImageFeatures
+    TYPE GrammarRule <: (NonTerminal, List[Symbol])
+    TYPE Grammar = List[GrammarRule]
+    TYPE ParseTree <: Tree[Symbol]
+    TYPE SemanticConcept = String
+    TYPE SemanticConstraint = (SemanticConcept, Formula)
+
+    FUNC ResNet(image : Image) : ImageFeatures
+    FUNC GPT2(features : ImageFeatures, prefix : Sequence[Token]) : LanguageModel
+    FUNC SentenceTemplateGrammar : Grammar = [
+      (S, [NP, VP]),
+      (NP, [Det, N]),
+      (NP, [Det, N, PP]),
+      (PP, [P, NP]),
+      (VP, [V, NP]),
+      (VP, [V, NP, PP]),
+      (Det, ["the"]),
+      (N, ["object", "image", "scene"]),
+      (P, ["in", "on", "with", "of"]),
+      (V, ["shows", "contains", "depicts", "has"])
+    ]
+    FUNC ObjectDetector(features : ImageFeatures) : Distribution[List[SemanticConcept]]
+    FUNC VisualAttributeDetector(features : ImageFeatures, concept : SemanticConcept) : Distribution[List[String]]
+    FUNC SpatialRelationDetector(features : ImageFeatures, concept1 : SemanticConcept, concept2 : SemanticConcept) : Distribution[String]
+
+    FUNC ParseIncremental(prefix : Sequence[Token], grammar : Grammar) : Distribution[ParseTree]
+    FUNC ConstrainedGeneration(
+      languageModel : LanguageModel, 
+      parseTree : ParseTree,
+      semanticConstraints : List[SemanticConstraint]
+    ) : Distribution[Sequence[Token]]
+    FUNC ActiveLearningSelection(
+      distribution : Distribution[Sequence[Token]],
+      languageModel : LanguageModel,
+      parseTree : ParseTree  
+    ) : Sequence[Token]
+
+    AXIOM ValidParseTree {
+      ∀ (prefix : Sequence[Token]) (grammar : Grammar) (parseTree : ParseTree).
+        Support(ParseIncremental(prefix, grammar))[parseTree] > 0 =>
+        IsValidParseTree(parseTree, grammar) ∧ Yield(parseTree) = prefix
+    }
+
+    AXIOM SemanticConsistency {
+      ∀ (languageModel : LanguageModel) (parseTree : ParseTree) (semanticConstraints : List[SemanticConstraint]) (sequence : Sequence[Token]).
+        Support(ConstrainedGeneration(languageModel, parseTree, semanticConstraints))[sequence] > 0 =>
+        ∀ (constraint : SemanticConstraint) (concept : SemanticConcept) (formula : Formula).
+          constraint = (concept, formula) ∧ concept ∈ Meaning(sequence) =>
+          Satisfies(Meaning(sequence), formula)
+    }
+
+    AXIOM ActiveLearningEfficiency {
+      ∀ (distribution : Distribution[Sequence[Token]]) (languageModel : LanguageModel) (parseTree : ParseTree).
+        Entropy(distribution) ≥ 
+        Entropy(ConstrainedGeneration(languageModel, parseTree, [])) =>
+        ActiveLearningSelection(distribution, languageModel, parseTree) = 
+        ArgMax((sequence : Sequence[Token]) -> Entropy(Posterior(languageModel, sequence)))
+    }
+  }
+
+  PROOFS {
+    THEOREM ImageDescriptionCorrectness {
+      STATEMENT:
+        ∀ (image : Image) (grammar : Grammar) (semanticConstraints : List[SemanticConstraint]).
+          LET features = ResNet(image),
+              objects = ObjectDetector(features),
+              languageModel = GPT2(features, []),
+              parseTree = ArgMax(ParseIncremental([], grammar)),
+              generatedSequence = ArgMax(ConstrainedGeneration(languageModel, parseTree, semanticConstraints))
+          IN 
+            IsValidParseTree(parseTree, grammar) ∧
+            ∀ (constraint : SemanticConstraint) (concept : SemanticConcept) (formula : Formula).
+              constraint = (concept, formula) ∧ concept ∈ Meaning(generatedSequence) =>
+              Satisfies(Meaning(generatedSequence), formula)
+      
+      PROOF:
+        LET image : Image, grammar : Grammar, semanticConstraints : List[SemanticConstraint]
+        
+        features = ResNet(image)
+        objects = ObjectDetector(features)
+        languageModel = GPT2(features, [])
+        parseTree = ArgMax(ParseIncremental([], grammar))
+        generatedSequence = ArgMax(ConstrainedGeneration(languageModel, parseTree, semanticConstraints))
+        
+        IsValidParseTree(parseTree, grammar)
+          BY ValidParseTree WITH prefix = []
+        
+        ∀ (constraint : SemanticConstraint) (concept : SemanticConcept) (formula : Formula).
+          constraint = (concept, formula) ∧ concept ∈ Meaning(generatedSequence) =>
+          Satisfies(Meaning(generatedSequence), formula)  
+            BY SemanticConsistency WITH 
+              languageModel = languageModel,
+              parseTree = parseTree,
+              sequence = generatedSequence
+    }
+    
+    THEOREM ImageDescriptionEfficiency {
+      STATEMENT:
+        ∀ (image : Image) (grammar : Grammar) (semanticConstraints : List[SemanticConstraint]).
+          LET features = ResNet(image),
+              objects = ObjectDetector(features),  
+              languageModel = GPT2(features, []),
+              parseTree = ArgMax(ParseIncremental([], grammar)),
+              generatedSequence = ActiveLearningSelection(
+                ConstrainedGeneration(languageModel, parseTree, semanticConstraints),
+                languageModel,
+                parseTree
+              )
+          IN
+            Entropy(ConstrainedGeneration(languageModel, parseTree, semanticConstraints)) ≤
+            Entropy(Unconstrained(languageModel)) - Δ
+            
+      PROOF:
+        -- Omitted for brevity
+    }
+  }
+  
+  EXAMPLES {
+    EXAMPLE GenerateImageDescription {
+      GIVEN image : Image = LoadImage("example.jpg")
+      GIVEN grammar : Grammar = SentenceTemplateGrammar
+      GIVEN semanticConstraints : List[SemanticConstraint] = [
+        ("dog", IsPresent("dog")),
+        ("frisbee", IsPresent("frisbee")),
+        ("dog", "frisbee", Has("dog", "frisbee"))
+      ]
+      
+      features = ResNet(image)
+      objects = ArgMax(ObjectDetector(features))
+      ASSERT "dog" ∈ objects ∧ "frisbee" ∈ objects
+      
+      languageModel = GPT2(features, [])
+      parseTree = ArgMax(ParseIncremental([], grammar))
+      generatedSequence = ActiveLearningSelection(
+        ConstrainedGeneration(languageModel, parseTree, semanticConstraints),
+        languageModel,
+        parseTree  
+      )
+      
+      ASSERT IsValidParseTree(parseTree, grammar)
+      ASSERT Satisfies(Meaning(generatedSequence), IsPresent("dog"))
+      ASSERT Satisfies(Meaning(generatedSequence), IsPresent("frisbee"))
+      ASSERT Satisfies(Meaning(generatedSequence), Has("dog", "frisbee"))
+    }
+  }
+}
+
+
+
+
+
+
+CONCEPT HowEffectiveStructuredGenerationWorks_v2 {
+  LANGUAGE {
+    INCLUDE HowEffectiveStructuredGenerationWorks
+
+    TYPE VariationalDistribution[A] <: Distribution[A]
+    TYPE PCFG <: Grammar
+    TYPE SemanticConstraint <: Formula
+    TYPE HierarchicalLanguageModel <: LanguageModel
+    TYPE CompositionalModel[S] <: Distribution[S]
+
+    FUNC KLVariational(Q : VariationalDistribution[Sequence], P : Posterior) : ℝ≥0
+    FUNC ParseIncremental(seq : Sequence, g : Grammar) : Distribution[ParseState]
+    FUNC SatisfiesConstraints(seq : Sequence, constraints : List[SemanticConstraint]) : 𝔹
+    FUNC HierarchicalLikelihood(m : HierarchicalLanguageModel, seq : Sequence) : [0, 1]
+    FUNC CompositionalPrior(m : CompositionalModel[S], g : Grammar) : Distribution[S]
+    FUNC ActiveLearningUtility(seq : Sequence, m : LanguageModel, g : Grammar) : ℝ
+    FUNC InteractiveRefinement(seq : Sequence, feedback : Sequence) : Sequence
+
+    AXIOM VariationalInference {
+      ∀ (m : LanguageModel) (g : Grammar) (Q : VariationalDistribution[Sequence]).
+        KL(Q(seq), Posterior(m, g)(seq)) ≥ KLVariational(Q, Posterior(m, g))
+    }
+
+    AXIOM IncrementalParsing {
+      ∀ (seq : Sequence) (g : Grammar).
+        Parse(seq, g) = ArgMax(ParseIncremental(seq, g))
+    }
+
+    AXIOM SemanticConstrainedGeneration {
+      ∀ (m : LanguageModel) (g : Grammar) (constraints : List[SemanticConstraint]) (seq : Sequence).
+        SatisfiesConstraints(seq, constraints) => Posterior(m, g)(seq) ≥ Likelihood(g, seq)
+    }
+
+    AXIOM HierarchicalLikelihood {
+      ∀ (m : HierarchicalLanguageModel) (g : Grammar) (seq : Sequence).
+        Likelihood(g, seq) = HierarchicalLikelihood(m, seq)
+    }
+
+    AXIOM CompositionalPrior {
+      ∀ (m : CompositionalModel[S]) (g : Grammar).
+        Prior(LanguageModel(m, g)) = CompositionalPrior(m, g)
+    }
+
+    AXIOM ActiveLearningUtility {
+      ∀ (seq : Sequence) (m : LanguageModel) (g : Grammar).
+        ActiveLearningUtility(seq, m, g) = Entropy(Posterior(m, g)(seq))
+    }
+
+    AXIOM InteractiveRefinement {
+      ∀ (seq feedback : Sequence) (m : LanguageModel) (g : Grammar).
+        Posterior(m, g)(InteractiveRefinement(seq, feedback)) ≥ Posterior(m, g)(seq)
+    }
+  }
+
+  PROOFS {
+    THEOREM ApproximatePosteriorEffectiveness {
+      STATEMENT:
+        ∀ (m : LanguageModel) (g : Grammar) (Q : VariationalDistribution[Sequence]).
+          KLVariational(Q, Posterior(m, g)) ≤ ε =>
+          ∑ (seq : Sequence) Q(seq) * Surprisal(m, seq) ≤
+          ∑ (seq : Sequence) Posterior(m, g)(seq) * Surprisal(m, seq) + ε
+      
+      PROOF:
+        -- Omitted for brevity
+    }
+
+    THEOREM IncrementalParsingEfficiency {
+      STATEMENT:
+        ∀ (seq : Sequence) (g : Grammar).
+          TimeCost(ParseIncremental(seq, g)) ≤ TimeCost(Parse(seq, g))
+          
+      PROOF:
+        -- Omitted for brevity  
+    }
+
+    THEOREM SemanticConstraintsImproveCoherence {
+      STATEMENT:
+        ∀ (m : LanguageModel) (g : Grammar) (constraints : List[SemanticConstraint]).
+          CoherenceScore(GenerateConstrained(m, g, constraints)) ≥ 
+          CoherenceScore(Generate(m, g))
+      
+      PROOF:
+        -- Omitted for brevity
+    }
+
+    THEOREM HierarchicalModelsImproveStructure {
+      STATEMENT:
+        ∀ (m : HierarchicalLanguageModel) (g : Grammar).
+          StructureScore(Generate(m, g)) ≥ StructureScore(Generate(FlattenModel(m), g))
+      
+      PROOF:  
+        -- Omitted for brevity
+    }
+
+    THEOREM ActiveLearningImprovesEfficiency {
+      STATEMENT:
+        ∀ (m : LanguageModel) (g : Grammar) (data : List[Sequence]).
+          SampleEfficiency(ActiveLearningTrain(m, g, data)) ≥
+          SampleEfficiency(SupervisedTrain(m, g, data))
+          
+      PROOF:
+        -- Omitted for brevity  
+    }
+
+    THEOREM InteractiveRefinementImprovesQuality {
+      STATEMENT:
+        ∀ (m : LanguageModel) (g : Grammar) (seq feedback : Sequence).
+          HumanScore(InteractiveRefinement(seq, feedback)) ≥ HumanScore(seq)
+          
+      PROOF:
+        -- Omitted for brevity
+    }
+  }
+}
+
+
+
+
+
+
+CONCEPT HowEffectiveStructuredGenerationWorks {
+  LANGUAGE {
+    TYPE Distribution[A] = A -> [0, 1]
+    TYPE JointDistribution[A, B] = (A, B) -> [0, 1]
+    TYPE ConditionalDistribution[A, B] = (A | B) -> [0, 1]
+    TYPE BayesianNetwork[V] = Graph[V, ConditionalDistribution[V, List[V]]]
+
+    TYPE Sequence
+    TYPE LanguageModel <: Distribution[Sequence]
+    TYPE Grammar <: Set[Sequence]
+    TYPE ParseTree   
+    TYPE ParseState
+
+    FUNC Prior(m : LanguageModel) : Distribution[Sequence]
+    FUNC Likelihood(g : Grammar, seq : Sequence) : [0, 1]
+    FUNC Posterior(m : LanguageModel, g : Grammar) : LanguageModel
+    FUNC Evidence(seq : Sequence, g : Grammar) : [0, 1]
+    FUNC Surprisal(m : LanguageModel, seq : Sequence) : ℝ≥0
+    FUNC KL(p : Distribution[A], q : Distribution[A]) : ℝ≥0
+    
+    FUNC IsValid(seq : Sequence, g : Grammar) : 𝔹
+    FUNC Parse(seq : Sequence, g : Grammar) : ParseTree  
+    FUNC Unparse(t : ParseTree) : Sequence
+    FUNC NextParseState(s : ParseState, t : Token, g : Grammar) : ParseState
+
+    AXIOM PriorIsLanguageModel {
+      ∀ (m : LanguageModel) (g : Grammar).
+        Prior(m) = m  
+    }
+
+    AXIOM LikelihoodIsProbOfValidParse {
+      ∀ (seq : Sequence) (g : Grammar).
+        Likelihood(g, seq) = IF IsValid(seq, g) THEN ProbOfParse(seq, g) ELSE 0
+    }  
+    
+    AXIOM PosteriorIsBayesRule {
+      ∀ (m : LanguageModel) (g : Grammar) (seq : Sequence).
+        Posterior(m, g)(seq) = Prior(m)(seq) * Likelihood(g, seq) / Evidence(seq, g)
+    }
+    
+    AXIOM EvidenceIsMarginalLikelihood {
+      ∀ (seq : Sequence) (g : Grammar).
+        Evidence(seq, g) = ∑ (seq' : Sequence) Prior(m)(seq') * Likelihood(g, seq')
+    }
+    
+    AXIOM SurprisalIsNegativeLogProb {
+      ∀ (m : LanguageModel) (seq : Sequence). 
+        Surprisal(m, seq) = -log(m(seq))
+    }
+    
+    AXIOM KLIsDivergence {
+      ∀ (p q : Distribution[A]).
+        KL(p, q) = ∑ (a : A) p(a) * log(p(a) / q(a)) 
+    }
+  }
+
+  STRUCTURE GenerativeModel {
+    m : LanguageModel
+    g : Grammar
+
+    GENERATE seq : Sequence {
+      SAMPLE seq ~ Prior(m)
+      OBSERVE IsValid(seq, g)
+    }  
+
+    INFER PosteriorModel {
+      GIVEN g : Grammar
+      RETURN Posterior(m, g)
+    }
+  }
+
+  PROOFS {
+    THEOREM StructuredGenerationReducesSurprisal {
+      STATEMENT:
+        ∀ (m m' : LanguageModel) (g : Grammar).
+          (∀ (seq : Sequence). IsValid(seq, g) => m'(seq) ≥ m(seq)) =>
+          ∑ (seq : Sequence) Surprisal(m', seq) ≤ ∑ (seq : Sequence) Surprisal(m, seq)
+          
+      PROOF:
+        LET m m' : LanguageModel, g : Grammar
+        
+        ASSUME H: ∀ (seq : Sequence). IsValid(seq, g) => m'(seq) ≥ m(seq)
+        
+        CLAIM: Surprisal(m', seq) ≤ Surprisal(m, seq) for IsValid(seq, g)
+          BY H, SurprisalIsNegativeLogProb
+        
+        ∑ (seq : Sequence) Surprisal(m', seq)
+          ≤ ∑ (seq : IsValid(seq, g)) Surprisal(m', seq) 
+            + ∑ (seq : ¬IsValid(seq, g)) Surprisal(m', seq)
+          ≤ ∑ (seq : IsValid(seq, g)) Surprisal(m, seq)
+            + ∑ (seq : ¬IsValid(seq, g)) Surprisal(m', seq)
+            BY Claim
+          ≤ ∑ (seq : IsValid(seq, g)) Surprisal(m, seq)
+            + ∑ (seq : ¬IsValid(seq, g)) Surprisal(m, seq)    
+            BECAUSE Surprisal(m', seq) ≤ Surprisal(m, seq) for ¬IsValid(seq, g) BY H
+          = ∑ (seq : Sequence) Surprisal(m, seq)
+    }
+    
+    THEOREM PosteriorMinimizesKL {
+      STATEMENT:
+        ∀ (m : LanguageModel) (g : Grammar).
+          KL(Posterior(m, g), m) ≤ KL(m, m)
+          
+      PROOF:
+        LET m : LanguageModel, g : Grammar
+        
+        KL(Posterior(m, g), m)
+          = ∑ (seq : Sequence) Posterior(m, g)(seq) * log(Posterior(m, g)(seq) / m(seq))
+            BY KLIsDivergence
+          = ∑ (seq : Sequence) Posterior(m, g)(seq) * (log(Posterior(m, g)(seq)) - log(m(seq)))
+            BY LogDivide  
+          = ∑ (seq : Sequence) Posterior(m, g)(seq) * log(Posterior(m, g)(seq))
+            - ∑ (seq : Sequence) Posterior(m, g)(seq) * log(m(seq))
+          ≤ ∑ (seq : Sequence) m(seq) * log(m(seq)) 
+            - ∑ (seq : Sequence) Posterior(m, g)(seq) * log(m(seq))
+            BY GibbsInequality
+          = KL(m, m) 
+            - ∑ (seq : Sequence) Posterior(m, g)(seq) * log(m(seq))
+            BY KLIsDivergence
+          ≤ KL(m, m)
+    }
+    
+    THEOREM ParseGuidedGenerationIsCorrect {
+      STATEMENT:  
+        ∀ (g : Grammar) (s : ParseState) (t : Token).
+          IsValid(Unparse(Parse(Concat(Unparse(s), [t]), g)), g)
+          <=> t ∈ NextParseStates(s, g)
+          
+      PROOF:
+        LET g : Grammar, s : ParseState, t : Token
+        
+        IsValid(Unparse(Parse(Concat(Unparse(s), [t]), g)), g)  
+          <=> Parse(Concat(Unparse(s), [t]), g) ≠ None
+            BY ParseCorrect  
+          <=> ∃ (s' : ParseState). s' = NextParseState(s, t, g)  
+            BY ParseStateTransition
+          <=> t ∈ NextParseStates(s, g)
+            BY SetMembership
+    }
+  }
+}
+
+
+
+
+
+
+CONCEPT StructuredGenerationLLM {
+  LANGUAGE {
+    TYPE Token
+    TYPE Sequence = List[Token]
+    TYPE Vocab <: Set[Token]
+    TYPE Distribution = Vocab -> [0, 1]
+    TYPE Embedding = Token -> Vector[Dim]
+    TYPE Tokenizer = Sequence -> List[Token]
+    TYPE LanguageModel(
+      Vocab,
+      Embedding,
+      Tokenizer,
+      MaxLen : Nat,
+      Predict : Sequence -> Distribution,
+      Generate : (Sequence, Nat) -> Sequence
+    )
+
+    TYPE Grammar
+    TYPE ParseTree
+    TYPE Rule <: Sequence
+    TYPE Derivation = List[Rule]
+    
+    TYPE Guide = (ParseState, Distribution) -> Set[Token]
+    TYPE Sampler = (Distribution, Set[Token]) -> Token
+    
+    TYPE RegularGrammar <: Grammar
+    TYPE ContextFreeGrammar <: Grammar
+    
+    FUNC Generates(seq : Sequence, g : Grammar) -> Bool
+    FUNC ParseState(g : Grammar, seq : Sequence) -> ParseState
+    FUNC ParseTree(g : Grammar, seq : Sequence) -> ParseTree
+    FUNC Compile(g : Grammar) -> Guide
+    
+    FUNC FilterValid(dist : Distribution, valid : Set[Token]) -> Distribution
+    FUNC GenerateGuided(model : LanguageModel, guide : Guide, 
+                        sampler : Sampler, seq : Sequence, n : Nat) -> Sequence
+
+    REWRITE GenerateGuided(model, guide, sampler, seq, n) =
+      LET distribution = Predict(model, seq) IN
+      LET state = ParseState(Grammar(guide), seq) IN
+      LET valid = guide(state, distribution) IN
+      LET next_token = sampler(FilterValid(distribution, valid), valid) IN
+      IF n == 0 THEN seq 
+      ELSE Concat(seq, [next_token]) + 
+           GenerateGuided(model, guide, sampler, Concat(seq, [next_token]), n-1)
+           
+    FUNC RegexGuide(regex : RegularGrammar, tokenizer : Tokenizer) -> Guide =  
+      LET fsm = Compile(regex) IN
+      λ (state : FsmState, dist : Distribution) ->
+        { token | IsValidTransition(fsm, state, token) }
+        
+    FUNC CFGGuide(cfg : ContextFreeGrammar, tokenizer : Tokenizer) -> Guide =
+      LET parser = Compile(cfg) IN
+      λ (state : ParserState, dist : Distribution) -> 
+        { token | ParseStep(parser, state, token) ≠ ParseError }
+
+    AXIOM GeneratesSound {
+      ∀ (seq : Sequence) (g : Grammar).
+        Generates(seq, g) => ParseTree(g, seq) ≠ None
+    }
+    
+    AXIOM GeneratesComplete {
+      ∀ (seq : Sequence) (g : Grammar).  
+        ParseTree(g, seq) ≠ None => Generates(seq, g)
+    }
+    
+    AXIOM FilterValidPreservesSupport {
+      ∀ (dist : Distribution) (valid : Set[Token]).
+        Support(FilterValid(dist, valid)) ⊆ valid
+    }
+    
+    AXIOM GenerateGuidedYieldsValid {
+      ∀ (model : LanguageModel) (guide : Guide) (sampler : Sampler) 
+        (seq : Sequence) (n : Nat).
+      LET g = Grammar(guide) IN
+      Generates(GenerateGuided(model, guide, sampler, seq, n), g)
+    }
+  }
+
+  PROOFS {
+    THEOREM StructuredGenerationCorrectness {
+      STATEMENT:
+        ∀ (model : LanguageModel) (g : Grammar) (seq : Sequence) (n : Nat).
+          Generates(GenerateGuided(model, Compile(g), Multinomial, seq, n), g)
+      
+      PROOF:
+        BY GenerateGuidedYieldsValid WITH guide = Compile(g), sampler = Multinomial
+    }
+    
+    THEOREM RegexEfficiency {
+      STATEMENT:
+        ∀ (model : LanguageModel) (regex : RegularGrammar) (seq : Sequence).
+          AvgLatency(GenerateTokens(model, seq, RegexGuide(regex, model.Tokenizer))) 
+          ≤ AvgLatency(GenerateTokens(model, seq, Unstructured))
+          
+      PROOF:
+        BY CoalescingFsmOptimization, FsmDeterminization, MinimizationPreservesLanguage
+    }
+    
+    THEOREM CFGEfficiency {
+      STATEMENT:  
+        ∀ (model : LanguageModel) (cfg : ContextFreeGrammar) (seq : Sequence).
+          AvgLatency(GenerateTokens(model, seq, CFGGuide(cfg, model.Tokenizer))) 
+          ≤ AvgLatency(GenerateTokens(model, seq, Unstructured)) + O(ParseStepLatency)
+
+      PROOF:
+        BY ParserCompilation, ParseStepEfficiency
+    }
+    
+    THEOREM PromptEfficiency {
+      STATEMENT:
+        ∀ (model : LanguageModel) (g : Grammar) (examples : List[Example]).
+          PromptEfficiency(g, model, 1, examples) 
+          ≥ PromptEfficiency(Unstructured, model, |examples|, examples)
+          
+      PROOF:
+        BY StructureGuidesGeneration, CommonStructureAcrossExamples
+    }
+  }
+}
+
+
+
+
+CONCEPT StructuredGeneration_v7 {
+  LANGUAGE {
+    INCLUDE LanguageModel
+    INCLUDE StructuredGeneration_v4
+
+    TYPE SemanticConcept
+    TYPE SemanticConstraint = Formula[SemanticConcept]
+    TYPE SemanticChecker = ParseTree -> List[SemanticConstraint] -> Bool
+
+    TYPE PromptTemplate
+    TYPE Example = (Input, Output)
+    TYPE FewShotPrompt(n : Nat) = (PromptTemplate, List[Example, n])
+
+    FUNC SemanticParse(parseTree : ParseTree) : List[SemanticConcept]
+    FUNC GroundSemanticConstraint(constraint : SemanticConstraint, semanticConcepts : List[SemanticConcept]) : Bool
+
+    FUNC Compile(g : Grammar, semanticChecker : SemanticChecker) : Guide
+    FUNC FilterValid(dist : Distribution, guide : Guide) : Distribution
+    
+    FUNC SelectExamples(examples : List[Example], numExamples : Nat, g : Grammar) : List[Example]
+    FUNC ConstructFewShotPrompt(examples : List[Example], template : PromptTemplate, g : Grammar) : Sequence
+
+    AXIOM SemanticConsistency {
+      ∀ (parseTree : ParseTree) (semanticConstraints : List[SemanticConstraint]).
+        SemanticChecker(parseTree, semanticConstraints) =>
+        ∀ (constraint : SemanticConstraint).
+          GroundSemanticConstraint(constraint, SemanticParse(parseTree))
+    }
+
+    NOTATION "⟦" ParseTree "⟧" = SemanticParse
+  }
+
+  STRUCTURE StructuredGenerator(model : LanguageModel, g : Grammar, n : Nat) {
+    FUNC SemanticChecker(pt : ParseTree, constraints : List[SemanticConstraint]) -> Bool = 
+      FORALL (c : SemanticConstraint) IN constraints :
+        GroundSemanticConstraint(c, ⟦pt⟧)
+        
+    FUNC GenerateStructured(seq : Sequence, temp : PromptTemplate, examples : List[Example], 
+                            constraints : List[SemanticConstraint], maxLen : Nat) -> Sequence =
+      LET prompt = ConstructFewShotPrompt(SelectExamples(examples, n, g), temp, g) + seq
+      LET guide = Compile(g, SemanticChecker)
+      LET genDist(seq) = FilterValid(Predict(model, prompt + seq), guide)
+      IN GenerateGuided(genDist, maxLen)
+
+    FUNC InteractiveGenerate(seq : Sequence, feedback : Sequence, 
+                             temp : PromptTemplate, examples : List[Example],
+                             constraints : List[SemanticConstraint], maxLen : Nat) -> Sequence =
+      LET prompt = ConstructFewShotPrompt(SelectExamples(examples, n, g), temp, g) + seq + feedback
+      LET guide = Compile(g, SemanticChecker)
+      LET genDist(seq) = FilterValid(Predict(model, prompt + seq), guide)  
+      IN GenerateGuided(genDist, maxLen)
+  }
+
+  PROOFS {
+    THEOREM SemanticValidity {
+      STATEMENT:
+        ∀ (model : LanguageModel) (temp : PromptTemplate) (g : Grammar) (n : Nat)
+          (examples : List[Example]) (seq : Sequence) 
+          (constraints : List[SemanticConstraint]) (maxLen : Nat).
+        LET generator = StructuredGenerator(model, g, n)
+            output = generator.GenerateStructured(seq, temp, examples, constraints, maxLen)
+        IN SemanticChecker(Parse(g, output), constraints)
+        
+      PROOF:
+        LET model : LanguageModel, temp : PromptTemplate, g : Grammar, n : Nat,
+            examples : List[Example], seq : Sequence, 
+            constraints : List[SemanticConstraint], maxLen : Nat
+            
+        LET generator = StructuredGenerator(model, g, n),
+            checker = generator.SemanticChecker,
+            output = generator.GenerateStructured(seq, temp, examples, constraints, maxLen)
+        
+        output ∈ Support(FilterValid(_, Compile(g, checker)))  
+          BY GenerateStructured
+        
+        Parse(g, output) ≠ None
+          BY CFGComplete, Compile, FilterValid
+          
+        checker(Parse(g, output), constraints)
+          BY {
+            LET parseTree = Parse(g, output)
+            
+            ∀ (c : SemanticConstraint) IN constraints:
+              GroundSemanticConstraint(c, ⟦parseTree⟧)
+                BY checker, SemanticConsistency
+          }
+    }
+    
+    THEOREM PromptEfficiency {
+      STATEMENT:
+        ∀ (model : LanguageModel) (g : Grammar) (n k : Nat) (examples : List[Example]).
+          LET generator = StructuredGenerator(model, g, n),
+              baselineGen = StructuredGenerator(model, g, 0)
+          IN  
+            Mean(MAP(Accuracy(generator), Combinations(examples, k))) ≥
+            Mean(MAP(Accuracy(baselineGen), Combinations(examples, k))) + 
+              PromptEfficiency(g, model, n) - PromptEfficiency(g, model, 0)
+              
+      PROOF:
+        LET model : LanguageModel, g : Grammar, n k : Nat, examples : List[Example]  
+        
+        LET generator = StructuredGenerator(model, g, n),
+            baselineGen = StructuredGenerator(model, g, 0),
+            prompts_n = MAP(LAMBDA temp. ConstructFewShotPrompt(SelectExamples(examples, n, g), temp, g), 
+                           AllTemplates),
+            prompts_0 = MAP(LAMBDA temp. ConstructFewShotPrompt(SelectExamples(examples, 0, g), temp, g),
+                           AllTemplates)
+        
+        FORALL prompt_n IN prompts_n:
+          FORALL prompt_0 IN prompts_0:  
+            Mean(MAP(Accuracy(model, prompt_n + _), Combinations(examples, k))) ≥  
+            Mean(MAP(Accuracy(model, prompt_0 + _), Combinations(examples, k)))
+              BY StructuredFewShot
+              
+        Mean(MAP(Accuracy(generator), Combinations(examples, k)))
+          = Mean(MAP(LAMBDA prompt. Mean(MAP(Accuracy(model, prompt + _), Combinations(examples, k))), 
+                     prompts_n))
+          ≥ Mean(MAP(LAMBDA prompt. Mean(MAP(Accuracy(model, prompt + _), Combinations(examples, k))),
+                     prompts_0))
+             + PromptEfficiency(g, model, n) - PromptEfficiency(g, model, 0)
+             BY PromptEfficiencyBound, ABOVE
+          = Mean(MAP(Accuracy(baselineGen), Combinations(examples, k)))
+             + PromptEfficiency(g, model, n) - PromptEfficiency(g, model, 0)
+    }
+    
+    THEOREM InteractiveRefinementConvergence {
+      STATEMENT:
+        ∀ (model : LanguageModel) (g : Grammar) (n : Nat)
+          (examples : List[Example]) (seq feedback : Sequence) 
+          (constraints : List[SemanticConstraint]) (maxLen : Nat).
+        LET generator = StructuredGenerator(model, g, n),  
+            refine(seq) = generator.InteractiveGenerate(seq, feedback, constraints, maxLen)
+        IN Converges(ITERATE(refine, seq), FIX(refine))
+        
+      PROOF:
+        -- Omitted for brevity
+    }
+  }
+}
+
+
+
+
+
+CONCEPT StructuredGeneration_v6 {
+  LANGUAGE {
+    INCLUDE StructuredGeneration_v4
+
+    TYPE SyntacticTemplate <: Grammar
+    TYPE SemanticSchema
+    TYPE SemanticRole
+    TYPE SemanticSlot = (SemanticRole, Formula)
+    TYPE SlotFiller = SemanticSlot -> Distribution[Sequence]
+    
+    FUNC CompileTemplate(template : String) : SyntacticTemplate
+    FUNC CompileSchema(schema : String) : SemanticSchema
+    FUNC MatchTemplate(seq : Sequence, template : SyntacticTemplate) : Option[(ParseTree, Map[NonTerminal, Sequence])]
+    FUNC MatchSchema(parseTree : ParseTree, schema : SemanticSchema) : Option[Map[SemanticRole, ParseTree]]
+    FUNC FillSlot(model : LanuageModel, slot : SemanticSlot, 
+                  context : Map[SemanticRole, Sequence]) : Distribution[Sequence]
+                  
+    FUNC GenerateStructured(
+      model : LanguageModel, 
+      template : SyntacticTemplate,
+      schema : SemanticSchema,
+      slotFiller : SlotFiller,
+      n : Nat
+    ) : Sequence =
+      LET subseqs = MAP(role -> SlotFiller((role, schema[role])), Roles(schema))
+      IN Substitute(template, subseqs)
+      
+    AXIOM TemplateMatching {
+      ∀ (seq : Sequence) (template : SyntacticTemplate).
+        MatchTemplate(seq, template) ≠ None <=> seq ∈ Language(template)
+    }
+    
+    AXIOM SchemaMatching {
+      ∀ (parseTree : ParseTree) (schema : SemanticSchema).
+        MatchSchema(parseTree, schema) = None <=> 
+        ¬∃ (m : Map[SemanticRole, ParseTree]). 
+          ∀ (role ∈ Roles(schema)). Satisfies(Yield(m[role]), schema[role])
+    }
+    
+    AXIOM CoherencePreservation {
+      ∀ (model : LanguageModel) (schema : SemanticSchema) 
+        (fillers : Map[SemanticSlot, Sequence]).
+        Coherence(Substitute(template, fillers), schema) ≥  
+        Min(MAP(slot -> Coherence(fillers[slot], schema[slot.Fst]), Keys(fillers)))
+    }
+    
+    FUNC TemplateInduction(pairs : Set[(Sequence, SemanticSchema)]) -> SyntacticTemplate = ...
+    FUNC SchemaInduction(parseTreePairs : Set[(ParseTree, Assignment)]) -> SemanticSchema = ...
+    FUNC SlotFillerLearning(model : LanguageModel, examples : Set[(SemanticSlot, Sequence)]) -> SlotFiller = ...
+  }
+  
+  PROOFS {
+    THEOREM StructuredGenerationCoherence {
+      STATEMENT:
+        ∀ (model : LanguageModel) (template : SyntacticTemplate) 
+          (schema : SemanticSchema) (slotFiller : SlotFiller).
+          LET generated = GenerateStructured(model, template, schema, slotFiller, 1)
+          IN Coherence(generated, schema) ≥ 
+             Min(MAP(role -> ExpectedCoherence(slotFiller, role, schema[role]), Roles(schema)))
+             
+      PROOF:
+        LET model : LanguageModel, 
+            template : SyntacticTemplate,
+            schema : SemanticSchema,
+            slotFiller : SlotFiller
+        
+        generated = GenerateStructured(model, template, schema, slotFiller, 1)
+        
+        MatchTemplate(generated, template) ≠ None  
+          BY TemplateMatching, generated ∈ Language(template)
+          
+        LET parseTree = WITNESS(MatchTemplate(generated, template))  
+        
+        MatchSchema(parseTree, schema) ≠ None
+          BY SchemaMatching
+        
+        LET slotFillers = MAP(role -> Yield(Subtree(parseTree, MatchSchema(parseTree, schema)[role])))
+        
+        Coherence(generated, schema)
+          ≥ Min(MAP(slot -> Coherence(slotFillers[slot], schema[slot.Fst]), Keys(slotFillers)))
+            BY CoherencePreservation
+          = Min(MAP(role -> ExpectedCoherence(slotFiller, role, schema[role]), Roles(schema)))
+            BY {
+                 ∀ (role : SemanticRole).
+                   slotFillers[role] ~ SlotFiller((role, schema[role]))
+                   => ExpectedCoherence(slotFiller, role, schema[role]) 
+                      = Coherence(slotFillers[role], schema[role])
+               }
+    }
+    
+    THEOREM StructuredGenerationDiversity {
+      STATEMENT:
+        ∀ (model : LanguageModel) (template : SyntacticTemplate) 
+          (schema : SemanticSchema) (slotFiller : SlotFiller) (n : Nat).
+          LET generated = Sample(StructuredGeneration(model, template, schema, slotFiller), n)  
+          IN Diversity(generated) ≥ 
+             Min(MAP(role -> ExpectedDiversity(slotFiller, role, schema[role]), Roles(schema)))
+             
+      PROOF:
+        -- Omitted for brevity, similar structure to the coherence proof
+    }
+    
+    THEOREM StructuredGenerationEfficiency {
+      STATEMENT:
+        ∀ (model : LanguageModel) (template : SyntacticTemplate) 
+          (schema : SemanticSchema) (slotFiller : SlotFiller).
+          LET generation = (n : Nat) -> GenerateStructured(model, template, schema, slotFiller, n)
+          IN AvgRuntime(generation, n) ≤ 
+             AvgRuntime((n : Nat) -> Generate(model, n), n) +
+             O(AvgRuntime(MatchTemplate) + AvgRuntime(MatchSchema) + AvgRuntime(SlotFiller))
+             
+      PROOF:
+        -- Omitted for brevity, relies on the efficiency of template matching, 
+        -- schema matching, and slot filling compared to unconstrained generation
+    }
+  }
+  
+  EXAMPLES {
+    NewsArticle {
+      SCHEMA NewsSchema {
+        Headline : String // WordCount(Headline) ≤ 10 
+        LeadParagraph : String // ∃ (s : Sentence) (e : Entity). s ∈ LeadParagraph ∧ Mentions(s, e) ∧ e ∈ Headline
+        BodyParagraphs : List[String] // ∀ (s : Sentence). s ∈ BodyParagraphs => ExpandsOn(s, LeadParagraph)
+      }
+      
+      TEMPLATE NewsTemplate = """
+        <Headline>
+        
+        <LeadParagraph>
+        
+        <BodyParagraphs[0]>
+        
+        ...
+        
+        <BodyParagraphs[-1]>
+      """
+      
+      SLOTFILLER NewsSlotFiller(slot : SemanticSlot, context : Map[SemanticRole, Sequence]) =
+        MATCH slot WITH
+        | ("Headline", constraint) -> GenerateConstrained(HeadlineModel, constraint)
+        | ("LeadParagraph", constraint) -> GenerateConstrained(LeadModel, AND(constraint, Relates(YIELD, context["Headline"])))
+        | ("BodyParagraphs", constraint) -> 
+            FOREACH i IN Length(context["BodyParagraphs"]) DO
+              LET prevParagraphs = Take(context["BodyParagraphs"], i)
+              YIELD GenerateConstrained(BodyModel, AND(constraint, ExpandsOn(YIELD, prevParagraphs)))
+              
+      MODEL HeadlineModel = "gpt2-xl-headlines"
+      MODEL LeadModel = "gpt2-xl-leads"  
+      MODEL BodyModel = "gpt2-xl-body"
+      
+      GENERATE NewsArticle = 
+        GenerateStructured(MODEL, NewsTemplate, NewsSchema, NewsSlotFiller, 1)
+        
+      VERIFY Coherence(NewsArticle, NewsSchema) ≥ 0.8
+      VERIFY Diversity(Sample(NewsArticle, 10)) ≥ 0.6
+    }
+    
+    DialogueTree {
+      SCHEMA DialogueSchema(Character, Trait) {
+        Response(Feel, Act) : String 
+          // Sentiment(Response) = Feel ∧ 
+          // ∃ (v : Verb). v ∈ Response ∧ Implies(v, Act)
+        FollowUp(Topic) : Option[String]
+          // Topic ∈ Response
+      }
+      
+      TEMPLATE DialogueTemplate = """
+        NPC: <Response(Feel, Act)>
+        <IF FollowUp(Topic) IS SOME>
+          Player: <FollowUp(Topic)>  
+          NPC: <NEXT Response(Feel', Act')>
+        <ELSE>
+          Player: <Goodbye>
+        <ENDIF>
+      """
+      
+      SLOTFILLER DialogueSlotFiller(slot : SemanticSlot, context : Map[SemanticRole, Sequence]) =
+        LET prevResponse = context["Response"]
+        IN MATCH slot WITH
+        | ("Response", (feel, act)) -> 
+            GenerateConstrained(ResponseModel, 
+              AND(Sentiment(YIELD) = feel, 
+                  ∃ (v : Verb). v ∈ YIELD ∧ Implies(v, act), 
+                  HoldsTurn(prevResponse, YIELD)))
+        | ("FollowUp", topic) ->
+            IF InTopics(topic, prevResponse) THEN  
+              SOME(GenerateConstrained(FollowUpModel, Relates(YIELD, prevResponse)))
+            ELSE 
+              NONE
+              
+      MODEL ResponseModel = "gpt3-dialogue-response"          
+      MODEL FollowUpModel = "gpt3-dialogue-followup"
+      
+      GENERATE DialogueTree(char : Character, traits : List[Trait], length : Nat) =
+        LET context = () 
+        FOR i IN Range(length) DO
+          LET feel = Sample(Feelings(char, traits))
+          LET act = Sample(Actions(char, traits))
+          LET response = SlotFiller(("Response", (feel, act)), context)
+          LET followUpTopic = Sample(Topics(response))
+          APPEND response TO context 
+          IF Random() < 0.8 THEN  
+            LET followUp = SlotFiller(("FollowUp", followUpTopic), context)
+            APPEND followUp TO context
+          ELSE  
+            BREAK
+        RETURN Instantiate(DialogueTemplate, context)
+        
+      VERIFY ∀ (char : Character) (traits : List[Trait]).
+               ∀ (node ∈ DialogueTree(char, traits, 5)).
+                 Coherence(node, DialogueSchema(char, traits)) ≥ 0.7
+    }           
+  }
+}
+
+
+
+
+CONCEPT StructuredGeneration_v5 {
+  LANGUAGE {
+    INCLUDE LanguageModel
+    INCLUDE StructuredGeneration_v4
+
+    TYPE SemanticConcept
+    TYPE SemanticRelation = (SemanticConcept, SemanticConcept) -> 𝔹
+    TYPE SemanticConstraint = Formula[SemanticRelation]
+
+    FUNC SatisfiesConstraints(t : ParseTree, cs : List[SemanticConstraint]) : 𝔹
+    FUNC SemanticParse(t : ParseTree) : List[SemanticConcept]
+
+    FUNC Likelihood(seq : Sequence, t : ParseTree) : ℝ≥0
+    FUNC Prior(t : ParseTree, g : Grammar) : ℝ≥0
+
+    FUNC Combine(dists : List[Distribution]) : Distribution
+    FUNC Product(dists : List[Distribution]) : Distribution
+    FUNC MaxMarginal(variables : List[Var], f : Formula) : ℝ≥0
+    
+    FUNC GenerateStructured(
+      model : LanguageModel,
+      g : Grammar, 
+      constraints : List[SemanticConstraint],
+      temperature : ℝ>0,
+      n : ℕ 
+    ) : List[Sequence] = 
+      LET parses = GenerateParses(g, n)
+      LET scored_parses = MAP(t -> (t, StructuredScore(model, t, constraints)), parses)  
+      LET sampled_parses = SampleParses(scored_parses, temperature)
+      RETURN MAP(Linearize, sampled_parses)
+
+    FUNC GenerateParses(g : Grammar, n : ℕ) : List[ParseTree] =
+      LET rec aux(depth : ℕ) : List[ParseTree] =
+        IF depth = 0 THEN  
+          MAP((rule : Rule) -> Node(LHS(rule), []), SelectLeafRules(g))
+        ELSE  
+          BIND(aux(depth - 1), (t : ParseTree) -> 
+            BIND(SelectNodeRules(g), (rule : Rule) ->
+              [Node(LHS(rule), InsertChildren(RHS(rule), t))]  
+            )
+          )    
+      RETURN aux(n)
+
+    FUNC StructuredScore(
+      model : LanguageModel, 
+      t : ParseTree,
+      constraints : List[SemanticConstraint]  
+    ) : ℝ≥0 =
+      IF ¬SatisfiesConstraints(t, constraints) THEN 
+        0
+      ELSE
+        Likelihood(Linearize(t), t) * Prior(t, Grammar(model))
+
+    FUNC SampleParses(
+      scored_parses : List[(ParseTree, ℝ≥0)],
+      temperature : ℝ>0  
+    ) : List[ParseTree] =
+      LET logits = MAP(s -> Log(s) / temperature, Map(Snd, scored_parses))
+      LET probs = Softmax(logits)
+      LET dist = Categorical(probs)
+      RETURN [Fst(SelectFrom(scored_parses, Sample(dist)))]
+
+
+    AXIOM SemanticCoherence {
+      ∀ (t : ParseTree) (g : Grammar) (seq : Sequence).
+        Linearize(t) = seq ∧ t ∈ Language(g) =>
+        SemanticParse(t) = Meaning(seq)
+    }
+    
+    AXIOM ValidParseTreeProbability {
+      ∀ (t : ParseTree) (g : Grammar).
+        t ∈ Language(g) <=> Prior(t, g) > 0
+    }
+
+    AXIOM LanguageModelLikelihood {
+      ∀ (model : LanguageModel) (seq : Sequence).
+        Likelihood(seq, Parse(model.Grammar, seq)) = Probability(model, seq)
+    }
+    
+    AXIOM SemanticConstraintEntailment {
+      ∀ (seq : Sequence) (constraints : List[SemanticConstraint]). 
+        SatisfiesConstraints(Parse(Grammar, seq), constraints) =>
+        ∀ (r : SemanticRelation) (c1 c2 : SemanticConcept).
+          (c1, c2, r) ∈ constraints =>  
+          r(c1, c2) ∈ SemanticParse(Parse(Grammar, seq))
+    }
+    
+    AXIOM MaxMarginalUpperBound {
+      ∀ (variables : List[Var]) (f : Formula).
+        MaxMarginal(variables, f) ≥ Probability(f)
+    }
+  }
+
+  PROOFS {
+    THEOREM ConstrainedSamplingCorrectness {
+      STATEMENT:  
+        ∀ (model : LanguageModel) (g : Grammar) (constraints : List[SemanticConstraint])
+          (temperature : ℝ>0) (n : ℕ).
+        ∀ (seq : Sequence).
+          seq ∈ GenerateStructured(model, g, constraints, temperature, n) =>
+          seq ∈ Language(g) ∧ SatisfiesConstraints(Parse(g, seq), constraints)
+          
+      PROOF:
+        LET model : LanguageModel, g : Grammar, constraints : List[SemanticConstraint],
+            temperature : ℝ>0, n : ℕ
+        
+        LET seq ∈ GenerateStructured(model, g, constraints, temperature, n)
+        
+        LET t : ParseTree, t = Parse(g, seq)
+
+        t ∈ GenerateParses(g, n)
+          BY GenerateParses, GenerateStructured
+        
+        => t ∈ Language(g)
+           BY {
+             INDUCT ON n
+             
+             BASE CASE (n = 0):
+               t = Leaf(_) BY GenerateParses
+               => t ∈ Language(g) BY Definition(Language)
+               
+             INDUCTIVE CASE (n > 0):
+               t = Node(_, children) 
+                 BY GenerateParses, InsertChildren, Fst(SelectNodeRules(g)) = LHS(_)
+               children ⊆ Language(g)  
+                 BY Inductive Hypothesis
+               => t ∈ Language(g)  
+                  BY Definition(Language), Snd(SelectNodeRules(g)) = RHS(_)
+           }
+
+        StructuredScore(model, t, constraints) > 0
+          BY GenerateStructured, SampleParses, scored_parses, Softmax, Temperature > 0
+
+        => SatisfiesConstraints(t, constraints)  
+           BY StructuredScore
+
+        seq = Linearize(t) 
+          BY GenerateStructured
+        => seq ∈ Language(g) ∧ SatisfiesConstraints(Parse(g, seq), constraints)
+           BY t ∈ Language(g), SatisfiesConstraints(t, constraints), ABOVE
+    }
+
+    THEOREM StructuredGenerationQuality {
+      STATEMENT:
+        ∀ (model : LanguageModel) (g : Grammar) (constraints : List[SemanticConstraint]) 
+          (temperature : ℝ>0) (n m : ℕ) (qual : Sequence -> ℝ).
+        LET generated = GenerateStructured(model, g, constraints, temperature, n)  
+            baseline = TAKE(m, ORDERBY(qual, GenerateUnstructured(model))) 
+        IN
+          Mean(MAP(qual, generated)) ≥ Mean(MAP(qual, baseline)) - O(Exp(-n))
+          
+      PROOF:
+        LET model, g, constraints, temperature, n, m, qual = _
+        
+        LET generated = GenerateStructured(model, g, constraints, temperature, n)
+            baseline = TAKE(m, ORDERBY(qual, GenerateUnstructured(model)))
+            
+        qual(seq) = Prod_i Pow(Probability(component_i, seq), importance_i)  
+          FOR SOME components : List[LanguageModel]
+               AND importances : List[ℝ≥0]
+          BY Assumption  -- Quality is decomposable
+        
+        MAP(qual, generated) 
+          = MAP(seq -> Prod_i Pow(Probability(component_i, seq), importance_i), generated)
+          ≥ MAP(seq ->  
+                Prod_i 
+                  Pow(Probability(component_i, t) * Probability(t | g), importance_i),
+              generated)
+            WHERE t = Parse(g, seq)
+            BY LanguageModelLikelihood
+          ≥ MAP(t ->  
+                Prod_i
+                  Pow(MaxMarginal([t], Probability(component_i, Linearize(t))), importance_i) *  
+                  Pow(Probability(t | g), Sum(importances)),  
+              ParseTree(generated))
+            BY SemanticCoherence, MaxMarginalUpperBound, ArithmeticMeanGeometricMeanInequality
+          ≥ 𝔼 t ~ ParseTreeDistribution(generated) [ 
+                Prod_i 
+                  Pow(MaxMarginal([t], Probability(component_i, Linearize(t))), importance_i) *
+                  Pow(Probability(t | g), Sum(importances))
+            ]
+            BY GenerateStructured(SampleParses(_)), 
+               ImportanceSamplingIdentity, MinImportanceWeight ≥ Exp(-n)
+          ≥ Prod_i
+              Pow(𝔼 t ~ ParseTreeDistribution(generated) [ 
+                    MaxMarginal([t], Probability(component_i, Linearize(t)))
+                  ], importance_i) *
+              𝔼 t ~ ParseTreeDistribution(g) [  
+                Pow(Probability(t | g), Sum(importances))
+              ]
+              - O(Exp(-n))
+            BY CauchySchwarzInequality, SumImportances ≤ 1
+
+        Mean(MAP(qual, baseline))
+          ≤ Prod_i  
+              Pow(Mean(MAP(seq -> Probability(component_i, seq), baseline)), importance_i)
+            BY JensenInequality
+          ≤ Prod_i  
+              Pow(𝔼 t ~ ParseTreeDistribution(g) [
+                     MaxMarginal([t], Probability(component_i, Linearize(t)))   
+                  ], importance_i)
+            BY MaxMarginalUpperBound
+          ≤ Prod_i
+              Pow(𝔼 t ~ ParseTreeDistribution(generated) [
+                    MaxMarginal([t], Probability(component_i, Linearize(t)))  
+                  ], importance_i) *
+              𝔼 t ~ ParseTreeDistribution(g) [
+                Pow(Probability(t | g), Sum(importances))  
+              ] 
+              
+        HENCE
+          Mean(MAP(qual, generated))  
+            ≥ Prod_i 
+                Pow(𝔼 t ~ ParseTreeDistribution(generated) [
+                      MaxMarginal([t], Probability(component_i, Linearize(t)))  
+                    ], importance_i) *
+                𝔼 t ~ ParseTreeDistribution(g) [ 
+                    Pow(Probability(t | g), Sum(importances))
+                ]
+                - O(Exp(-n))  
+            ≥ Mean(MAP(qual, baseline)) 
+              - O(Exp(-n))
+    }          
+  }
+  
+  EXAMPLES {
+    EXAMPLE StoryGeneration {
+      GIVEN model : LanguageModel = GPT3  -- Pretrained language model
+      GIVEN g : Grammar = """
+        S -> Setting '.' Plot '.'
+        
+        Setting -> Orientation LocationPhrase Timeframe 
+        Orientation -> 'Once upon a time,' | 'Long ago,' | 'In a distant land,'
+        LocationPhrase -> 'in' Location 
+        Location -> 'a kingdom' | 'a village' | 'an enchanted forest'
+        Timeframe -> 'during' TemporalSetting
+        TemporalSetting -> 'the reign of a wise king' | 'a time of great strife' | 'an era of magic'
+
+        Plot -> Event '.' Elaboration  
+        Event -> Protagonist Action
+        Protagonist -> Character
+        Character -> Archetype | Archetype WithModifier 
+        Archetype -> 'a brave knight' | 'a humble peasant' | 'a wicked witch'  
+        WithModifier -> 'with' Attribute
+        Attribute -> 'magical powers' | 'dreams of grandeur' | 'a curse'
+        Action -> Goal | Conflict
+        Goal -> 'went on a quest' | 'searched for treasure' | 'tried to break the spell'
+        Conflict -> 'fought' Antagonist | 'was tricked by' Antagonist | 'struggled against' AbstractNoun
+        Antagonist -> Character
+        AbstractNoun -> 'fate' | 'temptation' | 'evil'
+        Elaboration -> Consequence | Twist
+        Consequence -> Resolution | Transformation
+        Resolution -> 'and succeeded' | 'but ultimately failed'
+        Transformation -> 'and was forever changed' | 'becoming' Character
+        Twist -> 'However,' Surprise
+        Surprise -> 'all was not as it seemed.' | 'an unexpected ally appeared.' 
+      """
+      GIVEN constraints : List[SemanticConstraint] = [
+        ∀ c. Character(c) => EXISTS setting. IN(c, setting) AND Setting(setting),
+        ∀ c1 c2. Character(c1) AND Character(c2) AND Conflict(c1, c2) => Opposing(c1, c2),
+        ∀ e. Event(e) => Causes(e, ∃ con. Consequence(con))
+      ]
+
+      SAMPLE GenerateStructured(model, g, constraints, temperature = 1.0, n = 10)
+    }
+
+    EXAMPLE ProductDescription {
+      GIVEN model : LanguageModel = BERT  -- Pretrained language model fine-tuned on product descriptions
+      GIVEN g : Grammar = """
+        Desc -> Intro Features Benefits
+        
+        Intro -> 'Introducing' Product ',' Tagline '.'
+        Product -> Make Model
+        Make -> 'Acme' | 'Dyna' | 'Oasis'  
+        Model -> 'X1000' | 'Zoom' | 'Fluxor'
+        Tagline -> Slogan | Purpose
+        Slogan -> 'the' Modifier 'solution' | 'your' Modifier 'companion' 
+        Purpose -> 'for' Need
+        Need -> 'easy cleaning' | 'powerful computing' | 'portable entertainment'
+        Modifier -> 'ultimate' | 'smart' | 'versatile'
+
+        Features -> 'With' FeatureList '.'  
+        FeatureList -> Feature | Feature 'and' FeatureList
+        Feature -> Attribute Specification
+        Attribute -> 'a' Dimension Measurement | Qualifier Component  
+        Dimension -> 'compact' | 'lightweight' | 'high-capacity'
+        Measurement -> Number Unit
+        Number -> '10' | '5.5' | '800' 
+        Unit -> 'inch' | 'lbs' | 'GB'
+        Qualifier -> 'powerful' | 'intelligent' | 'durable'
+        Component -> 'processor' | 'battery' | 'sensors'
+        
+        Benefits -> 'So you can' BenefitList '.'
+        BenefitList -> Benefit | Benefit 'and' BenefitList  
+        Benefit -> Verb Object Qualifier
+        Verb -> 'create' | 'experience' | 'enjoy'
+        Object -> 'documents' | 'virtual worlds' | 'multimedia'
+        Qualifier -> 'effortlessly' | 'like never before' | 'anywhere'
+      """
+
+
+
+
+CONCEPT StructuredGeneration_v4 {
+  LANGUAGE {
+    INCLUDE StructuredGeneration_v3
+
+    TYPE ContextFreeGrammar <: Grammar
+
+    FUNC Parse(seq : Sequence, g : ContextFreeGrammar) : ParseTree
+    FUNC GenerateCFG(model : LanguageModel, g : ContextFreeGrammar, seq : Sequence, 
+                     n : Nat) : Sequence
+
+    FUNC Yacc(grammar_spec : String) : ContextFreeGrammar
+    FUNC Lark(grammar_spec : String) : ContextFreeGrammar
+
+    REWRITE GenerateCFG(model, g, seq, n) =
+      LET guide = CFGGuide(g, model.Tokenizer) IN
+      LET sampler = MultinomialSampler(model, guide) IN
+      GenerateGuided(sampler, seq, n)
+
+    FUNC CFGGuide(g : ContextFreeGrammar, tokenizer : Tokenizer) -> Guide =  
+      LET parser = LarkParser(g) IN
+      λ (state : ParserState) -> 
+        LET valid_tokens = 
+          { token | ParseStep(parser, state, token) ≠ ParseError } IN
+        IF IsAccepting(parser, state) THEN  
+          valid_tokens ∪ {tokenizer.EOSToken}
+        ELSE
+          valid_tokens
+
+    AXIOM CFGSound {
+      ∀ (g : ContextFreeGrammar) (seq : Sequence).
+        seq ∈ Language(g) <=> Parse(g, seq) ≠ None
+    }
+
+    AXIOM CFGComplete {
+      ∀ (g : ContextFreeGrammar) (model : LanguageModel) (seq : Sequence) (n : Nat).
+        Parse(g, GenerateCFG(model, g, seq, n)) ≠ None
+    }
+  }
+
+  PROOFS {
+    THEOREM CFGEfficiency {
+      STATEMENT:
+        ∀ (model : LanguageModel) (g : ContextFreeGrammar) (seq : Sequence).
+          AvgLatency(GenerateTokens(model, seq, CFGGuide(g, model.Tokenizer))) ≤
+          AvgLatency(GenerateTokens(model, seq, Unstructured)) + 1ms
+
+      PROOF:
+        LET model : LanguageModel, 
+            g : ContextFreeGrammar,
+            seq : Sequence,
+            guide = CFGGuide(g, model.Tokenizer)
+
+        AvgLatency(GenerateTokens(model, seq, guide))
+          = AvgLatency(GenerateCFG(model, g, seq, Inf))
+          ≤ AvgLatency(GenerateTokens(model, seq, guide, model.Tokenizer.Vocabulary))
+            + AvgParseLatency(Parse(g))
+            BY DefinitionOfGenerateCFG
+          ≤ AvgLatency(GenerateTokens(model, seq, Unstructured))  
+            + O(1) * AvgLatency(ParseStep(LarkParser(g)))
+            BY LarkParserEfficiency
+          ≤ AvgLatency(GenerateTokens(model, seq, Unstructured)) + 1ms
+            BY ParseStepLatencyBound
+    }
+  }
+
+  EXAMPLES {
+    SQL {
+      GRAMMAR SqlGrammar = """
+        %import .org.partial_sql.start -> start_sql_code
+
+        start: PROMPT code_block
+        code_block : "\n```sql\n" start_sql_code "\n```\n"
+
+        PROMPT : /.+/
+
+        %import common.WS
+        %ignore WS
+      """
+
+      MODEL SqlModel = "Salesforce/codegen-350M-mono"
+
+      PROMPT SqlPrompt = "The following is a SQL statement that returns values from the \"id\" column of the \"users\" table:\n```sql\nselect"
+
+      GENERATE SqlGeneration = GenerateCFG(LoadModel(SqlModel), Lark(SqlGrammar), SqlPrompt, 100)
+
+      ASSERT Parse(Lark(SqlGrammar), SqlPrompt + SqlGeneration) ≠ None
+    }
+
+    C {
+      GRAMMAR CGrammar = Yacc("""
+        ... // Full C grammar Yacc specification
+      """)
+
+      MODEL CModel = "google/codegemma-2b"
+
+      PROMPT CPrompt = """
+        // Complete the following C program that determines whether or not an integer is a prime number
+        int main() {
+
+          int n, i, flag = 0;
+          printf("Enter a positive integer: ");
+          scanf("%d", &n);
+
+          // 0 and 1 are not prime numbers
+          // change flag to 1 for non-prime number
+          if (n == 0 || n == 1)
+            flag = 1;
+
+          for (i = 2; i <= n / 2;
+      """
+
+      GENERATE CGeneration = GenerateCFG(LoadModel(CModel), CGrammar, CPrompt, 400)
+
+      ASSERT Parse(CGrammar, CPrompt + CGeneration) ≠ None
+      
+      THEOREM CPerformance {
+        GIVEN model = LoadModel(CModel)
+        PROVE 
+          AvgLatency(GenerateTokens(model, CPrompt, CFGGuide(CGrammar, model.Tokenizer)))
+          ≤ AvgLatency(GenerateTokens(model, CPrompt, Unstructured)) + 1ms
+        BY CFGEfficiency
+      }
+    }
+  }
+}
+
+
+
+
+
+CONCEPT StructuredGeneration_v3 {
+  LANGUAGE {
+    INCLUDE LanguageModel
+    INCLUDE StructuredGeneration_v2
+
+    TYPE Example = (Input, Output)
+    TYPE FewShotLearning(n : Nat) = List[Example, n]
+
+    FUNC Unstructured : Grammar = GRAMMAR { 
+      START -> (.*), 
+      RULES :: [] 
+    }
+
+    FUNC Accuracy(model : LanguageModel, examples : List[Example], 
+                  g : Grammar) : [0, 1] =
+      LET preds = MAP(
+        (input, _) -> Generate(model, InputToPrompt(input, examples, g)), 
+        examples
+      )
+      IN Mean(MAP(
+        ((_, output), pred) -> OutputMatch(output, pred), 
+        ZIP(examples, preds)
+      ))
+
+    FUNC PromptEfficiency(g : Grammar, model : LanguageModel, n : Nat) : [0, 1] =
+      LET examples = RandomSample(TestSet, n)
+      IN Accuracy(model, examples, g) - Accuracy(model, examples, Unstructured)
+
+    AXIOM PromptEfficiencyBound {
+      ∀ (g : Grammar) (model : LanguageModel) (k n : Nat). 
+        k < n =>
+        PromptEfficiency(g, model, k) ≥ PromptEfficiency(Unstructured, model, n)
+    }
+  }
+
+  PROOFS {
+    THEOREM StructuredFewShot {
+      STATEMENT:
+        ∀ (g : Grammar) (model : LanguageModel) (n : Nat).
+          PromptEfficiency(g, model, 1) ≥ PromptEfficiency(Unstructured, model, n)
+
+      PROOF:
+        LET g : Grammar, model : LanguageModel, n : Nat
+
+        PromptEfficiency(g, model, 1)
+          ≥ PromptEfficiency(Unstructured, model, 1)  
+            BY {
+              LET examples = RandomSample(TestSet, 1)
+
+              Accuracy(model, examples, g)
+                ≥ Accuracy(model, examples, Unstructured)
+                  BY StructuredGenerationImproves
+            }
+          ≥ PromptEfficiency(Unstructured, model, n)
+            BY {
+              PromptEfficiencyBound WITH k = 1
+            }
+
+        HENCE PromptEfficiency(g, model, 1) ≥ PromptEfficiency(Unstructured, model, n)
+    }
+
+    THEOREM StructuredGenerationImproves {
+      STATEMENT:
+        ∀ (model : LanguageModel) (examples : List[Example]) (g : Grammar).
+          Accuracy(model, examples, g) ≥ Accuracy(model, examples, Unstructured)
+
+      PROOF:
+        LET model : LanguageModel, examples : List[Example], g : Grammar
+
+        LET preds_g = MAP(
+              (input, _) -> Generate(model, InputToPrompt(input, examples, g)), 
+              examples
+            ),
+            preds_u = MAP(
+              (input, _) -> Generate(model, InputToPrompt(input, examples, Unstructured)), 
+              examples
+            )
+        
+        ∀ ((_, output), pred_g, pred_u) ∈ ZIP(examples, preds_g, preds_u).
+          OutputMatch(output, pred_g) ≥ OutputMatch(output, pred_u)  
+            BY PropertyOfStructuredGeneration
+
+        HENCE Mean(MAP(((_, output), pred) -> OutputMatch(output, pred), ZIP(examples, preds_g)))  
+                ≥ Mean(MAP(((_, output), pred) -> OutputMatch(output, pred), ZIP(examples, preds_u)))
+              BY MonotonicityOfMean
+        
+        HENCE Accuracy(model, examples, g) ≥ Accuracy(model, examples, Unstructured)  
+          BY definition of Accuracy
+    }
+  }
+}
+
+
+
+
+CONCEPT StructuredGeneration_v2 {
+  LANGUAGE {
+    INCLUDE LanguageModel
+
+    TYPE Grammar
+    TYPE Rule <: Sequence  
+    TYPE Derivation = List[Rule]
+    TYPE ParseTree = Tree[Token]
+    TYPE FSM = {
+      States : Set[State],
+      Transitions : Set[(State, Token, State)],  
+      StartState : State,
+      FinalStates : Set[State]
+    }
+    TYPE Tokenizer = Sequence -> List[Token]
+
+    FUNC Parse(seq : Sequence, g : Grammar) : Option[ParseTree]
+    FUNC IsValid(seq : Sequence, g : Grammar) : Bool
+    FUNC FilterValid(dist : Distribution, g : Grammar) : Distribution
+    FUNC ToFSM(g : Grammar) : FSM
+    FUNC SimplifyFSM(fsm : FSM, tokenizer : Tokenizer) : FSM
+    FUNC CoalesceTransitions(fsm : FSM, tokenizer : Tokenizer) : FSM
+
+    AXIOM GrammarInvariant {
+      ∀ (g : Grammar) (seq : Sequence).
+        IsValid(seq, g) <=> ∃ (t : ParseTree). Parse(seq, g) = Some(t)
+    }
+
+    AXIOM ValidDistribution {
+      ∀ (dist : Distribution) (g : Grammar).  
+        Support(FilterValid(dist, g)) ⊆ { seq | IsValid(seq, g) }
+    }
+
+    AXIOM FSMLanguage {
+      ∀ (g : Grammar).
+        { seq | IsValid(seq, g) } = Language(ToFSM(g))
+    }
+
+    REWRITE Parse(Concat(seq, [t]), g : Grammar) =
+      MATCH Parse(seq, g) WITH
+      | None -> None
+      | Some(tree) ->
+        MATCH SelectApplicable(Rules(g), tree, t) WITH
+        | None -> None  
+        | Some(rule) -> Some(ApplyRule(rule, tree, t))
+
+    REWRITE SimplifyFSM(fsm : FSM, tokenizer : Tokenizer) =
+      LET fsm_tokens = MAP(t -> tokenizer([t]), AllTransitions(fsm))
+      IN CoalesceTransitions(fsm_tokens, tokenizer)
+
+    REWRITE CoalesceTransitions((s1, tok1, s2) : FSM, tokenizer : Tokenizer) =
+      IF ∃ ((s1, tok2, s2) : FSM).
+           tokenizer(tok2) = [prefix, ..., suffix] ∧ tok1 = prefix  
+      THEN (s1, tok2, s2)
+      ELSE (s1, tok1, s2)
+
+    NOTATION "D(g)" = { seq | IsValid(seq, g) }
+    NOTATION "Language(M)" = { seq | ∃ (p : Path(M)). Consume(seq, p) ∈ FinalStates(M) }
+  }
+
+  PROOFS {
+    THEOREM SimplifyFSM_Correctness {
+      STATEMENT:
+        ∀ (g : Grammar) (tokenizer : Tokenizer).
+          Language(ToFSM(g)) = Language(SimplifyFSM(ToFSM(g), tokenizer))
+
+      PROOF:
+        LET g : Grammar, tokenizer : Tokenizer
+        
+        Language(ToFSM(g))
+          = { seq | IsValid(seq, g) }  
+            BY FSMLanguage
+          = { seq | ∃ (p : Path(ToFSM(g))). Consume(seq, p) ∈ FinalStates(ToFSM(g)) }
+            BY definition Language
+          = { seq | ∃ (p : Path(SimplifyFSM(ToFSM(g), tokenizer))). 
+                      Consume(seq, p) ∈ FinalStates(SimplifyFSM(ToFSM(g), tokenizer)) }  
+            BY {
+              LET M = ToFSM(g), M' = SimplifyFSM(M, tokenizer)
+              
+              (seq ∈ Language(M)) 
+                => ∃ (p : Path(M)). Consume(seq, p) ∈ FinalStates(M)
+                => ∃ (p : Path(M')). Consume(seq, CoalesceTransitions(p, tokenizer)) ∈ FinalStates(M')
+                  BY definition CoalesceTransitions 
+                => seq ∈ Language(M')
+
+              (seq ∈ Language(M')) 
+                => ∃ (p : Path(M')). Consume(seq, p) ∈ FinalStates(M') 
+                => ∃ (p : Path(M)). Consume(seq, ExpandTransitions(p, tokenizer)) ∈ FinalStates(M)
+                  BY definition CoalesceTransitions
+                => seq ∈ Language(M)
+            }
+          = Language(SimplifyFSM(ToFSM(g), tokenizer))  
+            BY definition Language
+            
+        HENCE Language(ToFSM(g)) = Language(SimplifyFSM(ToFSM(g), tokenizer))
+    }
+
+    THEOREM SimplifyFSM_Speedup {
+      STATEMENT:
+        ∀ (M : FSM) (tokenizer : Tokenizer) (seq : Sequence) (model : LanguageModel).
+          Length(GenerateTokens(model, seq, M)) ≥ 
+          Length(GenerateTokens(model, seq, SimplifyFSM(M, tokenizer)))
+
+      PROOF:
+        LET M : FSM, tokenizer : Tokenizer, seq : Sequence, model : LanguageModel
+        
+        LET gen_m = GenerateTokens(model, seq, M),
+            gen_m' = GenerateTokens(model, seq, SimplifyFSM(M, tokenizer))
+
+        Length(gen_m) 
+          ≥ Length(gen_m')  BY {
+            LET p = Path(M, gen_m), 
+                p' = Path(SimplifyFSM(M, tokenizer), gen_m')
+
+            |gen_m| 
+              = |p|
+              ≥ |CoalesceTransitions(p, tokenizer)|  
+                BY definition CoalesceTransitions
+              = |p'|  
+                BY definition Path
+              = |gen_m'|
+          }
+        
+        HENCE Length(gen_m) ≥ Length(gen_m')
+    }
+  }  
+}
+
+
+
+
+
+CONCEPT StructuredGeneration_v1 {
+  LANGUAGE {
+    INCLUDE LanguageModel
+
+    TYPE Grammar
+    TYPE Rule <: Sequence
+    TYPE Derivation = List[Rule]
+    TYPE ParseTree = Tree[Token]
+
+    FUNC Parse(seq : Sequence, g : Grammar) : Option[ParseTree]
+    FUNC IsValid(seq : Sequence, g : Grammar) : Bool
+    FUNC FilterValid(dist : Distribution, g : Grammar) : Distribution
+
+    AXIOM GrammarInvariant {
+      ∀ (g : Grammar) (seq : Sequence).
+        IsValid(seq, g) <=> ∃ (t : ParseTree). Parse(seq, g) = Some(t)
+    }
+
+    AXIOM ValidDistribution {
+      ∀ (dist : Distribution) (g : Grammar).
+        Support(FilterValid(dist, g)) ⊆ { seq | IsValid(seq, g) }  
+    }
+
+    REWRITE Parse(Concat(seq, [t]), g : Grammar) =
+      MATCH Parse(seq, g) WITH
+      | None -> None  
+      | Some(tree) ->
+        MATCH SelectApplicable(Rules(g), tree, t) WITH
+        | None -> None
+        | Some(rule) -> Some(ApplyRule(rule, tree, t))
+
+    NOTATION "D(g)" = { seq | IsValid(seq, g) }
+  }
+
+  STRUCTURE PCFG {
+    REQUIRE Grammar
+    REQUIRE ∀ (r : Rule). 0 ≤ Prob(r) ∧ Prob(r) ≤ 1
+    REQUIRE ∀ (sym : Symbol). Sum(MAP(Prob, SelectRules(sym))) = 1
+
+    FUNC Prob(r : Rule) : [0, 1]
+    FUNC SelectRules(sym : Symbol) : Set[Rule]
+
+    REWRITE FilterValid(dist, pcfg : PCFG) =
+      LET normalize = (dist' : Distribution) ->  
+        dist' / Sum(dist')
+      IN normalize(MAP((seq, p) -> IF IsValid(seq, pcfg) THEN p ELSE 0, dist))
+  }
+
+  PROOFS {
+    TACTIC ParseUnique(g : Grammar, seq : Sequence) -> 𝔹 =
+      MATCH Parse(seq, g) WITH
+      | None -> ❌
+      | Some(t) -> ✔
+
+    THEOREM ValidParse {
+      STATEMENT:
+        ∀ (g : Grammar) (seq : Sequence) (t : ParseTree).
+          Parse(seq, g) = Some(t) => IsValid(seq, g)
+
+      PROOF:
+        LET g : Grammar, seq : Sequence, t : ParseTree
+        
+        ASSUME Parse(seq, g) = Some(t)
+        
+        SHOW IsValid(seq, g) BY {
+          LET t = WITNESS(Parse(seq, g))  
+          ✔ BY ParseUnique(g, seq)
+        }
+    }
+    
+    THEOREM FilteredIsValid {
+      STATEMENT:
+        ∀ (dist : Distribution) (g : Grammar).
+          Support(FilterValid(dist, g)) ⊆ D(g)
+          
+      PROOF:
+        LET dist : Distribution, g : Grammar
+        
+        LET filtered = FilterValid(dist, g)
+        LET seq : Sequence, seq ∈ Support(filtered)
+        
+        filtered[seq] > 0  
+        => dist[seq] > 0 ∧ IsValid(seq, g)
+           BY ValidDistribution, FilterValid
+        => seq ∈ D(g)
+           BY GrammarInvariant
+    }
+  }
+}
+
+
+
+
+
+CONCEPT LanguageModel {
+  LANGUAGE {
+    TYPE Token
+    TYPE Sequence = List[Token]
+    TYPE Vocab <: Set[Token]
+    TYPE Distribution = Vocab -> [0, 1]
+    TYPE Embedding = Token -> Vector[Dim]
+
+    FUNC Predict(seq : Sequence) : Distribution
+    FUNC Generate(seq : Sequence, n : Nat) : Sequence  
+    FUNC Encode(seq : Sequence) : Vector[Dim]
+    FUNC Decode(v : Vector[Dim]) : Sequence
+
+    AXIOM NormDist {
+      ∀ (d : Distribution). Sum(d) = 1
+    }
+    
+    AXIOM VocabCoverage {
+      ∀ (seq : Sequence). ∀ (t : Token). t ∈ seq => t ∈ Vocab  
+    }
+
+    NOTATION "D(Vocab)" = Distribution
+    NOTATION "E(Dim)" = Embedding
+  }
+
+  STRUCTURE Transformer(
+    Layers : Nat, 
+    Heads : Nat,
+    HiddenDim : Nat,  
+    FFDim : Nat,
+    Embeddings : Vocab -> E(HiddenDim),
+    PositionalEncoding : Sequence -> E(HiddenDim)
+  ) {
+    REQUIRE Divisible(HiddenDim, Heads)
+
+    LET SelfAttention(Q K V : Vector[HiddenDim]) -> Vector[HiddenDim] = ...
+    LET FeedForward(X : Vector[HiddenDim]) -> Vector[HiddenDim] = ...
+    LET AttentionHead(X : Vector[HiddenDim]) -> Vector[HiddenDim] = ...    
+    LET TransformerLayer(X : Vector[HiddenDim]) -> Vector[HiddenDim] = ...
+    
+    REWRITE Encode(seq : Sequence) =
+      FOLD(TransformerLayer, 
+        MAP((t, i) -> Embeddings(t) + PositionalEncoding(seq)[i], ENUM(seq)),  
+        Layers
+      )
+
+    REWRITE Decode(v : Vector[HiddenDim]) =
+      LET distribution = Softmax(Linear(v))
+      IN SAMPLE(distribution, Length(v))
+  }
+
+  PROOFS {
+    THEOREM Autoregressive {
+      STATEMENT:
+        ∀ (m : LanguageModel) (seq : Sequence) (t : Token).
+          Predict(m, Concat(seq, [t]))[t] = 
+            Predict(m, seq)[t] * Predict(m, Concat(seq, [t]))[t] / 
+              Sum(MAP(t' -> Predict(m, seq)[t'] * Predict(m, Concat(seq, [t']))[t'], Vocab))
+
+      PROOF:
+        LET m : LanguageModel, seq : Sequence, t : Token
+
+        Predict(m, Concat(seq, [t]))[t]  
+          = Exp(DotProduct(Encode(m, seq), Embedding(t))) / 
+              Sum(MAP(t' -> Exp(DotProduct(Encode(m, seq), Embedding(t'))), Vocab))
+          = Exp(DotProduct(Encode(m, seq), Embedding(t))) / Exp(LogSumExp(...))  
+          = Softmax(DotProduct(Encode(m, seq), Embedding(t)))
+          = Softmax(DotProduct(Encode(m, seq), Embedding(t)))[t]  
+          = Softmax(MAP(t' -> DotProduct(Encode(m, seq), Embedding(t')), Vocab))[t]
+          = Predict(m, seq)[t] * Predict(m, Concat(seq, [t]))[t] /
+              Sum(MAP(t' -> Predict(m, seq)[t'] * Predict(m, Concat(seq, [t']))[t'], Vocab))
+    }
+
+    THEOREM UniqueDecoding {
+      STATEMENT:  
+        ∀ (m : LanguageModel) (seq seq' : Sequence).
+          Encode(m, seq) = Encode(m, seq') => seq = seq'
+
+      PROOF:
+        LET m : LanguageModel, seq seq' : Sequence
+        
+        ASSUME Encode(m, seq) = Encode(m, seq')
+        
+        LET v = Encode(m, seq)
+        
+        seq' = Decode(m, Encode(m, seq'))  
+             = Decode(m, Encode(m, seq))
+             = Decode(m, v)  
+             = seq
+        
+        HENCE seq = seq'
+    }
+  }
+}

@@ -1,0 +1,179 @@
+CONCEPT GeometricTypeTheory {
+  PARAMETERS {
+    d : Nat  -- Ambient dimension
+    𝕜 : Field -- Coefficient field
+    N : Nat  -- Sequence length for attention mechanism
+  }
+
+  CONTEXT {
+    TYPES {
+      INDUCTIVE GType {
+        CASE Base
+        CASE Arrow(GType, GType)
+        CASE Tensor(GType, GType)
+        CASE ManifoldType(Shape)
+      }
+
+      INDUCTIVE GTerm {
+        CASE Var(String)
+        CASE Abs(String, GType, GTerm)
+        CASE App(GTerm, GTerm)
+        CASE TensorProd(GTerm, GTerm)
+        CASE ManifoldPoint(Shape, Point)
+      }
+
+      Shape := CS(ℝ^d)
+      Point := ℝ^d
+      ENV := MAP(String, GType)
+      
+      AttentionLayer := Attention(GTerm, GTerm, GTerm)
+    }
+
+    STRUCTURES {
+      STRUCTURE GTyping {
+        TypeOf(env : ENV, t : GTerm) -> GType
+          CASE Var(x) => env(x)
+          CASE Abs(x, T, t) => Arrow(T, TypeOf(env ∪ {x : T}, t))
+          CASE App(f, t) => (
+            LET S = TypeOf(env, f)
+            LET T = TypeOf(env, t)
+            REQUIRE S IS Arrow(_, U) 
+            REQUIRE S.1 = T
+            U  
+          )
+          CASE TensorProd(t1, t2) => Tensor(TypeOf(env, t1), TypeOf(env, t2))
+          CASE ManifoldPoint(M, p) => ManifoldType(M)
+
+        AXIOM Soundness {
+          env ⊢ t : T ⇒ (t ~>* v ⇒ env ⊢ v : T)
+        }
+      }
+
+      STRUCTURE GSemantics {
+        Reduces(t : GTerm, t' : GTerm)
+          CASE App(Abs(x, _, t), s) => t[x ↦ s]
+          CASE App(f, t) => App(f', t) WHERE f ~> f'
+          CASE App(f, t) => App(f, t') WHERE t ~> t'
+          CASE TensorProd(t1, t2) => TensorProd(t1', t2) WHERE t1 ~> t1'
+          CASE TensorProd(t1, t2) => TensorProd(t1, t2') WHERE t2 ~> t2'
+      }
+
+      STRUCTURE ManifoldOperations {
+        FIELD ParallelTransport(M : Shape, p q : Point, v : GTerm) -> GTerm
+        FIELD ExpMap(M : Shape, p : Point, v : GTerm) -> Point
+        FIELD LogMap(M : Shape, p q : Point) -> GTerm
+
+        AXIOM ParallelTransportComposition {
+          ParallelTransport(M, p, r, ParallelTransport(M, q, r, v)) =
+            ParallelTransport(M, p, q, v)
+        }
+
+        AXIOM ExpLogInverse {
+          ExpMap(M, p, LogMap(M, p, q)) = q
+        }
+      }
+
+      STRUCTURE GeometricAttention IMPLEMENTS AttentionLayer {
+        IMPLEMENT Alignment(k : GTerm, q : GTerm) -> Real
+          WITH CASE (ManifoldPoint(M, p), ManifoldPoint(M, q)) =>
+                 EXP(-NORM(LogMap(M, p, q))^2 / 2)
+               CASE _ => DotProductAttention.Alignment(k, q)
+
+        IMPLEMENT FUNC(q : GTerm, ks : Seq(GTerm), vs : Seq(GTerm)) -> GTerm
+          WITH CASE (ManifoldPoint(M, p), _, _) =>
+                 LET α = SoftMax(Seq(Alignment(ks[i], q) for i in Fin(N)))
+                 IN ManifoldPoint(M, ExpMap(M, p, Σ_i α_i * LogMap(M, p, vs[i])))
+               CASE _ => DotProductAttention(q, ks, vs)
+      }
+    }
+
+    NOTATION {
+      ⊢ := TypeOf
+      ~> := Reduces
+      "_[_ ↦ _]" := Subst
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE BetaReduction {
+      App(Abs(x, T, t), s) ~> t[x ↦ s]
+    }
+
+    SIMPLIFY TensorDistribution {
+      App(TensorProd(f, g), TensorProd(x, y)) ~> 
+        TensorProd(App(f, x), App(g, y))
+    }
+
+    REWRITE ParallelTransportCommutativity {
+      ParallelTransport(M, p, q, TensorProd(v, w)) <=>
+        TensorProd(ParallelTransport(M, p, q, v), ParallelTransport(M, p, q, w))
+    }
+  }
+
+  PROOFS {
+    THEOREM TypePreservation {
+      env ⊢ t : T ∧ t ~> t' ⇒ env ⊢ t' : T
+    }
+    PROOF {
+      ASSUME env ⊢ t : T AND t ~> t'
+      CASE App(Abs(x, S, s), r) ~> s[x ↦ r] {
+        HAVE env ⊢ Abs(x, S, s) : Arrow(S, T)
+        HAVE env ⊢ r : S
+        SHOW env ⊢ s[x ↦ r] : T BY SubstitutionLemma
+      }
+      CASE App(f, t) ~> App(f', t) WHERE f ~> f' {
+        HAVE env ⊢ f : Arrow(S, T)
+        HAVE env ⊢ f' : Arrow(S, T) BY InductionHypothesis
+        SHOW env ⊢ App(f', t) : T
+      }
+      CASE TensorProd(t1, t2) ~> TensorProd(t1', t2) WHERE t1 ~> t1' {
+        HAVE env ⊢ t1 : T1
+        HAVE env ⊢ t1' : T1 BY InductionHypothesis
+        SHOW env ⊢ TensorProd(t1', t2) : Tensor(T1, T2)
+      }
+      QED
+    }
+
+    THEOREM GeometricAttentionCovariance {
+      FORALL (M : Shape, f : Diffeomorphism(M), q : GTerm, ks vs : Seq(GTerm)) .
+        f(GeometricAttention(q, ks, vs)) = GeometricAttention(f(q), f(ks), f(vs))
+    }
+    PROOF {
+      ASSUME M : Shape, f : Diffeomorphism(M), 
+             q : GTerm, ks vs : Seq(GTerm)
+      
+      LET α = SoftMax(Seq(Alignment(ks[i], q) for i in Fin(N)))
+      
+      f(GeometricAttention(q, ks, vs))
+        = f(ExpMap(M, p, Σ_i α_i * LogMap(M, p, vs[i]))) [BY DEF GeometricAttention]
+        = ExpMap(M, f(p), Df_p(Σ_i α_i * LogMap(M, p, vs[i]))) [BY Naturality of ExpMap]
+        = ExpMap(M, f(p), Σ_i α_i * Df_p(LogMap(M, p, vs[i]))) [BY Linearity of Df]
+        = ExpMap(M, f(p), Σ_i α_i * LogMap(M, f(p), f(vs[i]))) [BY Naturality of LogMap]
+        = GeometricAttention(f(q), f(ks), f(vs)) [BY DEF GeometricAttention]
+      
+      QED
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE GeometricLambdaTerm {
+      LET M = Sphere(2)
+      LET p = (1, 0, 0)
+      LET q = (0, 1, 0)
+      LET v = TensorProd(ManifoldPoint(M, p), ManifoldPoint(M, q))
+      
+      LET geoLambda = Abs("x", ManifoldType(M), 
+                          App(GeometricAttention, 
+                              TensorProd(Var("x"), v)))
+
+      THEN ∅ ⊢ geoLambda : Arrow(ManifoldType(M), ManifoldType(M))
+      
+      LET result = App(geoLambda, ManifoldPoint(M, (0, 0, 1)))
+      
+      THEN result ~>* ManifoldPoint(M, ExpMap(M, (0, 0, 1), 
+                                              α_1 * LogMap(M, (0, 0, 1), p) + 
+                                              α_2 * LogMap(M, (0, 0, 1), q)))
+        WHERE (α_1, α_2) = SoftMax([Alignment(p, (0, 0, 1)), Alignment(q, (0, 0, 1))])
+    }
+  }
+}

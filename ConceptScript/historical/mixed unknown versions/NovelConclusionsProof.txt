@@ -1,0 +1,43 @@
+CONCEPT NovelConclusionsProof {
+  PROOFS {
+    proof ExistenceProof: ∃R1, R2, r1: R1. 
+      (∃r2: R2. SoundsLike(r1, r2)) ∧
+      ∃c1: Conclusion. Generates(r1, c1) ∧ ¬∃k: Knowledge. (Uses(r1, k) ∧ k = c1) {
+
+      ; Define concrete instances of R1, R2, r1, r2
+      let R1 = FormalReasoning
+      let R2 = InformalReasoning
+      let r1 = DeductiveArgument {
+        Premises = { P1: "All men are mortal", P2: "Socrates is a man" }
+        Inferences = { I1: "Modus ponens" } 
+        Conclusion = C1: "Socrates is mortal"
+      }
+      let r2 = InductiveArgument {
+        Premises = { P1': "Most observed men have died", P2': "Socrates resembles other men" }
+        Inferences = { I1': "Inductive generalization" }
+        Conclusion = C1': "Socrates will likely die"
+      }
+
+      ; Prove that r1 and r2 sound alike
+      have SoundsLike(r1, r2) by:
+        - Both arguments reason about mortality from premises about men and Socrates
+        - The conclusions are similar up to qualifiers like "is" vs "will likely"
+        - The inferences (modus ponens, inductive generalization) serve analogous roles
+
+      ; Prove that r1 generates a novel conclusion
+      have Generates(r1, C1) by definition of r1
+      assume ∃k: Knowledge. Uses(r1, k) ∧ k = C1
+      have k ∈ {P1, P2} by definition of Uses and r1
+      have k ≠ C1 for k ∈ {P1, P2} by inspection
+      contradiction
+
+      ; Package up the results  
+      let c1 = C1
+      have (∃r2: R2. SoundsLike(r1, r2)) ∧ 
+           ∃c1: Conclusion. Generates(r1, c1) ∧ ¬∃k: Knowledge. (Uses(r1, k) ∧ k = c1)
+      hence ∃R1, R2, r1: R1.
+        (∃r2: R2. SoundsLike(r1, r2)) ∧
+        ∃c1: Conclusion. Generates(r1, c1) ∧ ¬∃k: Knowledge. (Uses(r1, k) ∧ k = c1)
+    }
+  }
+}

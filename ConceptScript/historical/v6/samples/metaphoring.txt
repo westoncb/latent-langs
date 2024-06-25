@@ -1,0 +1,42 @@
+Metaphoring := (
+  Input(Topic, Vehicle),
+  DomainMapping,
+  StructuralAlignment,
+  InferenceProjection,
+  AffectTransfer,
+  Output(Understanding�Т, Understandingⱽ)  
+) :: {
+  [Topic ∈ Domain_T, Vehicle ∈ Domain_V] 
+  [Domain_T ≉ Domain_V]
+  
+  DomainMapping := (
+    Topic |> ExtractSchemas |> Tᴍ,
+    Vehicle |> ExtractSchemas |> Vᴍ,
+    CrossDomainMatch(Tᴍ, Vᴍ) |> Mₒ
+  )
+  
+  StructuralAlignment := (
+    Mₒ |> AlignEntities |> Mₑ,
+    Mₑ |> AlignRelations |> Mᵣ,
+    Mᵣ |> AlignAttributes |> Mapping
+  )
+  
+  InferenceProjection := (
+    Mapping |> ProjectInferences(Vehicle -> Topic) |> 
+    FilterInferences |>
+    Understandingᴬ
+  )
+  
+  AffectTransfer := (
+    Topic |> ExtractAffect |> Aᴛ,
+    Vehicle |> ExtractAffect |> Aᵥ,
+    BlendAffect(Aᴛ, Aᵥ) |> Aᴍ,
+    Understandingᴬ + Aᴍ |> Understandingᴬᴬ  
+  )
+  
+  Output := (
+    Reframe(Topic, Understandingᴬᴬ) |> Understandingᴹᵀ,
+    Vehicle |> Understandingⱽ,
+    [Understandingᴹᵀ > Understandingᴹᵗ]  
+  )
+}

@@ -1,0 +1,112 @@
+CONCEPT SymbolicNoncommutativeDifferentialGeometry {
+  LANGUAGE {
+    type Sym = Const(ℂ) | Var(ℕ) | Binary(Sym, Sym) | Unary(Sym)  
+    type Alg = C*-Alg | Heis(Sym) | Prod(Alg, Alg) | Ideal(Alg) | Quot(Alg, Ideal)
+    type Man = NCMan(Alg) | NCRiem(Alg, Sym) | NCLie(Alg, Lie) | NCSypl(Alg, Sym)
+    type Mod = Hilb(Alg) | Proj(Alg) 
+    
+    notation "A ∘ B" = Compose(A: Alg, B: Alg)
+    notation "A / J" = Quot(A: Alg, J: Ideal)
+    notation "L[S, T]" = Binary(S: Sym, T: Sym)        ; NC Lie derivative 
+    notation "d[S]" = Unary(S: Sym)                   ; NC exterior derivative
+    notation "∫[ω, A]" = Binary(ω: Sym, A: Alg)       ; NC integration
+    notation "⟨S, T⟩" = Binary(S: Sym, T: Sym)        ; NC inner product
+    notation "S ⋅ T" = Binary(S: Sym, T: Sym)         ; NC product
+    notation "Δ[S]" = Unary(S: Sym)                   ; Modular operator
+    
+    pred Represent(π: Alg -> Mod, ω: Sym -> Mod)
+    pred Functor(F: Alg -> Alg)
+    pred SpectralNC(𝒜: Alg, H: Mod, D: Sym)
+    
+    axiom NCLeibniz(S, T: Sym): d[S ⋅ T] = d[S] ⋅ T + S ⋅ d[T]
+    axiom NCRiemann(S, T, U, V: Sym): ⟨S ⋅ T, U ⋅ V⟩ = ⟨S, U⟩ ⋅ ⟨T, V⟩
+    axiom Modularity(S, T: Sym): Δ[S ⋅ T] = Δ[S] ⋅ Δ[T] 
+  }
+  
+  STRUCTURE {
+    ProductGeometry: {
+      A, B are algebras ⇒ (A ⊗ B, ⋅, *, Δ) is an algebra
+      π: A ⊗ B -> Mod(H) factors through π_A ⊗ π_B
+      (d, L) satisfy a Leibniz rule over ⊗  
+    }
+    
+    QuotientGeometry: {
+      J ⊂ A an ideal ⇒ (A/J, ⋅, *, Δ) is an algebra
+      π: A -> Mod(H) factors through A/J
+      (d, L, ⟨,⟩) descend to well-defined ops on A/J  
+    }
+    
+    HilbertModules: {
+      𝒜 an algebra ⇒ (E, ⟨,⟩) is a right 𝒜-module
+      ∇: E -> E ⊗_𝒜 Ω¹(𝒜) an 𝒜-connection
+      ⟨ω ⋅ ψ, φ⟩ + ⟨ψ, ω* ⋅ φ⟩ = d⟨ψ, φ⟩ + ⟨∇ψ, φ⟩ + ⟨ψ, ∇φ⟩  
+    }
+      
+    DifferentialCalculi: {
+      𝒜 an alg ⇒ (Ω*(𝒜), d) a diff calculus over 𝒜
+      d²=0, d(ω ∧ η) = dω ∧ η + (-1)^k ω ∧ dη for ω ∈ Ω^k 
+      ∫: Ω^n(𝒜) -> ℂ a closed graded trace
+    }
+  }
+
+  PROOFS {
+    theorem ConnesNCGeometry(𝒜: Alg, H: Hilb, D: Sym, π: 𝒜 -> 𝐵(H)):
+      SpectralNC(𝒜, H, D) ⊢ ∃! (Ω*(𝒜), d, ∫) with d[π(a)] = [D, π(a)]
+    {
+      assume SpectralNC(𝒜, H, D)
+      let J = 𝒜 ∩ Ker(π)
+      have 𝒜/J ≅ π(𝒜)             ; π is injective modulo J 
+      let (Ω*(𝒜/J), d, ∫) be the differential calculus on 𝒜/J
+      have d[π(a)] = [D, π(a)]     ; Connes' formula
+      Represent(π, d)  
+      Represent(π, ∫)              ; Dixmier trace ∘ π = NCIntegral
+      QuotientGeometry(𝒜, J)
+      have (Ω*(𝒜), d, ∫) lifting of (Ω*(𝒜/J), d, ∫) 
+      hence ∃! (Ω*(𝒜), d, ∫) with d[π(a)] = [D, π(a)]
+    }
+    
+    theorem NCStokes(𝒜: Alg, ω: Ω^{n-1}(𝒜)):
+      DifferentialCalculi(Ω*(𝒜), d, ∫) ⊢ ∫[dω] = 0
+    {
+      assume (Ω*(𝒜), d, ∫) a differential calculus 
+      suffices to show ∫[dω] = 0 ∀ ω ∈ Ω^{n-1}(𝒜)
+      {
+        let ω ∈ Ω^{n-1}(𝒜)
+        have d(ω ∧ η) = dω ∧ η + (-1)^{n-1} ω ∧ dη   ∀ η ∈ Ω^1
+        have ∫[d(ω∧η)] = ∫[dω∧η] + (-1)^{n-1} ∫[ω∧dη]
+        have ∫[d(ω∧η)] = 0            ; ∫ ∘ d = 0 on Ω^n
+        have ∫[ω∧dη] = 0              ; dη ∈ Ω^2, top form is Ω^n 
+        hence ∫[dω] = 0
+      }        
+    }
+
+    theorem GaugeTransform(𝒜: Alg, ∇: E -> E ⊗_𝒜 Ω¹(𝒜), u ∈ 𝒰(𝒜)):
+      HilbertModules(E, 𝒜) ⊢ ∇^u(uψ) = u∇(ψ)u* + (du)ψu*
+    {
+      assume (E, ⟨,⟩) an 𝒜-module, ∇ an 𝒜-connection
+      let ∇^u(ψ) := u∇(u*ψ)u* be gauge transform of ∇
+      have ⟨ω⋅uψ,φ⟩ + ⟨uψ,ω*⋅φ⟩ = d⟨uψ,φ⟩ + ⟨∇(uψ),φ⟩ + ⟨uψ,∇φ⟩
+      have d⟨uψ,φ⟩ = ⟨(du)ψ,φ⟩ + ⟨uψ,(du)*φ⟩ 
+      have ⟨(du)ψ,φ⟩ = ⟨(du)ψu*,uφ⟩
+      so ∇^u(uψ) = u∇(ψ)u* + (du)ψu*
+    }
+      
+    theorem FrobeniusTheorem(𝒜: Alg, H: Hilb, D: Sym, π: 𝒜 -> 𝐵(H)): 
+      SpectralNC(𝒜, H, D) ⊢ ∃ ρ ∈ 𝒜*⁺ with ρ(ab) = ρ(bσ(a)) ∀ a,b ∈ 𝒜 
+    {
+      assume SpectralNC(𝒜, H, D)
+      have ∃ ψ ∈ H with Dψ = 0   ; D has compact resolvent  
+      define ρ(a) := ⟨ψ, π(a)ψ⟩  ∀ a ∈ 𝒜
+      have ρ ∈ 𝒜*⁺               ; ρ is positive linear functional
+      define σ(a) := Δ[a] Δ⁻¹     ; Modular automorphism group
+      have ρ(ab) = ⟨π(b*)ψ, π(a*)ψ⟩          
+      have π(b*)ψ = π(σ(b*))ψ     ; KMS condition for ψ  
+      so ρ(ab) = ⟨π(σ(b*))ψ, π(a*)ψ⟩ = ρ(bσ(a))
+    }
+  }
+}
+
+This Concept blends ideas from noncommutative geometry and symbolic differential geometry to develop a theory of "Symbolic Noncommutative Differential Geometry". It introduces noncommutative analogues of manifolds, Riemannian metrics, Lie groups, symplectic structures, and Hilbert spaces, all built from noncommutative algebras.
+Key constructions include product and quotient noncommutative geometries, Hilbert modules equipped with connections, and differential calculi satisfying abstract Stokes' theorem. Connes' noncommutative geometry is recovered from a spectral triple.
+Proofs are given for the existence and uniqueness of the differential calculus associated to a spectral triple, a noncommutative Stokes' theorem, the behavior of connections under gauge transformations, and the existence of KMS states (a version of the noncommutative Frobenius theorem).
+The language introduces notation for composing algebras, quotienting by ideals, Lie derivatives, exterior derivatives, noncommutative integrals and inner products, modular operators, and more. Predicates are defined for algebra representations, algebra functors, and spectral triples.

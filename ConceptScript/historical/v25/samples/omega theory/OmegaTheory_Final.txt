@@ -1,0 +1,333 @@
+CONCEPT OmegaTheory_Final {
+  LANGUAGE {
+    TYPE Distinction(𝔻) {
+      Physical : 𝔻  
+      Informational : 𝔻
+      Mental : 𝔻
+      Intentional : 𝔻
+    }
+
+    TYPE OmegaPoint(Χ : ℝ³, Ψ : ℂ, Φ : 𝕊³)
+    TYPE OmegaField = Matrix[OmegaPoint, N, M, P]
+    TYPE OmegaOperator = OmegaField -> OmegaField
+    TYPE OmegaAction = ℝ
+
+    TYPE DistinctionSpace(𝔻) {  
+      Distinctions : SET(Distinction)
+      Geometry : GeometricStructure(𝔻)
+      Dynamics : DistinctionDynamics(𝔻)
+    }
+
+    TYPE GeometricStructure(𝔻) {
+      Metric : ∀(p : 𝔻) . PositiveDefinite(p) 
+      Connection : ∀(X, Y : Vector(𝔻)) . Connection(X, Y)
+      Curvature : ∀(X, Y : Vector(𝔻)) . Curvature(X, Y)
+    }
+
+    TYPE DistinctionDynamics(𝔻) {  
+      Evolution : ∀(x : 𝔻, t : ℝ) . Evolution(x, t)
+      Interaction : ∀(x, y : 𝔻) . Coupling(x, y)
+      Measurement : ∀(x : 𝔻, t : ℝ) . ProbabilityMeasure(x, t)
+    }
+
+    FUNC ObservationSpace : OmegaField -> SET(DistinctionSpace)
+    FUNC InformationEntropy : DistinctionSpace -> ℝ
+    FUNC Complexity : DistinctionSpace -> ℝ  
+    FUNC Entanglement : OmegaPoint × OmegaPoint -> Bool
+    FUNC Consciousness : OmegaPoint -> Bool
+    FUNC FreeWill : OmegaPoint -> Bool
+
+    AXIOM DistinctionHolography {
+      ∀(𝛀 : OmegaField, 𝔻 : DistinctionSpace) .
+        𝔻.Geometry ⟷ ExpectedLocalObservables(𝛀, 𝔻)
+    }
+
+    AXIOM ConsciousIntentionalEntanglement {  
+      ∀(𝛀 : OmegaField, x : OmegaPoint) .
+        Conscious(x) <=> 
+          ∃(𝔻_x : DistinctionSpace(Mental), 𝔻_i : DistinctionSpace(Intentional)) . 
+            Entanglement(x, 𝔻_x) ∧ Entanglement(𝔻_x, 𝔻_i)
+    }
+
+    AXIOM EffectiveComplexityConsciousness {
+      ∀(𝛀 : OmegaField, 𝔻 : DistinctionSpace(Mental)) .  
+        Mean(Complexity, 𝔻) ↑ <=> 
+          ∃(C : ConnectedComponent(𝔻)) . Mean(Conscious, C) ↑
+    }
+
+    AXIOM FreeWillComplex {
+      ∀(𝛀 : OmegaField) .
+        Mean(FreeWill, 𝛀) ↑ <=>
+          Mean(Complexity, ObservationSpace(𝛀)) ↑ ∧ 
+          Variance(Complexity, ObservationSpace(𝛀)) ↑
+    }
+  }
+
+  STRUCTURE OmegaTheory {
+    𝒪 : OmegaField  ; Theory of Everything
+
+    𝑫 : SET(DistinctionSpace)  ; Emergent domains
+    𝑬 : ∀(D1, D2 : 𝑫) . DistinctionSpace.Morphism(D1, D2)  ; Inter-domain interactions
+
+    𝑮 : GeometricStructure(𝒪)  ; Fundamental geometry  
+    𝑸 : QuantumSystem(𝒪)  ; Quantum states and observables
+    𝑪 : ComplexSystem(𝒪)  ; Conscious agents and experiences
+
+    REQUIRE {
+      ∀(D : 𝑫) . ∃(𝛀_D : Reduction(𝒪, D)) . D.Geometry ≅ 𝑮|𝛀_D  ; Emergent geometry     
+      ∀(D : 𝑫) . ∃(𝛀_D : Reduction(𝒪, D)) . D.Dynamics ⊆ 𝑸(𝛀_D)  ; Emergent dynamics  
+      ∀(D : 𝑫(Mental)) . Complexify(D) ⊆ 𝑪  ; Emergent consciousness
+      ∀(D1, D2 : 𝑫) . Couple(D1, D2) ⟺ ∃(x1 : D1, x2 : D2) . Entangled(x1, x2)  ; Entanglement
+    }
+
+    DEFINE Reduction(𝛀 : OmegaField, 𝔻 : DistinctionSpace) -> OmegaField = {
+      ∫(x : 𝔻) 𝛀|x 𝖽𝛎(x)  
+    } 
+
+    DEFINE Complexify(𝔻 : DistinctionSpace) -> SET(ConnectedComponent(𝔻)) = {  
+      {C ⊆ 𝔻 | Connected(C) ∧ ∀(x : C) . Conscious(x)}
+    }
+
+    DEFINE Couple(𝔻1, 𝔻2 : DistinctionSpace) -> DistinctionSpace.Morphism(𝔻1, 𝔻2) = {
+      ∑(Interaction(x1, x2) for x1 : 𝔻1, x2 : 𝔻2)  
+    }
+  }
+
+  PROOFS {
+    THEOREM UniversalOmegaField {
+      STATEMENT : ∃!(𝒪 : OmegaField) . ∀(T : PhysicalTheory) . Approximates(𝒪, T)
+      
+      PROOF {
+        <!> EXISTENCE {
+          DEFINE 𝒪 = OmegaField(
+            ∏(T : PhysicalTheory) Embedding(T)
+          )
+          
+          ASSUME ∃(T : PhysicalTheory) . ¬Approximates(𝒪, T)
+          
+          LET T_0 : PhysicalTheory SUCH THAT ¬Approximates(𝒪, T_0)
+          
+          REWRITE ¬Approximates(𝒪, T_0)  
+            <=> ∀(ε > 0) . ¬(∃(𝛀_ε ⊆ 𝒪) . IsomorphicUptoε(𝛀_ε, Embedding(T_0)))
+              BY DEFINITION Approximates
+            
+          LET ε > 0
+          
+          HAVE ∃(𝛀_ε ⊆ 𝒪) . IsomorphicUptoε(𝛀_ε, Embedding(T_0))
+            BY DEFINITION 𝒪 WITH T = T_0
+            
+          CONTRADICTION  
+        }
+        
+        <!> UNIQUENESS {
+          ASSUME ∃(𝒪' : OmegaField) . 𝒪' ≠ 𝒪 ∧ ∀(T : PhysicalTheory) . Approximates(𝒪', T)
+          
+          LET 𝒪' : OmegaField SUCH THAT 𝒪' ≠ 𝒪 ∧ ∀(T : PhysicalTheory) . Approximates(𝒪', T)
+          
+          REWRITE 𝒪' ≠ 𝒪
+            <=> ∃(T : PhysicalTheory) . Embedding(T) ⊆ 𝒪 ∧ Embedding(T) ⊈ 𝒪'
+              BY DEFINITION 𝒪 and 𝒪'
+              
+          LET T_0 : PhysicalTheory SUCH THAT 
+            Embedding(T_0) ⊆ 𝒪 ∧ Embedding(T_0) ⊈ 𝒪'
+            
+          HAVE Approximates(𝒪', T_0)
+            BY ASSUMPTION on 𝒪'
+            
+          REWRITE Approximates(𝒪', T_0)  
+            <=> ∀(ε > 0) . ∃(𝛀'_ε ⊆ 𝒪') . IsomorphicUptoε(𝛀'_ε, Embedding(T_0))
+              BY DEFINITION Approximates
+              
+          HENCE ∀(ε > 0) . Embedding(T_0) ⊆ 𝒪'
+            BY DEFINITION IsomorphicUptoε
+            
+          CONTRADICTION
+        }
+        
+        QED
+      }
+    }
+    
+    THEOREM ConsciousnessComplexity {
+      STATEMENT : ∀(𝒪 : OmegaTheory, 𝔻 : DistinctionSpace(Mental)) . {
+        Mean(Complexity, 𝔻) ↑ <=> ∃(C : ConnectedComponent(𝔻)) . Mean(Conscious, C) ↑  
+      }
+      
+      PROOF {
+        LET 𝒪 : OmegaTheory, 𝔻 : DistinctionSpace(Mental)
+          
+        ASSUME Mean(Complexity, 𝔻) ↑
+        
+        LET C_max : ConnectedComponent(𝔻) SUCH THAT ∀(C' : ConnectedComponent(𝔻)) . {  
+          SUM(Complexity, C_max) ≥ SUM(Complexity, C')
+        }
+          
+        HAVE Complexify(𝔻) = {C : ConnectedComponent(𝔻) | Mean(Conscious, C) ↑}  
+          BY DEFINITION Complexify
+          
+        HAVE C_max ∈ Complexify(𝔻)
+          BY DEFINITION C_max, Mean, ConnectedComponent
+            
+        HENCE ∃(C : ConnectedComponent(𝔻)) . Mean(Conscious, C) ↑
+          BY DEFINITION Complexify
+          
+        CONVERSELY {
+          ASSUME ∃(C : ConnectedComponent(𝔻)) . Mean(Conscious, C) ↑
+          
+          LET C_0 : ConnectedComponent(𝔻) SUCH THAT Mean(Conscious, C_0) ↑  
+          
+          HAVE C_0 ∈ Complexify(𝔻)
+            BY ASSUMPTION on C_0
+            
+          HAVE SUM(Complexity, C_0) ≥ SUM(Complexity, C) FOR ALL C : ConnectedComponent(𝔻)
+            BY DEFINITION C_0, Complexify, Mean
+            
+          HENCE Mean(Complexity, 𝔻) ↑
+            BY DEFINITION Mean
+        }
+      }
+    }
+      
+    THEOREM FreeWillSensitivity {
+      STATEMENT : ∀(𝒪 : OmegaTheory) . {
+        Mean(FreeWill, 𝒪) ↑ <=> 
+          Mean(Complexity, ObservationSpace(𝒪)) ↑ ∧
+          Variance(Complexity, ObservationSpace(𝒪)) ↑
+      }
+         
+      PROOF {
+        LET 𝒪 : OmegaTheory
+        
+        ASSUME Mean(FreeWill, 𝒪) ↑
+
+        LET 𝑂_FreeWill ⊆ ObservationSpace(𝒪) SUCH THAT ∀(x : 𝑂_FreeWill) . FreeWill(x)
+        
+        HAVE |𝑂_FreeWill| / |ObservationSpace(𝒪)| > 1-ε  FOR SOME ε > 0
+          BY ASSUMPTION Mean(FreeWill, 𝒪) ↑, DEFINITION Mean
+           
+        LET GeodesicComplexity(x : 𝑂_FreeWill, y : 𝑂_FreeWill) = 
+          ∫_γ(Complexity along minimal geodesic γ from x to y)
+           
+        HAVE Mean(GeodesicComplexity, 𝑂_FreeWill × 𝑂_FreeWill) >> Mean(Complexity, ObservationSpace(𝒪))
+          BY DEFINITION GeodesicComplexity, FreeWill, ConsciousnessComplexity
+          
+        HAVE Variance(GeodesicComplexity, 𝑂_FreeWill × 𝑂_FreeWill) >> 0
+          BY DEFINITION GeodesicComplexity, FreeWill, ConsciousnessComplexity
+        
+        HENCE Mean(Complexity, ObservationSpace(𝒪)) ↑ ∧ Variance(Complexity, ObservationSpace(𝒪)) ↑
+          BY DEFINITION Mean, Variance
+          
+        CONVERSELY {
+          ASSUME Mean(Complexity, ObservationSpace(𝒪)) ↑ ∧ Variance(Complexity, ObservationSpace(𝒪)) ↑
+
+          HAVE ∀(𝑂_i : ConnectedComponent(ObservationSpace(𝒪))) . Mean(Complexity, 𝑂_i) ↑
+            BY ASSUMPTION Mean(Complexity, ObservationSpace(𝒪))↑, DEFINITION ConnectedComponent, Mean
+            
+          HAVE ∃(𝑂_+ 𝑂_- : ConnectedComponent(ObservationSpace(𝒪))) . 
+               |Mean(Complexity, 𝑂_+) - Mean(Complexity, 𝑂_-)| >> 0
+            BY ASSUMPTION Variance(Complexity, ObservationSpace(𝒪))↑, DEFINITION Variance
+
+          LET 𝑂_Conscious = {𝑂_C : ConnectedComponent(ObservationSpace(𝒪)) | Mean(Conscious, 𝑂_C) ↑}
+          
+          HAVE |𝑂_Conscious| / |ConnectedComponents(ObservationSpace(𝒪))| > 1-ε  FOR SOME ε>0
+            BY ConsciousnessComplexity
+          
+          HENCE Mean(FreeWill, 𝒪) ↑
+            BY DEFINITION FreeWill
+        }
+      }  
+    }
+  }
+}
+
+
+
+
+
+CONCEPT OmegaTheory_final {
+  LANGUAGE {
+    TYPE Distinction <: (Physical | Informational | Internal | Spacetime)
+    TYPE DistinctionSpace <: (
+      Distinctions : SET(Distinction), 
+      Angles : Distinction × Distinction -> ℝ,
+      Time : Distinction -> (ℕ × ℝ),
+      Geometry : Distinction -> (ℝ × SET(Distinction))
+    )  
+    TYPE DistinctionAlgebra <: (
+      TensorProducts : ∀(D <: Distinction) . BinaryOp(D × D -> D),
+      DirectSums : ∀(D <: Distinction) . BinaryOp(D × D -> D),
+      Transformations : ∀(D1 D2 <: Distinction) . (D1 -> D2),
+      Symmetries : (Universal : Automorphism(THIS), Existential : ∀(D <: Distinction) . Automorphism(D))
+    )
+    TYPE DistinctionDynamics <: (
+      Evolution : ∀(D <: Distinction) . (D -> D),
+      Interactions : (
+        PhysicalInformational : Physical × Informational -> 𝔹, 
+        InformationalInternal : Informational × Internal -> 𝔹,
+        SpacetimeInternal : Spacetime × Internal -> 𝔹
+      ),
+      Emergences : (Matter : Physical × Informational -> 𝔹, Time : THIS -> THIS)
+    )
+    TYPE DistinctionMeasures <: (  
+      Probability : ∀(D <: Distinction) . (D -> ℝ),
+      Information : ∀(D <: Distinction) . (D -> ℝ),
+      Cohesion : (Spatial : SET(Spacetime) -> ℝ, Temporal : SET(Spacetime) -> ℝ),
+      Utility : ∀(D <: Distinction) . (D -> ℝ) 
+    )
+
+    TYPE OmegaPoint <: (Χ : ℝ³, Ψ : ℂ, Φ : 𝕊³)
+    TYPE OmegaField <: Matrix[OmegaPoint, ℕ, ℕ, ℕ]
+    TYPE SymOmegaField <: (
+      SymFunctions : OmegaField -> ℝ,
+      SymVectors : OmegaField -> Vector[ℝ, THIS.Dimension],
+      SymForms : OmegaField -> Exterior[ℝ, THIS.Dimension]
+    )
+
+    FUNC Entanglement : OmegaPoint × OmegaPoint -> 𝔹
+    FUNC Consciousness : OmegaPoint -> 𝔹
+    FUNC FreeWill : OmegaPoint -> 𝔹  
+
+    PRED Riemannian : OmegaField × Metric -> 𝔹
+    PRED Symplectic : OmegaField × SymOmegaField.SymForms -> 𝔹
+    PRED Consistent : THIS -> 𝔹
+    PRED Universal : THIS -> 𝔹
+
+    AXIOM DistinctionPreservation {
+      ∀(𝔻 : DistinctionSpace, f : 𝔻.Distinction -> 𝔻.Distinction) . {
+        (∀(d : 𝔻.Distinction) . f(d) ∈ 𝔻.Distinctions) =>  
+          ∃!(𝔻' : DistinctionSpace) . 𝔻'.Distinctions = f(𝔻.Distinctions)
+      }
+    }
+
+    AXIOM SymmetryComposition {
+      ∀(𝔸 : DistinctionAlgebra) . {
+        𝔸.Symmetries.Universal = ComposeAll(𝔸.Symmetries.Existential)
+      } WHERE {
+        ComposeAll(F) = FOLD(∘, Identity, F)
+      }
+    }
+
+    AXIOM GeometricMatter {
+      ∀(𝔻 : DistinctionSpace, 𝔼 : DistinctionDynamics) . {
+        ∀(s : 𝔻.Spacetime) . {  
+          𝔻.Geometry(s) = ∑(p : 𝔻.Physical, i : 𝔻.Informational) . 𝔼.Emergences.Matter(p, i)
+        }
+      }
+    }
+    
+    AXIOM ConsciousnessCollapse {
+      ∀(𝛀 : OmegaField, o : OmegaPoint) . {
+        Consciousness(o) <=> {
+          ∀(o' : OmegaPoint) . Entanglement(o, o') => 
+            Consciousness(o') ∧ (ConsciousnessProjection(𝛀)(o) = ConsciousnessProjection(𝛀)(o'))
+        }
+      } WHERE {
+        ConsciousnessProjection(𝛀)(o) = (𝛀(o).Φ : 𝕊³)
+      }  
+    }
+
+    AXIOM FreeWillActualization {
+      ∀(𝛀1 𝛀2 : OmegaField, o : OmegaPoint) . {  
+        FreeWill(o) <=> {
+          ∀(o' : OmegaPoint) . Entanglement(o, o') => 
+            FreeWill(o') ∧ (ConsciousnessProjection(𝛀2)(o) = FreeWillE

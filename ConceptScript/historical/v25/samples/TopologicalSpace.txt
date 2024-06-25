@@ -1,0 +1,237 @@
+CONCEPT TopologicalSpace {
+  LANGUAGE {
+    TYPE Space
+    TYPE Set(X : Space) <: Space
+    TYPE Open(X : Space) <: Set(X)
+    TYPE Continuous(X Y : Space) = X -> Y
+
+    FUNC Basis(X : Space) : Set(Set(X))
+
+    AXIOM OpenUnion {
+      ∀ (X : Space) (O : Set(Open(X))). 
+        ⋃(O) : Open(X)
+    }
+
+    AXIOM OpenInter {
+      ∀ (X : Space) (O1 O2 : Open(X)). 
+        O1 ∩ O2 : Open(X)
+    }
+
+    AXIOM OpenWhole {
+      ∀ (X : Space). X : Open(X)  
+    }
+
+    AXIOM OpenEmpty {
+      ∀ (X : Space). ∅ : Open(X)
+    }
+
+    REWRITE BasisUnion {
+      ∀ (X : Space) (B : Basis(X)) (O : Open(X)).
+        O = ⋃({ B' ∈ B | B' ⊆ O })
+    }
+
+    NOTATION "f : X ⟶ Y" = Continuous(X, Y)
+  }
+
+  STRUCTURE HausdorffSpace(X : Space) {
+    REQUIRE ∀ (p q : X). p ≠ q =>
+      ∃ (O1 O2 : Open(X)). p ∈ O1 ∧ q ∈ O2 ∧ O1 ∩ O2 = ∅  
+  }
+
+  STRUCTURE CompactSpace(X : Space) {
+    REQUIRE ∀ (O : Set(Open(X))). X ⊆ ⋃(O) => 
+      ∃ (F : Set(Open(X))). Finite(F) ∧ F ⊆ O ∧ X ⊆ ⋃(F)
+  }
+
+  PROOFS {
+    TACTIC Topology(X) -> 𝔹 = 
+      SHOW X : Space,
+      SHOW ∀ (O : Set(Open(X))). ⋃(O) : Open(X),
+      SHOW ∀ (O1 O2 : Open(X)). O1 ∩ O2 : Open(X),  
+      SHOW X : Open(X),
+      SHOW ∅ : Open(X)
+
+    THEOREM SubspaceTopology {
+      STATEMENT:
+        ∀ (X : Space) (Y : Set(X)). 
+          LET SubSpace = {
+            Space := Y,
+            Open := { O ∩ Y | O : Open(X) },
+            _ := INDUCED
+          } IN Topology(SubSpace)
+      
+      PROOF:
+        LET X : Space, Y : Set(X)
+        DEFINE SubSpace = {
+          Space := Y,   
+          Open := { O ∩ Y | O : Open(X) },
+          _ := INDUCED  
+        }
+
+        SHOW SubSpace : Space
+        SHOW ∀ (O : Set(Open(SubSpace))). ⋃(O) : Open(SubSpace) BY {
+          LET O : Set(Open(SubSpace))
+          REWRITE ⋃(O) 
+            = ⋃({ O' ∈ Open(X) | ∃ (V ∈ O). V = O' ∩ Y}) ∩ Y
+              BY Substitution  
+            : Open(SubSpace) 
+              BY OpenUnion, Substitution
+        }
+        SHOW ∀ (O1 O2 : Open(SubSpace)). O1 ∩ O2 : Open(SubSpace) BY {
+          LET O1 O2 : Open(SubSpace)
+          MATCH (O1, O2) WITH 
+          | (U1 ∩ Y, U2 ∩ Y) -> 
+            REWRITE O1 ∩ O2
+              = (U1 ∩ Y) ∩ (U2 ∩ Y)  
+              = (U1 ∩ U2) ∩ Y
+                BY Associativity, Commutativity
+              : Open(SubSpace)
+                BY OpenInter, Substitution
+        }     
+        SHOW Y : Open(SubSpace) 
+          BY REWRITE Y = X ∩ Y : Open(SubSpace)
+        SHOW ∅ : Open(SubSpace)  
+          BY REWRITE ∅ = ∅ ∩ Y : Open(SubSpace) 
+
+        HENCE Topology(SubSpace)
+    }
+
+    THEOREM CompactHausdorff {
+      STATEMENT:  
+        ∀ (X : CompactSpace) (Y : HausdorffSpace).
+          LET Z = {
+            Space := X × Y,
+            Basis := { U × V | U ∈ Basis(X), V ∈ Basis(Y) },  
+            _ := INDUCED
+          } IN CompactSpace(Z) ∧ HausdorffSpace(Z)
+
+      PROOF:
+        LET X : CompactSpace, Y : HausdorffSpace
+        DEFINE Z = {  
+          Space := X × Y,
+          Basis := { U × V | U ∈ Basis(X), V ∈ Basis(Y) },
+          _ := INDUCED
+        }
+        
+        SHOW CompactSpace(Z) BY {
+          LET O : Set(Open(Z)), Z ⊆ ⋃(O)
+          HAVE ∀ (p : X) (q : Y). (p, q) ∈ ⋃(O)  
+          ...
+        }
+
+        SHOW HausdorffSpace(Z) BY {
+          LET (p1, q1) (p2, q2) : Z, (p1, q1) ≠ (p2, q2)
+          MATCH (p1 = p2, q1 = q2) WITH
+          | (TRUE, FALSE) -> ... 
+          | (FALSE, TRUE) -> ...
+          | (FALSE, FALSE) -> ...
+        }
+
+        HENCE CompactSpace(Z) ∧ HausdorffSpace(Z) 
+    }
+  }
+}
+
+
+
+
+
+
+
+
+CONCEPT TopologicalSpace {
+  LANGUAGE {
+    TYPE Space
+    TYPE Set <<: Space
+    TYPE Open <<: Set
+    TYPE Continuous(X : Space, Y : Space) = X -> Y
+
+    AXIOM OpenUnion {
+      ∀ (O : Set <<: Open). Union(O) : Open
+    }
+
+    AXIOM OpenInter {
+      ∀ (O1 O2 : Open). Inter(O1, O2) : Open 
+    }
+
+    AXIOM OpenWhole {
+      Space : Open
+    }  
+
+    AXIOM OpenEmpty {
+      Empty : Open
+    }
+
+    NOTATION "X ⊆ Y" = Subset(X, Y)
+    NOTATION "X ∪ Y" = Union(X, Y)
+    NOTATION "X ∩ Y" = Inter(X, Y)
+    NOTATION "f : X → Y" = Continuous(X, Y)
+  }
+
+  STRUCTURE BasisSpace(Space, Basis : Set <<: Open) {
+    REQUIRE ∀ (p : Space). ∃ (B : Basis). p ∈ B
+    REQUIRE ∀ (B1 B2 : Basis). ∀ (p : Space). p ∈ B1 ∩ B2 => ∃ (B3 : Basis). p ∈ B3 ∧ B3 ⊆ B1 ∩ B2
+  }
+
+  STRUCTURE T1Space {
+    REQUIRE ∀ (p q : Space). p ≠ q => ∃ (O : Open). (p ∈ O ∧ q ∉ O) ∨ (p ∉ O ∧ q ∈ O)
+  } 
+
+  STRUCTURE HausdorffSpace {
+    REQUIRE ∀ (p q : Space). p ≠ q => ∃ (O1 O2 : Open). p ∈ O1 ∧ q ∈ O2 ∧ O1 ∩ O2 = Empty
+  }
+
+  PROOFS {
+    THEOREM ContinuousComposition {
+      STATEMENT:
+        ∀ (X Y Z : Space) (f : X → Y) (g : Y → Z). (g ∘ f) : X → Z
+
+      PROOF:
+        LET X Y Z : Space, f : X → Y, g : Y → Z
+        DEFINE h : X → Z = g ∘ f
+        LET O : Open <<: Z, p : X, q = f(p), r = g(q)  
+        ASSUME r ∈ O
+        HAVE g^(-1)[O] : Open <<: Y USING g : Y → Z
+        HAVE f^(-1)[g^(-1)[O]] : Open <<: X USING f : X → Y
+        SHOW p ∈ f^(-1)[g^(-1)[O]] USING q ∈ g^(-1)[O] ∧ p ∈ f^(-1)[q] 
+        HENCE h^(-1)[O] = f^(-1)[g^(-1)[O]] : Open <<: X
+        HENCE h : X → Z
+    }
+
+    THEOREM HausdorffIsT1 {
+      STATEMENT:
+        ∀ (X : HausdorffSpace). X : T1Space
+
+      PROOF:
+        LET X : HausdorffSpace, p q : X, p ≠ q  
+        HAVE O1 O2 : Open, p ∈ O1, q ∈ O2, O1 ∩ O2 = Empty USING X : HausdorffSpace
+        SHOW (p ∈ O1 ∧ q ∉ O1) ∨ (p ∉ O2 ∧ q ∈ O2) BY {
+          ASSUME p ∈ O2
+          HAVE p ∈ O1 ∩ O2 USING p ∈ O1 ∧ p ∈ O2
+          CONTRA Empty = O1 ∩ O2
+          HENCE p ∉ O2  
+        }
+        HENCE X : T1Space
+    }
+
+    THEOREM Subspace {
+      STATEMENT:
+        ∀ (X : Space) (Y : Set <<: X). 
+          Y : Space ∧ ∀ (O : Open <<: X). O ∩ Y : Open <<: Y
+
+      PROOF: 
+        LET X : Space, Y : Set <<: X
+        DEFINE Open(Y) = { O ∩ Y | O : Open <<: X } <<: Set
+        
+        SHOW Open(Y) satisfies topological axioms:
+          LET C : Set <<: Open(Y)
+          HAVE O = { O' : Open <<: X | ∃ (O'' ∈ C). O' ∩ Y = O'' } : Set <<: Open <<: X
+          THEN Union(C) = Union(O) ∩ Y : Open(Y)  BY OpenUnion
+                Inter(C1, C2) = Inter(O1, O2) ∩ Y : Open(Y)  ∀ C1 C2 ∈ C, O1 ∩ Y = C1, O2 ∩ Y = C2, BY OpenInter
+                Y = Space ∩ Y : Open(Y)  BY OpenWhole
+                Empty = Empty ∩ Y : Open(Y)  BY OpenEmpty
+        
+        HENCE Y : Space ∧ Open(Y) = { O ∩ Y | O : Open <<: X } <<: Open <<: Set <<: Y
+    }        
+  }
+}

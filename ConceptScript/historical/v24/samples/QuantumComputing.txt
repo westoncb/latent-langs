@@ -1,0 +1,271 @@
+CONCEPT QuantumComputing {
+  LANGUAGE {
+    TYPE Ket = Vector[Complex]
+    TYPE Bra = DualVector[Complex]
+    TYPE Operator = Matrix[Complex]
+    
+    NOTATION "|" "⟩" = Ket
+    NOTATION "⟨" "|" = Bra
+    NOTATION "⟨" x "|" y "⟩" = InnerProduct(Bra(x), Ket(y))
+    NOTATION "|" x "⟩⟨" y "|" = OuterProduct(Ket(x), Bra(y))
+    
+    NOTATION "𝟙" = IdentityOperator
+    NOTATION "H" = HadamardOperator
+    NOTATION "X" = PauliXOperator
+    NOTATION "Y" = PauliYOperator
+    NOTATION "Z" = PauliZOperator
+    NOTATION "CNOT" = ControlledNotOperator
+    
+    NOTATION x "⊗" y = TensorProduct(x, y)
+    
+    FUNC TensorProduct(x : Ket, y : Ket) -> Ket
+    FUNC TensorProduct(x : Operator, y : Operator) -> Operator
+    
+    PRED Entangled(ψ : Ket) = 
+      ¬(∃ (a : Ket) (b : Ket). ψ = a ⊗ b)
+      
+    FUNC Measure(ψ : Ket, P : Operator) -> (p : Real, ψ' : Ket)
+      WHERE P * P = P, P = P^†
+      
+    REWRITE ⟨φ| * (|ψ₁⟩ + |ψ₂⟩) = ⟨φ|ψ₁⟩ + ⟨φ|ψ₂⟩
+    REWRITE (⟨φ₁| + ⟨φ₂|) * |ψ⟩ = ⟨φ₁|ψ⟩ + ⟨φ₂|ψ⟩
+    REWRITE (c * |ψ⟩)^† = c^* * ⟨ψ|
+    REWRITE (|ψ⟩ ⊗ |φ⟩)^† = ⟨ψ| ⊗ ⟨φ|
+    
+    AXIOM TensorProductAssociativity {
+      FORALL (x y z : Ket). (x ⊗ y) ⊗ z = x ⊗ (y ⊗ z)
+    }
+    
+    AXIOM TensorProductDistributivity {
+      FORALL (x y z : Ket). 
+        x ⊗ (y + z) = (x ⊗ y) + (x ⊗ z)
+        (x + y) ⊗ z = (x ⊗ z) + (y ⊗ z)
+    }
+  }
+  
+  STRUCTURE {
+    DEF Bell00 = (|00⟩ + |11⟩) / √2
+    DEF Bell01 = (|01⟩ + |10⟩) / √2
+    DEF Bell10 = (|00⟩ - |11⟩) / √2
+    DEF Bell11 = (|01⟩ - |10⟩) / √2
+    
+    DEF Teleportation(|ψ⟩ : Ket, |β00⟩ : Ket) {
+      LET |ψ⟩ ⊗ |β00⟩ = |ψ⟩ ⊗ ((|00⟩ + |11⟩) / √2)
+      LET (_, |ψ'⟩ ⊗ |β'⟩) = Measure(|ψ⟩ ⊗ |β00⟩, 𝟙 ⊗ (|00⟩⟨00| + |01⟩⟨01|))
+      LET |ψ''⟩ = MATCH |β'⟩ WITH
+        | |00⟩ => 𝟙 * |ψ'⟩
+        | |01⟩ => X * |ψ'⟩
+        | |10⟩ => Z * |ψ'⟩
+        | |11⟩ => Y * |ψ'⟩
+      |ψ''⟩  
+    }
+  }
+  
+  PROOFS {
+    TACTIC ExpandKet(x) = MATCH x WITH
+      | a |0⟩ + b |1⟩ => REWRITE x = Matrix[[a], [b]]
+      | a |00⟩ + b |01⟩ + c |10⟩ + d |11⟩ => REWRITE x = Matrix[[a], [b], [c], [d]]
+      
+    TACTIC ExpandBra(x) = MATCH x WITH
+      | a ⟨0| + b ⟨1| => REWRITE x = Matrix[[a, b]]
+      | a ⟨00| + b ⟨01| + c ⟨10| + d ⟨11| => REWRITE x = Matrix[[a, b, c, d]]
+      
+    TACTIC ExpandOperator(P) = MATCH P WITH
+      | |x⟩⟨y| => REWRITE P = OuterProduct(|x⟩, ⟨y|)
+      | P1 + P2 => REWRITE P = P1 + P2
+      | P1 * P2 => REWRITE P = P1 * P2
+      
+    THEOREM TeleportationCorrectness {
+      STATEMENT:
+        FORALL (|ψ⟩ : Ket). 
+          Teleportation(|ψ⟩, Bell00) = |ψ⟩
+          
+      PROOF:
+        LET |ψ⟩ : Ket
+        REWRITE |ψ⟩ = a |0⟩ + b |1⟩ BY ExpandKet(|ψ⟩)
+        
+        HAVE Teleportation(|ψ⟩, Bell00)
+          = Teleportation(a |0⟩ + b |1⟩, (|00⟩ + |11⟩) / √2) BY DEFINITION
+          
+          = LET |ψ⟩ ⊗ |β00⟩ = (a |0⟩ + b |1⟩) ⊗ ((|00⟩ + |11⟩) / √2)
+            LET (_, |ψ'⟩ ⊗ |β'⟩) = Measure(|ψ⟩ ⊗ |β00⟩, 𝟙 ⊗ (|00⟩⟨00| + |01⟩⟨01|))
+            LET |ψ''⟩ = MATCH |β'⟩ WITH
+              | |00⟩ => 𝟙 * |ψ'⟩
+              | |01⟩ => X * |ψ'⟩ 
+              | |10⟩ => Z * |ψ'⟩
+              | |11⟩ => Y * |ψ'⟩
+            |ψ''⟩ BY DEFINITION
+            
+          = LET |ψ⟩ ⊗ |β00⟩ = (a |000⟩ + a |011⟩ + b |100⟩ + b |111⟩) / √2 BY {
+              (a |0⟩ + b |1⟩) ⊗ ((|00⟩ + |11⟩) / √2)
+                = ((a |0⟩ + b |1⟩) ⊗ |00⟩ + (a |0⟩ + b |1⟩) ⊗ |11⟩) / √2 BY TensorProductDistributivity {
+                  (a |0⟩ + b |1⟩) ⊗ |00⟩ 
+                    = a |0⟩ ⊗ |00⟩ + b |1⟩ ⊗ |00⟩ BY TensorProductDistributivity
+                    = a |000⟩ + b |100⟩
+                  (a |0⟩ + b |1⟩) ⊗ |11⟩
+                    = a |0⟩ ⊗ |11⟩ + b |1⟩ ⊗ |11⟩ BY TensorProductDistributivity  
+                    = a |011⟩ + b |111⟩
+                }
+            }
+            LET (_, |ψ'⟩ ⊗ |β'⟩) = Measure(|ψ⟩ ⊗ |β00⟩, 𝟙 ⊗ (|00⟩⟨00| + |01⟩⟨01|))
+            LET |ψ''⟩ = MATCH |β'⟩ WITH
+              | |00⟩ => 𝟙 * |ψ'⟩ = a |0⟩ + b |1⟩
+              | |01⟩ => X * |ψ'⟩ = a |1⟩ + b |0⟩ = b |0⟩ + a |1⟩  
+              | |10⟩ => Z * |ψ'⟩ = a |0⟩ - b |1⟩ = a |0⟩ + (-b) |1⟩
+              | |11⟩ => Y * |ψ'⟩ = i * (a |1⟩ - b |0⟩) = (-b) |0⟩ + a |1⟩
+            |ψ''⟩ BY {
+              Measure((a |000⟩ + a |011⟩ + b |100⟩ + b |111⟩) / √2, 𝟙 ⊗ (|00⟩⟨00| + |01⟩⟨01|))
+                = (1/2, (a |00⟩ + b |11⟩) ⊗ |00⟩) OR
+                  (1/2, (a |00⟩ - b |11⟩) ⊗ |01⟩) OR  
+                  (1/2, (a |01⟩ + b |10⟩) ⊗ |10⟩) OR
+                  (1/2, (a |01⟩ - b |10⟩) ⊗ |11⟩) BY ExpandOperator, ExpandKet
+            }
+            
+          = a |0⟩ + b |1⟩ OR 
+            b |0⟩ + a |1⟩ OR
+            a |0⟩ + (-b) |1⟩ OR
+            (-b) |0⟩ + a |1⟩
+            
+          = |ψ⟩ BY ExpandKet(|ψ⟩) 
+    }
+  }
+}
+
+
+
+
+
+CONCEPT QuantumComputing {
+  LANGUAGE {
+    TYPE Qubit = (α : Complex, β : Complex) | α^2 + β^2 = 1
+    TYPE Bra = Qubit
+    TYPE Ket = Qubit
+    
+    NOTATION "|" "⟩" = Ket
+    NOTATION "⟨" "|" = Bra
+    NOTATION "⟨" q "|" q' "⟩" = InnerProduct(q, q')
+
+    NOTATION "/" q1 "\\" "| x |" "/" q2 "\\" = TensorProduct(q1, x, q2)
+
+    FUNC InnerProduct(⟨a| : Bra, |b⟩ : Ket) : Complex
+    FUNC TensorProduct(|a⟩ : Ket, |b⟩ : Ket) : Ket
+    FUNC TensorProduct(⟨a| : Bra, ⟨b| : Bra) : Bra
+    FUNC TensorProduct(|a⟩ : Ket, A : Matrix, |b⟩ : Ket) : Matrix
+    FUNC TensorProduct(⟨a| : Bra, A : Matrix, ⟨b| : Bra) : Matrix
+    
+    FUNC Hadamard : Matrix
+    FUNC CNOT : Matrix
+    
+    AXIOM InnerProductConjugateSymmetry: ∀ (|a⟩ : Ket) (|b⟩ : Ket). ⟨a|b⟩ = Conjugate(⟨b|a⟩)
+    AXIOM TensorInnerProduct: ∀ (|a⟩ |a'⟩ : Ket) (|b⟩ |b'⟩ : Ket). ⟨a|a'⟩ * ⟨b|b'⟩ = /⟨a| ⟨b|\|InnerProduct|/|a'⟩ |b'⟩\
+  }
+  
+  STRUCTURE {
+    DEF |0⟩ = |1, 0⟩
+    DEF |1⟩ = |0, 1⟩
+    DEF |+⟩ = |1/√2, 1/√2⟩
+    DEF |-⟩ = |1/√2, -1/√2⟩
+    
+    DEF Bell00 = /|0⟩ |0⟩\
+    DEF Bell01 = /|0⟩ |1⟩\
+    DEF Bell10 = /|1⟩ |0⟩\
+    DEF Bell11 = /|1⟩ |1⟩\
+    
+    DEF BellBasis = [Bell00, Bell01, Bell10, Bell11]
+    
+    DEF Entangled(|ψ⟩ : Ket) = 
+      ¬∃ (|a⟩ |b⟩ : Ket). |ψ⟩ = /|a⟩ |b⟩\
+  }
+  
+  PROOFS {
+    THEOREM BellStateEntanglement {
+      STATEMENT: ∀ (|ψ⟩ : BellBasis). Entangled(|ψ⟩)
+      
+      PROOF:
+        LET |ψ⟩ : BellBasis
+        CASE |ψ⟩ OF 
+          Bell00 -> {
+            ASSUME ∃ (|a⟩ |b⟩ : Ket). Bell00 = /|a⟩ |b⟩\
+            LET |a⟩ |b⟩ : Ket 
+            ASSUME Bell00 = /|a⟩ |b⟩\
+            
+            ⟨0|0⟩ = /⟨0| ⟨0|\|InnerProduct|/|a⟩ |b⟩\ BY ASSUMPTION
+                  = ⟨0|a⟩ * ⟨0|b⟩ BY TensorInnerProduct
+            ⟨0|1⟩ = /⟨0| ⟨1|\|InnerProduct|/|a⟩ |b⟩\ BY ASSUMPTION
+                  = ⟨0|a⟩ * ⟨1|b⟩ BY TensorInnerProduct
+
+            ⟨0|a⟩ ≠ 0 BY {
+              ⟨0|a⟩ = 0 -> ⟨0|0⟩ = ⟨0|a⟩ * ⟨0|b⟩ = 0
+              BUT ⟨0|0⟩ = 1
+            }
+            ⟨1|b⟩ = 0 BY {
+              ⟨1|b⟩ ≠ 0 -> ⟨0|1⟩ = ⟨0|a⟩ * ⟨1|b⟩ ≠ 0 
+              BUT ⟨0|1⟩ = 0
+            }
+
+            |b⟩ = |0⟩ BY {
+              |b⟩ = β_0|0⟩ + β_1|1⟩
+              ⟨1|b⟩ = 0 -> β_1 = 0
+              |b⟩ = β_0|0⟩
+              ⟨b|b⟩ = 1 -> β_0 = 1
+            }
+
+            Bell00 = /|0⟩ |0⟩\
+            CONTRADICTION
+          }
+          Bell01 -> {
+            (* Similar to Bell00 case *)
+          }  
+          Bell10 -> {
+            (* Similar to Bell00 case *)
+          }
+          Bell11 -> {
+            (* Similar to Bell00 case *)
+          }
+    }
+    
+    THEOREM BellStateOrthonormality {
+      STATEMENT: ∀ (|ψ⟩ |φ⟩ : BellBasis).
+        ⟨ψ|φ⟩ = IF |ψ⟩ = |φ⟩ THEN 1 ELSE 0
+      
+      PROOF:
+        LET |ψ⟩ |φ⟩ : BellBasis
+        CASE (|ψ⟩, |φ⟩) OF
+          (Bell00, Bell00) -> {
+            ⟨ψ|φ⟩ = /⟨0| ⟨0|\|InnerProduct|/|0⟩ |0⟩\
+                  = ⟨0|0⟩ * ⟨0|0⟩ BY TensorInnerProduct
+                  = 1 * 1 
+                  = 1
+          }
+          (Bell00, Bell01) -> {
+            ⟨ψ|φ⟩ = /⟨0| ⟨0|\|InnerProduct|/|0⟩ |1⟩\
+                  = ⟨0|0⟩ * ⟨0|1⟩ BY TensorInnerProduct  
+                  = 1 * 0
+                  = 0
+          }
+          (* Other cases... *)
+    }
+    
+    THEOREM TeleportationProtocol {
+      STATEMENT:
+        LET |ψ⟩ : Ket, 
+            |β00⟩ = /|0⟩ |0⟩\,
+            |β01⟩ = /|0⟩ |1⟩\, 
+            |β10⟩ = /|1⟩ |0⟩\,
+            |β11⟩ = /|1⟩ |1⟩\
+        IN
+        FORALL (a b : Bit).
+          MAP(SWITCH a, b
+              CASE 0, 0 => I
+              CASE 0, 1 => X
+              CASE 1, 0 => Z
+              CASE 1, 1 => ZX
+          , 
+          /I ⟨βab|\(/Hadamard |a⟩\ ⊗ |ψ⟩))
+          = |ψ⟩
+          
+      PROOF:
+        (* Omitted for brevity *)
+    }
+  }
+}

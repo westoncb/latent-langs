@@ -1,0 +1,175 @@
+CONCEPT TuringMachine {
+  LANGUAGE {
+    TYPE State = Symbol
+    TYPE Symbol = Character | Blank
+    TYPE Tape = List[Symbol]
+    TYPE Head = ℕ
+    TYPE Direction = Left | Right | Stay
+    TYPE Transition = (State, Symbol) -> (State, Symbol, Direction)
+    TYPE Configuration = (State, Tape, Head)
+    TYPE Halted = State
+    
+    FUNC Blank: Symbol
+    FUNC InitialState: State
+    FUNC FinalStates: Set[State]
+    FUNC Transitions: Set[Transition]
+    
+    PRED IsHalted(c: Configuration) = c.State ∈ FinalStates
+    PRED Accepts(t: Tape) = ∃ (c: Configuration) . ReachesHalt(InitialConfig(t), c) ∧ IsHalted(c)
+  }
+  
+  NOTATION {
+    q ⊢ (t, h) ⇒ q' ⊢ (t', h') ⇔ (q, t[h]) -> (q', s, d) ∈ Transitions ∧ t' = Replace(t, h, s) ∧ h' = NextHead(h, d)
+    c ⇒* c' ⇔ ReachesHalt(c, c')
+    ⟨M⟩ ⇔ EncodeConfig(M)
+    ⟨M⟩(t) ⇔ EncodeConfig(M, t)
+  }
+
+  TRANSFORMERS {
+    FUNC NextHead(h: Head, d: Direction): Head = {
+      MATCH d WITH
+      | Left -> h - 1
+      | Right -> h + 1  
+      | Stay -> h
+    }
+
+    FUNC Replace(t: Tape, h: Head, s: Symbol): Tape = {
+      RETURN t[0..h] + [s] + t[h+1..]
+    }
+    
+    FUNC InitialConfig(t: Tape): Configuration = {
+      RETURN (InitialState, t, 0)
+    }
+    
+    FUNC NextConfig(c: Configuration): Configuration = {
+      LET (q, t, h) = c
+      IF q ∈ FinalStates THEN RETURN c
+      ELSE 
+        LET (q', s, d) = Transitions(q, t[h])
+        LET t' = Replace(t, h, s)
+        LET h' = NextHead(h, d)
+        RETURN (q', t', h')
+    }
+
+    FUNC ReachesHalt(c: Configuration, c': Configuration): 𝔹 = {
+      IF IsHalted(c) THEN RETURN c = c'
+      ELSE RETURN ReachesHalt(NextConfig(c), c')
+    }
+    
+    FUNC EncodeConfig(M: TuringMachine): Tape = {
+      LET Q = EncodeStates(M.States)
+      LET Σ = EncodeSymbols(M.Symbols)
+      LET δ = EncodeTransitions(M.Transitions)
+      LET q₀ = EncodeState(M.InitialState)
+      LET F = EncodeStates(M.FinalStates)
+      RETURN Q + [Blank] + Σ + [Blank] + δ + [Blank] + q₀ + [Blank] + F
+    }
+
+    FUNC EncodeConfig(M: TuringMachine, t: Tape): Tape = {
+      RETURN EncodeConfig(M) + [Blank] + EncodeState(M.InitialState) + [Blank] + t
+    }
+  }
+
+  STRUCTURE UniversalTuringMachine {
+    PARAM M: TuringMachine
+    PARAM t_in: Tape
+
+    FUNC Accepts(c: Tape): 𝔹 = {
+      IF c = [] THEN RETURN M.Accepts(t_in)
+      ELSE
+        LET (q, t, h) = DecodeConfig(c)  
+        IF q ∈ M.FinalStates THEN RETURN True
+        ELSE
+          LET (q', s, d) = M.Transitions(q, t[h])
+          LET t' = Replace(t, h, s)
+          LET h' = NextHead(h, d)
+          LET c' = EncodeConfig(M, (q', t', h'))
+          RETURN Accepts(c')
+    }
+  }
+
+  PROOFS {
+    THEOREM Halting {
+      STATEMENT:
+        ¬∃ (M: TuringMachine) . ∀ (t: Tape) . Accepts(M, ⟨M⟩ + [Blank] + t) <=> ¬Accepts(M, t)
+        
+      PROOF:
+        ASSUME ∃ (M: TuringMachine) . ∀ (t: Tape) . Accepts(M, ⟨M⟩ + [Blank] + t) <=> ¬Accepts(M, t)
+        
+        LET H: TuringMachine = M
+        LET t_H = ⟨H⟩
+
+        SHOW Contradiction:
+          CASE Accepts(H, t_H):
+            HAVE Accepts(H, ⟨H⟩ + [Blank] + t_H)  by Assumption
+            HENCE Accepts(H, ⟨H⟩ + [Blank] + ⟨H⟩) <=> ¬Accepts(H, ⟨H⟩)  by Substitution
+            HENCE ¬Accepts(H, t_H)  by Modus Tollens, which contradicts the case assumption
+          
+          CASE ¬Accepts(H, t_H):
+            HAVE ¬Accepts(H, ⟨H⟩ + [Blank] + t_H)  by Assumption
+            HENCE ¬Accepts(H, ⟨H⟩ + [Blank] + ⟨H⟩) <=> Accepts(H, ⟨H⟩)  by Substitution
+            HENCE Accepts(H, t_H)  by Modus Tollens, which contradicts the case assumption
+
+        THEREFORE, the initial assumption leads to a contradiction
+        HENCE, ¬∃ (M: TuringMachine) . ∀ (t: Tape) . Accepts(M, ⟨M⟩ + [Blank] + t) <=> ¬Accepts(M, t)
+
+        QED  
+    }
+
+    THEOREM Universality {
+      STATEMENT:
+        ∀ (M: TuringMachine) (t: Tape) . 
+          Accepts(M, t) <=> Accepts(UniversalTuringMachine[M], ⟨M⟩ + [Blank] + t)
+
+      PROOF:
+        LET M: TuringMachine, t: Tape
+        LET U: TuringMachine = UniversalTuringMachine[M]
+        LET c_0 = InitialConfig(M, t)
+
+        SHOW Accepts(M, t) => Accepts(U, ⟨M⟩ + [Blank] + t):
+          ASSUME Accepts(M, t)
+          THEN ∃ (c': Configuration) . ReachesHalt(c_0, c') ∧ IsHalted(c')  by Definition of Accepts
+          
+          DEFINE Simulate(c: Configuration): Configuration = {
+            IF IsHalted(c) THEN RETURN c
+            ELSE
+              LET c_next = NextConfig(M, c)   
+              LET c_encoded = EncodeConfig(M, c_next)
+              LET c_decoded = DecodeConfig(U, c_encoded)
+              RETURN Simulate(c_decoded)
+          }
+          
+          HAVE ∀ (c c': Configuration) . ReachesHalt(M, c, c') => Simulate(c) = c'  
+            by Induction over ReachesHalt using the definitions of NextConfig and EncodeConfig/DecodeConfig
+          
+          HENCE Simulate(c_0) = c'  by the above 
+          HENCE Accepts(U, ⟨M⟩ + [Blank] + t)  by Definition of Accepts for U
+          
+        SHOW Accepts(U, ⟨M⟩ + [Blank] + t) => Accepts(M, t):  
+          ASSUME Accepts(U, ⟨M⟩ + [Blank] + t)
+          THEN ∃ (c': Configuration) . ReachesHalt(U, InitialConfig(U, ⟨M⟩ + [Blank] + t), c') ∧ IsHalted(c')
+
+          LET c_0_encoded = EncodeConfig(M, c_0)
+          HAVE InitialConfig(U, ⟨M⟩ + [Blank] + t) = DecodeConfig(U, c_0_encoded)  
+            by Definition of EncodeConfig/DecodeConfig
+
+          DEFINE Simulate(c: Configuration): Configuration = {
+            IF IsHalted(c) THEN RETURN c
+            ELSE  
+              LET c_encoded = EncodeConfig(M, c)
+              LET c_next_encoded = NextConfig(U, c_encoded)
+              LET c_next = DecodeConfig(M, c_next_encoded)
+              RETURN Simulate(c_next)
+          }
+          
+          HAVE ∀ (c c': Configuration) . ReachesHalt(U, c, c') => 
+                 ∃ (c'': Configuration) . ReachesHalt(M, DecodeConfig(M, c), c'') ∧ EncodeConfig(M, c'') = c'
+            by Induction over ReachesHalt using the definitions of NextConfig and EncodeConfig/DecodeConfig
+            
+          HENCE ∃ (c'': Configuration) . ReachesHalt(M, c_0, c'') ∧ EncodeConfig(M, c'') = c'  by the above
+          HENCE Accepts(M, t)  by Definition of Accepts
+
+        QED
+    }
+  }
+}

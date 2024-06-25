@@ -1,0 +1,73 @@
+CONCEPT PersistenceBarcode {
+  LANGUAGE {
+    TYPE Filtration[S] = (ℝ -> 𝒫(S))
+    TYPE PersistenceDiagram = Set[(ℝ, ℝ ∪ {∞})]
+    TYPE PersistenceBarcode = Set[(ℝ, ℝ)]
+    TYPE HomologyGroup[K : Field, n : ℕ] = Mod[K, n]
+
+    FUNC Hk(X, k : ℕ, K : Field) : HomologyGroup[K, k]
+    FUNC BirthDeath(δ : PersistenceDiagram) : PersistenceBarcode
+    FUNC Bottleneck(β γ : PersistenceBarcode) : ℝ≥0
+
+    AXIOM PersistenceEquivalence {
+      ∀ (X Y : Filtration[S]) (k : ℕ) (K : Field) .
+        (∀ t . Hk(X(t), k, K) ≅ Hk(Y(t), k, K)) ⇒ Dgm[X, k] = Dgm[Y, k]
+    }
+
+    NOTATION "Dgm[X, k]" = { (b, d) : ℝ×(ℝ∪{∞}) | ∃ [c] ∈ Hk(X(d), k, K) . c ∉ im(Hk(X(b), k, K) -> Hk(X(d), k, K)) }    
+    NOTATION "Barcode[X, k]" = BirthDeath(Dgm[X, k])
+  }
+
+  STRUCTURE PersistentHomology[S, K : Field] {
+    FUNC Compute(X : Filtration[S], k : ℕ) -> PersistenceBarcode {
+      LET D = Dgm[X, k]
+      RETURN Barcode[X, k]
+    }
+  }
+
+  PROOFS {
+    THEOREM Stability {
+      STATEMENT : ∀ (X Y : Filtration[S]) (k : ℕ) (ε : ℝ≥0) .  
+        (∀ t . dH(X(t), Y(t)) ≤ ε) ⇒ Bottleneck(Barcode[X, k], Barcode[Y, k]) ≤ ε
+        WHERE dH(A, B) = max{sup[a ∈ A] inf[b ∈ B] d(a, b), sup[b ∈ B] inf[a ∈ A] d(a, b)}
+
+      PROOF {
+        LET X Y : Filtration[S], k : ℕ, ε : ℝ≥0
+        ASSUME (1) : ∀ t . dH(X(t), Y(t)) ≤ ε
+        
+        LET DX = Dgm[X, k], DY = Dgm[Y, k]
+        LET βX = Barcode[X, k], βY = Barcode[Y, k]
+        LET μ : βX ↔ βY SUCH THAT ∀ (b, d) ∈ βX . 
+          (μ(b, d) = (b', d')) ⇒ |b - b'| ≤ ε ∧ |d - d'| ≤ ε   USING (1)
+
+        Bottleneck(βX, βY)
+          = max{sup[(b, d) ∈ βX] inf[(b', d') ∈ βY] max(|b - b'|, |d - d'|), 
+                sup[(b', d') ∈ βY] inf[(b, d) ∈ βX] max(|b - b'|, |d - d'|)}
+                                                           BY definition
+          ≤ max{sup[(b, d) ∈ βX] max(|b - μ(b, d).b|, |d - μ(b, d).d|),
+                sup[(b', d') ∈ βY] max(|b' - μ⁻¹(b', d').b|, |d' - μ⁻¹(b', d').d|)}  
+                                                           USING μ
+          ≤ ε                                              BY construction of μ
+      }
+    }
+
+    THEOREM Completeness {
+      STATEMENT : ∀ (X : Filtration[S]) (k : ℕ) (K : Field) . 
+        ∀ [c] ∈ Hk(X(t), k, K) . ∃ (b, d) ∈ Dgm[X, k] . 
+          b ≤ t ≤ d ∧ [c] ∈ im(Hk(X(b), k, K) -> Hk(X(t), k, K)) ∧ [c] ∉ im(Hk(X(d), k, K) -> Hk(X(t), k, K))
+
+      PROOF {  
+        LET X : Filtration[S], k : ℕ, K : Field, t : ℝ, [c] ∈ Hk(X(t), k, K)
+
+        LET b = inf{ s ≤ t | [c] ∈ im(Hk(X(s), k, K) -> Hk(X(t), k, K)) }
+        LET d = sup{ s ≥ t | [c] ∈ im(Hk(X(t), k, K) -> Hk(X(s), k, K)) }
+
+        HAVE b ≤ t ≤ d                                    BY construction
+        HAVE [c] ∈ im(Hk(X(b), k, K) -> Hk(X(t), k, K))    BY continuity of Hk
+        HAVE [c] ∉ im(Hk(X(d), k, K) -> Hk(X(t), k, K))    BY continuity of Hk
+
+        SHOW (b, d) ∈ Dgm[X, k]                            BY definition of Dgm
+      }
+    }
+  }
+}

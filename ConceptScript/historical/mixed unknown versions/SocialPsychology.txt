@@ -1,0 +1,93 @@
+METALANGUAGE SocialPsychology {
+  type Cognition
+  type Behavior
+  type Emotion
+  type Attitude
+  type Belief
+  type Value
+  type Norm
+  
+  func Cause(Cognition | Behavior | Emotion, Cognition | Behavior | Emotion): Prop
+  func Contradict(Cognition, Cognition): Prop
+  func Align(Cognition, Cognition): Prop
+  func Induce(Emotion, Behavior): Prop
+  func Comply(Behavior, Norm): Prop
+  func Violate(Behavior, Norm): Prop
+  
+  pred Consistent(Cognition | Behavior | Emotion)
+  pred Inconsistent(Cognition | Behavior | Emotion)
+  pred Salient(Cognition | Behavior | Emotion)
+  
+  notation "A ==> B" = Cause(A, B)
+  notation "A <=> B" = Contradict(A, B)
+  notation "A <~> B" = Align(A, B)
+  notation "A +-> B" = Induce(A, B) 
+  notation "A =:= B" = Comply(A, B)
+  notation "A =/= B" = Violate(A, B)
+  
+  infer Consistency:
+    not (Inconsistent(A) and Consistent(A))
+    
+  infer Contradiction:  
+    A <=> B, Salient(A), Salient(B) --> Inconsistent(A) and Inconsistent(B)
+}
+
+THEORY CognitiveDissonance : SocialPsychology {
+  
+  structure CognitiveDissonance {
+    cognition1: Cognition
+    cognition2: Cognition
+    dissonance: Emotion
+    avoidance: Behavior 
+    rationalization: Cognition
+    attitudeChange: Cognition
+  }
+  
+  theorem DissonanceReduction(cd: CognitiveDissonance)
+  {
+    cd.cognition1 <=> cd.cognition2
+    Salient(cd.cognition1)
+    Salient(cd.cognition2)
+    
+    cd.cognition1 <=> cd.cognition2 ==> cd.dissonance
+    cd.dissonance +-> cd.avoidance
+    cd.dissonance ==> cd.rationalization
+    cd.dissonance ==> cd.attitudeChange
+    
+    cd.rationalization <~> cd.cognition1
+    cd.rationalization <~> cd.cognition2
+    
+    cd.attitudeChange <~> cd.cognition1
+    cd.attitudeChange <=> cd.cognition2
+    
+    Consistent(cd.rationalization) 
+    Consistent(cd.attitudeChange)
+  }
+  
+  lemma DissonanceInduction(b: Behavior, a: Attitude, v: Value)
+  {
+    b =/= v
+    b <~> a  
+    a <~> v
+    
+    Inconsistent(b) and Inconsistent(a)
+  }
+  
+  proof ForcedCompliance: DissonanceInduction
+  {
+    let b = Some(Behavior)
+    let a = Some(Attitude)
+    let v = Some(Value)
+    let n = Some(Norm)
+    
+    b =:= n  
+    a =/= n
+    v <~> n
+    
+    by Contradiction
+  }
+}
+
+The DissonanceReduction theorem captures the core idea of Festinger's theory: when an individual holds two contradictory cognitions, it creates a state of dissonance that motivates them to reduce the inconsistency through avoidance, rationalization, or attitude change.
+The DissonanceInduction lemma describes how dissonance can arise from inconsistencies between behaviors, attitudes, and values.
+The ForcedCompliance proof illustrates a specific case of dissonance induction, where an individual is compelled to comply with a norm that contradicts their attitudes and values.

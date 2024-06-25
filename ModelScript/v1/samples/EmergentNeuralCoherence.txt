@@ -1,0 +1,404 @@
+STRUCTURE EmergentNeuralCoherence {
+  PARAMETERS {
+    N : Int # Number of neurons
+    M : Int # Number of synapses per neuron
+    σ_w : Float # Standard deviation of initial synaptic weights
+    σ_s : Float # Standard deviation of stimulus input
+    λ : Float # Coherence length scale
+    β : Float # Coherence strength
+    γ : Float # Hebbian learning rate
+    ε : Float # Consistency threshold
+  }
+
+  SUBSTRATE {
+    Neurons := Graph(N)
+    Synapses := [RandomEdges(Neurons, M) for _ in range(N)]
+  }
+
+  STATE {
+    activity(t) : [Float for _ in range(N)]
+    weights(t) : [[Float for _ in range(M)] for _ in range(N)]
+  }
+
+  DYNAMICS {
+    # Neural activity dynamics
+    τ dactivity[i]/dt = -activity[i] + ReLU(∑(w_ij * activity[j]) + stimulus[i])
+
+    # Synaptic weight dynamics
+    dweights[i][j]/dt = γ * (activity[i] * activity[j] - weights[i][j])
+                        + β * CoherenceTerm(i, j)
+                        - ConsistencyTerm(i, j)
+
+    where:
+      # Coherence term promotes similar activity patterns for nearby neurons
+      CoherenceTerm(i, j) := activity[i] * ∑_{k near j} exp(-|k - j|^2 / (2 * λ^2)) * activity[k]
+
+      # Consistency term penalizes deviations from normalization and sparsity constraints
+      ConsistencyTerm(i, j) := α_1 * (∑(weights[i]) - 1) + α_2 * (KL(activity, Sparse(ρ)) - ε)
+  }
+
+  STIMULUS {
+    stimulus : [GaussianNoise(0, σ_s) for _ in range(N)]
+  }
+
+  INITIAL {
+    activity(0) = [0 for _ in range(N)]
+    weights(0) = [[GaussianSample(0, σ_w) for _ in range(M)] for _ in range(N)]
+  }
+
+  OBSERVABLES {
+    # Mean pairwise correlation between neural activity patterns
+    Correlation(t) := <activity[i](t) * activity[j](t)>_{i ≠ j}
+
+    # Sparsity of neural activity patterns  
+    Sparsity(t) := KL(activity(t), Sparse(ρ))
+
+    # Deviation of synaptic weights from normalization constraint
+    NormError(t) := ∑_i (∑_j weights[i][j](t) - 1)^2
+  }
+
+  PROPERTIES {
+    # Emergence of coherent activity patterns
+    ∃t_c : ∀t > t_c, Correlation(t) > Correlation(0)
+
+    # Emergence of sparse activity patterns  
+    ∃t_s : ∀t > t_s, Sparsity(t) < Sparsity(0)
+
+    # Convergence of synaptic weights to normalized values
+    lim_{t → ∞} NormError(t) = 0
+  }
+}
+
+In this EmergentNeuralCoherence model, the substrate is a graph of N neurons, with each neuron connected to M randomly chosen neighbors via synapses. The system state consists of the activity levels of the neurons and the synaptic weights between them.
+The neural activity dynamics follow a standard rate equation with a ReLU activation function, where the input to each neuron is the weighted sum of the activities of its neighbors plus a random stimulus. The synaptic weight dynamics combine a Hebbian learning term (promoting correlated activity), a coherence term (promoting similar activity patterns for nearby neurons), and a consistency term (penalizing deviations from normalization and sparsity constraints).
+The stimulus is modeled as Gaussian white noise with standard deviation σ_s. The initial conditions are zero activity and Gaussian-distributed synaptic weights with standard deviation σ_w.
+The key observables are the mean pairwise correlation between neural activity patterns (measuring coherence), the sparsity of the activity patterns (measuring selectivity), and the deviation of synaptic weights from a normalization constraint (measuring self-organization).
+The proposed properties of the model are the emergence of coherent and sparse activity patterns over time, and the convergence of synaptic weights to normalized values. These properties align with the goals of the EmergentConsistencyModel, instantiated in the specific context of neural networks.
+Some possible extensions and variations of this model could include:
+
+Incorporating more realistic neuron models (e.g., spiking neurons) and plasticity rules (e.g., STDP).
+Considering structured connectivity patterns (e.g., layers, modules) and input-output mappings.
+Analyzing the information-theoretic properties of the emergent representations (e.g., mutual information, dimensionality reduction).
+Comparing the emergent activity patterns to empirical data from neural recordings or fMRI.
+Studying the robustness and adaptability of the coherent representations to perturbations or changing environments.
+
+The EmergentNeuralCoherence model provides a concrete example of how the principles of the EmergentConsistencyModel can be applied to a specific complex system (neural networks) to study the emergence of coherent and consistent structures through local self-organization. 
+
+
+
+
+
+
+
+STRUCTURE EmergentNetworkModel {
+  PARAMETERS {
+    N : Int # Number of nodes in the network
+    k : Int # Average degree of nodes
+    α : Float # Coupling strength
+    β : Float # Coherence strength 
+    γ : Float # Consistency strength
+    ε : Float # Precision parameter for consistency conditions
+  }
+  
+  NOTATION {
+    𝒢 := NetworkSubstrate(N, k) # Network substrate
+    s := State(𝒢) # System state
+    H := CoherenceHamiltonian(s) # Coherence Hamiltonian 
+    C := ConsistencyConditions(s, ε) # Consistency conditions
+    δ := DiffusionOperator(𝒢, α) # Diffusion operator
+    γ := CoherenceOperator(𝒢, β) # Coherence operator
+    ∇ := GradientOperator(𝒢) # Gradient operator on the network
+    〈·,·〉 := InnerProduct(𝒢) # Inner product of states on the network
+  }
+
+  DEFINITIONS {
+    # Network substrate
+    NetworkSubstrate(N, k) := (
+      # Construct a random network with N nodes and average degree k
+      # Example: Erdős–Rényi random graph with edge probability p = k / (N-1)
+      # Other network models (e.g., scale-free, small-world) could also be used
+    )
+    
+    # System state
+    State(𝒢) := (
+      # Define the state of the system as a real-valued function on the nodes of the network
+      # s(i) represents the state value at node i
+      # The state space is an N-dimensional real vector space
+    )
+    
+    # Coherence Hamiltonian
+    CoherenceHamiltonian(s) := (
+      # Define a Hamiltonian-like function that measures the coherence of the system state
+      # Coherence is based on the similarity or correlation of state values between connected nodes
+      H(s) = -sum_(i,j) A_ij s(i) s(j) / (2 * k * N)
+      # A_ij is the adjacency matrix of the network (A_ij = 1 if nodes i and j are connected, 0 otherwise)
+      # The normalization factor k * N ensures that H scales properly with network size and density
+    )
+    
+    # Consistency conditions  
+    ConsistencyConditions(s, ε) := (
+      # Define a set of consistency conditions as linear constraints on the system state
+      # Example: C(s) = {sum_i s(i) = 0, sum_i s(i)^2 = N}
+      # These conditions enforce zero mean and unit variance of the state values
+      # The precision parameter ε allows for some deviation from the exact constraints
+    )
+
+    # Diffusion operator
+    DiffusionOperator(𝒢, α) := (
+      # Define a diffusion operator based on the network Laplacian matrix
+      δ(s) = -α * L * s
+      # L is the Laplacian matrix of the network (L_ij = k_i δ_ij - A_ij, where k_i is the degree of node i)
+      # The coefficient α controls the strength of diffusion
+      # This operator spreads state values between connected nodes and promotes mixing
+    )
+    
+    # Coherence operator 
+    CoherenceOperator(𝒢, β) := (
+      # Define a coherence operator based on the gradient of the coherence Hamiltonian
+      γ(s) = β * ∇H(s)  
+      # The gradient ∇H(s) points in the direction of increasing coherence
+      # The coefficient β controls the strength of the coherence term
+      # This operator drives the system towards more coherent states
+    )
+
+    # Gradient operator
+    GradientOperator(𝒢) := (
+      # Define a gradient operator on the network substrate
+      ∇f(s) = A * s - k * s 
+      # The gradient of a function f at state s is given by the difference between the local average and the node value
+      # A is the adjacency matrix and k is the average degree
+      # This operator captures the local variation of a function on the network
+    )
+  }
+
+  DYNAMICS {
+    # Evolution equation for the system state
+    ∂s/∂t = δ(s) + γ(s) - γ * ProjectOnto(C)(s)
+    # The system state evolves according to a combination of diffusion, coherence, and consistency terms
+    # The diffusion term δ(s) spreads state values and increases mixing
+    # The coherence term γ(s) drives the system towards more coherent states, as defined by the Coherence Hamiltonian
+    # The consistency term ProjectOnto(C)(s) enforces the consistency conditions C by projecting the state onto the space of consistent states
+    # The coefficient γ controls the strength of the consistency term
+  }
+
+  INITIALIZATION {
+    # Initialize the system state to random values
+    s(0) = RandomState(𝒢)
+    # Example: s(0) drawn from a standard normal distribution
+  }
+
+  PROPERTIES {
+    # Emergent coherence
+    ∃T : ∀t > T, H(s(t)) > H(s(0))
+    # The system state should become more coherent over time, as measured by the Coherence Hamiltonian
+    # There exists a time T after which the coherence always exceeds its initial value
+
+    # Emergent consistency
+    ∃T : ∀t > T, Distance(s(t), C) < ε  
+    # The system state should approach and remain close to the subspace of consistent states
+    # There exists a time T after which the state always lies within a distance ε of the consistency conditions
+
+    # Convergence to equilibrium
+    ∃s* : limt→∞ s(t) = s*
+    # The system state should converge to a stable equilibrium state s* 
+    # The equilibrium state should be coherent (high H) and consistent (low Distance to C)
+  }
+
+  OBSERVABLES {
+    # Global coherence
+    GlobalCoherence(s) := H(s)
+    # Measures the overall coherence of the system state using the Coherence Hamiltonian
+
+    # Local coherence
+    LocalCoherence(s, i) := sum_j A_ij s(i) s(j) / k_i
+    # Measures the coherence of the state in the neighborhood of node i
+    # k_i is the degree of node i  
+
+    # Consistency error  
+    ConsistencyError(s) := Distance(s, C)
+    # Measures the deviation of the system state from the consistency conditions
+    # Example: ConsistencyError(s) = |sum_i s(i)| + |sum_i s(i)^2 - N|
+  }
+
+  PREDICTIONS {
+    # Positive correlation between local and global coherence
+    corr(LocalCoherence(s, ·), GlobalCoherence(s)) > 0
+    # Nodes with high local coherence should contribute positively to the global coherence
+    # This prediction can be tested by computing the correlation over an ensemble of states or trajectories
+
+    # Inverse relationship between coherence and consistency error
+    corr(GlobalCoherence(s), ConsistencyError(s)) < 0   
+    # States with higher coherence should have lower consistency error, and vice versa
+    # This prediction can be tested by computing the correlation over an ensemble of states or trajectories
+
+    # Scaling of convergence time with network size
+    T_conv ~ N^p
+    # The time T_conv required to reach the equilibrium state should scale as a power law with the network size N
+    # The exponent p may depend on the network topology and the model parameters
+    # This prediction can be tested by estimating T_conv for networks of different sizes and fitting a power law
+  }
+}
+
+Here is a concrete model that builds upon the ideas of the EmergentConsistencyModel, with a focus on the emergence of consistent and coherent structures in a network-based substrate:
+Copy codeSTRUCTURE EmergentNetworkModel {
+  PARAMETERS {
+    N : Int # Number of nodes in the network
+    k : Int # Average degree of nodes
+    α : Float # Coupling strength
+    β : Float # Coherence strength 
+    γ : Float # Consistency strength
+    ε : Float # Precision parameter for consistency conditions
+  }
+  
+  NOTATION {
+    𝒢 := NetworkSubstrate(N, k) # Network substrate
+    s := State(𝒢) # System state
+    H := CoherenceHamiltonian(s) # Coherence Hamiltonian 
+    C := ConsistencyConditions(s, ε) # Consistency conditions
+    δ := DiffusionOperator(𝒢, α) # Diffusion operator
+    γ := CoherenceOperator(𝒢, β) # Coherence operator
+    ∇ := GradientOperator(𝒢) # Gradient operator on the network
+    〈·,·〉 := InnerProduct(𝒢) # Inner product of states on the network
+  }
+
+  DEFINITIONS {
+    # Network substrate
+    NetworkSubstrate(N, k) := (
+      # Construct a random network with N nodes and average degree k
+      # Example: Erdős–Rényi random graph with edge probability p = k / (N-1)
+      # Other network models (e.g., scale-free, small-world) could also be used
+    )
+    
+    # System state
+    State(𝒢) := (
+      # Define the state of the system as a real-valued function on the nodes of the network
+      # s(i) represents the state value at node i
+      # The state space is an N-dimensional real vector space
+    )
+    
+    # Coherence Hamiltonian
+    CoherenceHamiltonian(s) := (
+      # Define a Hamiltonian-like function that measures the coherence of the system state
+      # Coherence is based on the similarity or correlation of state values between connected nodes
+      H(s) = -sum_(i,j) A_ij s(i) s(j) / (2 * k * N)
+      # A_ij is the adjacency matrix of the network (A_ij = 1 if nodes i and j are connected, 0 otherwise)
+      # The normalization factor k * N ensures that H scales properly with network size and density
+    )
+    
+    # Consistency conditions  
+    ConsistencyConditions(s, ε) := (
+      # Define a set of consistency conditions as linear constraints on the system state
+      # Example: C(s) = {sum_i s(i) = 0, sum_i s(i)^2 = N}
+      # These conditions enforce zero mean and unit variance of the state values
+      # The precision parameter ε allows for some deviation from the exact constraints
+    )
+
+    # Diffusion operator
+    DiffusionOperator(𝒢, α) := (
+      # Define a diffusion operator based on the network Laplacian matrix
+      δ(s) = -α * L * s
+      # L is the Laplacian matrix of the network (L_ij = k_i δ_ij - A_ij, where k_i is the degree of node i)
+      # The coefficient α controls the strength of diffusion
+      # This operator spreads state values between connected nodes and promotes mixing
+    )
+    
+    # Coherence operator 
+    CoherenceOperator(𝒢, β) := (
+      # Define a coherence operator based on the gradient of the coherence Hamiltonian
+      γ(s) = β * ∇H(s)  
+      # The gradient ∇H(s) points in the direction of increasing coherence
+      # The coefficient β controls the strength of the coherence term
+      # This operator drives the system towards more coherent states
+    )
+
+    # Gradient operator
+    GradientOperator(𝒢) := (
+      # Define a gradient operator on the network substrate
+      ∇f(s) = A * s - k * s 
+      # The gradient of a function f at state s is given by the difference between the local average and the node value
+      # A is the adjacency matrix and k is the average degree
+      # This operator captures the local variation of a function on the network
+    )
+  }
+
+  DYNAMICS {
+    # Evolution equation for the system state
+    ∂s/∂t = δ(s) + γ(s) - γ * ProjectOnto(C)(s)
+    # The system state evolves according to a combination of diffusion, coherence, and consistency terms
+    # The diffusion term δ(s) spreads state values and increases mixing
+    # The coherence term γ(s) drives the system towards more coherent states, as defined by the Coherence Hamiltonian
+    # The consistency term ProjectOnto(C)(s) enforces the consistency conditions C by projecting the state onto the space of consistent states
+    # The coefficient γ controls the strength of the consistency term
+  }
+
+  INITIALIZATION {
+    # Initialize the system state to random values
+    s(0) = RandomState(𝒢)
+    # Example: s(0) drawn from a standard normal distribution
+  }
+
+  PROPERTIES {
+    # Emergent coherence
+    ∃T : ∀t > T, H(s(t)) > H(s(0))
+    # The system state should become more coherent over time, as measured by the Coherence Hamiltonian
+    # There exists a time T after which the coherence always exceeds its initial value
+
+    # Emergent consistency
+    ∃T : ∀t > T, Distance(s(t), C) < ε  
+    # The system state should approach and remain close to the subspace of consistent states
+    # There exists a time T after which the state always lies within a distance ε of the consistency conditions
+
+    # Convergence to equilibrium
+    ∃s* : limt→∞ s(t) = s*
+    # The system state should converge to a stable equilibrium state s* 
+    # The equilibrium state should be coherent (high H) and consistent (low Distance to C)
+  }
+
+  OBSERVABLES {
+    # Global coherence
+    GlobalCoherence(s) := H(s)
+    # Measures the overall coherence of the system state using the Coherence Hamiltonian
+
+    # Local coherence
+    LocalCoherence(s, i) := sum_j A_ij s(i) s(j) / k_i
+    # Measures the coherence of the state in the neighborhood of node i
+    # k_i is the degree of node i  
+
+    # Consistency error  
+    ConsistencyError(s) := Distance(s, C)
+    # Measures the deviation of the system state from the consistency conditions
+    # Example: ConsistencyError(s) = |sum_i s(i)| + |sum_i s(i)^2 - N|
+  }
+
+  PREDICTIONS {
+    # Positive correlation between local and global coherence
+    corr(LocalCoherence(s, ·), GlobalCoherence(s)) > 0
+    # Nodes with high local coherence should contribute positively to the global coherence
+    # This prediction can be tested by computing the correlation over an ensemble of states or trajectories
+
+    # Inverse relationship between coherence and consistency error
+    corr(GlobalCoherence(s), ConsistencyError(s)) < 0   
+    # States with higher coherence should have lower consistency error, and vice versa
+    # This prediction can be tested by computing the correlation over an ensemble of states or trajectories
+
+    # Scaling of convergence time with network size
+    T_conv ~ N^p
+    # The time T_conv required to reach the equilibrium state should scale as a power law with the network size N
+    # The exponent p may depend on the network topology and the model parameters
+    # This prediction can be tested by estimating T_conv for networks of different sizes and fitting a power law
+  }
+}
+This EmergentNetworkModel is a concrete instantiation of the general framework proposed in the EmergentConsistencyModel, with a focus on the emergence of coherent and consistent structures in a network-based system. The key components of the model are:
+
+Network Substrate: The system is defined on a random network with N nodes and average degree k. The network topology provides the substrate for the dynamics and interactions of the system state.
+System State: The state of the system is represented as a real-valued function on the nodes of the network. The state space is an N-dimensional vector space, and the dynamics of the state are governed by a combination of diffusion, coherence, and consistency terms.
+Coherence Hamiltonian: The coherence of the system state is measured by a Hamiltonian-like function that captures the similarity or correlation of state values between connected nodes. The Hamiltonian is defined in terms of the adjacency matrix of the network and is normalized to scale properly with network size and density.
+Consistency Conditions: The consistency conditions are imposed as linear constraints on the system state. In this example, the conditions enforce zero mean and unit variance of the state values, but other relevant constraints could be used depending on the specific system being modeled.
+Diffusion and Coherence Operators: The diffusion operator, based on the network Laplacian matrix, spreads state values between connected nodes and promotes mixing. The coherence operator, based on the gradient of the coherence Hamiltonian, drives the system towards more coherent states.
+Dynamics and Initialization: The evolution equation for the system state combines the diffusion, coherence, and consistency terms, with coefficients controlling the strength of each term. The state is initialized to random values drawn from a standard normal distribution.
+Emergent Properties: The model predicts the emergence of coherence and consistency in the system state over time. Specifically, the coherence (as measured by the Hamiltonian) should increase, and the consistency error (distance to the consistency conditions) should decrease. The system is expected to converge to a stable equilibrium state that is both coherent and consistent.
+Observables and Predictions: The model defines observables for measuring the global and local coherence of the system state, as well as the consistency error. Testable predictions are made about the correlations between these observables and the scaling of the convergence time with network size.
+
+This EmergentNetworkModel provides a concrete starting point for investigating the emergence of coherent and consistent structures in complex networks. It can be further refined and extended to incorporate more specific details of particular systems, such as gene regulatory networks, neural networks, or social networks. The model parameters (coupling strength α, coherence strength β, consistency strength γ) can be varied to explore different regimes of behavior and to study the robustness and universality of the emergent properties.
+Importantly, the predictions of the model can be tested against empirical data or simulations to validate its assumptions and to guide further theoretical developments. The model can also be compared and contrasted with other approaches to the study of emergence in complex systems, such as phase transitions, self-organized criticality, or information dynamics.
+Overall, the EmergentNetworkModel offers a promising framework for understanding how coherent and consistent structures can arise from the interplay of local interactions, global constraints, and dynamical processes in network-based systems. It integrates ideas from network science, dynamical systems theory, and statistical physics to provide a principled and testable theory of emergence.

@@ -1,0 +1,98 @@
+CONCEPT SilverCitySunriseSkillet EXTENDS CulinaryExperience {
+  STRUCTURE SilverCitySunriseSkillet {
+    DEF Ingredients = [
+      ("green chile", FlavorProfile(Spicy(7), Smoky(4), Earthy(5)), Tender),
+      ("potatoes", FlavorProfile(Starchy(6), Earthy(3)), Crispy),
+      ("chorizo", FlavorProfile(Spicy(6), Savory(7), Fatty(5)), Crumbly),
+      ("eggs", FlavorProfile(Rich(6), Creamy(5)), Soft),
+      ("cotija cheese", FlavorProfile(Salty(5), Tangy(4)), Crumbly),
+      ("cilantro", FlavorProfile(Bright(6), Herbal(7)), Fresh),
+      ("red onion", FlavorProfile(Pungent(5), Sweet(3)), Crunchy),
+      ("lime", FlavorProfile(Sour(7), Bright(6)), Juicy)
+    ]
+
+    DEF CulinaryTechniques = [Sauté, Fry, Scramble, Garnish]
+
+    DEF CuisineInfluences = [NewMexican, Mexican]
+
+    DEF DesiredQualities = [
+      λ dish. IsCulturallyAuthentic(dish.Ingredients, NewMexican),
+      λ dish. IsSuitableForOccasion(Breakfast, Brunch),
+      λ dish. HasHarmoniousFlavors(Fst(UnzipTriple(dish.Ingredients))),
+      λ dish. HasContrastingTextures(Snd(UnzipTriple(dish.Ingredients))),
+      λ dish. HasInvitingAroma(Fst(UnzipTriple(dish.Ingredients))),
+      λ dish. HasVisualAppeal(Presentation(dish)),
+      λ dish. MeetsAffordability(dish.Ingredients, Affordable)
+    ]
+  }
+
+  PROOFS {
+    THEOREM SilverCitySunriseIsDesirable {
+      STATEMENT:
+        ∃ (dish : SilverCitySunriseSkillet).
+          ∀ (quality : SilverCitySunriseSkillet -> Bool) ∈ DesiredQualities. quality(dish)
+
+      PROOF:
+        DEFINE dish = SilverCitySunriseSkillet {
+          Ingredients = [
+            ("green chile", FlavorProfile(Spicy(7), Smoky(4), Earthy(5)), Tender),
+            ("potatoes", FlavorProfile(Starchy(6), Earthy(3)), Crispy),
+            ("chorizo", FlavorProfile(Spicy(6), Savory(7), Fatty(5)), Crumbly),
+            ("eggs", FlavorProfile(Rich(6), Creamy(5)), Soft),
+            ("cotija cheese", FlavorProfile(Salty(5), Tangy(4)), Crumbly),
+            ("cilantro", FlavorProfile(Bright(6), Herbal(7)), Fresh),
+            ("red onion", FlavorProfile(Pungent(5), Sweet(3)), Crunchy),
+            ("lime", FlavorProfile(Sour(7), Bright(6)), Juicy)
+          ],
+          CulinaryTechniques = [Sauté, Fry, Scramble, Garnish],
+          CuisineInfluences = [NewMexican, Mexican]
+        }
+
+        SHOW ∀ (quality : SilverCitySunriseSkillet -> Bool) ∈ DesiredQualities. quality(dish) BY {
+          LET quality ∈ DesiredQualities
+          MATCH quality WITH
+          | λ dish. IsCulturallyAuthentic(dish.Ingredients, NewMexican) -> {
+            ARGUE ∀ (i : Ingredient) ∈ dish.Ingredients. IsNativeTo(i, NewMexico)
+            ARGUE UsesTechniques(dish, [Sauté, Fry])
+            HENCE IsCulturallyAuthentic(dish.Ingredients, NewMexican)
+          }
+          | λ dish. IsSuitableForOccasion(Breakfast, Brunch) -> {
+            ARGUE UsesIngredients(dish, [Eggs, Potatoes])
+            ARGUE UsesStyle(dish, Skillet)
+            HENCE IsSuitableForOccasion(Breakfast, Brunch)
+          }
+          | λ dish. HasHarmoniousFlavors(Fst(UnzipTriple(dish.Ingredients))) -> {
+            LET flavors = Fst(UnzipTriple(dish.Ingredients))
+            ARGUE FlavorPairing(GreenChile, Chorizo) ∧ FlavorPairing(GreenChile, Cotija)
+            ARGUE FlavorPairing(Chorizo, Eggs) ∧ FlavorPairing(Cotija, Eggs)
+            ARGUE FlavorPairing(Cilantro, Lime) ∧ FlavorPairing(RedOnion, Lime)
+            HENCE HarmoniousFlavors(flavors)
+          }
+          | λ dish. HasContrastingTextures(Snd(UnzipTriple(dish.Ingredients))) -> {
+            LET textures = Snd(UnzipTriple(dish.Ingredients))
+            ARGUE ContrastingTextures(textures) BY {
+              SHOW ∃ (t1 t2 : Texture). t1 ∈ textures ∧ t2 ∈ textures ∧ t1 ≠ t2 ∧
+                TextureIntensity(t1) - TextureIntensity(t2) ≥ 3
+            }
+          }
+          | λ dish. HasInvitingAroma(Fst(UnzipTriple(dish.Ingredients))) -> {
+            LET aromas = Fst(UnzipTriple(dish.Ingredients))
+            ARGUE ∃ (a : Aroma). a ∈ aromas ∧ IsAppealing(a) ∧ AromaIntensity(a) ≥ 6
+            HENCE InvitingAroma(aromas)
+          }
+          | λ dish. HasVisualAppeal(Presentation(dish)) -> {
+            ARGUE VisualAppeal(Presentation(dish)) ≥ 7
+            ARGUE ColorHarmony(Presentation(dish))
+            ARGUE Plating(Presentation(dish)) ≥ 5
+            HENCE VisuallyAppealing(Presentation(dish))
+          }
+          | λ dish. MeetsAffordability(dish.Ingredients, Affordable) -> {
+            ARGUE ∀ (i : Ingredient) ∈ dish.Ingredients. IsLocallySourced(i) ∨ IsInexpensive(i)
+            HENCE AffordableDish(dish.Ingredients, Affordable)
+          }
+        }
+
+        QED BY DesiredQualities
+    }
+  }
+}

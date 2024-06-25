@@ -1,0 +1,282 @@
+CONCEPT DifferentialGeometricSemantics {
+  PARAMETERS {
+    n : Nat
+    k : Nat
+    Σ : Vocabulary  
+  }
+  
+  CONTEXT {
+    TYPES {
+      Vocabulary = SET(Symbol)
+      Symbol = String
+      
+      SmoothManifold = {
+        Dimension : Nat
+        Atlas : SET(Chart)
+        Tangent : FUNC(THIS, TangentBundle)
+        Cotangent : FUNC(THIS, CotangentBundle)
+      }
+      
+      Chart(M : SmoothManifold) = {
+        Domain : OpenSet(M)
+        Map : FUNC(Domain, EuclideanSpace(M.Dimension))
+      }
+      
+      EuclideanSpace(n : Nat) = R^n
+      
+      VectorBundle(M : SmoothManifold, V : VectorSpace) = {
+        TotalSpace : SmoothManifold
+        BaseSpace : M
+        Fiber : V
+        Projection : FUNC(TotalSpace, BaseSpace)  
+      }
+
+      TangentBundle(M : SmoothManifold) = VectorBundle(M, R^(M.Dimension))
+      CotangentBundle(M : SmoothManifold) = VectorBundle(M, DualSpace(R^(M.Dimension)))
+      
+      Transformation(V : VectorSpace, W : VectorSpace) = FUNC(V, W)
+      Isomorphism(V : VectorSpace, W : VectorSpace) = Transformation(V, W)
+        WHERE ∃ g : Transformation(W, V) . f ∘ g = Identity(W) ∧ g ∘ f = Identity(V)
+        
+      INDUCTIVE SyntacticType(n : Nat) {  
+        CASE Atomic  
+        CASE Product(SyntacticType(n), ..., SyntacticType(n))
+        CASE Function(SyntacticType(n), SyntacticType(n))
+        CASE Quotient(SyntacticType(n), Relation)
+      }
+
+      Model(T : SyntacticType(n))
+        CASE T IS Atomic -> EuclideanSpace(n)
+        CASE T IS Product(T1, ..., Tm) -> DirectProduct(Model(T1), ..., Model(Tm))
+        CASE T IS Function(T1, T2) -> FUNC(Model(T1), Model(T2)) 
+        CASE T IS Quotient(T', ~) -> Quotient(Model(T'), InterpretRelation(~))
+      
+      Denotation(e : Expression(Σ), T : SyntacticType(n)) = 
+        IF "e : T" THEN Model(T) ELSE Void
+      
+      INDUCTIVE Expression(V : Vocabulary) {
+        CASE Variable(Symbol)
+        CASE Operation(Symbol, List(Expression(V)))  
+      }
+      
+      DifferentialOperator(M : SmoothManifold, V : VectorBundle(M)) = 
+        FUNC(Γ(M, V), Γ(M, V ⊗ Cotangent(M)))
+        
+      Connection(V : VectorBundle) = {
+        CovariantDerivative : DifferentialOperator(V.BaseSpace, V)
+      }
+      
+      Structure(n : Nat, k : Nat) = {
+        Base : SmoothManifold
+        VectorBundles : List(k)(VectorBundle(Base)) 
+        Connections : List(k)(Connection(VectorBundles[i]))
+      }
+    }
+    
+    STRUCTURES {
+      STRUCTURE TypingJudgment(V : Vocabulary, n : Nat, k : Nat) {
+        FIELD Term : Expression(V)
+        FIELD Type : SyntacticType(n)
+        FIELD Structure : Structure(n, k)
+        
+        AXIOM TypeInference "e : T" WHERE "⊢ e : T"
+        AXIOM ModelConstruction "D⟦e⟧ : Model(T)" WHERE "e : T"
+        AXIOM Compositionality "D⟦Operation(f, args)⟧ = F⟦f⟧(D⟦args[1]⟧, ..., D⟦args[m]⟧)"
+          WHERE "⊢ f : T1 → ... → Tm → T" AND "⊢ args[i] : Ti"
+        AXIOM Substitution "D⟦e[x := e']⟧ = D⟦e⟧(D⟦e'⟧/x)" 
+          WHERE "⊢ e : T" AND "⊢ e' : U" AND "x : U ∈ e" 
+      }
+      
+      STRUCTURE InterpretedSymbol(f : Symbol) {
+        FIELD Domain : List(SyntacticType(n))
+        FIELD Codomain : SyntacticType(n)
+        FIELD Implementation : FUNC(Model(Domain[1]), ..., Model(Domain[m])) -> Model(Codomain)
+        
+        AXIOM Typing "⊢ f : Domain[1] → ... → Domain[m] → Codomain"
+        NOTATION "F⟦f⟧" = Implementation(f)
+      }
+    }
+    
+    ASSERTIONS {
+      ASSUME "Vocabulary Σ" HAS_SYMBOLS {
+        "Vec" : "n → Type"
+          WITH "Model(Vec(k)) = EuclideanSpace(k)"  
+        "∇" : "∀ (n : Nat) (A : Type) . Vec(n) ⊗ A → Vec(n) ⊗ A" 
+          WITH "Model(∇) = CovariantDerivative"
+        "+" : "∀ (n : Nat) . Vec(n) ⊗ Vec(n) → Vec(n)" 
+          WITH "Model(+)(v, w) = v + w"
+        "·" : "∀ (n m : Nat) . Vec(n) ⊗ Vec(m) → R"
+          WITH "Model(·)(v, w) = v ⋅ w"
+      }
+    }
+  }
+
+  PROOFS {
+    THEOREM ExpressionNormalization(e : Expression(Σ))
+      WHERE "∀ e . ∃! e' . e ~>* e' ∧ e' IS_NORMAL_FORM"
+      
+    PROOF {
+      LET "e" : Expression(Σ)
+      
+      SHOW "∃! e' . e ~>* e' ∧ e' IS_NORMAL_FORM"
+        BY INDUCTION ON "e":
+        
+        CASE Variable(x) ->  
+          TAKE "e' = Variable(x)"
+          TRIVIAL
+          
+        CASE Operation(f, args) ->
+          ASSUME "∀ i . args[i] ~>* vi" AND "vi IS_NORMAL_FORM"
+            BY InductionHypothesis
+          
+          IF "f IS_REDUCIBLE"
+            THEN "Operation(f, args) ~> Operation(f', args)" 
+              WHERE "f ~> f'" BY ReductionRule
+            THEN "Operation(f', args) ~>* e'" 
+              BY ApplyInductionHypothesis
+            
+          ELSE "f IS_NORMAL_FORM"
+            IF "∃ i . args[i] IS_REDUCIBLE"
+              THEN "Operation(f, args) ~> Operation(f, args[1], ..., args'[i], ..., args[m])"
+                WHERE "args[i] ~> args'[i]" BY ReductionRule
+              THEN "Operation(f, args[1], ..., args'[i], ..., args[m]) ~>* e'"
+                BY ApplyInductionHypothesis  
+              
+            ELSE "∀ i . args[i] IS_NORMAL_FORM"
+              TAKE "e' = Operation(f, v1, ..., vm)" WHERE "args[i] ~>* vi"
+              THEN "e ~>* e'" BY Reflexivity, Transitivity of "~>*" 
+              SHOW "e' IS_NORMAL_FORM" BY NormalFormOfConstructors
+        
+      CONCLUDE "∃! e' . e ~>* e' ∧ e' IS_NORMAL_FORM" 
+      QED  
+    }
+
+    THEOREM ModelInvariance(e e' : Expression(Σ), T : SyntacticType(n), 𝒮 : Structure(n, k))
+      WHERE "e : T" AND "e ~> e'" IMPLIES "D⟦e⟧ = D⟦e'⟧ ∈ Model(T, 𝒮)" 
+    
+    PROOF {
+      LET "e e'" : Expression(Σ)  
+      LET "T" : SyntacticType(n)
+      LET "𝒮" : Structure(n, k)
+      
+      ASSUME "e : T" AND "e ~> e'"
+      SHOW "D⟦e⟧ = D⟦e'⟧ ∈ Model(T, 𝒮)"
+        BY INDUCTION ON "e ~> e'":
+        
+        CASE "e = Operation(f, args)" AND "e' = Operation(f', args)"
+          WHERE "f ~> f'" AND "⊢ f : T1 → ... → Tm → T" AND "⊢ f' : T1 → ... → Tm → T":
+          
+          HAVE "args[i] : Ti" AND "D⟦args[i]⟧ ∈ Model(Ti, 𝒮)" BY Assumption
+          THEN "D⟦e⟧ = F⟦f⟧(D⟦args[1]⟧, ..., D⟦args[m]⟧)" BY Compositionality
+          AND "D⟦e'⟧ = F⟦f'⟧(D⟦args[1]⟧, ..., D⟦args[m]⟧)" BY Compositionality
+          AND "F⟦f⟧ = F⟦f'⟧" BY SemanticInterpretationOfReduction
+          
+          HENCE "D⟦e⟧ = D⟦e'⟧" AND "D⟦e⟧ ∈ Model(T, 𝒮)" BY ModelConstruction
+        
+        CASE "e = Operation(f, args)" AND "e' = Operation(f, args[1], ..., args'[i], ..., args[m])"  
+          WHERE "args[i] ~> args'[i]":
+          
+          HAVE "D⟦args[i]⟧ = D⟦args'[i]⟧ ∈ Model(Ti, 𝒮)" BY InductionHypothesis
+          THEN "D⟦e⟧ = F⟦f⟧(D⟦args[1]⟧, ..., D⟦args[i]⟧, ..., D⟦args[m]⟧)" BY Compositionality  
+          AND "D⟦e'⟧ = F⟦f⟧(D⟦args[1]⟧, ..., D⟦args'[i]⟧, ..., D⟦args[m]⟧)" BY Compositionality
+          
+          HENCE "D⟦e⟧ = D⟦e'⟧" AND "D⟦e⟧ ∈ Model(T, 𝒮)" BY ModelConstruction
+          
+      CONCLUDE "D⟦e⟧ = D⟦e'⟧ ∈ Model(T, 𝒮)"  
+      QED
+    }
+  }
+  
+  EXAMPLES {
+    EXAMPLE VectorCalculus {
+      LET "T1" = "Vec(n)"
+      LET "T2" = "Vec(n)"
+      LET "T" = "R"
+      
+      LET "𝒮" = "Structure(n, 2)" WITH {
+        Base = EuclideanSpace(n)
+        VectorBundles[1] = TangentBundle(Base)
+        VectorBundles[2] = CotangentBundle(Base)
+        Connections[1] = Levi-CivitaConnection(Base)
+        Connections[2] = DualConnection(Connections[1])
+      }
+      
+      FUNC Gradient(φ : Expression(Σ)) -> Expression(Σ) {
+        RETURN "∇(φ)"
+      }
+      
+      FUNC Divergence(X : Expression(Σ)) -> Expression(Σ) {  
+        RETURN "∇ · X"
+      }
+      
+      FUNC Laplacian(φ : Expression(Σ)) -> Expression(Σ) {
+        RETURN "∇ · ∇(φ)"  
+      }
+      
+      LET "φ : T1"
+      LET "X Y : T2"
+      
+      THEN "⊢ φ : T1" AND "⊢ X : T2" AND "⊢ Y : T2" BY TypingAssumptions
+      
+      AND "⊢ ∇(φ) : T2" BY FunctionTyping, Typing("Vec"), Typing("∇"), TypingJudgment 
+      AND "D⟦∇(φ)⟧ = grad(D⟦φ⟧) ∈ Model(T2, 𝒮)" BY ModelRealization
+      
+      AND "⊢ ∇ · X : T1" BY FunctionTyping, Typing("·"), Typing("∇"), TypingJudgment
+      AND "D⟦∇ · X⟧ = div(D⟦X⟧) ∈ Model(T1, 𝒮)" BY ModelRealization  
+      
+      AND "⊢ ∇ · ∇(φ) : T1" BY FunctionTyping, Typing("·"), Typing("∇"), TypingJudgment
+      AND "D⟦∇ · ∇(φ)⟧ = ∆(D⟦φ⟧) ∈ Model(T1, 𝒮)" BY ModelRealization
+      
+      FUNC DotProduct(X Y : Expression(Σ)) -> Expression(Σ) {
+        RETURN "X · Y"  
+      }
+      
+      THEN "⊢ X · Y : T" BY FunctionTyping, Typing("·"), TypingJudgment
+      AND "D⟦X · Y⟧ = D⟦X⟧ ⋅ D⟦Y⟧ ∈ Model(T, 𝒮)" BY ModelRealization
+      
+      FUNC Identities(φ : Expression(Σ), X Y : Expression(Σ)) {
+        ASSERT "∇(φX · Y) ~>* (∇(φ)X + φ∇(X)) · Y + φ(X · ∇(Y))" BY {
+          LET "LHS" = "∇(φX · Y)"
+          LET "RHS" = "(∇(φ)X + φ∇(X)) · Y + φ(X · ∇(Y))" 
+          SHOW "LHS ~>* RHS" USING ProductRule, DistributivityAxiom, AssociativityAxiom
+          THEN "D⟦LHS⟧ = D⟦RHS⟧ ∈ Model(T, 𝒮)" BY ModelInvariance
+        }
+
+        ASSERT "∇ × (φX) ~>* ∇(φ) × X + φ(∇ × X)" BY {  
+          LET "LHS" = "∇ × (φX)"
+          LET "RHS" = "∇(φ) × X + φ(∇ × X)"
+          SHOW "LHS ~>* RHS" USING ProductRule, DistributivityAxiom 
+          THEN "D⟦LHS⟧ = D⟦RHS⟧ ∈ Model(T2, 𝒮)" BY ModelInvariance
+        }
+        
+        ASSERT "∇ × (X × Y) ~>* (∇ · Y)X - (∇ · X)Y + (Y · ∇)X - (X · ∇)Y" BY {
+          LET "LHS" = "∇ × (X × Y)"  
+          LET "RHS" = "(∇ · Y)X - (∇ · X)Y + (Y · ∇)X - (X · ∇)Y"
+          SHOW "LHS ~>* RHS" USING LagrangeIdentity, DistributivityAxiom
+          THEN "D⟦LHS⟧ = D⟦RHS⟧ ∈ Model(T2, 𝒮)" BY ModelInvariance  
+        }
+        
+        ASSERT "∇ · (X × Y) ~>* Y · (∇ × X) - X · (∇ × Y)" BY {
+          LET "LHS" = "∇ · (X × Y)"
+          LET "RHS" = "Y · (∇ × X) - X · (∇ × Y)"  
+          SHOW "LHS ~>* RHS" USING DotCrossProduct, DistributivityAxiom
+          THEN "D⟦LHS⟧ = D⟦RHS⟧ ∈ Model(T1, 𝒮)" BY ModelInvariance
+        }
+      }
+
+      COUNTEREXAMPLE NonFlatConnection {
+        LET "𝒮'" = "Structure(n, 1)" WITH {
+          Base = Sphere(n)
+          VectorBundles[1] = TangentBundle(Base)
+          Connections[1] = Levi-CivitaConnection(Base)
+        }
+        
+        TAKE "X Y : Expression(Σ)" WHERE "X : Vec(n)" AND "Y : Vec(n)"
+        
+        THEN "⊢ ∇ × (∇ × X) : Vec(n)" 
+        BUT "D⟦∇ × (∇ × X)⟧ ≠ 0 ∈ Model(Vec(n), 𝒮')" WHEN "n = 3" 
+          BECAUSE "Curvature(Connection[1]) ≠ 0" AND "∇ × (∇ × X) = (∇∇ - ∆)X"
+      }
+    }
+  }
+}

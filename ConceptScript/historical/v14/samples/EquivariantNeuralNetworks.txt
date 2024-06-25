@@ -1,0 +1,117 @@
+CONCEPT EquivariantNeuralNetworks {
+  LANGUAGE {
+    type Group := (Set, Binary, Identity, Inverse) // Group structure
+    type Action := Group × Set → Set // Group action on a set
+    type Representation := Group → GL(n, ℝ) // Group representation as matrices
+    type Feature := ℝ^n // Feature vector 
+    type Field := Set → Feature // Feature field on a set
+    type Kernel := Feature × Feature → ℝ // Kernel function on features
+
+    func induced(ρ: Representation, φ: Field): Field
+      := (u ↦ ∫_G ρ(g⁻¹) · φ(g·u) dg) // Induced representation on fields
+    
+    func equivariantConv(φ: Field, ψ: Field, ρ: Representation, κ: Kernel): Field  
+      := u ↦ ∫_X κ(ρ(g) · φ(u), ψ(g·u)) dg // Equivariant convolution
+      
+    func trivialRep(g: Group): Matrix 
+      := eye(n) // Trivial representation
+    
+    func regularRep(g: Group): Matrix
+      := ρ_reg(g) // Regular representation
+      
+    func irreps(G: Group): [Representation]
+      := decompose(regularRep(G)) // Irreducible representations
+  }
+  
+  STRUCTURE {
+    [HomogeneousSpace(G: Group, H: Group) := G/H
+      ↦ The space of left cosets of H in G]
+    
+    [PrincipalBundle(P: Set, B: Set, G: Group) := 
+      {u ∈ P | π(u) = b} ≅ G ∀ b ∈ B
+      ↦ A fiber bundle with a principal G-action on fibers]
+      
+    [GaugeField(P: PrincipalBundle, ρ: Representation) := 
+       u ↦ ρ(σ(u)) for some section σ: B → P
+       ↦ A ρ-valued G-equivariant function on P]
+       
+    [EquivariantLayer(φ: Field, ρ: Representation) := 
+       ψ ↦ equivariantConv(φ, ψ, ρ, κ)
+       ↦ Equivariant convolution layer with representation ρ]
+       
+    [EquivariantNet(φ_0: Field) :=
+       φ_L ↦ EquivariantLayer_ρ_L(...(EquivariantLayer_ρ_1(φ_0)))  
+       ↦ Composed equivariant layers with representations ρ_i]
+  }
+   
+  PROOFS {
+    theorem equivariance_of_induced_rep:
+      ∀ φ: Field, g: Group. induced(ρ, φ)(g·u) = ρ(g) · induced(ρ, φ)(u)
+    {
+      induced(ρ, φ)(g·u)
+        = ∫_G ρ(h⁻¹) · φ(h·(g·u)) dh   ; by definition
+        = ∫_G ρ(h⁻¹) · φ((hg)·u) dh   ; by associativity
+        = ∫_G ρ(g⁻¹k⁻¹) · φ(k·u) d(gk); substitute k = hg
+        = ρ(g) · ∫_G ρ(k⁻¹) · φ(k·u) dk; by invariance of Haar measure
+        = ρ(g) · induced(ρ, φ)(u)      ; by definition
+    }
+
+    theorem equivariance_of_conv:
+      ∀ φ, ψ: Field, g: Group. equivariantConv(φ, ψ, ρ)(g·u) = ρ(g) · equivariantConv(φ, ψ, ρ)(u) 
+    {
+      equivariantConv(φ, ψ, ρ)(g·u)
+        = ∫_X κ(ρ(h) · φ(g·u), ψ(h·(g·u))) dh; by definition
+        = ∫_X κ(ρ(h) · φ(g·u), ψ((hg)·u)) dh ; by associativity
+        = ∫_X κ(ρ(g)⁻¹·ρ(k)·φ(u), ψ(k·u)) d(gk); substitute k = hg
+        = ρ(g) · ∫_X κ(ρ(k)·φ(u), ψ(k·u)) dk  ; by ρ(g)⁻¹ρ(k) = ρ(g⁻¹k) 
+        = ρ(g) · equivariantConv(φ, ψ, ρ)(u)   ; by definition
+    }
+    
+    theorem equivariance_of_net:
+      If each layer is equivariant, the composed network is equivariant.
+    {
+      Assume EquivariantLayer_ρ_i is equivariant with respect to ρ_i.
+      Consider EquivariantNet(φ_0) = φ_L and g: Group.
+      
+      φ_L(g·u) 
+        = EquivariantLayer_ρ_L(...(EquivariantLayer_ρ_1(φ_0)))(g·u)
+        = ρ_L(g) · EquivariantLayer_ρ_L(...(EquivariantLayer_ρ_1(φ_0)))(u)
+          ; by equivariance of EquivariantLayer_ρ_L
+        = ρ_L(g) · ρ_{L-1}(g) · ... · EquivariantLayer_ρ_1(φ_0)(u) 
+          ; by repeating the argument
+        = (∏_i ρ_i(g)) · φ_L(u)
+        
+      Thus, EquivariantNet(φ_0) is equivariant with respect to the representation ∏_i ρ_i.   
+    }
+  }
+}
+
+This Concept explores the theory of equivariant neural networks, which are designed to respect the symmetries and group structure of the input data. Equivariance is a desirable inductive bias for learning on structured domains like graphs, manifolds, and gauge fields.
+The language introduces several key concepts:
+
+Groups, group actions, and representations
+Feature fields on sets and induced representations on fields
+Equivariant convolution operation using kernel functions
+Trivial and regular representations, and irreducible decompositions
+
+The structure section defines important constructs:
+
+Homogeneous spaces as quotients of groups
+Principal bundles with a principal group action on fibers
+Gauge fields as equivariant functions on principal bundles
+Equivariant layers and networks composed of equivariant convolutions
+
+The proofs section establishes key theorems:
+
+Equivariance of induced representations under the group action.
+Equivariance of the convolution operation with respect to the input fields and the group representation.
+Equivariance of the composed network, inherited from the equivariance of individual layers.
+
+The key ideas are:
+
+Symmetry and equivariance can be formalized using group actions and representations.
+Convolution can be made equivariant by integrating over the group action.
+Equivariant networks can be constructed by composing equivariant layers with different representations.
+Gauge fields and fiber bundles provide a general framework for equivariant learning on homogeneous spaces.
+
+The Concept aims to provide a high-level overview of the mathematical foundations of equivariant deep learning, drawing from representation theory, differential geometry, and gauge theory.

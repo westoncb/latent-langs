@@ -1,0 +1,51 @@
+CONCEPT NaturalNumbers {
+  LANGUAGE {
+    TYPE Nat = Zero | Succ(Nat)
+
+    FUNC (+) : Nat -> Nat -> Nat
+    Zero + n = n
+    Succ(m) + n = Succ(m + n)
+
+    PRED Even : Nat
+    Even(Zero)
+    Even(Succ(Succ(n))) :- Even(n)
+
+    REWRITE Succ(m) + Succ(n) = Succ(Succ(m + n))
+  }
+
+  STRUCTURE {
+    LET two = Succ(Succ(Zero))
+    LET three = Succ(two)
+
+    DEF double(n : Nat) : Nat = n + n
+
+    INSTANCE Monoid(Nat) {
+      mempty = Zero
+      mappend = (+)
+    }
+  }
+
+  PROOFS {
+    THEOREM AdditionCommutativity {
+      STATEMENT: FORALL (m n : Nat). m + n = n + m
+
+      PROOF:
+        LET m n : Nat;
+        CASE m OF
+          Zero -> {
+            SHOW Zero + n = n + Zero BY {
+              Zero + n = n; 
+              n + Zero = n;
+            }
+          }
+          Succ(k) -> {
+            ASSUME IH: k + n = n + k;
+            SHOW Succ(k) + n = n + Succ(k) BY {
+              Succ(k) + n = Succ(k + n);
+              Succ(k + n) = Succ(n + k) BY IH;
+              Succ(n + k) = n + Succ(k);
+            }
+          }
+    }
+  }
+}

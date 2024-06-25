@@ -1,0 +1,72 @@
+CONCEPT GaugeInvariance {
+  STRUCTURE {
+    [FieldSpace := Space of smooth functions ψ: M → V]
+    [M := 4D Minkowski spacetime]
+    [V := Complex vector space]
+    [Action := FieldSpace → ℝ]
+    [S[ψ] := ∫_M L(ψ, ∂ψ) d^4x]
+    [L(ψ, ∂ψ) := Lagrangian density]
+    [GaugeGroup := Lie group G acting on V]
+    [GaugeTransformation := M → GaugeGroup]
+    [ψ ↦ ψ' := g(x) * ψ(x), ∀g ∈ GaugeTransformation]
+    [∂_μ ↦ D_μ := ∂_μ + A_μ]
+    [A_μ := Connection 1-form taking values in Lie algebra of GaugeGroup]
+    [F_μν := ∂_μ A_ν - ∂_ν A_μ + [A_μ, A_ν]]
+    [InvariantLagrangian := L(ψ, D_μ ψ) = L(ψ', D_μ' ψ')]
+    [GaugeInvariance := S[ψ] = S[ψ'], ∀ψ, ψ' related by GaugeTransformation]
+  }
+
+  PROOFS {
+    theorem noether_current :
+      ∀ψ, ψ' ∈ FieldSpace related by infinitesimal GaugeTransformation,
+        ∃J^μ, ∂_μ J^μ = 0
+    {
+      assume ψ, ψ' ∈ FieldSpace by hypothesis
+      assume ψ' = ψ + δψ where δψ = ε * T * ψ, T ∈ Lie algebra of GaugeGroup by definition of infinitesimal gauge transformation
+      let J^μ = (∂L / ∂(∂_μ ψ)) * δψ - L * ε * T by definition of Noether current
+      ∂_μ J^μ = (∂L / ∂ψ - ∂_μ (∂L / ∂(∂_μ ψ))) * δψ + (∂L / ∂(∂_μ ψ)) * (∂_μ δψ) - ∂_μ(L * ε * T) by product rule and chain rule
+      (∂L / ∂ψ - ∂_μ (∂L / ∂(∂_μ ψ))) * δψ = 0 by Euler-Lagrange equations
+      (∂L / ∂(∂_μ ψ)) * (∂_μ δψ) - ∂_μ(L * ε * T) = 0 by {
+        ∂_μ δψ = ε * (∂_μ T) * ψ + ε * T * (∂_μ ψ) by product rule
+        (∂L / ∂(∂_μ ψ)) * ε * (∂_μ T) * ψ = -L * ε * (∂_μ T) by infinitesimal GaugeInvariance
+        (∂L / ∂(∂_μ ψ)) * ε * T * (∂_μ ψ) - ∂_μ(L * ε * T) = 0 by product rule
+      }
+      conclude ∂_μ J^μ = 0 by substitution
+    }
+    
+    theorem gauge_invariant_em_lagrangian :
+      L_EM := -1/4 * F_μν * F^μν - J_μ * A^μ is GaugeInvariant
+    {
+      let A_μ ↦ A_μ' := A_μ - ∂_μ α where α: M → ℝ by definition of gauge transformation in electromagnetism
+      F_μν ↦ F_μν' := ∂_μ A_ν' - ∂_ν A_μ' by {
+        ∂_μ A_ν' - ∂_ν A_μ'
+        = ∂_μ (A_ν - ∂_ν α) - ∂_ν (A_μ - ∂_μ α)
+        = ∂_μ A_ν - ∂_μ ∂_ν α - ∂_ν A_μ + ∂_ν ∂_μ α
+        = ∂_μ A_ν - ∂_ν A_μ since ∂_μ ∂_ν α = ∂_ν ∂_μ α
+        = F_μν
+      }
+      J_μ * A'^μ = J_μ * (A^μ - ∂^μ α) = J_μ * A^μ - J_μ * ∂^μ α
+      ∫_M J_μ * ∂^μ α d^4x = ∫_M ∂_μ (J^μ * α) d^4x - ∫_M α * ∂_μ J^μ d^4x by integration by parts
+      ∫_∂M J^μ * α * dS_μ - ∫_M α * ∂_μ J^μ d^4x by Stokes' theorem
+      ∫_∂M J^μ * α * dS_μ = 0 by boundary conditions at infinity
+      ∫_M α * ∂_μ J^μ d^4x = 0 by continuity equation ∂_μ J^μ = 0
+      conclude L_EM ↦ L_EM under gauge transformation by substitution
+    }
+  }
+
+  LANGUAGE {
+    type FieldSpace
+    type Action
+    type GaugeGroup
+    type GaugeTransformation
+    type Connection
+    
+    func L (ψ : FieldSpace, ∂ψ : FieldSpace) : ℝ
+    func S (ψ : FieldSpace) : ℝ
+    func F (A : Connection) : Connection ⊗ Connection
+    func D (ψ : FieldSpace, A : Connection) : FieldSpace
+    
+    pred "↦" (g : GaugeTransformation, ψ : FieldSpace, ψ' : FieldSpace) = ψ' = g * ψ
+    pred "↦" (g : GaugeTransformation, A : Connection, A' : Connection) = A' = g * A * g⁻¹ + g * dg⁻¹
+  }
+}

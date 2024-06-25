@@ -1,0 +1,286 @@
+CONCEPT CancerDevelopmentMechanisms {
+  PARAMETERS {
+    Cell : TYPE
+    Tissue : TYPE
+    Genome : TYPE
+    Proteome : TYPE
+    Metabolome : TYPE
+    Microenvironment : TYPE
+  }
+
+  CONTEXT {
+    TYPES {
+      Gene := STRUCTURE {
+        FIELD sequence : String
+        FIELD expression_level : Real
+        FIELD methylation_status : SET(CpGSite)
+      }
+      
+      Mutation := UNION {
+        PointMutation(position : Nat, original : Char, mutated : Char),
+        Insertion(position : Nat, sequence : String),
+        Deletion(start : Nat, end : Nat),
+        ChromosomalRearrangement(type : RearrangementType, breakpoints : SET(Nat))
+      }
+      
+      Pathway := SET(Gene)
+      
+      CellState := STRUCTURE {
+        FIELD genome : Genome
+        FIELD epigenome : SET(EpigeneticModification)
+        FIELD transcriptome : SET((Gene, Real))
+        FIELD proteome : Proteome
+        FIELD metabolome : Metabolome
+      }
+      
+      CellularProcess := ENUM {
+        Proliferation,
+        Apoptosis,
+        Senescence,
+        Differentiation,
+        Migration,
+        Angiogenesis,
+        ImmuneEvasion,
+        MetabolicReprogramming
+      }
+      
+      DriverEvent := UNION {
+        DriverMutation(gene : Gene, mutation : Mutation),
+        EpigeneticAlteration(gene : Gene, modification : EpigeneticModification),
+        ChromosomalInstability(type : CINType),
+        FusionGene(gene1 : Gene, gene2 : Gene)
+      }
+    }
+
+    STRUCTURES {
+      STRUCTURE TumorEvolution {
+        FIELD initial_cell : Cell
+        FIELD driver_events : List(DriverEvent)
+        FIELD clonal_expansions : List((Cell, Nat))
+        FIELD metastases : SET(Tissue)
+        
+        FUNC evolve(time : Nat) -> SET(Cell) {
+          LET population = {initial_cell}
+          FOREACH event IN driver_events {
+            population = APPLY(event, population)
+            IF IsClonalExpansionEvent(event) {
+              population = ClonalExpansion(SelectFittestClone(population), GetExpansionSize(event))
+            }
+          }
+          RETURN population
+        }
+      }
+      
+      STRUCTURE CancerHallmark {
+        FIELD name : String
+        FIELD associated_genes : SET(Gene)
+        FIELD cellular_processes : SET(CellularProcess)
+        
+        FUNC is_active(cell : Cell) -> Bool {
+          RETURN AnyActive(associated_genes, cell) AND 
+                 AllActive(cellular_processes, cell)
+        }
+      }
+      
+      STRUCTURE TumorMicroenvironment {
+        FIELD cancer_cells : SET(Cell)
+        FIELD immune_cells : SET(Cell)
+        FIELD stromal_cells : SET(Cell)
+        FIELD extracellular_matrix : SET(Protein)
+        FIELD signaling_molecules : SET(Molecule)
+        
+        FUNC interact(time : Nat) -> TumorMicroenvironment {
+          LET new_state = COPY(SELF)
+          new_state.cancer_cells = EvolvePopulation(cancer_cells, time)
+          new_state.immune_cells = ImmuneResponse(immune_cells, cancer_cells, time)
+          new_state.stromal_cells = StromalRemodeling(stromal_cells, cancer_cells, time)
+          new_state.extracellular_matrix = ECMRemodeling(extracellular_matrix, cancer_cells, stromal_cells, time)
+          new_state.signaling_molecules = UpdateSignaling(signaling_molecules, cancer_cells, immune_cells, stromal_cells, time)
+          RETURN new_state
+        }
+      }
+    }
+
+    ASSERTIONS {
+      AXIOM WarburEffectInCancerCells {
+        FORALL (cell : Cell) .
+          IsCancerCell(cell) => 
+            cell.metabolome.glycolysis_rate > NormalCell.metabolome.glycolysis_rate AND
+            cell.metabolome.oxidative_phosphorylation_rate < NormalCell.metabolome.oxidative_phosphorylation_rate
+      }
+      
+      AXIOM CancerStemCellHypothesis {
+        FORALL (tumor : SET(Cell)) .
+          EXISTS (subpopulation : SET(Cell)) .
+            subpopulation ⊂ tumor AND
+            HasStemCellProperties(subpopulation) AND
+            CanReconstituteTumor(subpopulation, tumor)
+      }
+      
+      AXIOM EpigeneticDysregulationInCancer {
+        FORALL (cancer_cell : Cell, normal_cell : Cell) .
+          EXISTS (gene : Gene) .
+            gene.methylation_status IN cancer_cell.epigenome !=
+            gene.methylation_status IN normal_cell.epigenome AND
+            IsOncogeneOrTumorSuppressor(gene)
+      }
+    }
+
+    NOTATION {
+      mutation >> gene := mutation affects gene
+      cell |= hallmark := hallmark is active in cell
+      A → B := A promotes or causes B
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE ApplyDriverEvent(event : DriverEvent, cell : Cell) -> Cell {
+      MATCH event WITH
+        | DriverMutation(gene, mutation) => 
+            cell WITH { genome = ApplyMutation(cell.genome, gene, mutation) }
+        | EpigeneticAlteration(gene, modification) =>
+            cell WITH { epigenome = cell.epigenome ∪ {(gene, modification)} }
+        | ChromosomalInstability(type) =>
+            cell WITH { genome = InduceChromosomalInstability(cell.genome, type) }
+        | FusionGene(gene1, gene2) =>
+            cell WITH { genome = CreateGeneFusion(cell.genome, gene1, gene2) }
+    }
+    
+    SIMPLIFY AssessHallmarks(cell : Cell, hallmarks : SET(CancerHallmark)) -> SET(CancerHallmark) {
+      {hallmark | hallmark ∈ hallmarks AND hallmark.is_active(cell)}
+    }
+  }
+
+  PROOFS {
+    THEOREM MultistepCarcinogenesis {
+      FORALL (normal_cell : Cell) .
+        EXISTS (sequence : List(DriverEvent)) .
+          LET evolved_cell = FOLDL(ApplyDriverEvent, normal_cell, sequence)
+          IN IsCancerCell(evolved_cell) AND
+             2 <= |sequence| <= 8
+    }
+    PROOF {
+      GIVEN normal_cell : Cell
+      
+      <1>. LET hallmarks = AllCancerHallmarks()
+      <2>. DEFINE IsCancerCell(cell) AS |AssessHallmarks(cell, hallmarks)| = |hallmarks|
+      <3>. LET initial_active = AssessHallmarks(normal_cell, hallmarks)
+      <4>. NEED_TO_ACTIVATE = hallmarks - initial_active
+      <5>. FOREACH hallmark IN NEED_TO_ACTIVATE
+        <5.1>. EXISTS (event : DriverEvent) . event → hallmark
+        <5.2>. LET cell' = ApplyDriverEvent(event, cell)
+        <5.3>. AssessHallmarks(cell', hallmarks) CONTAINS hallmark
+      <6>. 2 <= |NEED_TO_ACTIVATE| <= 8 BY current understanding of cancer biology
+      <7>. sequence = MINIMAL_SEQUENCE(DriverEvent, NEED_TO_ACTIVATE)
+      <8>. evolved_cell = FOLDL(ApplyDriverEvent, normal_cell, sequence)
+      <9>. IsCancerCell(evolved_cell) BY <2> and <5>
+      <10>. 2 <= |sequence| <= 8 BY <6> and minimality of sequence
+      
+      QED
+    }
+
+    THEOREM CloSaintEHypothesis {
+      FORALL (tumor : TumorEvolution) .
+        EXISTS (t1 t2 : Nat) . t1 < t2 AND
+          Intratumor(Heterogeneity(tumor.evolve(t1))) <
+          IntratumourBioinforma(Heterogeneity(tumor.evolve(t2)))
+    }
+    PROOF {
+      GIVEN tumor : TumorEvolution
+      
+      <1>. LET initial_heterogeneity = Heterogeneity(tumor.evolve(0))
+      <2>. tumor.driver_events != [] BY definition of TumorEvolution
+      <3>. EXISTS (t1 : Nat) . IsClonalExpansionEvent(tumor.driver_events[t1])
+      <4>. LET post_expansion = tumor.evolve(t1 + 1)
+      <5>. Heterogeneity(post_expansion) < initial_heterogeneity BY ClonalExpansionReducesHeterogeneity
+      <6>. FOREACH t IN (t1+1 .. |tumor.driver_events|)
+        <6.1>. LET new_population = APPLY(tumor.driver_events[t], post_expansion)
+        <6.2>. Heterogeneity(new_population) > Heterogeneity(post_expansion) BY MutationIncreasesHeterogeneity
+      <7>. LET t2 = |tumor.driver_events|
+      <8>. Heterogeneity(tumor.evolve(t2)) > Heterogeneity(tumor.evolve(t1))
+      
+      QED
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE ColorectalCancerProgression {
+      LET apc_mutation = DriverMutation(APC_GENE, PointMutation(1306, 'T', 'A'))
+      LET kras_mutation = DriverMutation(KRAS_GENE, PointMutation(35, 'G', 'T'))
+      LET tp53_mutation = DriverMutation(TP53_GENE, PointMutation(248, 'C', 'T'))
+      LET chromosomal_instability = ChromosomalInstability(CIN)
+
+      LET colorectal_evolution = TumorEvolution {
+        initial_cell = NormalColonocyte,
+        driver_events = [
+          apc_mutation,
+          kras_mutation,
+          chromosomal_instability,
+          tp53_mutation
+        ],
+        clonal_expansions = [
+          (AdenomatousPolyp, 10^6),
+          (EarlyCarcinoma, 10^9),
+          (InvasiveCarcinoma, 10^11)
+        ],
+        metastases = {Liver, Lung}
+      }
+
+      COMPUTE tumor_progression = [
+        colorectal_evolution.evolve(t) 
+        FOR t IN [0, 5, 10, 15, 20]
+      ]
+
+      ASSERT ALL(cell IN tumor_progression[-1]). cell |= ProliferativeSignaling
+      ASSERT ALL(cell IN tumor_progression[-1]). cell |= ApoptosisEvasion
+      ASSERT ANY(cell IN tumor_progression[-1]). cell |= MetastaticCapability
+
+      VISUALIZE MolecularSubtypeDistribution(tumor_progression[-1]) 
+        AS "Colorectal Cancer Molecular Subtypes"
+    }
+
+    EXAMPLE GlioblastomaHeterogeneity {
+      LET idh1_mutation = DriverMutation(IDH1_GENE, PointMutation(395, 'G', 'A'))
+      LET egfr_amplification = ChromosomalInstability(GeneAmplification(EGFR_GENE))
+      LET pten_deletion = ChromosomalInstability(GeneDeletion(PTEN_GENE))
+      LET mgmt_methylation = EpigeneticAlteration(MGMT_GENE, Hypermethylation)
+
+      LET glioblastoma_evolution = TumorEvolution {
+        initial_cell = NeuralStemCell,
+        driver_events = [
+          idh1_mutation,
+          egfr_amplification,
+          pten_deletion,
+          mgmt_methylation
+        ],
+        clonal_expansions = [
+          (LowGradeGlioma, 10^8),
+          (SecondaryGlioblastoma, 10^10)
+        ],
+        metastases = {}  -- Glioblastoma rarely metastasizes outside the CNS
+      }
+
+      LET tumor = glioblastoma_evolution.evolve(20)
+      LET microenvironment = TumorMicroenvironment {
+        cancer_cells = tumor,
+        immune_cells = RecruitedImmuneCs(cell) {
+          FOREACH cell IN tumor
+          WHERE cell.proteome.CONTAINS(IMMUNOSUPPRESSIVE_FACTORS)
+        },
+        stromal_cells = GlioblastomaAssociatedStromalCells(),
+        extracellular_matrix = GlioblastomaECM(),
+        signaling_molecules = {VEGF, IL-6, TGF-β}
+      }
+
+      COMPUTE spatial_architecture = SpatialTumorGraph(tumor, microenvironment)
+      COMPUTE clonal_diversity = IntratumouralHeterogeneity(tumor)
+
+      ASSERT clonal_diversity > ThresholdForHighHeterogeneity
+      ASSERT ANY(cell IN tumor). HasStemCellProperties(cell)
+      ASSERT ALL(cell IN tumor). cell.metabolome |= GlutamineAddiction
+
+      VISUALIZE SingleCellRNASeqClusters(tumor) AS "Glioblastoma Transcriptomic Subtypes"
+      VISUALIZE SpatialProtechenvironment omicsMap(spatial_architecture) AS "Glioblastoma Spatial Heterogeneity"
+    }
+  }
+}

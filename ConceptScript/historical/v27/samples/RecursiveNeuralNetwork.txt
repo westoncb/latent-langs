@@ -1,0 +1,113 @@
+CONCEPT RecursiveNeuralNetwork {
+  LANGUAGE {
+    TYPE Tensor[N] = [Real]
+    TYPE Operation = Tensor[N] -> Tensor[M]
+    TYPE Graph = (Node, Edge)
+    TYPE Node = Operation
+    TYPE Edge = (Node, Node)
+
+    FUNC apply(op: Operation, inputs: [Tensor[N]]) : Tensor[M] = op(FOLDR(inputs, ZEROS[N], ADD))
+    FUNC zeros[N] : Tensor[N] = [0.0 for i in 0..N-1]
+    FUNC add(t1: Tensor[N], t2: Tensor[N]) : Tensor[N] = [t1[i] + t2[i] for i in 0..N-1]
+    FUNC mul(t1: Tensor[N], t2: Tensor[N]) : Tensor[N] = [t1[i] * t2[i] for i in 0..N-1] 
+    FUNC matmul[N,M,P](t1: Tensor[N,M], t2: Tensor[M,P]) : Tensor[N,P] = 
+      [[SUM(t1[i][k] * t2[k][j] for k in 0..M-1) for j in 0..P-1] for i in 0..N-1]
+
+    FUNC evalGraph(g: Graph, inputs: [Tensor[N]]) : Tensor[M] = MATCH g WITH
+      | (node, []) => apply(node, inputs)
+      | (node, edges) => 
+          LET results = [evalGraph((n2, FILTER(edges, (e) => e.1 == n2)), inputs) for (_, n2) in edges] IN
+          apply(node, results)
+  }
+
+  NOTATION {
+    t1 ⊕ t2 = add(t1, t2) 
+    t1 ⊗ t2 = mul(t1, t2)
+    0[N] = zeros[N]
+    RNN = RecursiveNeuralNetwork
+  }
+
+  STRUCTURES {
+    STRUCTURE Algebra[N,M] {
+      FIELD carriers : (Tensor[N], Tensor[M])
+      FIELD ops : {
+        add: (Tensor[N], Tensor[N]) -> Tensor[N],
+        mul: (Tensor[N], Tensor[M]) -> Tensor[M], 
+        zeros: Tensor[N],
+        ones: Tensor[M]
+      }
+
+      AXIOM Associativity : ∀ a,b,c : carriers.0 . (a ⊕ b) ⊕ c == a ⊕ (b ⊕ c)
+      AXIOM Commutativity : ∀ a,b : carriers.0 . a ⊕ b == b ⊕ a
+      AXIOM Identity : ∀ a : carriers.0 . a ⊕ zeros == a
+      AXIOM Annihilation : ∀ a : carriers.0 . a ⊗ zeros == zeros
+      AXIOM Distributivity : ∀ a,b,c : carriers . a ⊗ (b ⊕ c) == (a ⊗ b) ⊕ (a ⊗ c)
+    }
+
+    STRUCTURE TreeAlgebra[N] EXTENDS Algebra[N,N] {
+      FIELD tree : Graph
+    }
+  }
+
+  THEOREMS {
+    THEOREM UniversalApproximation :
+      ∀ f: Tensor[N] -> Tensor[M], ε > 0 .
+      ∃ rnn: RNN . 
+        ∀ x: Tensor[N] .
+          |f(x) - evalGraph(rnn, [x])| < ε
+    {
+      GIVEN f: Tensor[N] -> Tensor[M], ε > 0
+
+      DEFINE approxF(x, i): 
+        IF i == 0 THEN 0[M]
+        ELSE LET y = approxF(x, i-1) IN 
+             y ⊕ (f(x) ⊗ (1/i)[M])
+
+      DEFINE rnnFromApproxF:
+        LET node1 = \t -> t ⊕ (f(t) ⊗ (1/i)[M])
+        LET node2 = \t -> IF i == 0 THEN 0[M] ELSE t
+        (node2, [(node2, node1), (node1, node2)])
+
+      PROVE ∀ x : Tensor[N], i : Nat . 
+        |f(x) - evalGraph(rnnFromApproxF(i), [x])| <= 1/i
+      {
+        BY Induction on i:
+        
+        Base Case: i = 0
+          |f(x) - evalGraph(rnnFromApproxF(0), [x])|
+            == |f(x) - 0[M]|  BY Def rnnFromApproxF
+            == |f(x)|         
+            <= 1              ASSUMING f IS BOUNDED
+            == 1/0            BY Def Inverse for Nat
+
+        Inductive Step: i > 0
+          IH: ASSUME |f(x) - evalGraph(rnnFromApproxF(i-1), [x])| <= 1/(i-1)
+
+          |f(x) - evalGraph(rnnFromApproxF(i), [x])|
+            == |f(x) - (evalGraph(rnnFromApproxF(i-1), [x]) ⊕ (f(x) ⊗ (1/i)[M]))|  BY Def rnnFromApproxF
+            == |(f(x) ⊕ -(f(x) ⊗ (1/i)[M])) - evalGraph(rnnFromApproxF(i-1), [x])|  BY Vector Arithmetic
+            == |(f(x) ⊕ -(f(x)/i)) - evalGraph(rnnFromApproxF(i-1), [x])|            BY Notation
+            == |f(x) - (evalGraph(rnnFromApproxF(i-1), [x]) ⊕ (f(x)/i))|            BY Vector Arithmetic
+            <= |f(x) - evalGraph(rnnFromApproxF(i-1), [x])| + |f(x)/i|              BY Triangle Inequality
+            == |f(x) - evalGraph(rnnFromApproxF(i-1), [x])| + |f(x)|/i
+            <= 1/(i-1) + |f(x)|/i            BY IH and i > 0
+            <= 1/(i-1) + 1/i                 ASSUMING |f(x)| <= 1
+            == (i + (i-1))/((i-1)*i)         BY Algebra of Fractions  
+            == (2*i - 1)/((i-1)*i)
+            < 2*i/((i-1)*i)                  SINCE i > 0
+            == 2/(i-1)
+            < 1/(i/2)                        SINCE i > 1
+            <= 1/i                           SINCE i/2 <= i             
+
+      } QED
+
+      LET rnn = rnnFromApproxF(⌈1/ε⌉) IN
+      
+      ∀ x : Tensor[N] . 
+        |f(x) - evalGraph(rnn, [x])| 
+          <= 1/(⌈1/ε⌉)     BY PREVIOUS THEOREM           
+          < ε              SINCE ⌈1/ε⌉ > 1/ε
+    } QED
+  }
+}
+

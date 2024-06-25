@@ -1,0 +1,134 @@
+CONCEPT QuantumChemicalDynamics {
+  EXTENDS GeometricChemistry {
+    type Time = ℝ
+    type State = Function(Time, ElectronicState)
+    type Trajectory = Function(Time, Molecule)
+    type Propagator = Operator(State)
+    type QuantumOperator = Operator(ElectronicStructure, Time)
+    type Observable = QuantumOperator
+    
+    notation "U(t)" = Propagator
+    notation "A(t)" = Observable
+    notation "𝓛" = Liouvillian
+    notation "𝓗(t)" = Time-dependent(ElectronicHamiltonian)
+    notation "ρ(t)" = Time-dependent(DensityMatrix)
+    
+    axiom Liouville(ρ: DensityMatrix, 𝓛: Liouvillian): ∂ρ/∂t = -i/ħ * [ρ, 𝓛]
+    axiom Heisenberg(A: Observable, 𝓗: ElectronicHamiltonian): i*ħ*dA/dt = [𝓗, A] 
+  }
+  
+  STRUCTURE {
+    TimeEvolution(U: Propagator, 𝓗: ElectronicHamiltonian):
+      U(t) = T̂[exp(-i/ħ * ∫[0, t] 𝓗(τ) dτ)]
+      where T̂ is the time-ordering operator
+      
+    QuantumLiouville(ρ: DensityMatrix, 𝓛: Liouvillian):
+      ∂ρ/∂t = -i/ħ * [ρ, 𝓛]
+      describing the time evolution of the density matrix
+      
+    EhrenbestTheorem(⟨A⟩: Expectation, ⟨𝓗⟩: Expectation):
+      d⟨A⟩/dt = -i/ħ * ⟨[A, 𝓗]⟩ + ⟨∂A/∂t⟩ 
+      relating the time dependence of expectation values to the commutator
+      
+    AdiabaticTheorem(𝓗: ElectronicHamiltonian, T: KineticEnergy):
+      [𝓗(R), T(P)] = i*ħ*dR/dt * ∇_R 𝓗
+      connecting the slow nuclear motion to the fast electronic dynamics
+        
+    BerryPhase(A: U(1)Connection, C: ClosedPath):
+      γ = ∮_C A = i * ∮_C ⟨ψ|d/dR|ψ⟩ dR  
+      the phase accumulated by the wavefunction along an adiabatic cycle 
+      
+    MarcusTheory(ℛ: ReactionRate, ΔG: FreeEnergy, λ: ReorganizationEnergy):
+      ℛ ∝ exp(-(ΔG + λ)^2 / (4*λ*k_B*T))
+      predicting electron transfer rates from thermodynamic parameters
+      
+    TullyHoppingAlgorithm(P_hop: HoppingProbability, Δt: TimeStep):
+      P_hop = max(0, -2*Real(⟨ψ_i|𝓗|ψ_j⟩*⟨ψ_j|d/dt|ψ_i⟩)*Δt / ⟨ψ_i|ψ_i⟩)
+      a Monte Carlo method for non-adiabatic transitions between electronic states
+  }
+  
+  PROOFS {
+    theorem QuantumClassicalCorrespondence(ρ: DensityMatrix, P: ProbabilityDistribution):
+      ρ(t) ≈ ∫ P(q, p; t) * |q⟩⟨p| dq dp
+    {
+      assume ρ(t) = U(t) * ρ(0) * U(t)⁻¹  ; Unitary evolution
+      
+      let ρ(0) = ∫∫ ρ(q, p; 0) * |q⟩⟨p| dq dp  ; Wigner transform at t=0
+      let U_qp(t) = ⟨q|U(t)|p⟩ be the propagator kernel
+      
+      have ρ(t) = ∫∫ ρ(q, p; 0) * U_qp(t) * |q⟩⟨p| * U_qp(t)⁻¹ dq dp
+               = ∫∫ P(q, p; t) * |q⟩⟨p| dq dp
+      where P(q, p; t) = ρ(q, p; 0) * |U_qp(t)|²
+      
+      hence ρ(t) ≈ ∫ P(q, p; t) * |q⟩⟨p| dq dp
+    }
+
+    theorem GeometricPhase(A: U(1)Connection, C: ClosedPath, ψ: Wavefunction):
+      let γ = ∮_C A = i * ∮_C ⟨ψ|d/dR|ψ⟩ dR, then:
+      ψ_C = exp(i*γ) * ψ_0
+    {    
+      assume ∇_R × A = 0  ; Vanishing curvature
+      have d(exp(i*∫_C A)) = exp(i*∫_C A) * (i*∮_C A)  ; Stokes' theorem
+      
+      let g(R) = exp(i*∫_{R_0}^R A)
+      have ψ(R) = g(R) * ψ_0 by parallel transport
+      hence ψ_C = g(C) * ψ_0 = exp(i*∮_C A) * ψ_0
+      
+      therefore, ψ_C = exp(i*γ) * ψ_0
+    }
+    
+    theorem DensityMatrixDynamics(ρ: DensityMatrix, 𝓗: ElectronicHamiltonian):
+      let 𝓛 = [𝓗, •], then:
+      ρ(t) = exp(-i*𝓛*t/ħ) * ρ(0)
+    {
+      assume ∂ρ/∂t = -i/ħ * [𝓗, ρ]  ; Liouville equation
+      define Liouvillian 𝓛 = [𝓗, •]
+      then ∂ρ/∂t = -i/ħ * 𝓛(ρ)
+      
+      let Ψ(t) = exp(-i*𝓛*t/ħ) be the propagator
+      have ∂Ψ/∂t = -i/ħ * 𝓛 * Ψ  and  Ψ(0) = 𝐈
+      hence Ψ(t) * ρ(0) satisfies the Liouville equation with initial condition ρ(0)
+      
+      by uniqueness of solutions:
+      ρ(t) = Ψ(t) * ρ(0) = exp(-i*𝓛*t/ħ) * ρ(0)
+    }
+    
+    theorem AdiabaticDynamics(H_ad: AdiabaticHamiltonian, T: KineticEnergy, |ψ_n⟩: AdiabaticState):
+      assume ⟨ψ_m|∇_R|ψ_n⟩ ≈ 0 for m ≠ n (adiabatic approximation), then:  
+      i*ħ*∂|ψ_n⟩/∂t ≈ (H_ad + T_n)|ψ_n⟩
+      where T_n = -(ħ²/(2*M)) * (⟨∇_R ψ_n|∇_R ψ_n⟩ + ⟨ψ_n|∇²_R|ψ_n⟩)
+    {
+      let |ψ⟩ = ∑_n c_n(t) * |ψ_n⟩ * exp(-i*θ_n(t)/ħ)  ; Expand in adiabatic basis
+      where H_ad|ψ_n⟩ = E_n|ψ_n⟩  and  θ_n(t) = ∫_0^t E_n(τ) dτ
+      
+      i*ħ*∂|ψ⟩/∂t = ∑_n [i*ħ*∂c_n/∂t - c_n*E_n] * |ψ_n⟩ * exp(-i*θ_n/ħ)
+                    + ∑_n c_n * [H_ad, |ψ_n⟩] * exp(-i*θ_n/ħ) 
+                    - i*ħ * ∑_n c_n * |∇_R ψ_n⟩ * dR/dt * exp(-i*θ_n/ħ)
+      
+      using [H_ad, |ψ_n⟩] = 0, ⟨ψ_m|∇_R|ψ_n⟩ ≈ 0, and multiplying by ⟨ψ_m|:
+      
+      i*ħ*∂c_m/∂t ≈ -(ħ²/(2*M)) * (⟨∇_R ψ_m|∇_R ψ_m⟩ + ⟨ψ_m|∇²_R|ψ_m⟩) * c_m
+      
+      therefore, i*ħ*∂|ψ_n⟩/∂t ≈ (H_ad + T_n)|ψ_n⟩
+    }
+  }
+}
+
+This Concept, QuantumChemicalDynamics, extends GeometricChemistry to incorporate time evolution and quantum dynamics. It introduces types for time-dependent states, trajectories, propagators, and observables. The key structural elements include:
+
+TimeEvolution, which defines the unitary propagator in terms of the time-ordered exponential of the Hamiltonian.
+QuantumLiouville, expressing the evolution of the density matrix under the Liouvillian superoperator.
+EhrenbestTheorem, relating the dynamics of observable expectation values to the commutator with the Hamiltonian.
+AdiabaticTheorem, connecting the slow nuclear motion on the potential energy surface to the fast electronic dynamics.
+BerryPhase, defining the geometric phase acquired by the wavefunction along an adiabatic cycle.
+MarcusTheory, a model for predicting electron transfer reaction rates from thermodynamic parameters.
+TullyHoppingAlgorithm, a surface hopping method for modeling non-adiabatic transitions.
+
+The proofs explore several fundamental aspects of quantum dynamics:
+
+QuantumClassicalCorrespondence derives the semiclassical limit of the density matrix in terms of the Wigner phase space distribution.
+GeometricPhase demonstrates how the wavefunction acquires a phase factor determined by the holonomy of the Berry connection.
+DensityMatrixDynamics solves the Liouville equation using the propagator defined by the Liouvillian superoperator.
+AdiabaticDynamics derives the effective Hamiltonian governing the slow nuclear motion on a single adiabatic potential energy surface.
+
+The Concept aims to provide a mathematical framework for reasoning about coupled electron-nuclear dynamics, non-adiabatic processes, and semiclassical approximations in quantum chemistry, blending differential geometry with quantum mechanics.

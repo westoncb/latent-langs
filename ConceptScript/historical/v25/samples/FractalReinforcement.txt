@@ -1,0 +1,85 @@
+CONCEPT FractalReinforcement {
+  LANGUAGE {
+    TYPE State = ℝ^n
+    TYPE Action = ℝ^m 
+    TYPE Reward = ℝ
+    TYPE Policy = State -> Action
+    TYPE Value = State -> ℝ
+    TYPE Transition = State × Action -> State
+    TYPE Fractal = State -> ℝ
+
+    FUNC Bellman(𝜋 : Policy, T : Transition, r : Reward, γ : ℝ) : Value
+    FUNC Hausdorff(X : State -> ℝ, d : ℝ) : ℝ
+    FUNC Mandelbrot(c : ℂ, n : ℕ) : ℂ
+    FUNC IFS(w : (State -> State)^k, p : ℝ^k) : State -> State
+
+    AXIOM Contraction {
+      ∀ (T : Transition) (𝜋 : Policy) (r : Reward) (γ : ℝ) (U V : Value) .
+        |Bellman(𝜋, T, r, γ)(U) - Bellman(𝜋, T, r, γ)(V)| ≤ γ * max[s] |U(s) - V(s)|
+    }
+
+    AXIOM FractalDimension {
+      ∀ (F : Fractal) . lim[d->0] log(Hausdorff(F, d)) / log(1/d) = Hausdorff(F)  
+    }
+
+    NOTATION "𝔹" = Bellman
+    NOTATION "ℍ" = Hausdorff
+    NOTATION "ℳ" = Mandelbrot
+  }
+
+  STRUCTURE FractalMDP(T : Transition, r : Reward, γ : ℝ, F : Fractal) {
+    DEF Optimal(U : Value) : Policy = (s : State) ↦ argmax[a : Action] 𝔼[T(s, a)] (r(s, a) + γ * U)
+
+    DEF Iterate(U : Value) : Value = 𝔹(Optimal(U), T, r, γ)(U)
+
+    REQUIRE ∀ (s : State) . F(s) = r(s, Optimal(Iterate^∞)(s))
+  }
+
+  PROOFS {
+    THEOREM ValueFractal {
+      STATEMENT : ∀ (M : FractalMDP) . ℍ(M.F) ≤ log(𝔼[s₁~M.T(s₀, a₀)] γ * |M.F(s₁) - M.F(s₀)|) / log(1/γ)
+
+      PROOF {
+        LET (T, r, γ, F) : FractalMDP
+        
+        ℍ(F)
+          = lim[d->0] log(ℍ(F, d)) / log(1/d)  BY FractalDimension
+          ≤ lim[d->0] log(𝔼[s₁~T(s₀, a₀)] γ * |F(s₁) - F(s₀)|) / log(1/d)  BY {
+              LET U = Iterate^∞, V = U
+              
+              |U(s₁) - U(s₀)| 
+                = |𝔹(Optimal(U), T, r, γ)(U)(s₁) - 𝔹(Optimal(U), T, r, γ)(U)(s₀)|
+                ≤ γ * max[s] |U(s) - V(s)|  BY Contraction
+                = γ * |U(s₁) - U(s₀)|  BY CHOOSING s₁, s₀ 
+              
+              ℍ(F, d)
+                = 𝔼[s₁~T(s₀, a₀)] |F(s₁) - F(s₀)| / d  BY definition
+                = 𝔼[s₁~T(s₀, a₀)] |U(s₁) - U(s₀)| / d  BY <<M : FractalMDP>>
+                ≤ 𝔼[s₁~T(s₀, a₀)] γ * |U(s₁) - U(s₀)| / d  USING PREV
+            }
+          = log(𝔼[s₁~T(s₀, a₀)] γ * |F(s₁) - F(s₀)|) / log(1/γ)  BY ALGEBRA
+      }
+    }
+
+    THEOREM FractalRL {
+      STATEMENT : ∀ (M : FractalMDP) . ℳ(r ∘ (Optimal ∘ Iterate^n), n) → M.F 
+
+      PROOF {
+        LET (T, r, γ, F) : FractalMDP
+        
+        SUFFICES SHOW ∀ (n : ℕ) . |ℳ(r ∘ (Optimal ∘ Iterate^n), n)(s) - F(s)| ≤ γ^n * max[s] |Iterate^n(s) - F(s)|
+
+        LET n : ℕ, s : State
+
+        |ℳ(r ∘ (Optimal ∘ Iterate^n), n)(s) - F(s)|
+          = |r(s, Optimal(Iterate^n)(s)) - r(s, Optimal(Iterate^∞)(s))|  BY definition of ℳ, F
+          ≤ |r(s, Optimal(Iterate^n)(s)) - 𝔹(Optimal(Iterate^∞), T, r, γ)(Iterate^n)(s)| +
+            |𝔹(Optimal(Iterate^∞), T, r, γ)(Iterate^n)(s) - r(s, Optimal(Iterate^∞)(s))|  BY TRIANGLE INEQUALITY  
+          ≤ γ * |Iterate^n(s) - Iterate^∞(s)| + 
+            |𝔹(Optimal(Iterate^∞), T, r, γ)(Iterate^n)(s) - 𝔹(Optimal(Iterate^∞), T, r, γ)(Iterate^∞)(s)|  BY DEFINITION of 𝔹
+          ≤ γ * |Iterate^n(s) - F(s)| + γ * max[s] |Iterate^n(s) - Iterate^∞(s)|  BY Contraction
+          ≤ γ^n * max[s] |Iterate^n(s) - F(s)|  BY ITERATING PREV n TIMES
+      }
+    }
+  }
+}

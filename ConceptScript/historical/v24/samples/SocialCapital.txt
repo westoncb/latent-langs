@@ -1,0 +1,90 @@
+CONCEPT SocialCapital {
+  LANGUAGE {
+    TYPE Person
+    TYPE SocialNetwork
+    TYPE Relationship
+    TYPE Favor
+    
+    FUNC Connect : Person -> Person -> SocialNetwork -> SocialNetwork
+    FUNC Introduce : Person -> Person -> Relationship -> SocialNetwork ⊸ SocialNetwork
+    FUNC AskFavor : Person -> Person -> Favor -> Relationship ⊸ (Favor, Relationship)
+    FUNC ReturnFavor : Person -> Person -> Favor -> Relationship ⊸ Relationship
+    
+    CLASS Reputable(P : Person) {
+      Reputation : P -> Int
+    }
+
+    AXIOM Reciprocity {
+      ∀ (P1 P2 : Person) (F : Favor) (R : Relationship).
+        (P1 <--[F] P2) ; (P1 -->[F] P2) = R
+    }
+    
+    NOTATION "P1 --[R] P2" = Introduce(P1, P2, R)
+    NOTATION "P1 <--[F] P2" = AskFavor(P1, P2, F)
+    NOTATION "P1 -->[F] P2" = ReturnFavor(P1, P2, F)
+  }
+  
+  STRUCTURE {
+    INSTANCE Reputable(P : Person) {
+      Reputation(P) = COUNT(F : Favor, P2 : Person. P -->[F] P2)
+    }
+    
+    DEF TransitiveIntroduction {
+      ∀ (P1 P2 P3 : Person) (R1 R2 : Relationship) (N : SocialNetwork).
+        (P1 --[R1] P2); (P2 --[R2] P3); N
+          ⊸ (P1 --[R1] P3); (P2 --[R2] P3); N
+    }
+  }
+  
+  PROOFS {
+    THEOREM ReputablePerson {
+      STATEMENT:
+        ∀ (P : Person) (N : SocialNetwork).
+          (∀ (P2 : Person) (F : Favor). (P <--[F] P2) ; (P -->[F] P2))
+            -> Reputable(P)
+      PROOF:
+        LET P : Person, N : SocialNetwork
+        ASSUME H1: ∀ (P2 : Person) (F : Favor). (P <--[F] P2) ; (P -->[F] P2)
+        SHOW Reputable(P) BY {
+          HAVE Reputation(P) = COUNT(F : Favor, P2 : Person. P -->[F] P2) BY Definition
+          REWRITE COUNT(F : Favor, P2 : Person. P -->[F] P2) 
+                = COUNT(F : Favor, P2 : Person. (P <--[F] P2) ; (P -->[F] P2)) BY H1
+          REWRITE COUNT(F : Favor, P2 : Person. (P <--[F] P2) ; (P -->[F] P2))
+                = COUNT(F : Favor, P2 : Person. P <--[F] P2) BY Reciprocity
+          HENCE Reputation(P) > 0
+        }
+    }
+    
+    THEOREM SixDegreesOfSeparation {
+      STATEMENT:
+        ∀ (P1 P2 : Person) (N : SocialNetwork).
+          ∃ (Ps : List(Person)) (Rs : List(Relationship)).
+            LENGTH(Ps) <= 6 ∧ (P1 --[HEAD(Rs)] Ps[1]);
+              (Ps[1] --[Rs[1]] Ps[2]); ... ; (Ps[LENGTH(Ps)-1] --[LAST(Rs)] P2); N
+      PROOF:
+        LET P1 : Person, P2 : Person, N : SocialNetwork
+        SHOW ∃ (Ps : List(Person)) (Rs : List(Relationship)).
+          LENGTH(Ps) <= 6 ∧ (P1 --[HEAD(Rs)] Ps[1]);
+            (Ps[1] --[Rs[1]] Ps[2]); ... ; (Ps[LENGTH(Ps)-1] --[LAST(Rs)] P2); N
+        BY {
+          LET Ps = ShortestPath(P1, P2, N)
+          LET Rs = ShortestPathRelationships(P1, P2, N)
+          HAVE LENGTH(Ps) <= 6 BY SmallWorldProperty
+          HAVE (P1 --[HEAD(Rs)] Ps[1]);
+                 (Ps[1] --[Rs[1]] Ps[2]); ... ; (Ps[LENGTH(Ps)-1] --[LAST(Rs)] P2); N
+            BY {
+              REWRITE (P1 --[HEAD(Rs)] Ps[1]);
+                        (Ps[1] --[Rs[1]] Ps[2]); ... ; (Ps[LENGTH(Ps)-1] --[LAST(Rs)] P2); N
+                    = (P1 --[HEAD(Rs)] Ps[1]); 
+                        TransitiveIntroduction(Ps[1], Ps[2], Ps[3], Rs[1], Rs[2]);
+                        TransitiveIntroduction(Ps[2], Ps[3], Ps[4], Rs[2], Rs[3]);
+                        ...
+                        TransitiveIntroduction(Ps[LENGTH(Ps)-2], Ps[LENGTH(Ps)-1], P2, 
+                                               Rs[LENGTH(Rs)-2], LAST(Rs)); 
+                        N
+              USE N
+            }
+        }
+    }
+  }
+}

@@ -1,0 +1,130 @@
+CONCEPT PACLearning {
+  LANGUAGE {
+    TYPE Instance
+    TYPE Label
+    TYPE Hypothesis = Instance -> Label
+    TYPE Concept = Instance -> Label  
+    TYPE Dataset = List[(Instance, Label)]
+    
+    FUNC Accuracy(h : Hypothesis, c : Concept, D : Distribution[Instance]) : ℝ
+    FUNC Agree(h : Hypothesis, c : Concept, x : Instance) : 𝔹
+    
+    AXIOM AccuracyDef: ∀ (h : Hypothesis) (c : Concept) (D : Distribution[Instance]) .
+      Accuracy(h, c, D) = Exp_{x ~ D} Agree(h, c, x)
+        
+    PRED PAC(L : Concept -> Hypothesis, 
+             𝜖 : ℝ, δ : ℝ, m : ℕ,
+             Train : Dataset -> Hypothesis,
+             C : Concept) =
+      ∀ (D : Distribution[Instance]) .
+        Pr_{S ~ D^m} [Accuracy(Train(S), C, D) > 1 - 𝜖] > 1 - δ
+  }
+  
+  NOTATION {
+    "Pr[X]" = Probability of event X
+    "Exp_D[X]" = Expected value of X over distribution D 
+    "D^m" = Product distribution; m iid samples from D
+    "S ~ D" = S is a random sample from distribution D
+  }
+
+  STRUCTURE Definitions {  
+    DEF Learner(C : Set[Concept], 
+               Train : Dataset -> Hypothesis, 
+               m : Instance -> ℝ,
+               𝜖 : ℝ, δ : ℝ) = {
+      ∀ (c : C) . ∃ (m_0 : ℕ) . ∀ (m > m_0) . PAC(Train, 𝜖, δ, m, c)                
+    }
+
+    DEF SampleComplexity(C : Set[Concept],
+                         𝜖 : ℝ, δ : ℝ,
+                         L : Concept -> Hypothesis, 
+                         Train : Dataset -> Hypothesis) : ℕ =
+      MIN {m : ℕ | ∀ (c : C) . PAC(L, 𝜖, δ, m, Train, c)}
+        
+    PRED FinitelyLearnable(C : Set[Concept]) = 
+      ∃ (L : Concept -> Hypothesis) 
+        (Train : Dataset -> Hypothesis)
+        (m : (ℝ, ℝ) -> ℕ) .
+      ∀ (𝜖 > 0) (δ > 0) . 
+        Learner(C, Train, (λ 𝜖 δ . m(𝜖, δ)), 𝜖, δ)
+        
+    PRED EfficientlyLearnable(C : Set[Concept]) =
+      FinitelyLearnable(C) ∧
+      SampleComplexity(C) is polynomial in 1/𝜖, 1/δ, Dim(C) ∧
+      Train is polynomial-time computable
+  }
+
+  PROOFS {
+    THEOREM FiniteClassPAC {
+      STATEMENT:
+        ∀ (C : FiniteSet[Concept]) . FinitelyLearnable(C)
+          
+      PROOF:
+        LET C : FiniteSet[Concept],
+            𝜖 δ : ℝ, 
+            D : Distribution[Instance],
+            m = ⌈(ln |C| + ln (1/δ)) / 𝜖⌉
+        
+        DEF L(c) = c  // Hypotheses are just the concepts
+        DEF Train(S) = argmin_{c ∈ C} 𝚺_{(x,y) ∈ S} 𝟙[c(x) ≠ y] 
+        
+        HAVE VC-Dim(C) ≤ log₂|C| by Sauer-Shelah Lemma
+        
+        ∀ (c : C) {
+          Pr_{S ~ D^m} [Accuracy(Train(S), c, D) ≤ 1-𝜖] 
+              ≤ Pr [∃ (h : C) . Accuracy(h, c, D) ≤ 1-𝜖 ∧ h = Train(S)] 
+              ≤ 𝚺_{h ∈ C} Pr [Accuracy(h, c, D) ≤ 1-𝜖 ∧ h = Train(S)]
+              ≤ |C| exp(-𝜖²m) 
+                BY Chernoff Bound, Union Bound
+              ≤ δ 
+                BY choice of m
+        }
+
+        THEREFORE Learner(C, Train, (λ _ _ . m), 𝜖, δ)
+        THEREFORE FinitelyLearnable(C)
+        
+        QED
+    }
+      
+    THEOREM NoFreeLunch {
+      STATEMENT:
+        ∀ (A : Set[Instance]) 
+          (B : Set[Label]) 
+          (m > |B|) .
+        ∀ (L : Concept -> Hypothesis)
+          (Train : Dataset -> Hypothesis) .
+        ∃ (C : Set[Concept])
+          (D : Distribution[Instance]) . 
+          (∀ (S : Dataset) . |S| = m 
+            => Exp_{c ~ Uniform(C)} Exp_{x ~ D} 𝟙[Train(S)(x) = c(x)] = 1/|B|)
+            
+      PROOF:
+        ASSUME |A| = n, |B| = k
+        LET C = ALL Functions A -> B
+        LET D = Uniform(A)
+        
+        ∀ (S : Dataset) . |S| = m {
+          LET X = {x : A | (x,_) ∉ S}  // Unobserved instances
+          
+          ∀ (b : B^X) . ∃ (c : C) . 
+            (∀ (x,y) ∈ S . c(x) = y) ∧ 
+            (∀ (x : X) . c(x) = b[x])
+        } 
+        THEREFORE |C_S| = k^(n-m) where C_S = {c : C | ∀ (x,y) ∈ S . c(x) = y}  
+        
+        LET h = Train(S) 
+        Exp_{c ~ Uniform(C)} Exp_{x ~ D} 𝟙[h(x) = c(x)]
+          = Exp_{x ~ D} Exp_{c ~ Uniform(C)} 𝟙[h(x) = c(x)]
+          = Exp_{x ~ D} [IF (x,_) ∈ S THEN 1 ELSE 1/k]
+          = m/n * 1 + (n-m)/n * 1/k
+          = m/n + (n-m)/(nk)
+          = 1/k + m/(nk) * (k-1)
+          ≤ 1/k + m/n * (k-1)/k
+          ≤ 1/k + (k-1)/k since m ≤ n
+          = 1/k + 1 - 1/k
+          = 1
+          
+        QED
+    }
+  }  
+}

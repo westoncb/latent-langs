@@ -1,0 +1,107 @@
+CONCEPT NaturalDeduction {
+  LANGUAGE {
+    TYPE Formula
+    TYPE Proof
+    TYPE Sequent = List[Formula] * Formula
+    
+    FUNC Axiom(Γ : List[Formula], φ : Formula) : Sequent
+    FUNC Premise(Γ : List[Formula]) : Sequent  
+    FUNC Implies(Γ : List[Formula], φ ψ : Formula) : Sequent
+    FUNC ImpliesElim(D : Proof, E : Proof) : Proof
+    FUNC ImpliesIntro(x : Proof -> Proof) : Proof
+    FUNC ForallIntro(x : Term -> Proof) : Proof
+    FUNC ForallElim(t : Term, D : Proof) : Proof
+
+    PRED Proves(D : Proof, Γ : List[Formula], φ : Formula) = 
+      ∀ M : Model . (M ⊨ Γ) => (M ⊨ φ)
+  }
+
+  NOTATION {
+    "Γ ⊢ φ" = ∃ (D : Proof) . Proves(D, Γ, φ)
+    "Γ, φ ⊢ ψ" = Γ ∪ {φ} ⊢ ψ
+    "⊢ φ" = ∅ ⊢ φ
+    "φ ⊢ ψ" = {φ} ⊢ ψ
+    "φ, ψ ⊢ χ" = {φ, ψ} ⊢ χ
+  }
+
+  TRANSFORMERS {
+    TACTIC Assumption(Γ : List[Formula], φ : Formula) = {
+      FIND φ ∈ Γ
+      THUS Γ ⊢ φ BY Premise(Γ)
+    }
+
+    TACTIC ModusPonens(Γ : List[Formula], φ ψ : Formula) = {
+      ASSUME (H1) : Γ ⊢ φ
+      ASSUME (H2) : Γ ⊢ φ => ψ
+      LET D : Proof = witness of H1
+      LET E : Proof = witness of H2
+      THUS Γ ⊢ ψ BY ImpliesElim(D, E)
+    }
+
+    TACTIC Deduction(Γ : List[Formula], φ ψ : Formula) = {
+      ASSUME (H) : Γ, φ ⊢ ψ
+      LET D : Proof -> Proof = λ x . x using H
+      THUS Γ ⊢ φ => ψ BY ImpliesIntro(D)  
+    }
+
+    TACTIC GeneralizationOverWitness(Γ : List[Formula], φ : Formula, t : Term) = {
+      ASSUME (H) : Γ ⊢ φ[t/x]
+      LET D : Term -> Proof = λ x . H
+      THUS Γ ⊢ ∀x.φ BY ForallIntro(D)
+    }
+
+    TACTIC UniversalInstantiation(Γ : List[Formula], φ : Formula, t : Term) = {
+      ASSUME (H) : Γ ⊢ ∀x.φ 
+      LET D : Proof = witness of H
+      THUS Γ ⊢ φ[t/x] BY ForallElim(t, D)
+    }
+  }
+
+  PROOFS {
+    THEOREM Soundness {
+      STATEMENT: ∀ (Γ : List[Formula]) (φ : Formula) . (Γ ⊢ φ) => (Γ ⊨ φ)
+
+      PROOF:
+        LET Γ : List[Formula], φ : Formula
+        ASSUME (H) : Γ ⊢ φ
+        LET D : Proof = witness of H
+        
+        SHOW ∀ M : Model . (M ⊨ Γ) => (M ⊨ φ) BY {
+          LET M : Model
+          ASSUME (H2) : M ⊨ Γ
+          SHOW M ⊨ φ BY induction on D:
+            CASE Axiom: TRIVIAL
+            CASE Premise: BY H2
+            CASE Implies: 
+              LET ψ : Formula, D1 D2 : Proof
+              IH1: Proves(D1, Γ, ψ)
+              IH2: Proves(D2, Γ, ψ => φ)
+              SUFFICES_TO_SHOW M ⊨ ψ ∧ M ⊨ (ψ => φ)
+              THUS M ⊨ ψ BY IH1, H2
+              THUS M ⊨ (ψ => φ) BY IH2, H2
+            CASE ImpliesElim:
+              LET D1 D2 : Proof
+              IH1: Proves(D1, Γ, ψ)  
+              IH2: Proves(D2, Γ, ψ => φ)
+              THUS M ⊨ ψ BY IH1
+              THUS M ⊨ (ψ => φ) BY IH2
+              HENCE M ⊨ φ
+            CASE ImpliesIntro:
+              SUFFICES_TO_SHOW M ⊨ (ψ => φ)
+              ASSUME M ⊨ ψ
+              THUS M ⊨ φ BY IH
+            CASE ForallIntro:  
+              SUFFICES_TO_SHOW M ⊨ (∀x.φ)
+              LET a ∈ M  
+              SHOW M ⊨ φ[a/x] BY IH
+            CASE ForallElim:
+              LET t : Term
+              HAVE M ⊨ (∀x.φ) BY IH
+              THUS M ⊨ φ[t/x]
+        }
+
+        THEREFORE Γ ⊨ φ
+        QED
+    }
+  }
+}

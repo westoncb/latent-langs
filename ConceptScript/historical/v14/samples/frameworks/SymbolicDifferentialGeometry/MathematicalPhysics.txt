@@ -1,0 +1,101 @@
+CONCEPT MathematicalPhysics {
+  EXTENDS SymbolicDifferentialGeometry {
+    type PhysicalSystem = (State: Manifold, Laws: List<Equation>)
+    type Equation = (LHS: Sym, RHS: Sym)
+    type Lagrangian = Function(State, ℝ)
+    type Hamiltonian = Function(State, ℝ)
+    type Symmetry = Diffeo(State, State)
+    type Conservation = Equation
+    
+    notation "L" = Lagrangian
+    notation "H" = Hamiltonian
+    notation "𝓢" = Symmetry
+    notation "∂L" = ∂(L)
+    notation "∂H" = ∂(H)
+    notation "𝓛" = Lie
+    
+    axiom PhysicsCorrespondence(P: PhysicalSystem):
+      ∀ law ∈ Laws(P). (LHS(law) ≈ RHS(law))
+      
+    axiom SymmetryConservation(S: Sym, L: Lagrangian, 𝓢: Symmetry):
+      (L ∘ 𝓢 ≈ L) ⇒ ∃ C: Conservation. (S ≈ LHS(C))
+  }
+
+  STRUCTURE {
+    LagrangianMechanics(L: Lagrangian, q: Coordinate, v: Velocity):
+      ∂L/∂q - d/dt(∂L/∂v) = 0
+      
+    HamiltonianMechanics(H: Hamiltonian, q: Coordinate, p: Momentum):  
+      dq/dt = ∂H/∂p, dp/dt = -∂H/∂q
+        
+    NoetherTheorem(L: Lagrangian, 𝓢: Symmetry, C: Conservation):
+      (L ∘ 𝓢 ≈ L) ⟺ ∃ C. (LHS(C) - d/dt(RHS(C)) = 0)
+
+    CanonicalTransformation(L: Lagrangian, H: Hamiltonian, q: Coordinate, Q: Coordinate):
+      ∃ S: Function(q, Q).
+        p dq - H dt ≈ P dQ - K dt + dS
+      where K(Q, P) = H(q(Q, P), p(Q, P))
+  }
+
+  PROOFS {
+    theorem LagrangianSymmetry(L: Lagrangian, 𝓢: Symmetry, I: Fun):
+      𝓛(𝓢) L = 0 ⊢ d/dt I ∘ 𝓢 = 0
+    {
+      assume 𝓛(𝓢) L = 0
+      let q be a coordinate and v = dq/dt
+      have 𝓛(𝓢) L = ∂L/∂q * 𝓢(q) + ∂L/∂v * d/dt(𝓢(q)) = 0  ; Chain rule
+      let I = ∂L/∂v * 𝓢(q)  ; Noether current
+      d/dt I = d/dt (∂L/∂v * 𝓢(q))
+             = ∂L/∂q * 𝓢(q) + ∂L/∂v * d/dt(𝓢(q))
+             = 𝓛(𝓢) L
+             = 0  
+      hence d/dt I ∘ 𝓢 = 0
+    }
+
+    theorem HamiltonJacobi(L: Lagrangian, H: Hamiltonian, S: Function):
+      let q, Q be coordinates and p, P momenta
+      S satisfies CanonicalTransformation(L, H, q, Q) ⊢ 
+        ∂S/∂t + H(q, ∂S/∂q) = 0
+    {
+      CanonicalTransformation(L, H, q, Q)
+      hence p dq - H dt ≈ P dQ - K dt + dS  ; For some K
+      Substitution(d, ∂, CanonicalTransformation(L, H, q, Q))
+      hence ∂S/∂q = p, ∂S/∂Q = -P, ∂S/∂t = -K
+      P = -∂S/∂Q = ∂K/∂Q̇  ; Legendre transform
+      hence K(Q, Q̇) = P Q̇ - L(Q, Q̇)
+      therefore ∂S/∂t = -K 
+               = -(P Q̇ - L(Q, Q̇))  
+               = L - P Q̇
+               = L - ∂S/∂q * dq/dt
+               = L - ∂S/∂q * ∂H/∂p  ; Hamilton's equation
+               = L - ∂S/∂q * (∂L/∂v)⁻¹  ; Legendre transform
+               = -H(q, ∂S/∂q)  ; Definition of H
+      hence ∂S/∂t + H(q, ∂S/∂q) = 0
+    }
+
+    theorem SymplecticFlow(H: Hamiltonian, X: Sym, ω: Form):
+      (X ≈ Symplectic(State(H))) ⊢ L[X](ω) = 0
+    {
+      Substitution(ω, -d[∂H], X ≈ Symplectic(State(H)))
+      have -d[∂H] ≈ ω  ; ω is symplectic form on state space
+      L[X](ω) = L[X](-d[∂H]) 
+              ≈ -L[X](d[∂H])
+              ≈ -d[L[X](∂H)]  ; Cartan magic formula
+        ; Let Y be Hamiltonian vector field of H
+        = -d[L[X, Y]]  ; Definition of Y
+        = -d[0]  ; [Y, X] = 0 since Hamiltonian flow
+        = 0
+    }
+  }
+}
+
+This Concept, MathematicalPhysics, extends SymbolicDifferentialGeometry to model physical systems using Lagrangian and Hamiltonian mechanics. Key ideas:
+
+Physical systems have a state space (manifold) and dynamics governed by equations.
+Lagrangians and Hamiltonians are functions on the state space that generate the dynamics.
+Symmetries of the Lagrangian lead to conservation laws (Noether's theorem).
+Canonical transformations relate different choices of coordinates and momenta.
+The Hamilton-Jacobi equation connects canonical transformations to generating functions.
+Hamiltonian flows are symplectic, preserving the symplectic form on state space.
+
+The proofs use substitution tactics to translate between symbolic expressions and geometric objects, as well as key results like Noether's theorem, Legendre transforms, and Cartan's magic formula. The Concept aims to elegantly express the rich interplay between mechanics, geometry and symmetry that lies at the heart of mathematical physics.

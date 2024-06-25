@@ -1,0 +1,132 @@
+CONCEPT FoundationsOfCognition {
+
+  LANGUAGE {
+    TYPE Perception
+    TYPE Action 
+    TYPE Belief
+    TYPE Goal
+    TYPE Plan = [Action]
+    
+    FUNC Perceive : Environment -> Perception
+    FUNC UpdateBeliefs : Perception -> Belief -> Belief
+    FUNC Deliberate : Belief -> Goal -> Plan
+    FUNC Act : Plan -> Environment -> Environment
+
+    PRED Achieves : Plan -> Goal -> Belief -> 𝔹
+    PRED Consistent : Belief -> 𝔹
+    PRED Possible : Perception -> Belief -> 𝔹
+    
+    NOTATION "BEL(φ)" = BeliefEntailment(φ)
+    NOTATION "POSS(p)" = PerceptionPossible(p)
+  }
+
+  STRUCTURE {
+    DEF BeliefEntailment(φ : Formula, b : Belief) = b ⊢ φ
+    DEF PerceptionPossible(p : Perception, b : Belief) = ∃ e : Environment . Perceive(e) = p ∧ Consistent(UpdateBeliefs(p, b))
+
+    AXIOM NonOmniscience : ∃ (φ : Formula) (b : Belief) . φ ∧ ¬BEL(φ)[b]
+    AXIOM ConsistencyPreservation : ∀ (p : Perception) (b : Belief) . Consistent(b) ∧ POSS(p)[b] -> Consistent(UpdateBeliefs(p, b))
+    AXIOM SuccessorState : ∀ (p : Plan) (e : Environment) . Act(p, e) = Fold(Act, p, e)
+  }
+
+  PROOFS {
+    THEOREM SituatedPlanning {
+      STATEMENT : ∀ (b : Belief) (g : Goal) (p : Plan) . 
+        Consistent(b) ∧ Achieves(p, g, b) ->
+        ∀ (e : Environment) . POSS(Perceive(e))[b] -> 
+        ∃ (p' : Plan) . Achieves(p', g, UpdateBeliefs(Perceive(e), b))
+
+      PROOF {
+        ASSUME [b : Belief] [g : Goal] [p : Plan] :
+          Consistent(b),
+          Achieves(p, g, b)
+        
+        ASSUME [e : Environment] : POSS(Perceive(e))[b]
+
+        LET p' = Deliberate(UpdateBeliefs(Perceive(e), b), g)
+
+        SHOW Achieves(p', g, UpdateBeliefs(Perceive(e), b)) {
+          DEFINE Induct(p, b) = 
+            IF Null(p) 
+            THEN BEL(g)[b]
+            ELSE Induct(Rest(p), UpdateBeliefs(Perceive(Act(First(p), e)), b))
+
+          HAVE Induct(p, b) BY {
+            Achieves(p, g, b),
+            SuccessorState
+          }
+
+          HAVE Consistent(UpdateBeliefs(Perceive(e), b)) BY ConsistencyPreservation
+
+          HENCE BEL(g)[UpdateBeliefs(Perceive(Act(p', e)), UpdateBeliefs(Perceive(e), b))] BY {
+            Deliberate GENERATES PLANS THAT ACHIEVE g FROM UpdateBeliefs(Perceive(e), b)  
+          }
+
+          HENCE Achieves(p', g, UpdateBeliefs(Perceive(e), b))
+        }
+      }
+    }
+
+    THEOREM IntentionalStance {
+      STATEMENT : ∀ (a : Agent) (g : Goal) (e e' : Environment) .
+        (∀ (e'' : Environment) . Perceive(e) = Perceive(e'') -> Act(Deliberate(Beliefs(a), g), e'') = Act(Deliberate(Beliefs(a), g), e)) ∧
+        Act(Deliberate(Beliefs(a), g), e) = e' ->
+        Achieves(Deliberate(Beliefs(a), g), g, Beliefs(a))
+
+      PROOF {
+        ASSUME [a : Agent] [g : Goal] [e e' : Environment] :
+          ∀ (e'' : Environment) . Perceive(e) = Perceive(e'') -> Act(Deliberate(Beliefs(a), g), e'') = Act(Deliberate(Beliefs(a), g), e),
+          Act(Deliberate(Beliefs(a), g), e) = e'
+
+        LET b = Beliefs(a)
+        LET p = Deliberate(b, g)
+        
+        SHOW Achieves(p, g, b) {
+          DEFINE Induct(n) = 
+            IF n = 0 
+            THEN BEL(g)[b]
+            ELSE Induct(n-1) ∧ BEL(g)[UpdateBeliefs(Perceive(Act(Take(n, p), e)), b)]
+
+          HAVE ∀ n . Induct(n) BY INDUCTION {
+            CASE n = 0 : 
+              SHOW BEL(g)[b] {
+                LET e'' = Act(Drop(1, p), e')
+                HAVE Perceive(e) = Perceive(e'') BY {
+                  SuccessorState,
+                  ASSUMPTION
+                }
+                HENCE Act(p, e'') = Act(p, e) = e' BY ASSUMPTION
+                HENCE BEL(g)[UpdateBeliefs(Perceive(e'), b)] BY {
+                  Deliberate GENERATES PLANS THAT ACHIEVE g FROM b
+                }
+                HENCE BEL(g)[b] BY ConsistencyPreservation
+              }
+
+            CASE n > 0 : 
+              ASSUME Induct(n-1)
+              SHOW Induct(n) {
+                LET e'' = Act(Drop(n+1, p), e')
+                HAVE Perceive(Act(Take(n, p), e)) = Perceive(Act(Take(n, p), e'')) BY {
+                  SuccessorState,
+                  ASSUMPTION
+                }
+                HENCE Act(Drop(n, p), Act(Take(n, p), e'')) = Act(Drop(n, p), Act(Take(n, p), e)) = e' BY {
+                  SuccessorState,
+                  ASSUMPTION
+                }
+                HENCE BEL(g)[UpdateBeliefs(Perceive(Act(Take(n, p), e)), b)] BY {
+                  Deliberate GENERATES PLANS THAT ACHIEVE g FROM UpdateBeliefs(Perceive(Act(Take(n, p), e)), b)
+                }
+              }
+          }
+
+          HENCE ∀ n . BEL(g)[UpdateBeliefs(Perceive(Act(Take(n, p), e)), b)]
+          HENCE ∀ n . BEL(g)[UpdateBeliefs(Perceive(Act(Take(n, p), Act(p, e))), b)] BY {
+            SuccessorState  
+          }
+          HENCE Achieves(p, g, b)
+        }
+      }
+    }
+  }
+}

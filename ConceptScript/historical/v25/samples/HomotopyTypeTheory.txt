@@ -1,0 +1,202 @@
+CONCEPT HomotopyTypeTheory {
+  LANGUAGE {
+    TYPE U  -- universe of types
+    TYPE Π(A : U, B : A -> U) <: U -- dependent function type
+    TYPE Σ(A : U, B : A -> U) <: U -- dependent pair type
+    TYPE Id(A : U, x : A, y : A) <: U -- identity type
+    TYPE Nat <: U -- natural numbers
+
+    FUNC Refl(A : U, x : A) : Id(A, x, x) -- reflexivity
+    FUNC J(A : U, C : (x y : A) -> Id(A, x, y) -> U, d : (x : A) -> C(x, x, Refl(A, x)), 
+           x y : A, p : Id(A, x, y)) : C(x, y, p) -- path induction
+    FUNC Transport(A B : U, p : Id(U, A, B), x : A) : B
+    FUNC Ap(f : A -> B, p : Id(A, x, y)) : Id(B, f(x), f(y)) -- action on paths
+    FUNC FunExt(f g : Π(A, B), h : (x : A) -> Id(B(x), f(x), g(x))) : Id(Π(A, B), f, g) -- function extensionality
+
+    AXIOM UIP {
+      ∀ (A : U) (x y : A) (p q : Id(A, x, y)). Id(Id(A, x, y), p, q)  
+    }
+
+    AXIOM FunExtAxiom {
+      ∀ (A : U) (B : A -> U) (f g : Π(A, B)).
+        ((x : A) -> Id(B(x), f(x), g(x))) -> Id(Π(A, B), f, g)
+    }
+
+    NOTATION "x = y" = Id(_, x, y)  
+    NOTATION "p # q" = Concat(p, q)
+    NOTATION "p^" = Inv(p)
+    NOTATION "x.1" = Fst(x)  
+    NOTATION "x.2" = Snd(x)
+  }
+
+  STRUCTURE NatInduction {
+    REQUIRE ∀ (P : Nat -> U).
+      (P(0) × ((n : Nat) -> P(n) -> P(S(n)))) -> ((n : Nat) -> P(n))
+  }
+
+  STRUCTURE UnivalenceAxiom {
+    REQUIRE ∀ (A B : U). IsEquiv(Id(U, A, B), Equiv(A, B))
+  }
+
+  PROOFS {
+    THEOREM IdIsEquiv {
+      STATEMENT:
+        ∀ (A : U) (x y : A). IsEquiv(Id(A, x, y), Equiv(Singleton(x), Singleton(y)))
+
+      PROOF:
+        LET A : U, x y : A
+        DEFINE f : Id(A, x, y) -> Equiv(Singleton(x), Singleton(y)) = 
+          λ (p : Id(A, x, y)). Transport(Singleton(x), Singleton(y), Ap(Singleton, p), *)
+        DEFINE g : Equiv(Singleton(x), Singleton(y)) -> Id(A, x, y) =
+          λ (e : Equiv(Singleton(x), Singleton(y))). J(A, 
+            λ (x y : A) (_ : Id(A, x, y)). Id(A, x, y),
+            Refl(A, x), x, y, Cast(e, Id(Singleton(x), *, *)))
+        SHOW (p : Id(A, x, y)) -> g(f(p)) = p BY {
+          LET p : Id(A, x, y)  
+          REWRITE g(f(p))
+            = J(A, λ (x y : A) (_ : Id(A, x, y)). Id(A, x, y), Refl(A, x), x, y, 
+                Cast(Transport(Singleton(x), Singleton(y), Ap(Singleton, p), *), Id(Singleton(x), *, *)))
+            = J(A, λ (x y : A) (_ : Id(A, x, y)). Id(A, x, y), Refl(A, x), x, y, Ap(Singleton, p))  
+            = p   BY JReduction
+        }
+        SHOW (e : Equiv(Singleton(x), Singleton(y))) -> f(g(e)) = e BY {
+          LET e : Equiv(Singleton(x), Singleton(y))
+          LET p : Id(A, x, y) = g(e)
+          REWRITE f(p)  
+            = Transport(Singleton(x), Singleton(y), Ap(Singleton, p), *)
+            = Transport(Singleton(x), Singleton(y), Ap(Singleton, 
+                J(A, λ (x y : A) (_ : Id(A, x, y)). Id(A, x, y), Refl(A, x), x, y, Cast(e, Id(Singleton(x), *, *)))), *)
+            = Transport(Singleton(x), Singleton(y), Ap(Singleton, Cast(e, Id(Singleton(x), *, *))), *)  
+            = Transport(Singleton(x), Singleton(y), e, *)
+            = e   BY CastTransport
+        }
+    }
+
+    THEOREM UnivalenceImpliesFunExt {
+      STATEMENT:  
+        UnivalenceAxiom -> FunExtAxiom
+
+      PROOF:
+        ASSUME UnivalenceAxiom  
+        LET A : U, B : A -> U, f g : Π(A, B), h : (x : A) -> Id(B(x), f(x), g(x))
+        DEFINE Φ : Equiv(Π(A, B), f, g) = 
+          λ (e : Equiv(Π(A, B), f, g)). (x : A) -> Cast(Ap(Eval(x), e), Id(B(x), f(x), g(x)))
+        HAVE e : Equiv(Π(A, B), f, g) BY UnivalenceAxiom, IdIsEquiv
+        LET φ : Id(Π(A, B), f, g) = Cast(Φ, Equiv(Id(Π(A, B), f, g), _))  
+        SHOW φ : Id(Π(A, B), f, g) BY {
+          REWRITE φ  
+            = Cast(Φ, Equiv(Id(Π(A, B), f, g), _))
+            : Id(Π(A, B), f, g)                     BY UnivalenceAxiom, IdIsEquiv
+        }
+    }
+  }
+}
+
+
+
+
+
+
+CONCEPT HomotopyTypeTheory {
+  LANGUAGE {
+    TYPE Type
+    TYPE Term
+    TYPE Path[A : Type, x y : Term]
+
+    FUNC Id(A : Type, x : Term) : Path[A, x, x]
+    FUNC _∘_[A : Type, x y z : Term](p : Path[A, x, y], q : Path[A, y, z]) : Path[A, x, z] 
+    FUNC _⁻¹[A : Type, x y : Term](p : Path[A, x, y]) : Path[A, y, x]
+    FUNC ap[A B : Type, f : A → B, x y : Term](p : Path[A, x, y]) : Path[B, f(x), f(y)]
+    FUNC transport[A : Type, P : A → Type, x y : Term](p : Path[A, x, y], u : P(x)) : P(y)
+    FUNC funext[A : Type, B : A → Type, f g : (x : A) → B(x)](p : (x : A) → Path[B(x), f(x), g(x)]) : Path[(x : A) → B(x), f, g] 
+    FUNC univalence(A B : Type)(p : Equiv[A, B]) : Path[Type, A, B]
+
+    AXIOM ReflPath : ∀(A : Type)(x : Term). Path[A, x, x]
+    AXIOM SymPath : ∀(A : Type)(x y : Term). Path[A, x, y] → Path[A, y, x]
+    AXIOM TransPath : ∀(A : Type)(x y z : Term). Path[A, x, y] → Path[A, y, z] → Path[A, x, z]
+    AXIOM PathInduction : ∀(A : Type)(P : (x y : A) → Path[A, x, y] → Type)(x : A).
+                            P(x, x, Id(A, x)) → ∀(y : A)(p : Path[A, x, y]). P(x, y, p)
+    AXIOM FunExt : ∀(A : Type)(B : A → Type)(f g : (x : A) → B(x)). 
+                     ((x : A) → Path[B(x), f(x), g(x)]) → Path[(x : A) → B(x), f, g]
+    AXIOM Univalence : ∀(A B : Type). Equiv[A, B] → Path[Type, A, B]
+  }
+
+  STRUCTURE Category {
+    ob : Type
+    hom : ob → ob → Type
+
+    id : ∀(A : ob). hom(A, A)
+    comp : ∀(A B C : ob). hom(A, B) → hom(B, C) → hom(A, C)
+
+    idl : ∀(A B : ob)(f : hom(A, B)). Path[hom(A, B), comp(A, B, B, id(B), f), f]
+    idr : ∀(A B : ob)(f : hom(A, B)). Path[hom(A, B), comp(A, A, B, f, id(A)), f]
+    assoc : ∀(A B C D : ob)(f : hom(A, B))(g : hom(B, C))(h : hom(C, D)).
+              Path[hom(A, D), comp(A, B, D, f, comp(B, C, D, g, h)), comp(A, C, D, comp(A, B, C, f, g), h)]
+  }
+
+  STRUCTURE Functor(C D : Category) {
+    ob : C.ob → D.ob
+    hom : ∀(A B : C.ob). C.hom(A, B) → D.hom(ob(A), ob(B))
+
+    fid : ∀(A : C.ob). Path[D.hom(ob(A), ob(A)), hom(A, A, C.id(A)), D.id(ob(A))]
+    fcomp : ∀(A B C : C.ob)(f : C.hom(A, B))(g : C.hom(B, C)).
+              Path[D.hom(ob(A), ob(C)), hom(A, C, C.comp(A, B, C, f, g)), D.comp(ob(A), ob(B), ob(C), hom(A, B, f), hom(B, C, g))]  
+  }
+
+  STRUCTURE NaturalTransformation(C D : Category)(F G : Functor(C, D)) {
+    components : ∀(A : C.ob). D.hom(F.ob(A), G.ob(A))
+
+    commutes : ∀(A B : C.ob)(f : C.hom(A, B)). 
+                Path[D.hom(F.ob(A), G.ob(B)), 
+                     D.comp(F.ob(A), F.ob(B), G.ob(B), F.hom(A, B, f), components(B)),
+                     D.comp(F.ob(A), G.ob(A), G.ob(B), components(A), G.hom(A, B, f))]
+  }
+
+  PROOFS {
+    THEOREM FunctorIdentity {
+      STATEMENT:
+        ∀(C : Category). Path[Functor(C, C), IdFunctor(C), IdFunctor(C)]
+
+      PROOF:
+        LET C : Category
+        
+        LET F = IdFunctor(C), G = IdFunctor(C)
+        DEFINE α : NaturalTransformation(C, C, F, G) = 
+          λ(A : C.ob). C.id(A)
+        
+        SHOW NatTransCommutes(C, C, F, G, α) BY {
+          LET A B : C.ob, f : C.hom(A, B)
+          
+          Path[C.hom(A, B), C.comp(A, A, B, C.id(A), f), C.comp(A, B, B, f, C.id(B))]
+            = Path[C.hom(A, B), f, C.comp(A, B, B, f, C.id(B))]  
+                BY C.idl(A, B, f)
+            = Path[C.hom(A, B), f, f]                           
+                BY C.idr(A, B, f)
+            = refl[C.hom(A, B), f]                          
+        }
+
+        CONCLUDE Path[Functor(C, C), F, G]            
+          BY ∃!(α : NaturalTransformation(C, C, F, G)). NatTransCommutes(C, C, F, G, α)
+    }
+
+    THEOREM UnitCohEvAdj {
+      STATEMENT:
+        ∀(A : Type). Path[Type, A, (Unit → A)]
+
+      PROOF:
+        LET A : Type
+        
+        DEFINE f : A → (Unit → A) = λ(a : A). λ(_ : Unit). a
+        DEFINE g : (Unit → A) → A = λ(h : Unit → A). h(())
+
+        SHOW ∀(a : A). Path[A, g(f(a)), a] BY λ(a : A). refl[A, a]
+        SHOW ∀(h : Unit → A). Path[Unit → A, f(g(h)), h] BY {
+          LET h : Unit → A
+          SHOW Path[Unit → A, f(g(h)), h] BY FunExt(Unit, λ(_ : Unit). A, f(g(h)), h, λ(u : Unit). refl[A, h(u)])   
+        }
+
+        HAVE Equiv[A, Unit → A] BY (f, g, ...)
+        CONCLUDE Path[Type, A, Unit → A] BY Univalence(A, Unit → A)
+    }
+  }
+}

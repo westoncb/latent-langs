@@ -1,0 +1,173 @@
+CONCEPT TypeTheory {
+  LANGUAGE {
+    TYPE Type
+    TYPE Term
+    TYPE Context = [(Var, Type)]
+    
+    FUNC Var : String -> Term
+    FUNC App : (Term, Term) -> Term  
+    FUNC Abs : (Var, Type, Term) -> Term
+    FUNC Pi : (Var, Type, Type) -> Type
+
+    PRED InCtx : (Context, Var, Type) -> Bool
+    PRED HasType : (Context, Term, Type) -> Bool
+    
+    AXIOM VarRule : 
+      FORALL (Γ: Context) (x: Var) (T: Type) .
+        InCtx(Γ, x, T) IMPLIES HasType(Γ, Var(x), T)
+        
+    AXIOM AppRule :
+      FORALL (Γ: Context) (t1 t2: Term) (T1 T2: Type) .
+        HasType(Γ, t1, Pi(x, T1, T2)) AND HasType(Γ, t2, T1)  
+        IMPLIES HasType(Γ, App(t1, t2), T2[x := t2])
+        
+    AXIOM AbsRule :
+      FORALL (Γ: Context) (x: Var) (T1 T2: Type) (t: Term) .
+        HasType([(x,T1)] ++ Γ, t, T2) 
+        IMPLIES HasType(Γ, Abs(x, T1, t), Pi(x, T1, T2))
+        
+    AXIOM PiIntro :
+      FORALL (Γ: Context) (x: Var) (T1 T2: Type) .
+        HasType([(x,T1)] ++ Γ, T2, *) 
+        IMPLIES HasType(Γ, Pi(x, T1, T2), *)  
+  }
+
+  NOTATION {
+    Γ |- t : T = HasType(Γ, t, T) 
+    Γ, x:T = [(x,T)] ++ Γ
+    (x:T1) -> T2 = Pi(x, T1, T2)
+    λ(x:T1).t = Abs(x, T1, t)
+    * = "Type"
+  }
+
+  STRUCTURES {
+    STRUCTURE SimplePropTT {
+      Type ::= * 
+             | (x:Type) -> Type 
+      
+      Term ::= Var(x)  
+             | App(Term, Term)
+             | Abs(x, Type, Term) 
+             
+      AXIOM PropRule :  
+        FORALL (Γ: Context) (t: Term) .
+          HasType(Γ, t, *) IMPLIES HasType(Γ, t, *)
+    }
+  }
+  
+  PROOFS {
+    PROOF SubjectReduction :
+      FORALL (Γ: Context) (t t': Term) (T: Type) .
+        (Γ |- t : T) AND (t -->β t') IMPLIES (Γ |- t' : T)
+    {
+      GIVEN (Γ: Context) (t t': Term) (T: Type)
+      ASSUME (Γ |- t : T) AND (t -->β t') 
+      
+      INDUCTION on t -->β t':
+        CASE BetaAbs: 
+          (λ(x:T1).s) t2 -->β s[x := t2]
+            WHERE (Γ |- λ(x:T1).s : (x:T1) -> T2)
+              AND (Γ |- t2 : T1)  
+              BY AppRule
+           
+            Γ, x:T1 |- s : T2 BY InvAbsRule on (Γ |- λ(x:T1).s : (x:T1) -> T2)
+            Γ |- s[x := t2] : T2 BY Substitution [x := t2] 
+        
+        CASE AppLeft:
+          s1 t --> s2 t IF (s1 --> s2)
+            WHERE (Γ |- s1 : (x:T1) -> T)  
+              AND (Γ |- t : T1)
+              BY AppRule
+                            
+            Γ |- s2 : (x:T1) -> T BY IH on (s1 --> s2)
+            Γ |- s2 t : T2  BY AppRule
+            
+        CASE AppRight: ...    
+          
+      QED
+    }
+    
+    PROOF TypeSafety :
+      FORALL (t: Term) . 
+        ([] |- t : T) IMPLIES NormalForm(t)
+    {
+      GIVEN (t: Term)
+      ASSUME ([] |- t : T)
+    
+      LET ProgProp(t) = ([] |- t : T) IMPLIES Evaluates(t)
+      
+      SUFFICES_TO_SHOW ProgProp(t)
+        
+      INDUCTION on t:
+        CASE VAR(x): VACUOUS since x not in []
+        
+        CASE App(t1,t2): 
+          [] |- t1 : (x:T2) -> T1 AND [] |- t2 : T2 IMPLIES
+          ProgProp(t1) AND ProgProp(t2)              BY IH
+          
+          IF NormalForm(t1) AND NormalForm(t2)
+            THEN NormalForm(App(t1,t2))
+            ELSE t1 -->β t1' AND App(t1',t2) : T1     BY SubjectReduction
+              OR t2 -->β t2' AND App(t1,t2') : T1    BY SubjectReduction
+              
+        CASE Abs(x, T1, t'):
+          [], x:T1 |- t' : T2 IMPLIES ProgProp(t')    BY IH
+          NormalForm(λ(x:T1).t')
+          
+      QED
+    }
+  }
+  
+  EXAMPLES {
+    EXAMPLE SimpleTypes : SimpleTypeTheory = {
+      Type ::= * 
+             | Type -> Type
+             
+      TypeInference = 
+        Hindley-Milner({
+          VarRule,
+          AppRule,
+          AbsRule,
+          LetRule
+        })  
+    }
+
+    EXAMPLE DependentTypes : DependentTypeTheory = {    
+      Type ::= * 
+             | (x:Type) -> Type
+             
+      TypeChecking =  
+        Bidirectional({
+          VarRule,
+          AppRule, 
+          AbsRule,
+          PiIntro,
+          ...
+        })
+    }
+    
+    EXAMPLE HoTTUniverse : HomotopyTypeTheory = {
+      Type ::= U
+             | (x:Type) -> Type
+             
+      Laws = {
+        UIP,
+        FunExt,
+        UnivalenceAxiom
+      }  
+    }
+    
+    EXAMPLE CubicalUniverse : CubicalTypeTheory = {
+      Type ::= U
+             | (x:I) -> Type
+             | (i:I) -> Type
+             | (p:Φ) -> Type
+             | Type -> Type
+                      
+      Laws = {
+        FaceOperations,
+        Connections
+      }
+    }
+  }
+}

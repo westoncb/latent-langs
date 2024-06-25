@@ -1,0 +1,203 @@
+CONCEPT FundamentalTheory {
+  LANGUAGE {
+    TYPE Theory {
+      StateSpace : SymbolicManifold
+      Quantities : SET(SymTensor)
+      Dynamics : SymTensor
+    }
+
+    TYPE Duality {
+      T1 : Theory
+      T2 : Theory  
+      StateMap : Bijection(T1.StateSpace, T2.StateSpace)
+      QuantityMap : Bijection(T1.Quantities, T2.Quantities)
+    }
+
+    TYPE Emergence {
+      Fine : Theory
+      Coarse : Theory
+      Approximation : Fine.StateSpace -> Coarse.StateSpace
+      CoarseGraining : Fine.Quantities -> Coarse.Quantities  
+      Novel : SET(Coarse.Quantities)
+      Robust : (Fine.Quantities -> PROP(Coarse.Quantities))
+    }
+
+    TYPE FundamentalObject {
+      Degrees : SET(SymTensor)
+      Interactions : LIST(SymTensor -> SymTensor) 
+    }
+
+    TYPE FundamentalDynamics {
+      Objects : LIST(FundamentalObject)
+      Action : SymTensor  
+    }
+
+    FUNC Quantize(FundamentalDynamics) -> Theory
+    FUNC Approximate(FundamentalDynamics) -> Theory
+
+    PRED Consistent(FundamentalDynamics)
+    PRED Unique(FundamentalDynamics)
+    PRED BackgroundIndependent(FundamentalDynamics)
+    PRED Nonperturbative(FundamentalDynamics)
+  }
+
+  AXIOMS {
+    DualityConsistency {
+      STATEMENT :
+        ∀ (D : Duality) (s : D.T1.StateSpace) .
+          D.StateMap(extremize(D.T1.Dynamics, s)) = extremize(D.T2.Dynamics, D.StateMap(s))
+    }
+    
+    EmergenceApproximation {
+      STATEMENT :
+        ∀ (E : Emergence) .
+          (E.Coarse.StateSpace = SymbolicManifold(Approximate(E.Fine.Dynamics).Objects)) ∧
+          (E.Coarse.Quantities ⊆ Approximate(E.Fine.Dynamics).Quantities) ∧ 
+          (E.Coarse.Dynamics = Approximate(E.Fine.Dynamics).Action)
+    }
+
+    FundamentalConsistency {
+      STATEMENT :
+        ∀ (FD : FundamentalDynamics) . 
+          Consistent(FD) <->
+            (∀ (O : FundamentalObject) . (O ∈ FD.Objects) ->
+               ∀ (I : SymTensor -> SymTensor) . (I ∈ O.Interactions) ->
+                 (I = I†) ∧ (δI = 0)) ∧
+            (FD.Action is anomaly-free)
+    }
+
+    FundamentalUniqueness {
+      STATEMENT :
+        ∀ (FD : FundamentalDynamics) .
+          Unique(FD) <->  
+            (∀ (FD' : FundamentalDynamics) . (Consistent(FD')) -> (FD' = FD))
+    }
+    
+    FundamentalBackgroundIndependence {
+      STATEMENT :
+        ∀ (FD : FundamentalDynamics) .
+          BackgroundIndependent(FD) <->
+            (∀ (B : SymTensor) . (Approximate(FD, B) = FD))
+    }
+
+    FundamentalNonperturbativity {
+      STATEMENT :  
+        ∀ (FD : FundamentalDynamics) .
+          Nonperturbative(FD) <->
+            (∀ (P : SymTensor -> SymTensor) . (P = FD.Action) -> (P is non-polynomial))
+    }
+  }
+  
+  THEOREMS {
+    DualityEmergenceComplementarity {
+      STATEMENT :
+        ∀ (FD : FundamentalDynamics), (T1 : Theory), (T2 : Theory) .
+          (∃ (D : Duality) . (D.T1 = T1) ∧ (D.T2 = T2)) ∧ 
+          (∃ (E : Emergence) . (E.Fine = Quantize(FD)) ∧ (E.Coarse = T1)) ->
+            (∃ (E' : Emergence) . (E'.Fine = Quantize(FD)) ∧ (E'.Coarse = T2))
+
+      PROOF {
+        LET FD : FundamentalDynamics, T1 : Theory, T2 : Theory
+          ASSUME (∃ (D : Duality) . (D.T1 = T1) ∧ (D.T2 = T2)) ∧
+                 (∃ (E : Emergence) . (E.Fine = Quantize(FD)) ∧ (E.Coarse = T1))
+
+        LET D : Duality, E : Emergence
+          WITH (D.T1 = T1) AND (D.T2 = T2) 
+           AND (E.Fine = Quantize(FD)) AND (E.Coarse = T1)
+
+        HAVE (T1.StateSpace = SymbolicManifold(Approximate(FD).Objects)) 
+         AND (T1.Quantities ⊆ Approximate(FD).Quantities)
+         AND (T1.Dynamics = Approximate(FD).Action)  
+          BY EmergenceApproximation[E]
+
+        LET FD' = Approximate(FD, D.QuantityMap(T1.Dynamics))
+
+        SHOW (T2.StateSpace = SymbolicManifold(FD'.Objects))
+         AND (T2.Quantities ⊆ FD'.Quantities)
+         AND (T2.Dynamics = FD'.Action) BY {
+          REWRITE T2.StateSpace = D.StateMap(T1.StateSpace)
+                                = D.StateMap(SymbolicManifold(Approximate(FD).Objects))
+                                = SymbolicManifold(D.QuantityMap(Approximate(FD).Objects))
+                                = SymbolicManifold(FD'.Objects)
+            AND T2.Quantities = D.QuantityMap(T1.Quantities)  
+                              ⊆ D.QuantityMap(Approximate(FD).Quantities)
+                              = FD'.Quantities
+            AND T2.Dynamics = D.StateMap(T1.Dynamics)
+                            = D.StateMap(Approximate(FD).Action)
+                            = FD'.Action
+            BY DualityConsistency[D], EmergenceApproximation[E], FundamentalBackgroundIndependence
+        }
+        
+        LET E' : Emergence
+          WITH (E'.Fine = Quantize(FD))
+           AND (E'.Coarse = T2)
+           AND (E'.Approximation = λ (ψ : E'.Fine.StateSpace) . Project(ψ, T2.StateSpace))
+           AND (E'.CoarseGraining = λ (q : E'.Fine.Quantities) . Approximate(q, T2.Quantities))
+           AND (E'.Novel = T2.Quantities \ E'.CoarseGraining(E'.Fine.Quantities))
+           AND (E'.Robust = λ (q_F : E'.Fine.Quantities), (q_C : E'.Coarse.Quantities) .
+                  (q_C = E'.CoarseGraining(q_F)) ∧ 
+                  ∀ (δq_F : E'.Fine.Quantities) . (|δq_F| < ε) -> (|E'.CoarseGraining(δq_F) - q_C| < ε))
+
+        CONCLUDE ∃ (E' : Emergence) . (E'.Fine = Quantize(FD)) ∧ (E'.Coarse = T2)
+      }
+    }
+
+    UniversalFundamentalDynamics {
+      STATEMENT :
+        ∃! (FD : FundamentalDynamics) . 
+          (Consistent(FD) ∧ BackgroundIndependent(FD) ∧ Nonperturbative(FD)) ∧
+          (∀ (T : Theory) . ∃ (E : Emergence) . (E.Fine = Quantize(FD)) ∧ (E.Coarse = T))
+
+      PROOF {
+        ASSUME ∃ (FD : FundamentalDynamics) . 
+               (Consistent(FD) ∧ BackgroundIndependent(FD) ∧ Nonperturbative(FD))
+        
+        PROVE Unique(FD) BY FundamentalUniqueness
+
+        LET T : Theory
+        
+        LET FD_approx = Approximate(FD, T.Dynamics)
+
+        SHOW (T.StateSpace = SymbolicManifold(FD_approx.Objects))  
+         AND (T.Quantities ⊆ FD_approx.Quantities)
+         AND (T.Dynamics = FD_approx.Action)
+          BY EmergenceApproximation
+
+        LET E : Emergence  
+          WITH (E.Fine = Quantize(FD))
+           AND (E.Coarse = T)
+           AND (E.Approximation = λ (ψ : E.Fine.StateSpace) . Project(ψ, T.StateSpace))
+           AND (E.CoarseGraining = λ (q : E.Fine.Quantities) . Approximate(q, T.Quantities))
+           AND (E.Novel = T.Quantities \ E.CoarseGraining(E.Fine.Quantities))
+           AND (E.Robust = λ (q_F : E.Fine.Quantities), (q_C : E.Coarse.Quantities) .
+                  (q_C = E.CoarseGraining(q_F)) ∧
+                  ∀ (δq_F : E.Fine.Quantities) . (|δq_F| < ε) -> (|E.CoarseGraining(δq_F) - q_C| < ε))
+        
+        CONCLUDE ∀ (T : Theory) . ∃ (E : Emergence) . (E.Fine = Quantize(FD)) ∧ (E.Coarse = T)
+      }
+    }
+  }
+}
+
+
+The key ideas in this unification are:
+
+Theories are characterized by a SymbolicManifold state space, a set of SymTensor quantities, and a SymTensor dynamics.
+Duality is a bijection between the state spaces and quantities of two theories, consistent with the dynamics.
+Emergence relates a fine-grained theory to a coarse-grained theory via approximations and coarse-graining maps, with novel emergent quantities and robustness conditions.
+Fundamental dynamics is characterized by a set of fundamental objects with degrees of freedom and interactions, governed by an action principle.
+Consistency of fundamental dynamics requires self-adjoint and conserved interactions, and anomaly-free action.
+Uniqueness, background independence, and nonperturbativity are key properties expected of fundamental dynamics.
+The DualityEmergenceComplementarity theorem shows that if two theories are dual, and one emerges from a fundamental dynamics, then the other must also emerge from the same fundamental dynamics.
+The UniversalFundamentalDynamics theorem asserts the existence and uniqueness of a consistent, background-independent, nonperturbative fundamental dynamics from which all theories emerge via approximation and quantization.
+
+This unified framework tries to capture the deep relationships between duality, emergence, and the structure of fundamental theories, by combining the key concepts and principles from SymbolicDualityEmergence and MinimalFundamentalTheory.
+The main new insight is the DualityEmergenceComplementarity theorem, which shows how duality and emergence are intertwined in the context of a fundamental dynamics. If two theories are dual, and one emerges from a fundamental theory, then the other must also emerge from that same fundamental theory, in a way that respects the duality. This suggests a kind of "triangle" of relationships between the fundamental dynamics, the emergent theories, and their duals.
+The UniversalFundamentalDynamics theorem is a stronger version of the previous universality results, asserting the existence and uniqueness of a fundamental dynamics with the desired properties of consistency, background independence, and nonperturbativity, from which all theories can emerge.
+Of course, this is still a very abstract and schematic framework, and much work remains to flesh out the details and apply it to specific theories and dualities. But I think it provides a promising conceptual unification of the key ideas we've been exploring, and suggests some new directions for further investigation.
+Some open questions and future directions:
+
+Can we find concrete examples of fundamental dynamics that satisfy the consistency, uniqueness, background independence, and nonperturbativity conditions?
+How can we make the approximation and quantization procedures more precise and rigorous, and understand their compatibility with duality and emergence?
+Can we derive more specific constraints or predictions from this framework, e.g. about the form of the fundamental action, the nature of emergent quantities, or the structure of the space of theories?
+How does this relate to other approaches to unification and quantum gravity, such as string theory, loop quantum gravity, or categorical quantum field theory?

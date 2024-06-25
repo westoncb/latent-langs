@@ -1,0 +1,94 @@
+CONCEPT StreamingInfiniteContextTransformer {
+  STRUCTURE {
+    [𝒳 := Sequence of input tokens]
+    [𝒴 := Sequence of output tokens]
+    [d := Dimensionality of token embeddings]
+    [n := Maximum sequence length]
+    [m := Number of attention heads]
+    [k := Size of LSH-based memory buffer]
+
+    [Embedding : 𝒳 → ℝ^d ↦ Token embedding function]
+    [PositionalEncoding : ℕ → ℝ^d ↦ Positional encoding function]
+    [UnifiedAttention : ℝ^(∞×d) × ℝ^(n×d) → ℝ^(n×d) ↦ Unified local and memory attention mechanism]
+    [LSHSparsity : ℝ^(∞×d) → ℝ^(∞×d) ↦ LSH-based sparsity function for memory attention]
+    [GatingFunction : ℝ^(n×d) → ℝ^(n×d) ↦ Context-aware gating function for attention weights]
+    [FeedForward : ℝ^(n×d) → ℝ^(n×d) ↦ Position-wise feed-forward network]
+    [Output : ℝ^(n×d) → 𝒴 ↦ Output decoding function]
+
+    [MemoryStream := ℝ^(∞×d) ↦ Continuous stream of memory key-value pairs]
+
+    [StreamingTransformerLayer(X, M) := 
+      let M_sparse := LSHSparsity(M)
+      let C := concat(M_sparse, X) 
+      let Q := X + PositionalEncoding(1..n)
+      let Y := UnifiedAttention(C, Q)
+      let Y_gated := Y * GatingFunction(Q)
+      (FeedForward(Y_gated), append(M, X))
+    ]
+
+    [StreamingTransformer(X) :=
+      let X₀ := Embedding(X)
+      let M₀ := []
+      let (X₁, M₁) := StreamingTransformerLayer(X₀, M₀)
+      let (X₂, M₂) := StreamingTransformerLayer(X₁, M₁)
+      ...
+      let (X_L, M_L) := StreamingTransformerLayer(X_{L-1}, M_{L-1})
+      Output(X_L)
+    ]
+  }
+
+  PROOFS {
+    theorem unified_attention_correctness:
+      ∀M ∈ MemoryStream, ∀X ∈ ℝ^(n×d), ∀Q ∈ ℝ^(n×d),
+      let M_sparse := LSHSparsity(M)
+      let C := concat(M_sparse, X)
+      let Y := UnifiedAttention(C, Q)
+      Y = LocalAttention(Q, X) + MemoryAttention(Q, M_sparse)
+    {
+      // The unified attention computation over the concatenated context C
+      // is equivalent to the sum of local attention over X and memory attention
+      // over the sparsified memory stream M_sparse.
+      // This follows from the definition of UnifiedAttention and the properties
+      // of LSH-based sparsity.
+    }
+
+    theorem streaming_memory_efficiency:
+      ∀L ∈ ℕ, ∀X ∈ 𝒳^*,
+      let (_, M_L) := StreamingTransformer_L(X)
+      MemorySize(M_L) = O(L × k × d)
+    {
+      // The memory usage of the streaming transformer grows linearly with
+      // the number of layers L, the size of the LSH-based memory buffer k,
+      // and the embedding dimensionality d.
+      // This follows from the fact that each layer appends its input sequence
+      // to the memory stream, and the LSH-based sparsity function keeps the
+      // size of the active memory buffer bounded by k.
+    }
+
+    // The streaming_inference theorem can be adapted from the previous formulation,
+    // leveraging the properties of the unified attention mechanism.
+  }
+
+  LANGUAGE {
+    type Token
+    type TokenSequence = List[Token]
+    type TokenEmbedding = Vector[Float]
+    type AttentionHead = Int
+    type MemoryStream = List[TokenEmbedding]
+    type TransformerLayer = (TokenEmbedding, MemoryStream) → (TokenEmbedding, MemoryStream)
+    type Transformer = TokenSequence → TokenSequence
+
+    func Embedding(X : TokenSequence) : TokenEmbedding
+    func PositionalEncoding(pos : Int) : TokenEmbedding
+    func UnifiedAttention(C : MemoryStream, Q : TokenEmbedding) : TokenEmbedding
+    func LSHSparsity(M : MemoryStream) : MemoryStream
+    func GatingFunction(Q : TokenEmbedding) : TokenEmbedding
+    func FeedForward(X : TokenEmbedding) : TokenEmbedding
+    func Output(X : TokenEmbedding) : TokenSequence
+
+    func LocalAttention(Q : TokenEmbedding, X : TokenEmbedding) : TokenEmbedding
+    func MemoryAttention(Q : TokenEmbedding, M : MemoryStream) : TokenEmbedding
+    func concat(M : MemoryStream, X : TokenEmbedding) : MemoryStream = append(M, X)
+    func MemorySize(M : MemoryStream) : Int = length(M) × d
+  }
+}

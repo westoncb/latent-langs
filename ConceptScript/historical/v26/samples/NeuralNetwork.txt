@@ -1,0 +1,173 @@
+CONCEPT NeuralNetwork[InputDim, OutputDim] {
+  LANGUAGE {
+    TYPE ℝ[N] = Vector[ℝ, N]
+    TYPE ℝ[M,N] = Matrix[ℝ, M, N]
+    TYPE Layer = ℝ[InputDim] -> ℝ[OutputDim]
+    TYPE Model = InputEncoder -> List[Layer] -> OutputDecoder
+    TYPE Loss = (ℝ[OutputDim], ℝ[OutputDim]) -> ℝ
+
+    FUNC σ(x: ℝ): ℝ = 1 / (1 + exp(-x))
+    FUNC ReLU(x: ℝ): ℝ = max(0, x)
+    FUNC Softmax(v: ℝ[N]): ℝ[N] = exp(v) / sum(exp(v))
+    FUNC ArgMax(v: ℝ[N]): ℕ = Index of maximum element in v
+    FUNC SquaredError(y: ℝ[N], ŷ: ℝ[N]): ℝ = ||y - ŷ||^2
+    FUNC CrossEntropy(y: ℝ[N], ŷ: ℝ[N]): ℝ = -sum(y * log(ŷ))
+
+    AXIOM DimMatch {
+      ∀ (L: Layer) (x: ℝ[InputDim]) . Dim(L(x)) = OutputDim
+    }
+  }
+
+  NOTATION {
+    ∀ x ∈ 𝒳 . P(x) ⇔ ∀ (x: 𝒳) . P(x)
+    ∃ x ∈ 𝒳 . P(x) ⇔ ∃ (x: 𝒳) . P(x)
+    x ∼ 𝒟 ⇔ Sample(x, 𝒟)
+    𝔼[x∼𝒟] f(x) ⇔ Expectation(f, 𝒟)
+    f ∘ g ⇔ Compose(f, g)
+    f⁻¹ ⇔ Inverse(f)
+    ∇f ⇔ Gradient(f)
+  }
+
+  TRANSFORMERS {
+    FUNC Linear(W: ℝ[InputDim, OutputDim], b: ℝ[OutputDim]): Layer = {
+      λ (x: ℝ[InputDim]) . W · x + b
+    }
+
+    FUNC Sequential(layers: List[Layer]): Layer = {
+      MATCH layers WITH
+      | [] -> Identity
+      | [L, ...Ls] -> Sequential(Ls) ∘ L
+    }
+
+    TACTIC GradDescent(model: Model, X: List[ℝ[InputDim]], Y: List[ℝ[OutputDim]], η: ℝ, epochs: ℕ) -> Model = {
+      FOR i = 1 TO epochs:
+        FOR (x, y) IN Zip(X, Y):
+          LET ŷ = model(x)
+          LET ∇loss = ∇(λ model . Loss(model(x), y))
+          model := model - η * ∇loss(model)
+      RETURN model
+    }
+  }
+
+  STRUCTURE FeedForwardNet {
+    PARAM InputEncoder: ℝ[InputDim] -> ℝ[H]
+    PARAM OutputDecoder: ℝ[H] -> ℝ[OutputDim]
+    PARAM Layers: List[ℝ[H] -> ℝ[H]]
+    PARAM H: ℕ
+
+    FUNC Forward(x: ℝ[InputDim]): ℝ[OutputDim] = {
+      LET h = InputEncoder(x)
+      FOR L IN Layers:
+        h := L(h)
+      RETURN OutputDecoder(h)
+    }
+
+    FUNC Train(X: List[ℝ[InputDim]], Y: List[ℝ[OutputDim]], η: ℝ, epochs: ℕ): FeedForwardNet = {
+      GradDescent(Forward, X, Y, η, epochs)
+    }
+  }
+
+  STRUCTURE RecurrentNet {
+    PARAM InputEncoder: ℝ[InputDim] -> ℝ[H]
+    PARAM OutputDecoder: ℝ[H] -> ℝ[OutputDim]
+    PARAM CellFunction: (ℝ[H], ℝ[H]) -> ℝ[H]
+    PARAM H: ℕ
+
+    FUNC Forward(x: List[ℝ[InputDim]]): List[ℝ[OutputDim]] = {
+      VAR h = Zeros(H)
+      VAR outputs = []
+      FOR x_t IN x:
+        h := CellFunction(InputEncoder(x_t), h)
+        outputs := outputs + [OutputDecoder(h)]
+      RETURN outputs
+    }
+
+    FUNC Train(X: List[List[ℝ[InputDim]]], Y: List[List[ℝ[OutputDim]]], η: ℝ, epochs: ℕ): RecurrentNet = {
+      GradDescent(λ model . FlatMap(model ∘ Forward, X), FlatMap(Identity, Y), η, epochs)
+    }
+  }
+
+  PROOFS {
+    THEOREM UniversalApproximation {
+      STATEMENT:
+        ∀ (𝒳: Set[ℝ[InputDim]]) (f: 𝒳 -> ℝ[OutputDim]) (ε: ℝ) (σ: ℝ -> ℝ) .
+          σ is non-polynomial continuous function =>
+            ∃ (model: FeedForwardNet) .
+              ∀ x ∈ 𝒳 . ||model(x) - f(x)|| < ε
+
+      PROOF:
+        LET 𝒳: Set[ℝ[InputDim]], f: 𝒳 -> ℝ[OutputDim], ε: ℝ, σ: ℝ -> ℝ
+        ASSUME σ is non-polynomial continuous function
+
+        DEFINE ApproxNet(n: ℕ): FeedForwardNet {
+          LET H = n
+          LET InputEncoder(x) = [σ(w·x + b) for w ∈ 𝒲, b ∈ 𝒷]
+            where 𝒲: Set[ℝ[InputDim]] and 𝒷: Set[ℝ] are randomly initialized
+          LET Layers = []
+          LET OutputDecoder(h) = v·h + c
+            where v: ℝ[H] and c: ℝ[OutputDim] are optimized by GradDescent
+        }
+
+        CHOOSE n: ℕ sufficiently large
+        LET model = ApproxNet(n)
+        HAVE ∀ x ∈ 𝒳 . ||model(x) - f(x)|| < ε  by Universal Approximation Theorem for FeedForwardNets
+
+        QED
+    }
+
+    THEOREM GeneralizationBound {
+      STATEMENT:
+        ∀ (X: List[ℝ[InputDim]]) (Y: List[ℝ[OutputDim]]) (m: ℕ) (δ: ℝ) (model: Model) .
+          m = Length(X) ∧ (0 < δ < 1) =>
+            𝔼[x∼𝒳, y∼𝒴] Loss(model(x), y) ≤
+              (1/m) * Σᵢ Loss(model(Xᵢ), Yᵢ) + 𝒪(√(Log(1/δ) / m))
+
+      PROOF:
+        LET X: List[ℝ[InputDim]], Y: List[ℝ[OutputDim]], m: ℕ, δ: ℝ, model: Model
+        ASSUME m = Length(X) ∧ (0 < δ < 1)
+
+        DEFINE EmpiricalRisk(model) = (1/m) * Σᵢ Loss(model(Xᵢ), Yᵢ)
+        DEFINE TrueRisk(model) = 𝔼[x∼𝒳, y∼𝒴] Loss(model(x), y)
+
+        LET 𝒢 = {model | model: Model}  // Hypothesis class
+        LET 𝒞(𝒢) = Covering number of 𝒢
+
+        HAVE ∀ (δ: ℝ) . ℙ(sup_{model ∈ 𝒢} |EmpiricalRisk(model) - TrueRisk(model)| > ε) ≤ 𝒞(𝒢) · exp(-2mε^2)
+          by Uniform Convergence Bound
+
+        LET ε = √(Log(𝒞(𝒢)/δ) / 2m)
+        HENCE ℙ(sup_{model ∈ 𝒢} |EmpiricalRisk(model) - TrueRisk(model)| > ε) ≤ δ
+
+        THEREFORE, with probability at least 1 - δ:
+          TrueRisk(model) ≤ EmpiricalRisk(model) + 𝒪(√(Log(𝒞(𝒢)/δ) / m))
+        
+        QED
+    }
+
+    THEOREM StableRecurrence {
+      STATEMENT:
+        ∀ (Cell: (ℝ[H], ℝ[H]) -> ℝ[H]) (x: List[ℝ[InputDim]]) .
+          ||∇Cell|| ≤ 1 =>
+            ∃ (K: ℝ) . ∀ (t: ℕ) . ||h_t|| ≤ K * max_{i≤t} ||x_i||
+            where h_t = Recurrent(Cell, InputEncoder)(x)[t]
+
+      PROOF:
+        LET Cell: (ℝ[H], ℝ[H]) -> ℝ[H], x: List[ℝ[InputDim]]
+        ASSUME ||∇Cell|| ≤ 1
+
+        LET h_t = Recurrent(Cell, InputEncoder)(x)[t]
+        LET x_t = InputEncoder(x[t])
+
+        HAVE ||h_t|| ≤ ||Cell(h_{t-1}, x_t)|| ≤ ||h_{t-1}|| + ||x_t||
+          by Lipschitz continuity of Cell and triangle inequality
+
+        HENCE ||h_t|| ≤ Σ_{i≤t} ||x_i||
+          by Unrolling the recurrence and telescoping sum
+
+        LET K = 1
+        THEREFORE ||h_t|| ≤ K * max_{i≤t} ||x_i||
+
+        QED
+    }
+  }
+}

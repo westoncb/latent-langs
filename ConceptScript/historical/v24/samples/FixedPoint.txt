@@ -1,0 +1,108 @@
+CONCEPT FixedPoint {
+  LANGUAGE {
+    TYPE A
+    TYPE B
+    FUNC id[X] : X -> X
+    FUNC (∘)[X, Y, Z] : (Y -> Z) -> (X -> Y) -> (X -> Z)
+    AXIOM IdLeft(f : X -> Y): id ∘ f = f
+    AXIOM IdRight(f : X -> Y): f ∘ id = f
+    AXIOM Assoc(f : X -> Y, g : Y -> Z, h : Z -> W): (h ∘ g) ∘ f = h ∘ (g ∘ f)
+    
+    CLASS Functor(F : Type -> Type) {
+      fmap : (A -> B) -> F(A) -> F(B)
+      
+      LAWS {
+        fmapId(x : F(A)): fmap(id, x) = x
+        fmapCompose(g : A -> B, h : B -> C, x : F(A)): 
+          fmap(h ∘ g, x) = fmap(h, fmap(g, x))
+      }
+    }
+    
+    DEF FixedPoint(f : A -> A) = {x : A | f(x) = x}
+    
+    DEF Descend(s : Set(A), f : A -> A) : Set(A) = {y : A | ∃ (x : s). y = f(x)}
+    
+    DEF Closure(s : Set(A), f : A -> A) : Set(A) = LeastFixedPoint(X => s ∪ Descend(X, f))
+    
+    DEF Accessible(s : Set(A), f : A -> A) = ⋃ (n : Nat) Repeat(s, f, n)
+      WHERE Repeat(s, f, 0) = s
+            Repeat(s, f, n + 1) = Descend(Repeat(s, f, n), f)
+  }
+  
+  STRUCTURE {
+    LET Mu(F : Type -> Type)[FUNCTOR : Functor(F)] = FixedPoint(F)
+      ≅ {x : F(Mu(F)) | x = fmap(id, x)} BY {
+        ISO {
+          encode(x) = fmap(encode, x)
+          decode(x) = fmap(decode, x)
+          LeftInv(x : Mu(F)) = fmapId(encode(x))
+          RightInv(x : F(Mu(F))) = fmapCompose(decode, encode, x)
+        }
+      }
+  }
+  
+  PROOFS {
+    THEOREM FixedPointInduction {
+      STATEMENT:
+        ∀ (f : A -> A) (P : A -> Prop).
+          (∀ (x : A). P(f(x)) -> P(x)) ->
+          ∀ (x : FixedPoint(f)). P(x)
+      
+      PROOF:
+        LET f : A -> A, P : A -> Prop;
+        ASSUME InductiveHyp: ∀ (x : A). P(f(x)) -> P(x);
+        
+        LET x : A;
+        ASSUME FixedPointHyp: f(x) = x;
+        
+        REWRITE x
+          = f(x)         BY FixedPointHyp
+          = f(f(x))      BY FixedPointHyp
+          = f(f(f(x)))   BY FixedPointHyp
+          = ...
+          = fⁿ(x)        ∀ n BY INDUCTION
+          
+        HAVE P(fⁿ⁺¹(x)) -> P(fⁿ(x)) ∀ n BY InductiveHyp
+        
+        SHOW P(fᵏ(x))   ∀ k BY INDUCTION {
+          CASE k = 0:
+            SHOW P(x) BY InductiveHyp(fⁿ(x)) ∀ n >= 1
+          CASE k = m + 1:
+            SHOW P(fᵐ⁺¹(x)) BY {
+              P(fᵐ⁺²(x))   BY INDUCTION_HYP
+              P(fᵐ⁺¹(x))   BY InductiveHyp
+            }
+        }    
+         
+        SHOW P(x) BY {
+          REWRITE x = fⁿ(x)        ∀ n BY ABOVE
+          SHOW P(fⁿ(x))            ∀ n BY ABOVE
+        }
+    }
+    
+    THEOREM AccessibleClosure {      
+      STATEMENT:
+        ∀ (s : Set(A)) (f : A -> A).
+          Accessible(s, f) = Closure(s, f)
+          
+      PROOF:
+        LET s : Set(A), f : A -> A;
+        
+        REWRITE Closure(s, f)
+          = LeastFixedPoint(X => s ∪ Descend(X, f))   BY DEF
+          = ⋃ (n : Nat) CloseApprox(n)                BY KnasterTarski
+            WHERE CloseApprox(0) = s
+                  CloseApprox(n + 1) = s ∪ Descend(CloseApprox(n), f)
+          = ⋃ (n : Nat) {x | x ∈ Repeat(s, f, n)}     BY INDUCTION {
+              CASE 0: TRIVIAL
+              CASE n + 1:
+                CloseApprox(n + 1)
+                  = s ∪ Descend(CloseApprox(n), f)
+                  = s ∪ Descend({x | x ∈ Repeat(s, f, n)}, f)  BY IND_HYP
+                  = s ∪ {y | ∃ (x : Repeat(s, f, n)). y = f(x)}
+                  = {x | x ∈ Repeat(s, f, n + 1)}               BY DEF
+            }
+          = Accessible(s, f)                          BY DEF
+    }
+  }
+}

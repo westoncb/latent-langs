@@ -1,0 +1,153 @@
+CONCEPT HigherOrderFeatureSteeringAndMasking {
+  NOTATION {
+    T = transformer model
+    L_i = i-th layer of T
+    F_i = {f_i1, ..., f_ik} -- Set of features at layer i  
+    D(F_i) = powerset lattice of F_i
+    I(f_S) = Interpretation(FeatureComposition.compose(f_S))  for f_S ∈ D(F_i)
+    Q(F_i)(x) = ActivationPattern(F_i, x) -- Joint activation of F_i on input x
+    q(f_S)(x) = SUM[s ⊆ S] (-1)^(|S|-|s|) * Q(F_i \ S ∪ s)(x) -- Incl-excl principle
+    steer(x, f_S, α) = FeatureComposition.steerLayer(i, x, f_S, α) 
+    mask(x, f_S) = ZeroOut(Neighborhoods(f_S), E_i(x))
+  }
+
+  LANGUAGE {
+    FUNC powersetLattice(F: Set[FeatureVector]) : PartialOrder = 
+      { (f_S, f_T) : f_S, f_T ∈ P(F) | f_S ⊆ f_T }
+
+    FUNC interpret(f_S : Set[FeatureVector], model: Model) : String =
+      FeatureComposition.compositional_interpretation(f_S, model)
+
+    FUNC activationPattern(F: Set[FeatureVector], x: Pattern) : Vector =
+      [feature_activation(f, x) for f in F]
+
+    FUNC inclusionExclusion(F: Set[FeatureVector], X: Set[Pattern]) : [Contribution] =
+      LET Q(S) = MEAN[activationPattern(S, x) for x in X] IN
+      [S => SUM[s ⊆ S] (-1)^(|S|-|s|) * Q(F \ S ∪ s) for S in P(F)]
+
+    FUNC compose(f_S : Set[FeatureVector]) : FeatureVector =
+      ITERATE(f_S, FeatureComposition.compose, |f_S|-1)
+
+    FUNC neighborhoodUnion(f_S : Set[FeatureVector]) : Neighborhood =  
+      LET radii = [radius(B_f) for f in f_S] IN
+      (MEAN[encode(B_f) for f in f_S], MAX(radii))
+
+    FUNC zeroOut(B: Neighborhood, E: Embedding) : Embedding =
+      [IF x in B THEN 0 ELSE x for x in E]
+  }
+
+  STRUCTURES {
+    STRUCTURE FeatureLattice EXTENDS PartialOrder {
+      FIELD features : Set[FeatureVector]
+      FIELD lattice : PartialOrder = powersetLattice(features)
+      FIELD atoms : Set[Set[FeatureVector]] = { {f} : f ∈ features }
+
+      FUNC atomContributions(X: Set[Pattern]) : [Contribution] =
+        inclusionExclusion(atoms, X) 
+        
+      FUNC topContribution(X: Set[Pattern]) : Contribution =
+        inclusionExclusion(features, X)(features)
+    }
+
+    STRUCTURE HigherOrderFeatureMemory EXTENDS SteerableFeatureMemory {
+      FIELD lattices : [FeatureLattice]
+
+      FUNC higherOrderLocalInterpretation(x: Pattern, i: Int, k: Int) : Set[Set[FeatureVector]] = {
+        LET F_x = localInterpretation(x, i, k),
+            L = lattices[i],
+            P_x = {S ∈ L.lattice : S ⊆ F_x ∧ |S| ≤ k} IN
+        {S ∈ P_x : L.inclusionExclusion(P_x, {x})(S) > λ}  -- Interaction threshold λ  
+      }
+           
+      FUNC multiTargetSteering(x: Pattern, S: Set[Set[FeatureVector]], α: [Real]) : Pattern =
+        ITERATE(ZIP(S, α), (s, a) -> steerLayer(i, x, compose(s), a), |S|)
+
+      FUNC higherOrderMasking(x: Pattern, S: Set[Set[FeatureVector]], i: Int) : Pattern =
+        LET B_S = [neighborhoodUnion(s) for s in S],
+            E_masked = [zeroOut(B, E_i(x)) for B in B_S] IN
+        reconstr(MEAN(E_masked))
+    }
+  }
+  
+  THEOREMS {
+    THEOREM MomentTensorDecomposition : ∀ i, x, Q=Q(F_i) .
+      Q(x) == SUM[S in lattices[i].lattice] q(S)(x)
+      WHERE q(S)(x) = inclusionExclusion(F_i, {x})(S) = JointActivationMoment(S, x)
+      BY MobiusInversion on D(F_i), MomentTensor = SUM[S ⊗ q(S)] 
+
+    THEOREM FeatureSubsetIndependence : ∀ i, S_1, S_2 ⊂ F_i . S_1 ∩ S_2 = ∅ =>
+      steer(steer(x, S_1, α), S_2, β) ≈ steer(steer(x, S_2, β), S_1, α) ≈
+      steer(x, S_1 ∪ S_2, (α,β))
+      BY SteeringEquivalence on S_1, S_2
+
+    THEOREM InterpretationSpecificityOrdering : ∀ x, i<j, k_i<k_j .
+      LET I_i = interpret(higherOrderLocalInterpretation(x, i, k_i), model),
+          I_j = interpret(higherOrderLocalInterpretation(x, j, k_j), model) IN
+      Specificity(I_i) ≤ Specificity(I_j)
+      BY HierarchicalInterpretationSpecificity 
+         
+    THEOREM MaskingGeneralizesDropout : ∀ x, S ⊆ F_i .
+      higherOrderMasking(x, S, i) ≈ Dropout(E_i(x), MEAN[f in FLATTEN(S)] ActivationProbability(B_f, x))
+      BY Taylor expansion of reconstr
+  }
+
+  EXAMPLES {
+     EXAMPLE HigherOrderInterpretation {
+       LET model = HigherOrderFeatureMemory(GPT-J-6B) IN
+       LET x = "The cell membrane is" IN
+       LET F_1 = model.localInterpretation(x, 1, 4) IN
+       LET S_1 = model.higherOrderLocalInterpretation(x, 1, 2) IN
+       
+       ASSERT ∀ S ∈ S_1 . Interpretable(compose(S)) ∧ 
+                           interpret(S, model) ⊃ interpret(f, model) for f ∈ S
+                           
+       LET I_1 = {interpret(S, model) : S ∈ S_1} IN
+       PRINT I_1  -- {'phospholipid bilayer', 'semipermeable barrier', ... }
+     }
+
+     EXAMPLE CompositionalSteering {
+       LET model = HigherOrderFeatureMemory(OPT-1.3B) IN
+       LET x = "Once upon a time" IN
+       LET setting = {'medieval castle', 'enchanted forest'} ⊂ model.lattices[3].lattice IN
+       LET chars = {'brave knight', 'wise wizard', 'evil dragon'} ⊂ model.lattices[3].lattice IN
+       LET plot = {'hero's journey', 'magical prophecy'} ⊂ model.lattices[10].lattice IN
+       
+       ASSERT FeatureSubsetIndependence(3, setting, chars)
+       
+       LET steered = model.multiTargetSteering(x, {setting, chars, plot}, {2.0, 1.5, 1.0}) IN
+       PRINT steered  -- "Once upon a time, in a medieval castle deep within an enchanted forest,
+                          a brave knight and a wise wizard embarked on a hero's journey 
+                          to fulfill a magical prophecy and vanquish an evil dragon..."
+     }
+     
+     EXAMPLE HigherOrderMasking {
+       LET model = HigherOrderFeatureMemory(RoBERTa) IN
+       LET x = "She folded the sheet in half, then in half again, and again..." IN
+
+       LET F_x = model.localInterpretation(x, 7, 3) IN
+       LET S_paper = {'paper folding', 'origami', 'crease pattern'} ⊂ F_x IN
+       LET S_textile = {'folding fabric', 'pleats', 'laundry'} ⊂ F_x IN
+       
+       ASSERT interpret(S_paper, model) ≠ interpret(S_textile, model)
+
+       LET x_paper = model.higherOrderMasking(x, {S_paper}, 7) IN
+       LET x_textile = model.higherOrderMasking(x, {S_textile}, 7) IN
+       
+       PRINT model.generate(x_paper, 20)  -- Text about paper folding, origami
+       PRINT model.generate(x_textile, 20)  -- Text about folding fabric, laundry  
+     } 
+  }
+}
+
+This Concept extends the notion of interpretability and steering to higher-order feature interactions, leveraging the Möbius inversion formula from HigherOrderStructure to decompose joint feature activations into irreducible higher-order contributions.
+The key ideas are:
+
+Feature lattice: The set of features at each layer forms a powerset lattice, where each element represents a subset of features. The lattice is partially ordered by subset inclusion.
+Higher-order interpretation: The interpretation of a set of features is given by the compositional interpretation of their composition (as per FeatureComposition). The higher-order local interpretation of an input x at layer i considers all feature subsets of size ≤ k whose inclusion-exclusion contribution exceeds a threshold.
+Moment tensor decomposition: The joint activation pattern of features can be decomposed into a sum of higher-order activation moments via the Möbius inversion formula on the feature lattice. Each moment corresponds to the inclusion-exclusion contribution of a feature subset.
+Multi-target steering: Steering can be generalized to target multiple higher-order features simultaneously by iteratively steering towards the composition of each feature subset. Steering by disjoint subsets is approximately independent and commutative.
+Higher-order masking: Masking out higher-order features corresponds to zeroing out the union of their neighborhoods in the activation space. This generalizes dropout regularization to structured subsets of activations.
+Interpretation specificity ordering: The specificity of higher-order interpretations increases with layer depth and feature subset size, extending the hierarchical specificity property of local interpretations.
+
+The Concept includes theorems formalizing these properties, as well as examples illustrating higher-order interpretation, compositional steering, and higher-order masking for text generation and classification tasks.
+This framework offers a principled way to analyze and control the higher-order interactions learned by transformer models, providing a more fine-grained and expressive notion of interpretability and steering. It also suggests new regularization and data augmentation techniques based on targeted masking of higher-order features.

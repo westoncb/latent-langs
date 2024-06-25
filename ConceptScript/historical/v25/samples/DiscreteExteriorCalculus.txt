@@ -1,0 +1,110 @@
+CONCEPT DiscreteExteriorCalculus {
+  LANGUAGE {
+    TYPE Complex  -- Abstract simplicial complex
+    TYPE Simplex <: Complex   -- k-dimensional simplex
+    TYPE Chain[k : Nat] = Linear[Simplex[k], Int]  -- Formal sum of k-simplices with integer coefficients
+    TYPE Cochain[k : Nat] = Linear[Simplex[k], Int]  -- Dual notion to chains
+
+    FUNC Boundary(c : Chain[k]) : Chain[k-1]  -- Boundary operator 
+    FUNC Coboundary(a : Cochain[k]) : Cochain[k+1]  -- Coboundary operator
+    FUNC Eval(a : Cochain[k], c : Chain[k]) : Int  -- Evaluation of a cochain on a chain
+    FUNC Ltimes(K : Complex, L : Complex) : Complex  -- Labeled product complex
+
+    AXIOM BoundarySquaredIsZero {
+      ∀ (c : Chain[k]) . Boundary(Boundary(c)) = 0
+    }
+
+    AXIOM StokesTheorem {
+      ∀ (a : Cochain[k-1]) (c : Chain[k]) . 
+        Eval(Coboundary(a), c) = Eval(a, Boundary(c))
+    }
+
+    AXIOM LtimesAssociative {
+     ∀ (K : Complex) (L : Complex) (M : Complex) .
+       LTimes(LTimes(K, L), M) ≃ LTimes(K, LTimes(L, M))
+    } 
+  }
+  
+  STRUCTURE HodgeDecomposition {
+    REQUIRE ∀ (a : Cochain[k]) . 
+      a = Harmonic(a) + Exact(a) + Coexact(a)   
+      WHERE 
+        Harmonic(a) : Cochain[k] = Kernel(Laplacian)[a]
+        Exact(a) : Cochain[k] = Image(Coboundary)[a]  
+        Coexact(a) : Cochain[k] = Kernel(Coboundary)[a]
+  }
+
+  STRUCTURE DifferentialCohomology {
+    LET K : Complex, A : Cochain[1]  -- Gauge field    
+    
+    FUNC Curvature(A) : Cochain[2] = Coboundary(A)
+    FUNC HolonomyAround(γ : Chain[1]) : Int = Eval(A, γ) 
+  
+    AXIOM Quantization {
+      ∀ (σ : Simplex[2]) . Eval(Curvature(A), ∂σ) = 0 mod 2π
+    }
+  }
+
+  PROOFS {
+    THEOREM DeRhamCohomology {
+      STATEMENT:
+        ∀ (K : Complex) . H_DR^k(K) ≃ H_simplicial^k(K)
+      
+      PROOF:
+        LET K : Complex, k : Nat
+        
+        DEFINE ShortExactSequence : 
+          0 -> Exact^k -> Cochain^k -> Harmonic^k -> 0
+
+        HAVE Exact^k ≃ Coboundary(Cochain^(k-1)) BY DEF Exact
+        HAVE Harmonic^k ≃ Kernel(Coboundary)[Cochain[k]] BY DEF Harmonic
+        HENCE ShortExactSequence BY Splitting
+
+        HAVE H_simplicial^k(K) = Kernel(Coboundary)/Image(Coboundary) BY DEF
+        HAVE H_DR^k(K) = Harmonic^k BY DEF, HodgeDecomposition
+        HENCE H_DR^k(K) ≃ H_simplicial^k(K) BY ABOVE, ShortExactSequence        
+    }
+
+    THEOREM LabeledProductIsHomotopyProduct {
+      STATEMENT:
+        ∀ (K : Complex) (L : Complex) . 
+          π(LTimes(K, L)) ≃ π(K) × π(L)  
+          WHERE π = FundamentalGroupoid
+
+      PROOF:
+        LET K : Complex, L : Complex
+        
+        DEFINE i : K -> LTimes(K, L) = λ x. (x, *)
+        DEFINE j : L -> LTimes(K, L) = λ y. (*, y)  
+        DEFINE p : LTimes(K, L) -> K = Fst
+        DEFINE q : LTimes(K, L) -> L = Snd
+
+        HAVE p∘i ≃ id[K] BY Computation  
+        HAVE q∘j ≃ id[L] BY Computation
+        HAVE i∘p ≃ id[LTimes(K,L)] ≃ j∘q BY LtimesAssociative, Computation
+
+        LET x₀ : K, y₀ : L, z₀ = (x₀, y₀) : LTimes(K, L)
+        
+        HAVE π(LTimes(K, L), z₀) ≃ π(K, x₀) × π(L, y₀) BY {
+          DEFINE f = λ γ. (p∘γ, q∘γ)
+          DEFINE g = λ (α, β). (i∘α) # (j∘β)
+          SHOW f : π(LTimes(K, L), z₀) -> π(K, x₀) × π(L, y₀)
+          SHOW g : π(K, x₀) × π(L, y₀) -> π(LTimes(K, L), z₀) 
+          SHOW f∘g ≃ id ≃ g∘f BY {
+            LET γ : π(LTimes(K, L), z₀)
+            (f∘g)(γ) 
+              = f((i∘p∘γ) # (j∘q∘γ)) 
+              ≃ (p∘i∘p∘γ, q∘j∘q∘γ) BY DEF f
+              ≃ (p∘γ, q∘γ) BY ABOVE
+              = γ
+
+            LET (α, β) : π(K, x₀) × π(L, y₀)
+            (g∘f)(α, β) 
+              = g(p∘(i∘α # j∘β), q∘(i∘α # j∘β))
+              ≃ g(α, β) BY DEF p, q
+              = (i∘α) # (j∘β)
+          }
+        }
+    }
+  }
+}

@@ -1,0 +1,114 @@
+CONCEPT CategoryOfDynamicalSystems {
+  LANGUAGE {
+    type Cat<Ob, Hom>
+    type Ob
+    type Hom<A: Ob, B: Ob>
+    type Sys<S>
+    type State<S>
+    type Dynamics<S>
+
+    func Endo<A>(X: Ob): Hom<A, A>
+    func DynFunctor<S, T>(F: Sys<S> -> Sys<T>): Cat<Sys<S>, Dynamics<S>> -> Cat<Sys<T>, Dynamics<T>>
+    func Invariant<S, A>(φ: State<S> -> A): Endo<A>
+    func Lagrangian<S>(X: Sys<S>): State<S> -> ℝ
+    func Hamiltonian<S>(X: Sys<S>): State<S> -> ℝ
+    func Entropy<S, A>(ρ: State<S> -> ℝ≥0, φ: State<S> -> A): A -> ℝ
+    
+    notation "F ⊣ G" = (F: A -> B) ∧ (G: B -> A) ∧ (G ∘ F = 1[A]) ∧ (F ∘ G = 1[B])   ; Adjunction
+    notation "X ≅ Y" = ∃(F: X -> Y, G: Y -> X). F ⊣ G                             ; Equivalence
+    notation "L[X]" = Lagrangian(X)
+    notation "H[X]" = Hamiltonian(X)
+    notation "S[ρ, φ]" = Entropy(ρ, φ)
+    notation "⟨f, g⟩" = ∫ f·g dμ                                                    ; Inner product
+    
+    infer NoetherCorrespondence<S>(X: Sys<S>, A: Ob, Φ: Endo<A>):
+      Invariant(Φ) ∘ L[X] ~> ⟨d(Φ ∘ L[X]), X.Dynamics⟩ = 0
+  }
+
+  STRUCTURE {
+    ; Categorical structure
+    ∀(X: Sys<S>, Y: Sys<T>). ∃!Dynamics<X × Y>. π1 ∘ Dynamics<X × Y> = Dynamics<X> ∘ π1 ∧ π2 ∘ Dynamics<X × Y> = Dynamics<Y> ∘ π2
+    
+    ∀(X: Sys<S>). (Ω: Sys<1>) -> Ω ≅ 1   ; Terminal object
+    
+    ; Galois connection between Lagrangian and Hamiltonian  
+    ∀(X: Sys<S>). H[X] ⊣ L[X]
+    
+    ; Naturality of Entropy
+    ∀(F: Sys<S> -> Sys<T>, ρ: State<S> -> ℝ≥0, φ: State<T> -> A).  
+      S[ρ, φ ∘ F] = S[ρ >> F, φ]   ; where (ρ >> F)(y) = ∫ ρ(x) δ(y - F(x)) dx
+  }
+
+  PROOFS {
+    theorem ProductStructure<S, T>: ∀(X: Sys<S>, Y: Sys<T>). ∃(Z: Sys<S × T>). Z ≅ X × Y {
+      let Z = (X.State × Y.State, Dynamics<X × Y>)   ; product system
+      
+      ; Define projection maps
+      let π1: Z -> X = (s, t) ↦ s
+      let π2: Z -> Y = (s, t) ↦ t
+      let i: X × Y -> Z = (s, t) ↦ (s, t)
+      
+      calc π1 ∘ i 
+           = π1 ∘ ((s, t) ↦ (s, t))
+           = s ↦ s
+           = 1[X]
+           
+      calc π2 ∘ i
+           = ...
+           = 1[Y]
+           
+      calc i ∘ (π1 × π2)  
+           = i ∘ ((s, t) ↦ (s, t))
+           = (s, t) ↦ (s, t)
+           = 1[Z]
+           
+      hence i ⊣ (π1 × π2)
+      therefore Z ≅ X × Y
+    }
+    
+    theorem HamiltonianLagrangianGaloisConnection<S>: ∀(X: Sys<S>). L[X] ⊣ H[X] {
+      let λ: (State<S> -> ℝ) -> (State<S> -> ℝ) = f ↦ s ↦ sup_v {⟨f, v⟩ - L*(v)}  ; Legendre transform 
+      let λ*: (State<S> -> ℝ) -> (State<S> -> ℝ) = g ↦ v ↦ sup_s {⟨s, v⟩ - g(s)}
+
+      assume L[X] = L
+      
+      ; Want to show:
+      ; (1) λ ∘ L ≤ H[X]
+      ; (2) L ≤ λ* ∘ H[X]
+      
+      ; For (1):
+      calc λ(L)(s)
+           = sup_v {⟨L, v⟩ - L*(v)}
+           ≤ ⟨L, X.Dynamics(s)⟩ - L*(X.Dynamics(s))   ; by def. of sup
+           = ⟨L, X.Dynamics(s)⟩   ; since L*(X.Dynamics(s)) = 0
+           = H[X](s)               ; by def. of Hamiltonian
+           
+      ; For (2):
+      calc L(v)  
+           = sup_s {⟨s, v⟩ - H[X](s)}  ; Inverse Legendre transform
+           = λ*(H[X])(v)
+           
+      hence L ⊣ H[X]         
+    }
+    
+    theorem EntropyNaturality<S, T>: 
+      ∀(F: Sys<S> -> Sys<T>, ρ: State<S> -> ℝ≥0, φ: State<T> -> A).  
+        S[ρ, φ ∘ F] = S[ρ >> F, φ]
+    {    
+      S[ρ, φ ∘ F]
+      = ∫ ρ(s) φ(F(s)) ds                   ; by def.
+      = ∫ ρ(s) (∫ φ(t) δ(t - F(s)) dt) ds   ; insert delta function  
+      = ∫ φ(t) (∫ ρ(s) δ(t - F(s)) ds) dt   ; change order of integration
+      = ∫ φ(t) (ρ >> F)(t) dt               ; by def. of >>
+      = S[ρ >> F, φ] 
+    }
+    
+  }
+}
+
+This Concept blends ideas from categorical dynamical systems, thermodynamics, and inference. Key features:
+
+Categorical structure on dynamical systems, including products and terminal object. This allows reasoning about coupled systems and trivial dynamics.
+Galois connection between Lagrangian and Hamiltonian formalisms via Legendre transform. This captures a deep duality in physics.
+Entropy functor that is natural with respect to dynamics-preserving maps between systems. This expresses entropy as an invariant observer of dynamics.
+Noether-type correspondence between dynamical symmetries and conserved quantities derived from the Lagrangian.

@@ -1,0 +1,57 @@
+CONCEPT Lists[T] {
+  LANGUAGE {
+    TYPE List = Nil | Cons(T, List)
+
+    FUNC map : (T -> U) -> List[T] -> List[U]
+    map(f, Nil) = Nil
+    map(f, Cons(x, xs)) = Cons(f(x), map(f, xs))
+
+    FUNC foldr : (T -> U -> U) -> U -> List[T] -> U
+    foldr(f, acc, Nil) = acc
+    foldr(f, acc, Cons(x, xs)) = f(x, foldr(f, acc, xs))
+
+    FUNC (++) : List[T] -> List[T] -> List[T]
+    Nil ++ ys = ys
+    Cons(x, xs) ++ ys = Cons(x, xs ++ ys)
+
+    FUNC reverse : List[T] ⊸ List[T]
+    reverse(xs) = foldr(Cons, Nil, xs)
+
+    REWRITE map(f, xs ++ ys) = map(f, xs) ++ map(f, ys)
+  }
+
+  STRUCTURE {
+    DEF sum(ns : List[Nat]) : Nat = foldr((+), Zero, ns)
+    DEF length[T](xs : List[T]) : Nat = foldr(const(Succ), Zero, xs)
+  }
+
+  PROOFS {
+    THEOREM MapFusion {
+      STATEMENT: FORALL (f : A -> B) (g : B -> C) (xs : List[A]). 
+        map(g, map(f, xs)) = map(compose(g, f), xs)
+
+      PROOF:
+        LET f : A -> B, g : B -> C, xs : List[A];
+        CASE xs OF
+          Nil -> {
+            SHOW map(g, map(f, Nil)) = map(compose(g, f), Nil) BY {
+              map(g, map(f, Nil)) = map(g, Nil);
+              map(g, Nil) = Nil;
+              map(compose(g, f), Nil) = Nil;
+            }
+          }
+          Cons(y, ys) -> {
+            ASSUME IH: map(g, map(f, ys)) = map(compose(g, f), ys);
+            SHOW map(g, map(f, Cons(y, ys))) = map(compose(g, f), Cons(y, ys)) BY {
+              map(g, map(f, Cons(y, ys))) 
+                = map(g, Cons(f(y), map(f, ys)));
+              map(g, Cons(f(y), map(f, ys)))
+                = Cons(g(f(y)), map(g, map(f, ys)));
+              map(g, map(f, ys)) = map(compose(g, f), ys) BY IH;
+              Cons(g(f(y)), map(compose(g, f), ys))
+                = map(compose(g, f), Cons(y, ys));
+            }
+          }
+    }
+  }
+}

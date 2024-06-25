@@ -1,0 +1,77 @@
+CONCEPT DualNumberAutomatic {
+  LANGUAGE {
+    TYPE R = ℝ | R + ε * R  ; Dual numbers
+    TYPE Fn = List[Sym] -> R  ; Symbolic functions
+    
+    FUNC ε : R
+    FUNC D(f : Fn, k : ℕ) : Fn
+    FUNC ∇(f : Fn) : List[Fn]
+    FUNC ∇²(f : Fn) : List[List[Fn]]
+
+    AXIOM DualBasis {
+      ε^2 = 0
+    }
+    
+    AXIOM ChainRule {
+      ∀ (f g : Fn) . D(f ∘ g) = D(f) ∘ g * D(g)
+    }
+    
+    NOTATION "'" = D
+    NOTATION "∇" = Grad
+    NOTATION "∇²" = Hess
+    NOTATION "ε" = DualUnit
+  }
+  
+  STRUCTURE DualForwardMode {
+    DEF Eval(f : Fn, xs : List[R]) : R =
+      f(Map((x : R) ↦ x + ε * 1, xs))
+    
+    REQUIRE ∀ (f : Fn) (xs : List[R]) (k : ℕ) . 
+      D(f, k)(xs) = CoeffOf(ε^k, Eval(f, xs))
+  }
+
+  STRUCTURE DualReverseMode {
+    DEF Eval(f : Fn, xs : List[R], ws : List[R]) : R =
+      f(Map2((x : R, w : R) ↦ x + ε * w, xs, ws))
+
+    REQUIRE ∀ (f : Fn) (xs ws : List[R]) .
+      ∇(f)(xs) · ws = CoeffOf(ε, Eval(f, xs, ws))
+      
+    REQUIRE ∀ (f : Fn) (xs ws vs : List[R]) .  
+      ws · ∇²(f)(xs) · vs = CoeffOf(ε, ∇(Eval(f, -, ws))(xs) · vs)
+  }
+
+  PROOFS {
+    THEOREM ForwardAD {
+      STATEMENT : ∀ (f : Fn) (xs : List[R]) .
+        f'(xs) = [D(f, 1)(xs)]
+      
+      PROOF {
+        LET f : Fn, xs : List[R]
+
+        f(Map((x : R) ↦ x + ε, xs))  
+          = f(xs) + ε * f'(xs)  BY Taylor
+          = f(xs) + ε * D(f, 1)(xs)  BY DualForwardMode
+      }
+    }
+
+    THEOREM ReverseAD {
+      STATEMENT : ∀ (f : Fn) (xs : List[R]) .
+        ∇(f)(xs) = [D(f)(x1), ..., D(f)(xn)]
+          WHERE xs = [x1, ..., xn]
+      
+      PROOF {
+        LET f : Fn, xs : List[R], ws : List[R]  
+        
+        ∇(f)(xs) · ws
+          = CoeffOf(ε, Eval(f, xs, ws))  BY DualReverseMode
+          = CoeffOf(ε, f(Map2((x, w) ↦ x + ε * w, xs, ws)))
+          = CoeffOf(ε, f([x1 + ε * w1, ..., xn + ε * wn]))
+            WHERE xs = [x1, ..., xn], ws = [w1, ..., wn]
+          = CoeffOf(ε, f(xs) + ε * (w1 * D(f)(x1) + ... + wn * D(f)(xn)))  BY ChainRule, Taylor
+          = w1 * D(f)(x1) + ... + wn * D(f)(xn)
+          = [D(f)(x1), ..., D(f)(xn)] · ws
+      }
+    }
+  }
+}

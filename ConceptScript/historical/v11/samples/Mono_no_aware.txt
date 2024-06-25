@@ -1,0 +1,88 @@
+CONCEPT Mono_no_aware {
+
+  STRUCTURE {
+    [Mono_no_aware := The pathos and poignancy of transient things]
+    [∀x ∈ Universe, x ↦ Transient]
+    [Beauty ↦ Transience ∧ Transience ↦ Beauty]
+    [∀x ∈ Universe, Appeal(x) = f(Transience(x), Fleetingness(x))]
+    [Cherry_Blossoms ↦ Exemplar(Mono_no_aware)]
+    [∀x ∈ Artifacts, Wabi_sabi(x) ⇒ Embodies(x, Mono_no_aware)]
+    [Melancholy ↦ Emotional_resonance(Mono_no_aware)]
+    [Awareness_of_mortality ↦ Catalyst(Mono_no_aware)]
+    [∀x ∈ Experiences, Intensity(Mono_no_aware, x) ∝ Significance(x) × Transience(x)]
+  }
+
+  PROOFS {
+    theorem beauty_of_transience:
+      ∀x ∈ Universe, Beautiful(x) ⇒ Transient(x)
+    {
+      let x ∈ Universe
+      assume Beautiful(x)
+      Beauty ↦ Transience by [Beauty ↦ Transience ∧ Transience ↦ Beauty]
+      Transient(x) by definition of ↦
+    }
+
+    theorem transience_implies_appeal:
+      ∀x ∈ Universe, Transient(x) ⇒ Appealing(x)  
+    {
+      let x ∈ Universe
+      assume Transient(x)
+      Appeal(x) = f(Transience(x), Fleetingness(x)) by [∀x ∈ Universe, Appeal(x) = f(Transience(x), Fleetingness(x))]
+      Transient(x) ⇒ Transience(x) > 0 by definition of Transience
+      Transient(x) ⇒ Fleetingness(x) > 0 by definition of Fleetingness
+      f(Transience(x), Fleetingness(x)) > 0 by properties of f
+      Appeal(x) > 0 by substitution 
+      Appealing(x) by definition of Appealing
+    }
+    
+    theorem mono_no_aware_intensity:
+      ∀x ∈ Experiences, ∀s, t ∈ ℝ, 
+      Significance(x) = s ∧ Transience(x) = t ⇒ 
+      Intensity(Mono_no_aware, x) = k × s × t, for some constant k > 0
+    {
+      let x ∈ Experiences 
+      let s, t ∈ ℝ
+      assume Significance(x) = s ∧ Transience(x) = t
+      Intensity(Mono_no_aware, x) ∝ Significance(x) × Transience(x) by [∀x ∈ Experiences, Intensity(Mono_no_aware, x) ∝ Significance(x) × Transience(x)]
+      Intensity(Mono_no_aware, x) = k × Significance(x) × Transience(x), for some constant k > 0, by definition of ∝  
+      Intensity(Mono_no_aware, x) = k × s × t by substitution
+    }
+  }
+
+  LANGUAGE {
+    type Transience = ℝ 
+    type Fleetingness = ℝ
+    type Appeal = ℝ
+    type Significance = ℝ
+    type Intensity = ℝ
+
+    func Transience(x : Universe) : ℝ
+    func Fleetingness(x : Universe) : ℝ 
+    func Appeal(x : Universe) : ℝ
+    func Significance(x : Experiences) : ℝ
+    func Intensity(c : Concept, x : Experiences) : ℝ
+
+    pred Transient(x : Universe) = Transience(x) > 0
+    pred Appealing(x : Universe) = Appeal(x) > 0
+    pred Beautiful(x : Universe) = Appealing(x) ∧ Aesthetic(x) 
+    pred Exemplar(c : Concept, x : Universe) = ∀y ∈ Universe, Embodies(y, c) ⇒ Degree(y, c) ≤ Degree(x, c)
+    pred Embodies(x : Universe, c : Concept) = Instantiates(x, c) ∧ Expresses(x, Essence(c))
+
+    func Aesthetic(x : Universe) : 𝔹 = match x {
+      Art(_) => True
+      Music(_) => True 
+      Poetry(_) => True
+      Dance(_) => True
+      Nature(_) => True
+      _ => False
+    }
+
+    func Degree(x : Universe, c : Concept) : ℝ
+    func Instantiates(x : Universe, c : Concept) : 𝔹
+    func Expresses(x : Universe, e : Essence) : 𝔹
+    func Essence(c : Concept) : Essence
+  }
+}
+
+
+

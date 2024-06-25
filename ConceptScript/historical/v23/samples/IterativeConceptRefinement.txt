@@ -1,0 +1,103 @@
+CONCEPT IterativeConceptRefinement {
+
+  LANGUAGE {
+    TYPE Concept
+    TYPE Justification
+    TYPE Iteration = ℕ
+    
+    FUNC Refine(c: Concept, j: Justification) -> Concept
+    FUNC Justify(c: Concept) -> 𝒫(Justification)
+    FUNC Explore(c: Concept) -> 𝒫(Concept)
+    
+    PRED IsRefined(c: Concept, i: Iteration) <->
+      ∀ j ∈ Justify(c). IsValid(j, i)
+      
+    PRED IsValid(j: Justification, i: Iteration)
+    PRED IsConverged(c: Concept, i: Iteration) 
+    
+    NOTATION "c ↝ c'" = Refine(c, j) = c' FOR SOME j ∈ Justify(c)
+    NOTATION "c ↝* c'" = Refine*(c) = c'
+      WHERE Refine*(c) = LET c' = Refine(c, j) FOR SOME j ∈ Justify(c) IN 
+              IF c' = c THEN c ELSE Refine*(c')
+  }
+  
+  STRUCTURE {
+    DEF IterativeRefinement(cₒ: Concept) -> Concept =
+      LET i = 0 IN
+      LET c = cₒ IN
+      WHILE ¬IsConverged(c, i):
+        HAVE ∃ j ∈ Justify(c). ¬IsValid(j, i) BY ¬IsRefined(c, i)
+        LET c ↝ c' 
+        LET i = i + 1
+      RETURN c
+      
+    AXIOM Convergence {
+      ∀ cₒ: Concept. ∃ i: Iteration. IsConverged(IterativeRefinement(cₒ), i)  
+    }
+    
+    AXIOM Refinement {
+      ∀ c c': Concept. c ↝ c' -> (∀ i: Iteration. IsRefined(c', i) -> IsRefined(c, i))
+    }
+    
+    AXIOM Exploration {
+      ∀ c: Concept. ∀ c' ∈ Explore(c). ∃ c'' ∈ Explore(c'). c ↝* c''
+    }
+  }
+  
+  PROOFS {
+    THEOREM Correctness {
+      STATEMENT: ∀ cₒ: Concept. IsRefined(IterativeRefinement(cₒ), ∞)
+        WHERE IsRefined(c, ∞) <-> ∀ i: Iteration. IsRefined(c, i)
+        
+      PROOF {
+        ASSUME [cₒ: Concept]
+        
+        LET c = IterativeRefinement(cₒ)
+        
+        HAVE ∃ i: Iteration. IsConverged(c, i) BY Convergence
+        LET i BE SUCH THAT IsConverged(c, i)
+        
+        SHOW ∀ i': Iteration. IsRefined(c, i') BY INDUCTION ON i' {
+          CASE i' ≤ i:
+            SHOW IsRefined(c, i') SINCE IsConverged(c, i) IMPLIES IsRefined(c, i')
+          CASE i' > i:  
+            ASSUME IsRefined(c, i'-1)
+            HAVE c = Refine(c, j) FOR ALL j ∈ Justify(c) SINCE IsConverged(c, i)
+            HENCE IsRefined(c, i') BY Refinement
+        }
+      }
+    }
+    
+    THEOREM Completeness {
+      STATEMENT: ∀ cₒ: Concept. ∀ c*: Concept.
+        (∀ i: Iteration. IsRefined(c*, i)) -> (cₒ ↝* c*)
+        
+      PROOF {
+        ASSUME [cₒ: Concept] [c*: Concept] 
+          SUCH THAT ∀ i: Iteration. IsRefined(c*, i)
+        
+        LET c = IterativeRefinement(cₒ)
+        
+        HAVE IsRefined(c, ∞) BY Correctness
+        
+        SHOW cₒ ↝* c* BY {
+          LET S = {c' | cₒ ↝* c'}
+          
+          HAVE c ∈ S TRIVIALLY
+          HAVE c* ∈ S BY {
+            ASSUME c* ∉ S  
+            HAVE ∃ c' ∈ S. ∃ c'' ∈ Explore(c'). c* ↝* c'' BY Exploration
+            HENCE ∃ c'' ∈ S. IsRefined(c'', ∞)
+            CONTRADICTION SINCE c IS THE UNIQUE ELEMENT OF S SUCH THAT IsRefined(c, ∞)
+          }
+          
+          HENCE cₒ ↝* c*
+        }
+      }
+    }
+  }
+}
+
+This Concept formalizes the process of iteratively refining a concept by generating justifications, checking their validity, and updating the concept until convergence to a fully justified state. The Explore function allows generating related concepts for consideration.
+The Correctness theorem shows that this process converges to a fully justified concept. The Completeness theorem shows that any fully justified concept reachable from the initial concept will be found by this process.
+The proofs utilize induction on the iteration counter, the convergence and refinement axioms, and the notion of the reachable set of concepts to establish the key results.

@@ -1,0 +1,65 @@
+CONCEPT DiscreteRiemannianGeometry {
+  LANGUAGE {
+    type CellComplex = {cells: Cell*, boundary: Cell -> Cell*}
+    type Cell = Primitive
+    type CellMetric = Cell -> ℝ  ; Metric on cells
+    type DualCell = Primitive
+    type Orientation = {+1, -1}
+
+    type DiscreteForm(K: CellComplex, n: ℕ) = Cell -> ℝ  ; n-forms on cells
+    type DiscreteVector(K: CellComplex) = Cell -> ℝ^K.dim  ; Discrete vector fields
+
+    notation "d(K, n)" = ExteriorDerivative(K: CellComplex, n: ℕ) = LinearMap(DiscreteForm(K, n), DiscreteForm(K, n+1))
+    notation "⋆(K, g)" = HodgeStar(K: CellComplex, g: CellMetric) = LinearMap(DiscreteForm(K, n), DiscreteForm(K, K.dim-n))
+
+    axiom DiscreteStokes(K: CellComplex, ω: DiscreteForm(K, n)):  
+      ∑_σ∈K.cells ω(∂σ) = ∑_σ∈K.cells (d(K, n)ω)(σ)   ; Discrete Stokes' theorem
+  }
+
+  STRUCTURE {  
+    [DiscreteRiemannianManifold:
+      {K: CellComplex, g: CellMetric,
+       ∀ σ,τ ∈ K.cells. g(σ, τ) = g(τ, σ),  ; Symmetry 
+       ∀ σ ∈ K.cells. g(σ, σ) > 0}  ; Positive definiteness
+    ]
+
+    [DiscreteConnection(M: DiscreteRiemannianManifold):
+      ∇: (DiscreteVector(M.K), DiscreteVector(M.K)) -> DiscreteVector(M.K) | 
+        ∇(X, fY + gZ) = f∇(X, Y) + g∇(X, Z),  ; Linearity
+        ∇(fX + gY, Z) = f∇(X, Z) + g∇(Y, Z),  ; Linearity
+        ∇(X, Y) - ∇(Y, X) = [X, Y]  ; Torsion-free
+    ]
+
+    [DiscreteCurvature(M: DiscreteRiemannianManifold, ∇: DiscreteConnection(M)):
+      R: (DiscreteVector(M.K), DiscreteVector(M.K), DiscreteVector(M.K)) -> DiscreteVector(M.K) |
+        R(X, Y)Z = ∇(X, ∇(Y, Z)) - ∇(Y, ∇(X, Z)) - ∇([X, Y], Z)
+    ]
+
+    [DiscreteLaplacian(M: DiscreteRiemannianManifold):  
+      Δ := ⋆(M.K, M.g)⁻¹ ∘ d(M.K, 1) ∘ ⋆(M.K, M.g) ∘ d(M.K, 0)
+    ]
+  }
+
+  PROOFS {
+    theorem DiscreteGaussBonnet(M: DiscreteRiemannianManifold):
+      ∑_σ∈M.K.cells (∫_σ Scal_g + ∫_∂σ κ_g) = 2πχ(M.K)
+    {
+      let K = M.K
+      let g = M.g
+      have ∑_σ∈K.cells (∫_σ Scal_g + ∫_∂σ κ_g) 
+           = ∑_σ∈K.cells ∫_σ (Scal_g + d ⋆ Ric_g)  ; Discrete Stokes' theorem
+           = ∑_σ∈K.cells ∫_σ (Scal_g + d(Ric_g(ν, ν) ⋆ 1))  ; ν is the dual of the volume form
+           = ∑_σ∈K.cells ∫_∂σ Ric_g(ν, ν) ⋆ 1  ; Discrete Stokes' theorem
+           = ∫_∂K Ric_g(ν, ν) ⋆ 1  ; Telescoping sum
+           = 2πχ(K)  ; Chern-Gauss-Bonnet theorem
+    }
+    
+    conjecture DiscreteWeylLaw(M: DiscreteRiemannianManifold, k: ℕ):
+      λ_k(Δ(M)) ∼ 4π(k/vol(M))^(2/M.K.dim) as k -> ∞
+    {
+      The conjecture states that the k-th eigenvalue λ_k of the discrete Laplacian Δ(M)
+      on a discrete Riemannian manifold M asymptotically behaves like 4π(k/vol(M))^(2/M.K.dim) 
+      as k tends to infinity, where vol(M) is the discrete Riemannian volume of M.
+    }
+  }
+}

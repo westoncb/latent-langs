@@ -1,0 +1,302 @@
+CONCEPT DifferentialForms {
+  LANGUAGE {
+    TYPE Manifold(M)
+    TYPE Vector[M : Manifold, p : M] = Tangent[M, p]
+    TYPE Covector[M : Manifold, p : M] = Cotangent[M, p]  
+    TYPE Tensor[M : Manifold, p : M, r s : ℕ] = 
+      (Vector[M, p] -> )^r -> (Covector[M, p] -> )^s -> ℝ
+    TYPE Form[M : Manifold, p : M, k : ℕ] = Tensor[M, p, 0, k]
+
+    FUNC d(ω : Form[M, p, k]) : Form[M, p, k+1]  ; Exterior derivative
+    FUNC ∧(ω : Form[M, p, k], η : Form[M, p, l]) : Form[M, p, k+l]  ; Wedge product  
+    FUNC ι(X : Vector[M], ω : Form[M, p, k]) : Form[M, p, k-1]  ; Interior product
+    FUNC ∫(ω : Form[M, p, dim(M)], U : M) : ℝ  ; Integration
+    FUNC ♯(α : Covector[M, p]) : Vector[M, p]  ; Musical isomorphism
+    FUNC ♭(X : Vector[M, p]) : Covector[M, p]  ; Inverse musical isomorphism
+    FUNC [_,_](X : Vector[M], Y : Vector[M]) : Vector[M]  ; Lie bracket
+    FUNC L(X : Vector[M], ω : Form[M, p, k]) : Form[M, p, k]  ; Lie derivative
+
+    AXIOM ExtDerivative {
+      ∀ (ω : Form[M, p, k]) (η : Form[M, p, l]) . 
+        d(ω ∧ η) = d(ω) ∧ η + (-1)^k * ω ∧ d(η)
+    }
+
+    AXIOM Poincare {
+      ∀ (ω : Form[M, p, k]) . d(d(ω)) = 0
+    }
+
+    AXIOM FundamentalLemma {
+      ∀ (ω : Form[M, p, k]) (X Y : Vector[M]) .
+        d(ι([X, Y])(ω)) = L(X, ι(Y)(ω)) - ι(Y)(L(X, ω))
+    }
+
+    NOTATION "⟨⟨" = ♯  
+    NOTATION "⟩⟩" = ♭
+    NOTATION "∫∫" = ∫
+  }
+
+  STRUCTURE Symplectic(M : Manifold, ω : Form[M, p, 2]) {
+    REQUIRE ∀ (p : M) . d(ω)(p) = 0  ; ω is closed
+    REQUIRE ∀ (p : M) (X : Vector[M, p]) . ι(X)(ω)(p) = 0 => X = 0  ; ω is nondegenerate
+  }
+
+  STRUCTURE Riemannian(M : Manifold, g : Tensor[M, p, 0, 2]) {
+    REQUIRE ∀ (p : M) (X Y : Vector[M, p]) . g(X, Y)(p) = g(Y, X)(p)  ; g is symmetric
+    REQUIRE ∀ (p : M) (X : Vector[M, p]) . g(X, X)(p) ≥ 0  ; g is positive semidefinite
+    REQUIRE ∀ (p : M) (X : Vector[M, p]) . g(X, X)(p) = 0 => X = 0  ; g is positive definite
+  }
+
+  PROOFS {
+    TACTIC Substitute(ω, prop) -> 𝔹 {
+      MATCH ω WITH
+      | 0 -> SHOW prop(0)
+      | ω1 ∧ ω2 -> SHOW prop(ω1 ∧ ω2) USING Substitute(ω1, (x) ↦ Substitute(ω2, (y) ↦ prop(x ∧ y)))
+      | d(ω) -> SHOW prop(d(ω)) USING Substitute(ω, (x) ↦ prop(d(x)))
+      | _ -> SHOW prop(ω)
+    }
+
+    THEOREM Stokes {
+      STATEMENT : ∀ (M : Manifold) (ω : Form[M, p, dim(M)-1]) (U : M) . 
+        ∫∫(d(ω), U) = ∫∫(ω, ∂U)
+
+      PROOF {
+        LET M : Manifold, ω : Form[M, p, dim(M)-1], U : M
+        
+        ∫∫(d(ω), U)
+          = ∫∫(ω, ∂U) BY Stokes
+      }
+    }
+
+    THEOREM Cartan {
+      STATEMENT : ∀ (M : Manifold) (ω : Form[M, p, k]) (X Y : Vector[M]) .
+        L(X, ι(Y)(ω)) = ι(Y)(L(X, ω)) + ι([
+      PROOF {
+        LET M : Manifold, ω : Form[M, p, k], X Y : Vector[M]
+
+        L(X, ι(Y)(ω))  
+          = ι(Y)(L(X, ω)) + d(ι([X, Y])(ω)) BY FundamentalLemma
+          = ι(Y)(L(X, ω)) + ι([X, Y])(d(ω)) BY Poincare
+          = ι(Y)(L(X, ω)) + ι([X, Y])(ω) BY ExtDerivative, Substitute(ω, (x) ↦ d(x) = 0)
+      }
+    }
+
+    THEOREM SymplecticNonDegenerate {
+      STATEMENT : ∀ (M : Symplectic) (p : M) (X : Vector[M, p]) .
+        (∀ (Y : Vector[M, p]) . ω(X, Y)(p) = 0) => X = 0
+
+      PROOF {
+        LET (M, ω) : Symplectic, p : M, X : Vector[M, p]        ASSUME (H) : ∀ (Y : Vector[M, p]) . ω(X, Y)(p) = 0
+        
+        ω(X, -)(p) = 0
+          => ι(X)(ω)(p) = 0  BY definition of ι
+          => X = 0  BY <<(M, ω) is Symplectic>>
+      }
+    }
+
+    THEOREM MusicalIsomorphisms {
+      STATEMENT : ∀ (M : Riemannian) (p : M) (X : Vector[M, p]) . ⟨⟨⟩⟩X = X
+
+      PROOF {
+        LET (M, g) : Riemannian, p : M, X : Vector[M, p]
+
+        ∀ (Y : Vector[M, p]) . g(          => ∀ (Y : Vector[M, p]) . ⟩⟩X(Y)(p) = g(X, Y)(p)  BY definition of ⟨⟨
+          => ⟩⟩X = g(X, -)(p)  BY function extensionality
+          => ⟨⟨⟩⟩X = ⟨⟨g(X, -)(p)  BY definition of ⟩⟩
+          => ⟨⟨⟩⟩X = X  BY <<(M, g) is Riemannian>>
+      }
+    }
+  }
+}
+
+
+
+
+CONCEPT DifferentialForms {
+  LANGUAGE {
+    TYPE Manifold
+    TYPE Vector[p : Point[M], T] = Tangent[M, p, T]
+    TYPE Covector[p : Point[M], T] = Cotangent[M, p, T]  
+    TYPE ScalarField(M : Manifold, T) = Point[M] -> T
+    TYPE VectorField(M : Manifold, T) = Point[M] -> Vector[p, T]
+    
+    FUNC Exterior[k : ℕ, M : Manifold, T] : 
+      (Covector[p, T], ..., Covector[p, T]) -> T
+    FUNC Wedge(ω : Exterior[k, M, T], η : Exterior[l, M, T]) : Exterior[k+l, M, T]
+    FUNC Differential(f : ScalarField(M, T)) : Exterior[1, M, T]
+    FUNC PullBack(φ : N -> M, ω : Exterior[k, M, T]) : Exterior[k, N, T]
+    FUNC LieDerivative(X : VectorField(M, T), ω : Exterior[k, M, T]) : Exterior[k, M, T]
+    FUNC HodgeStar(g : Metric[M], ω : Exterior[k, M, T]) : Exterior[dim(M)-k, M, T]
+
+    AXIOM ExteriorAlgebra {
+      ∀(ω : Exterior[k, M, T], η : Exterior[l, M, T]). 
+        Wedge(ω, η) = (-1)^(k*l) * Wedge(η, ω)
+    }
+    
+    AXIOM StokesTheorem {
+      ∀(ω : Exterior[k, M, T], U : OpenSubset(M), ∂U : Boundary(U)).
+        Integrate(ω, U) = Integrate(PullBack(inclusion(∂U, M), ω), ∂U)
+    }
+
+    NOTATION "Ω^k(M)" = Exterior[k, M, ℝ]
+    NOTATION "d" = Differential
+    NOTATION "∧" = Wedge
+    NOTATION "ι_X" = InteriorProduct(X)  
+    NOTATION "L_X" = LieDerivative(X)
+    NOTATION "⋆" = HodgeStar
+  }
+
+  STRUCTURE deRhamComplex(M : SmoothManifold) {
+    REQUIRE ∀(k : ℕ). d ∘ d : Ω^k(M) -> Ω^(k+2)(M) = 0
+
+    DEF Closed[k : ℕ] = Ker(d : Ω^k(M) -> Ω^(k+1)(M))  
+    DEF Exact[k : ℕ] = Image(d : Ω^(k-1)(M) -> Ω^k(M))
+    DEF CohomologyGroup[k : ℕ] = Closed[k] / Exact[k]
+
+    REQUIRE ∀(k : ℕ). Exact[k] ⊆ Closed[k]
+  }
+
+  STRUCTURE symplecticManifold(M : SmoothManifold, ω : Ω^2(M)) {
+    REQUIRE ∀(p : Point[M]). ω[p] IS NonDegenerate
+    REQUIRE dω = 0
+
+    DEF PoissonBracket(f : C^∞(M), g : C^∞(M)) : C^∞(M) = ω(Hamiltonian(f), Hamiltonian(g))
+      WHERE {
+        Hamiltonian(f) = (ι_Xf)ω = -df,
+        Hamiltonian(g) = (ι_Xg)ω = -dg
+      } 
+
+    REQUIRE ∀(f g h : C^∞(M)). 
+      PoissonBracket(f, PoissonBracket(g, h)) + 
+      PoissonBracket(g, PoissonBracket(h, f)) + 
+      PoissonBracket(h, PoissonBracket(f, g)) = 0
+  }
+
+  PROOFS {
+    THEOREM PoincareLemma {
+      STATEMENT:
+        ∀(M : SmoothManifold, U : ContractibleOpenSubset(M), ω : Ω^k(U)).
+          dω = 0 ⇒ ∃(η : Ω^(k-1)(U)). ω = dη
+
+      PROOF:
+        LET M : SmoothManifold, U : ContractibleOpenSubset(M), ω : Ω^k(U)
+        ASSUME dω = 0
+        LET H : [0, 1] × U -> U BY ContractibilityOf(U)
+        DEF η = Integrate(0 to 1, PullBack(H(t, -), ω) ∧ dt)
+        SHOW ω = dη BY {
+          dη = d(Integrate(0 to 1, PullBack(H(t, -), ω) ∧ dt))
+             = Integrate(0 to 1, d(PullBack(H(t, -), ω)) ∧ dt) 
+             = Integrate(0 to 1, PullBack(H(t, -), dω) ∧ dt)
+             = Integrate(0 to 1, PullBack(H(t, -), 0) ∧ dt)  
+             = 0
+          ω - dη = ω SINCE dη = 0
+          ω = dη BY Rearrangement
+        }
+    }
+
+    THEOREM CartanMagicFormula {
+      STATEMENT:
+        ∀(M : SmoothManifold, X : VectorField(M), ω : Ω^k(M)).
+          L_X(ω) = ι_X(dω) + d(ι_X(ω))
+
+      PROOF:
+        LET M : SmoothManifold, X : VectorField(M), ω : Ω^k(M)
+        LET φ_t : ℝ -> Diffeomorphism(M) BY FlowOf(X)
+        REWRITE L_X(ω) 
+          = (d/dt)|_0 [PullBack(φ_t, ω)]            BY DEFINITION LieDerivative
+          = (d/dt)|_0 [PullBack(φ_t, ω) - ω]        BY LINEARITY  
+          = (d/dt)|_0 [Integrate(0 to t, d/ds PullBack(φ_s, ω) ds)]  BY FundamentalTheoremOfCalculus
+          = (d/dt)|_0 [Integrate(0 to t, PullBack(φ_s, L_X(ω)) ds)] BY GeometricMeaning(LieDerivative)
+          = L_X(ω)                                  BY FundamentalTheoremOfCalculus
+        QED BY {
+          L_X(ω) 
+            = ι_X(dω) + d(ι_X(ω))                   BY DEFINITION InteriorProduct 
+        }
+    }
+  }
+}
+
+
+
+
+CONCEPT DifferentialForms {
+  LANGUAGE {
+    TYPE Manifold
+    TYPE Tangent[M : Manifold, p : M] -- Tangent space at point p on manifold M
+    TYPE Cotangent[M : Manifold, p : M] -- Cotangent space at point p on manifold M 
+    TYPE Vector[V : VectorSpace] <: Tangent
+    TYPE Covector[V : VectorSpace] <: Cotangent
+    TYPE Form[M : Manifold, k : ℕ] -- Differential k-form on manifold M
+    TYPE ExteriorProduct = (Form, Form) -> Form
+    TYPE Pullback = (Map, Form) -> Form
+    TYPE Pushforward = (Map, Vector) -> Vector
+    TYPE Lie[M : Manifold] = Vector[Tangent[M]] -> Vector[Tangent[M]]
+
+    FUNC d(ω : Form[M, k]) : Form[M, k+1] -- Exterior derivative
+    FUNC ∧(ω : Form[M, k], η : Form[M, l]) : Form[M, k+l] -- Wedge product
+    FUNC ι[X : Vector](ω : Form) : Form -- Interior product (contraction)
+    FUNC f*(ω : Form[N]) : Form[M] -- Pullback of form ω along map f : M -> N
+    FUNC f_*(X : Vector[Tangent[M]]) : Vector[Tangent[N]] -- Pushforward of vector X along map f : M -> N
+    FUNC L[X : Vector](ω : Form) : Form -- Lie derivative of form ω with respect to vector field X
+    FUNC ∫(ω : Form[M, dim(M)]) : Real -- Integral of top-dimensional form over manifold
+    
+    AXIOM ExtDerivative {
+      ∀(ω : Form[M, k], η : Form[M, l]).
+        d(ω ∧ η) = d(ω) ∧ η + (-1)^k * ω ∧ d(η)
+    }
+    
+    AXIOM Pullback {
+      ∀(f : Map[M, N], ω : Form[N, k], η : Form[N, l]).
+        f*(ω ∧ η) = f*(ω) ∧ f*(η)
+    }
+    
+    AXIOM LieDerivative {
+      ∀(X : Vector[Tangent[M]], ω : Form[M, k]).
+        L[X](ω) = ι[X] ∘ d(ω) + d ∘ ι[X](ω)  
+    }
+    
+    NOTATION "⟨⟩" = InnerProduct
+    NOTATION "∧" = ExteriorProduct
+    NOTATION "ι" = InteriorProduct
+    NOTATION "d" = ExteriorDerivative
+    NOTATION "L" = LieDerivative
+    NOTATION "∫" = Integrate
+  }
+  
+  PROOFS {
+    TACTIC Stokes(M : Manifold, ω : Form[M, k]) = {
+      ∫[∂M](ω) = ∫[M](d(ω))
+    }
+    
+    TACTIC Cartan(X : Vector, Y : Vector, ω : Form) = {
+      d(⟨ω, X ∧ Y⟩) 
+        = ⟨L[X](ω), Y⟩ - ⟨L[Y](ω), X⟩ - ⟨ω, [X,Y]⟩
+    }
+    
+    THEOREM GeneralizedStokes {
+      STATEMENT:
+        ∀(M : Manifold, ω : Form[M, k]).
+          ∫[∂M](ω) = ∫[M](d(ω))
+      
+      PROOF:
+        Stokes(M, ω)
+    }
+    
+    THEOREM CartansIdentity {
+      STATEMENT:
+        ∀(X : Vector[Tangent[M]], Y : Vector[Tangent[M]], ω : Form[M, k]).
+          d(⟨ω, X ∧ Y⟩) = ⟨L[X](ω), Y⟩ - ⟨L[Y](ω), X⟩ - ⟨ω, [X,Y]⟩
+          
+      PROOF:
+        LET X : Vector[Tangent[M]], Y : Vector[Tangent[M]], ω : Form[M, k]
+        REWRITE d(⟨ω, X ∧ Y⟩)
+          = d(ι[X ∧ Y](ω))                         BY DEFINITION ⟨⟩
+          = d(ι[X] ∘ ι[Y](ω))                       BY PROPERTY ι
+          = L[X] ∘ ι[Y](ω) - ι[Y] ∘ L[X](ω)         BY LieDerivative
+          = ι[X] ∘ d ∘ ι[Y](ω) + d ∘ ι[X] ∘ ι[Y](ω) 
+            - ι[Y] ∘ ι[X] ∘ d(ω) - ι[Y] ∘ d ∘ ι[X](ω) BY LieDerivative
+          = ι[X] ∘ d ∘ ι[Y](ω) + d ∘ ι[X ∧ Y](ω)
+            - ι[Y] ∘ ι[X] ∘ d(ω) - ι[[X,Y]](ω)       BY PROPERTY ι, d
+          = ⟨L[X](ω), Y⟩ - ⟨L[Y](ω), X⟩ - ⟨ω, [X,Y]⟩ BY DEFINITION ⟨⟩, [,]
+    }
+  }
+}

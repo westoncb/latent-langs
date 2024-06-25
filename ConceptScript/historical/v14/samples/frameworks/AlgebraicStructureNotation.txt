@@ -1,0 +1,201 @@
+CONCEPT AlgebraicStructureNotation {
+  LANGUAGE {
+    type Set
+    type BinOp = Func(Set, Set) -> Set
+    type UnOp = Func(Set) -> Set
+    type Hom = Func(Set, Set)
+    
+    S := s | S + S | S * S | S ∘ S | S⁻¹ | 0 | 1 | d[S] | ∫[S] | ⟨S, S⟩ | [S, S] | S ≈ S | δS 
+    where  
+      s is an element of a Set
+      + is a binary operation (e.g. addition, join, union, tensor product)
+      * is a binary operation (e.g. multiplication, meet, intersection, composition) 
+      ∘ is a binary operation (e.g. composition, convolution, action)
+      ⁻¹ is a unary operation (e.g. inverse, complement, dual)
+      0 is an identity element for +
+      1 is an identity element for *
+      d[S] is a derivation (e.g. Lie derivative, differential, boundary)  
+      ∫[S] is an integration (e.g. integral, measure, cohomology)
+      ⟨S, S⟩ is an inner product or pairing
+      [S, S] is a Lie bracket or commutator 
+      S ≈ S is a homomorphism or morphism
+      δS is a perturbation or variation
+      
+    pred Assoc(∙: BinOp)
+    pred Comm(∙: BinOp)  
+    pred Unital(∙: BinOp, e: Set)
+    pred Inv(∙: BinOp, ⁻¹: UnOp)
+    pred Dist(+: BinOp, *: BinOp)
+    pred Leibniz(d: UnOp, *: BinOp)
+    pred AntiComm(∙: BinOp)
+    pred Jacobi(∙: BinOp)
+  }
+   
+  STRUCTURE {
+    AlgebraicStructureAxioms: {
+      Assoc(+), Comm(+), Unital(+, 0), Inv(+, ⁻¹)                     ; Abelian group
+      Assoc(*), Unital(*, 1)                                         ; Monoid
+      Dist(+, *), Inv(*, ⁻¹)                                         ; Ring  
+      Comm(*)                                                        ; Commutative ring
+      Leibniz(d, *)                                                  ; Differential ring 
+      AntiComm([,]), Jacobi([,]), Leibniz(d, [,]), Unital([,], 0)   ; Lie algebra
+    }
+  }
+  
+  PROOFS {
+    tactic SubstProp(φ: S -> Prop, ψ: S -> Prop):
+      (∀ x. φ(x) ⟺ ψ(x)) ⊢ φ(S) ⟺ ψ(S)
+      
+    tactic Linearize(S + δS, ∙): 
+      S + δS ≈ S + d[S] ∘ δS
+    
+    tactic LeibnizRule(d, op, *):
+      Leibniz(d, op) ⊢ d[S * T] ≈ d[S] * T + S * d[T]  
+      
+    theorem Derivation(S: S, d: UnOp):
+      Leibniz(d, *) ⊢ d[1] ≈ 0 ∧ d[S + T] ≈ d[S] + d[T] 
+    {
+      assume Leibniz(d, *) 
+      have d[1] ≈ d[1 * 1] ≈ d[1] * 1 + 1 * d[1]   ; By Leibniz rule
+      hence d[1] ≈ 0                               ; Solve 
+      have d[S + T] ≈ d[S] + d[T]                  ; Linearize(S + T, +)
+    }
+    
+    theorem Automorphism(φ: Hom):
+      (∀ S, T. φ(S + T) ≈ φ(S) + φ(T)) ∧ (∀ S, T. φ(S * T) ≈ φ(S) * φ(T)) ∧ φ(1) ≈ 1 ⊢ 
+        φ ∘ φ⁻¹ ≈ id ∧ φ⁻¹ ∘ φ ≈ id
+    {
+      assume (∀ S, T. φ(S + T) ≈ φ(S) + φ(T)) ∧ (∀ S, T. φ(S * T) ≈ φ(S) * φ(T)) ∧ φ(1) ≈ 1
+      let ψ := φ⁻¹
+      suffices to show ∀ S. φ(ψ(S)) ≈ S ∧ ψ(φ(S)) ≈ S  ; Inverse laws
+      have φ(ψ(S + T)) ≈ φ(ψ(S) + ψ(T))                 ; Homomorphism 
+                       ≈ φ(ψ(S)) + φ(ψ(T))             ; Homomorphism
+      hence φ ∘ ψ respects +                            ; Substitution 
+      have φ(ψ(S * T)) ≈ φ(ψ(S) * ψ(T))                 ; Homomorphism
+                       ≈ φ(ψ(S)) * φ(ψ(T))             ; Homomorphism
+      hence φ ∘ ψ respects *                            ; Substitution
+      have φ(ψ(1)) ≈ φ(1) ≈ 1                           ; Identity preservation  
+      have φ ∘ ψ ≈ id                                   ; Uniqueness of homomorphisms
+      have ψ ∘ φ ≈ id                                   ; By symmetric argument
+    }
+      
+    theorem LieAlgebraHom(φ: Hom):  
+      (∀ S, T. φ([S, T]) ≈ [φ(S), φ(T)]) ⊢ Leibniz(φ ∘ d, [,]) 
+    {
+      assume ∀ S, T. φ([S, T]) ≈ [φ(S), φ(T)]
+      suffices to show φ(d[S, T]) ≈ [φ(d[S]), φ(T)] + [φ(S), φ(d[T])]  ; Leibniz identity
+      have φ(d[S, T]) ≈ φ(d[S * T] - d[S] * T - S * d[T])              ; Linearized Leibniz 
+                      ≈ φ(d[S * T]) - φ(d[S] * T) - φ(S * d[T])       ; Homomorphism 
+                      ≈ [φ(d[S]), φ(T)] + [φ(S), φ(d[T])]             ; Jacobi identity
+    }
+  }
+}
+
+
+
+
+
+CONCEPT AlgebraicStructureNotation {
+  LANGUAGE {
+    type Set
+    type BinOp = Fun(Set, Set, Set)
+    type UnOp = Fun(Set, Set)
+    type Hom = Fun(Set, Set)
+    
+    S := s | S + S | S * S | S⁻¹ | 0 | 1 | ∂(S) | Ker(f) | Im(f) | S ≅ S | S ≌ S
+    where 
+      s is an element of a set
+      + is a binary operation 
+      * is a binary operation (often composition)
+      ⁻¹ is a unary operation (inversion)
+      0 is an identity element for +
+      1 is an identity element for *
+      ∂ is a unary operation (boundary/derivation)
+      Ker(f) is the kernel of homomorphism f
+      Im(f) is the image of homomorphism f
+      ≅ is an isomorphism relation
+      ≌ is a homomorphism relation
+
+    notation "S + T" = Binary(S: Set, T: Set)  
+    notation "S * T" = Binary(S: Set, T: Set)
+    notation "S⁻¹" = Unary(S: Set)
+    notation "∂(S)" = Unary(S: Set)
+    notation "S ≅ T" = Iso(S: Set, T: Set)  
+    notation "S ≌ T" = Hom(S: Set, T: Set)
+
+    pred Abelian(S: Set, +: BinOp) 
+    pred Associative(S: Set, *: BinOp)
+    pred Identity(S: Set, e, *: BinOp)
+    pred Inverse(S: Set, ⁻¹: UnOp, *: BinOp)
+    pred Exact(S: Set, T: Set, f: Hom, g: Hom)
+  }
+
+  STRUCTURE {
+    GroupAxioms: {
+      ∀ G: Set, +: BinOp.
+        Abelian(G, +) ∧ Identity(G, 0, +) ∧ Inverse(G, ⁻¹, +) ⇒ Group(G)
+    }
+    
+    RingAxioms: {
+      ∀ R: Set, +: BinOp, *: BinOp.
+        Group(R, +) ∧ Abelian(R, +) ∧ 
+        Monoid(R, *) ∧ Distributive(*, +) ⇒ Ring(R)
+    }
+
+    ModuleAxioms: {
+      ∀ R: Ring, M: Ab, *: BinOp.
+        LeftAction(R, M, *) ⇒ LeftModule(R, M)
+    }
+      
+    ChainConditions: {
+      ∀ S: Set, f: Hom, g: Hom.
+        Exact(Ker(f), S, f, g) ∧ Exact(S, Im(f), f, g) ⇒ 
+          Exact(Ker(f), Im(f), g∘f, 0)  
+    }
+      
+    DualityCorrespondence: {
+      ∀ V: VectorSpace. 
+        V ≅ (V*)* ∧ dimV = dimV*
+    }
+  }
+  
+  PROOFS {
+    theorem HomomorphismTheorem(G, H: Group, f: Hom(G, H)): 
+      G/Ker(f) ≅ Im(f)
+    {
+      let π: Hom(G, G/Ker(f)) = Natural(Ker(f))
+      let i: Hom(Im(f), H) = Inclusion(H)
+      have Exact(Ker(f), G, f, π)        ; By definition of quotient
+      have Exact(Im(f), H, i, f)         ; By definition of image
+      have Exact(Ker(f), Im(f), i∘f, 0)  ; By ChainConditions
+      let φ = InducedMap(π, i∘f)
+      IsIsomorphism(φ)                   ; By exactness, 1st isomorphism thm
+    }
+    
+    theorem SchurLemma(V: IrrRepSpace, W: RepSpace, f: Hom(V,W)):
+      (f = 0) ∨ Iso(V, W)
+    {  
+      assume f ≠ 0
+      Ker(f) = 0                       ; f injective by irreducibility
+      Im(f) ≤ W                        ; Im(f) is a subrepresentation
+      have IrrRepSpace(Im(f))          ; V irreducible ⇒ Im(f) irreducible
+      Im(f) = W                        ; Subrepresentation theorem
+      hence Iso(V, W)                  ; f injective and surjective
+    }
+
+    theorem DoubleCommutant(A: Algebra, V: RepSpace):  
+      End(V)ᵃ = Cent(End(V), A)
+    {
+      Aᵃ = Cent(End(V), A)             ; By definition of commutant
+      (Aᵃ)ᵃ = Cent(End(V), Aᵃ)         ; Applying definition again  
+      have A ⊆ (Aᵃ)ᵃ                   ; A ⊆ Cent(End(V), Cent(End(V), A))
+      have dimA = dim(Aᵃ)ᵃ             ; By Jacobson density theorem
+      hence End(V)ᵃ = Cent(End(V), A)  ; By double inclusion
+    } 
+  }
+}
+
+This Concept defines an abstract language for expressing various algebraic structures and their properties. It includes notation for common operations and axioms, and proves some fundamental theorems that hold in many algebraic contexts.
+The language portion defines a type Set and various unary and binary operations on Sets. It uses notation similar to the MaterialsScienceNotation example, with operations like +, *, ∘, ⁻¹ representing abstract algebraic operations. Axioms like associativity, commutativity, distributivity, etc. are defined as predicates.
+The structure portion lists common axiomatic combinations that define familiar algebraic structures like groups, rings, and Lie algebras.
+The proofs portion includes some basic tactics and theorems. The Derivation theorem shows that a derivation is fully determined by the Leibniz rule and linearity. The Automorphism theorem proves that a homomorphism φ with a two-sided inverse is an automorphism. The LieAlgebraHom theorem demonstrates that a Lie algebra homomorphism commutes with the derivative.

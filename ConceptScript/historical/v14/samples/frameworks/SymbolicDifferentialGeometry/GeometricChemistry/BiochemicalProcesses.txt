@@ -1,0 +1,250 @@
+CONCEPT BiochemicalProcesses {
+  EXTENDS GeometricChemistry {
+    type Biomolecule = Molecule | Macromolecule
+    type Macromolecule = Polymer(Monomer)
+    type Monomer = Enumeration(AminoAcid, Nucleotide, Carbohydrate, Lipid)
+    
+    type Enzyme = Biomolecule with Catalysis
+    type Substrate = Molecule
+    type Catalysis = Function(Substrate, Product)
+    type Product = Molecule
+    
+    type MetabolicPathway = DirectedGraph(BiochemicalReaction)
+    type BiochemicalReaction = ChemicalReaction with Catalysis
+    type Flux = Function(MetabolicPathway, ℝ)
+    
+    type MembraneStructure = SmoothManifold(Dimension(2))
+    type LipidBilayer = EmbeddedSubmanifold(MembraneStructure)
+    type MembraneProtein = Biomolecule on MembraneStructure
+    type IonChannel = MembraneProtein with Conductance
+    type Conductance = Function(Voltage, Current)
+    type Voltage = ℝ
+    type Current = ℝ
+    
+    type GeneExpression = Function(Gene, TranscriptionRate)  
+    type Gene = Sequence(Nucleotide)
+    type TranscriptionRate = ℝ
+    type TranscriptionFactor = Biomolecule with GeneRegulation
+    type GeneRegulation = Function(Gene, TranscriptionRate)
+    
+    type SignalingPathway = DirectedGraph(SignalingInteraction)
+    type SignalingInteraction = Function(Biomolecule, Biomolecule)
+    type LigandReceptor = SignalingInteraction
+    type PhosphorylationCascade = SignalingPathway
+    
+    notation "𝓜" = MetabolicPathway  
+    notation "𝓕" = Flux
+    notation "𝓖" = GeneExpression
+    notation "𝓡" = GeneRegulation
+    notation "𝓢" = SignalingPathway
+  }
+
+  STRUCTURE {
+    EnzymeKinetics(E: Enzyme, S: Substrate, P: Product):
+      MichaelisMenten(E, S, P) = {
+        v = v_max * [S] / (K_M + [S]) 
+        where v is reaction rate, v_max is maximum rate, K_M is Michaelis constant
+      }
+      
+    MetabolicFluxBalance(𝓜: MetabolicPathway, 𝓕: Flux):
+      SteadyState(𝓜) = {
+        ∑(𝓕(r) for r in 𝓜) = 0  ; Influx equals outflux at each node
+      }
+                  
+    NernstPotential(I: IonChannel, V: Voltage):
+      GoldmanHodgkinKatz(I, V) = {
+        V = (R * T / (z * F)) * ln((P_K * [K⁺]_out + P_Na * [Na⁺]_out) / (P_K * [K⁺]_in + P_Na * [Na⁺]_in))
+        where R is gas constant, T is temperature, F is Faraday's constant, 
+        P_ion is permeability, [ion] is concentration, in/out is inside/outside cell  
+      }
+                           
+    HillEquation(R: TranscriptionFactor, G: Gene):
+      CooperativityOfBinding(R, G) = {  
+        𝓡(G) = 𝓡_max * [R]^n / (K_d^n + [R]^n)  
+        where 𝓡_max is maximal expression, K_d is dissociation constant, n is Hill coefficient
+      }
+                               
+    MassActionKinetics(𝓢: SignalingPathway):
+      DifferentialEquations(𝓢) = {
+        d[X_i]/dt = ∑(k_prod * ∏([X_j] for X_j in Reactants(r)) 
+                    - k_cons * ∏([X_j] for X_j in Products(r))
+                    for r in 𝓢)
+        for each species X_i, where k_prod/k_cons are rate constants                 
+      }
+  }
+  
+  PROOFS {
+    theorem ThermodynamicsOfMetabolism(𝓜: MetabolicPathway):
+      SteadyState(𝓜) ⇒ MinimumFreeEnergy(𝓜)
+    {
+      assume SteadyState(𝓜)
+      hence ∑(𝓕(r) for r in 𝓜) = 0  ; Flux balance 
+      
+      let G(r) = ΔG°(r) + R * T * ln(∏([P_i] for P_i in Products(r)) / ∏([S_j] for S_j in Reactants(r))) 
+        be the free energy of reaction r, where ΔG° is standard free energy
+      have 𝓕(r) = k * (1 - exp(G(r) / (R * T))) near equilibrium, for some constant k 
+        ; Flux-force relationship from linear irreversible thermodynamics
+        
+      let G(𝓜) = ∑(𝓕(r) * G(r) for r in 𝓜) be the total free energy dissipation rate
+      have dG(𝓜)/dt = ∑(𝓕(r) * dG(r)/dt for r in 𝓜) = 0 at steady state
+      hence G(𝓜) is minimized at steady state
+        ; Prigogine's minimum entropy production principle  
+    }
+
+    theorem ControlOfGeneExpression(𝓖: GeneExpression, 𝓡: GeneRegulation):  
+      Differentiation(Cell) ⇒ Attractor(𝓖 ∘ 𝓡)
+    {
+      assume Differentiation(Cell)
+      hence GeneExpressionPattern(Cell) is stable and heritable
+      
+      let 𝓖 ∘ 𝓡 be the composed gene regulatory network
+      HillEquation(R, G) for each transcription factor R and gene G
+      hence 𝓖 ∘ 𝓡 is a nonlinear dynamical system
+      
+      let Jacobian(𝓖 ∘ 𝓡) be the linearization at a fixed point
+      have Eigenvalues(Jacobian(𝓖 ∘ 𝓡)) < 0 for stable fixed points  
+        ; Lyapunov stability theorem
+      hence Attractors(𝓖 ∘ 𝓡) correspond to cell types
+        ; Waddington's epigenetic landscape
+    }
+    
+    theorem UltrastructureOfMembranes(L: LipidBilayer, P: MembraneProtein):
+      Fluidity(L) ∧ Mosaic(P) ⇒ LateralDiffusion(P on L)  
+    {
+      assume Fluidity(L) ∧ Mosaic(P)
+      hence L is a 2D fluid and P are embedded in L
+      
+      let D be the diffusion coefficient of P on L
+      have D = k_B * T / (4 * π * η * R)  ; Saffman-Delbrück equation
+        where k_B is Boltzmann constant, T is temperature, 
+        η is viscosity, R is radius of P
+        
+      let MSD(t) = ⟨|r(t) - r(0)|^2⟩ be the mean squared displacement of P over time t  
+      have MSD(t) = 4 * D * t for lateral diffusion in a membrane
+        ; Einstein relation for Brownian motion in 2D
+        
+      hence LateralDiffusion(P on L) with coefficient D  
+    }
+    
+    theorem Allostery(E: Enzyme, S: Substrate, R: Regulator):
+      let Regulation(E by R) = {k_cat(E) = k_cat(E, 0) * (1 + [R] / K_R) / (1 + [R] / K_R')}
+      Regulation(E by R) ⇒ Cooperativity(E) 
+    {
+      assume Regulation(E by R)
+      let MWC(E, S, R) = {
+        Y(S, R) = L * (1 + S/K_S)^n / ((1 + S/K_S)^n + L * (1 + S/(K_S * c))^n)  ; Fraction of active enzyme  
+        k_cat(E, [R]) = k_cat(0) * Y(S, R)  ; Catalytic rate
+        L(R) = L(0) * exp(-ΔG_R / (R * T))  ; R tunes the allosteric constant L
+      } where L is [inactive]/[active], K_S is dissociation constants, 
+        c is ratio of K_S, n is number of subunits, ΔG_R is binding energy of R
+        
+      Regulation(E by R) ⇒ MWC(E, S, R)  ; Derived from the model assumptions
+        
+      have SigmoidalCurve(Y(S, R) vs S) with Hill coefficient n_H ≈ n  
+        ; Emergent positive cooperativity  
+      hence Cooperativity(E)
+    }
+  }
+}
+
+
+
+
+CONCEPT AlzheimersDisease {
+  EXTENDS BiochemicalProcesses {
+    type Neuron = (Compartments: (Soma: Compartment, Dendrites: List<Compartment>, Axon: Compartment),
+                   Mitochondria: List<Compartment>,
+                   Synapses: List<Synapse>,
+                   NeurotransmitterReceptors: List<Receptor>,
+                   SignalingPathways: List<SignalingCascade>,
+                   MetabolicNetwork: MetabolicNetwork)
+                   
+    type Synapse = (PresynapticTerminal: Compartment, PostsynapticTerminal: Compartment, 
+                    Cleft: Compartment, Neurotransmitters: List<Molecule>,
+                    Receptors: List<Receptor>, SignalingPathways: List<SignalingCascade>)
+                    
+    type Mitochondrion = (Matrix: Compartment, InnerMembrane: Membrane, OuterMembrane: Membrane,
+                          ElectronTransportChain: List<Enzyme>, ATP_Synthase: Enzyme,
+                          MetabolicNetwork: MetabolicNetwork)
+    
+    type Microglia = (Cytosol: Compartment, Phagosomes: List<Compartment>,
+                      InflammatorySignaling: List<SignalingCascade>,
+                      MetabolicNetwork: MetabolicNetwork)
+                      
+    type Astrocyte = (Cytosol: Compartment, EndoplasmicReticulum: Compartment,
+                      GlutamateUptake: TransportProcess, LactateRelease: TransportProcess,
+                      GlycogenMetabolism: List<MetabolicReaction>,
+                      CalciumSignaling: List<SignalingCascade>) 
+    
+    type OligodendrocytePrecursorCell = (Cytosol: Compartment, Nucleus: Compartment,
+                                         DifferentiationSignaling: List<SignalingCascade>)
+                                         
+    type NeuronalNetwork = (Neurons: List<Neuron>, Synapses: List<Synapse>,
+                            Connectivity: List<(Neuron, Neuron)>,
+                            ActivityPatterns: List<Pattern>)
+  }
+  
+  HYPOTHESIS MitochondrialCascade {
+    let N be a NeuronalNetwork in a brain region affected by AD (e.g. hippocampus, cortex)
+    
+    for each Neuron in N:
+      let M be the Mitochondria
+      assume IonGradientImbalance(M) due to age, genetics, or environmental factors
+        ; Impaired calcium homeostasis and membrane potential regulation
+      hence ElectronTransportChain(M) is disrupted 
+        ; Reduced efficiency of oxidative phosphorylation
+      hence ATP_Synthase(M) activity is reduced
+        ; Decreased ATP production
+      hence MetabolicNetwork(Neuron) shifts towards glycolysis and lactate production
+        ; Warburg effect and metabolic reprogramming
+      hence ROS_Production(M) increases and ROS_Detoxification(M) decreases
+        ; Oxidative stress and accumulation of reactive oxygen species (ROS)
+        
+    for each Astrocyte connected to N:  
+      uptake the excess Lactate released by Neurons
+        ; Astrocyte-neuron lactate shuttle
+      upregulate GlycogenMetabolism to provide energy substrates to Neurons
+        ; Metabolic coupling and support
+      but overload of Lactate and depletion of Glycogen impairs normal functions
+        ; Reduced glutamate uptake, dysregulated calcium signaling, etc.
+        
+    for each Synapse in N:
+      let Pre = PresynapticTerminal and Post = PostsynapticTerminal  
+      assume InsufficientATP(Pre) and InsufficientATP(Post) 
+        ; Due to mitochondrial dysfunction and metabolic impairment
+      hence NeurotransmitterRelease(Pre) is reduced 
+        ; Impaired synaptic vesicle cycling and exocytosis
+      hence NeurotransmitterReuptake(Pre) is reduced
+        ; Impaired recycling and clearance of neurotransmitters from Cleft
+      hence NeurotransmitterReceptorActivation(Post) is altered
+        ; Hypo- or hyper-activation depending on the type of receptor 
+      hence SignalingCascades(Post) are dysregulated
+        ; Aberrant downstream effects on gene expression, cytoskeleton, etc.
+      hence SynapticPlasticity(Synapse) is impaired
+        ; Reduced capacity for learning and memory
+        
+    for each Microglia interacting with N:
+      detect the ROS, Lactate, and abnormal signaling molecules released by Neurons
+        ; Sensing of damage-associated molecular patterns (DAMPs)
+      activate InflammatorySignaling and release Cytokines, Chemokines
+        ; Shift towards a pro-inflammatory state (M1 polarization)  
+      recruit more Microglia to the site of damage  
+        ; Amplification of neuroinflammation
+      phagocytose the dysfunctional Synapses and Neurons
+        ; Synaptic stripping and neuronal loss  
+        
+    for each OligodendrocytePrecursorCell (OPC) in the vicinity of N:
+      sense the InflammatorySignals released by Microglia
+      activate DifferentiationSignaling to transform into mature Oligodendrocytes
+      but the newly generated Oligodendrocytes fail to properly myelinate the Axons
+        ; Due to the hostile inflammatory environment and impaired metabolic support
+      hence SaltatoryConduction(Axon) is disrupted and ActionPotentialPropagation(Neuron) slows down
+        ; Reduced efficiency and speed of information processing
+        
+    as a result:
+      the Connectivity and ActivityPatterns of N become progressively disturbed
+        ; Loss of synapses, altered neuronal excitability, disrupted network oscillations 
+      leading to Neurodegeneration and Cognitive Decline characteristic of AD
+        ; Accumulation of damage over years and decades 
+  }
+}

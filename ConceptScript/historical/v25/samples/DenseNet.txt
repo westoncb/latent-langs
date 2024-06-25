@@ -1,0 +1,203 @@
+CONCEPT DenseNet {
+  LANGUAGE {
+    TYPE Tensor[T, n...]
+    TYPE ConvLayer = Tensor[Real, 3, 3, in, out] -> Tensor[Real, height, width, out] 
+    TYPE DenseBlock = List[ConvLayer]
+    TYPE TransitionLayer = ConvLayer
+    TYPE ClassificationLayer = Tensor[Real, in] -> Tensor[Real, numClasses]
+
+    FUNC NumLayers : Nat
+    FUNC GrowthRate : Nat
+    FUNC Theta : Real
+    FUNC Compress : Real
+
+    FUNC Concat(tensors... : Tensor[Real, n...]) : Tensor[Real, n-1...]
+    FUNC BatchNorm(x : Tensor[Real, n...]) : Tensor[Real, n...]
+    FUNC ReLU(x : Tensor[Real, n...]) : Tensor[Real, n...]
+    FUNC Conv(filters : Tensor[Real, 3, 3, in, out], x : Tensor[Real, h, w, in]) : Tensor[Real, h, w, out]
+    FUNC AvgPool(x : Tensor[Real, h, w, c]) : Tensor[Real, h/2, w/2, c]
+    FUNC Softmax(x : Tensor[Real, n]) : Tensor[Real, n]
+
+    NOTATION "+" = Concat
+    NOTATION "BN" = BatchNorm
+    NOTATION "R" = ReLU  
+    NOTATION "C" = Conv
+    NOTATION "P" = AvgPool
+    NOTATION "S" = Softmax
+  }
+
+  STRUCTURE DenseNetModel(numBlocks : Nat, k : Nat, theta : Real) {
+    REQUIRE numBlocks > 2 ∧ k > 0 ∧ 0 < theta ≤ 1
+
+    DEF NumLayers : Nat = 2 * numBlocks  
+    DEF GrowthRate : Nat = k
+    DEF Theta : Real = theta
+    DEF Compress : Real = 0.5
+
+    DEF DenseLayer(input : Tensor[Real, h, w, in]) : Tensor[Real, h, w, in+k] =
+      LET convolved = C(Tensor[Real, 3, 3, in, 4*k], input),
+          normalized = BN(convolved),
+          activated = R(normalized),  
+          compressed = C(Tensor[Real, 3, 3, 4*k, k], activated)
+      IN input + compressed
+
+    DEF DenseBlock(input : Tensor[Real, h, w, in], numLayers : Nat) : Tensor[Real, h, w, out] =
+      MATCH numLayers {
+        0 -> input  
+        n -> DenseBlock(DenseLayer(input), n-1)
+      }
+      INVARIANT out = in + numLayers * GrowthRate
+
+    DEF TransitionLayer(input : Tensor[Real, h, w, in]) : Tensor[Real, h/2, w/2, in*Compress] =
+      LET normalized = BN(input),
+          activated = R(normalized),
+          compressed = C(Tensor[Real, 3, 3, in, in*Compress], activated),
+          pooled = P(compressed)  
+      IN pooled
+
+    DEF ForwardPass(input : Tensor[Real, 224, 224, 3]) : Tensor[Real, numClasses] =
+      LET normalized = BN(input),
+          convolved = C(Tensor[Real, 7, 7, 3, 2*k], normalized),
+          pooled = P(convolved),
+          block1 = DenseBlock(pooled, NumLayers / 4),
+          transition1 = TransitionLayer(block1),
+          block2 = DenseBlock(transition1, NumLayers / 4),  
+          transition2 = TransitionLayer(block2),
+          block3 = DenseBlock(transition2, NumLayers / 4),
+          transition3 = TransitionLayer(block3),  
+          block4 = DenseBlock(transition3, NumLayers / 4),
+          pooled2 = P(block4),
+          flattened = Tensor[Real, block4.out](pooled2),
+          output = ClassificationLayer(flattened)
+      IN S(output)
+  }
+
+  PROOFS {
+    THEOREM DenseNetEfficiency {
+      STATEMENT:
+        ∀ (L : Nat) (k : Nat) (theta : Real).
+          LET M = DenseNetModel(L/2, k, theta),
+              totalParams = Sum(Map(NumParams, M.Layers))  
+          IN totalParams < 10 * L * k^2
+
+      PROOF:
+        LET L : Nat, k : Nat, theta : Real, M = DenseNetModel(L/2, k, theta)
+        LET totalParams = Sum(Map(NumParams, M.Layers))
+        REWRITE totalParams
+          < (L/2) * (9 * (3 + theta*L*k)^2 + 9 * (theta*L*k)^2) + 9 * (theta*L*k)^2 + 9 * k^2  BY ParameterCount  
+          < (L/2) * (9 * (4*L*k)^2) + 9 * (L*k)^2 + 9 * k^2                                BY 0 < theta ≤ 1
+          < (L/2) * (144 * L^2 * k^2) + 9 * L^2 * k^2 + 9 * k^2                            BY ARITHMETIC  
+          < 72 * L^3 * k^2 + 9 * L^2 * k^2 + 9 * k^2
+          < 72 * L^3 * k^2 + 9 * L^3 * k^2                                                 BY L > 2
+          < 81 * L^3 * k^2  
+          < 10 * L * k^2                                                                   BY L > 2
+    }
+  }
+}
+
+CONCEPT DenseNet {
+  LANGUAGE {
+    TYPE Tensor[T, n...]
+    TYPE ConvLayer[in_ch, out_ch, kernel, stride, padding]
+    TYPE DenseBlock[in_ch, growth_rate, num_layers] 
+    TYPE TransitionLayer[in_ch, out_ch]
+    TYPE ClassificationLayer[in_ch, num_classes]
+
+    FUNC DenseLayer(in : Tensor[Real, h, w, in_ch]) : Tensor[Real, h, w, in_ch + growth_rate]
+    FUNC Concatenate(tensors... : Tensor[Real, h, w, ch]) : Tensor[Real, h, w, sum(ch)]
+
+    NOTATION "BN" = BatchNormalization
+    NOTATION "ReLU" = RectifiedLinearUnit  
+    NOTATION "Conv(in_ch, out_ch, kernel, stride)" = ConvLayer[in_ch, out_ch, kernel, stride, kernel/2]
+    NOTATION "DenseBlock(in_ch, g, n)" = DenseBlock[in_ch, g, n]
+    NOTATION "Transition(in_ch)" = TransitionLayer[in_ch, in_ch/2]  
+    NOTATION "Classifier(in_ch, out_ch)" = ClassificationLayer[in_ch, out_ch]
+  }
+
+  STRUCTURE DenseNetModel[growth_rate, block_config, compression, num_classes] {
+    DEF input : Tensor[Real, 224, 224, 3]
+    
+    DEF FirstConv : Tensor[Real, 112, 112, 64] = 
+      ReLU(BN(Conv(3, 64, 7, 2)(input)))
+
+    DEF DenseBlocks : Tensor[Real, 7, 7, num_channels] = 
+      LET num_channels = 64,
+          MakeBlock(in_ch, i) = 
+            LET block = DenseBlock(in_ch, growth_rate, block_config[i]),
+                trans = Transition(in_ch + growth_rate * block_config[i])  
+            IN (trans(block), in_ch + growth_rate * block_config[i] * compression)
+      IN Fold(MakeBlock, Zip([num_channels] + Drop(num_channels, Length(block_config)-1), Range(Length(block_config))), FirstConv)  
+
+    DEF Output : Tensor[Real, num_classes] =
+      Classifier(num_channels, num_classes)(GlobalAvgPool(DenseBlocks))
+
+    REQUIRE Length(block_config) = 4
+    REQUIRE ∀ (i : 0..3). block_config[i] ∈ [6, 12, 24, 16]
+    REQUIRE compression ∈ [0, 1]
+  }
+
+  FUNC DenseLayer(in : Tensor[Real, h, w, in_ch]) -> Tensor[Real, h, w, in_ch + growth_rate] =
+    LET conv1 = ReLU(BN(Conv(in_ch, 4*growth_rate, 1, 1)(in))),  
+        conv2 = ReLU(BN(Conv(4*growth_rate, growth_rate, 3, 1)(conv1)))
+    IN Concatenate(in, conv2)
+
+  PROOFS {
+    TACTIC ParameterCount(layer) = Product(Parameters(layer))
+
+    TACTIC FeatureMapSize(layer, h, w) = [h / Stride(layer), w / Stride(layer), OutChannels(layer)]
+
+    THEOREM DenseBlockGrowth {
+      STATEMENT:
+        ∀ (in_ch, growth_rate, num_layers).
+          LET block = DenseBlock(in_ch, growth_rate, num_layers)  
+          IN OutChannels(block) = in_ch + num_layers * growth_rate
+
+      PROOF:
+        LET in_ch, growth_rate, num_layers
+        LET block = DenseBlock(in_ch, growth_rate, num_layers)
+        LET out_ch = OutChannels(block)
+        SHOW out_ch = in_ch + num_layers * growth_rate BY INDUCTION {  
+          BASE CASE (num_layers = 1):
+            out_ch 
+              = OutChannels(DenseLayer(in_ch))                BY DEFINITION DenseBlock
+              = in_ch + growth_rate                           BY DEFINITION DenseLayer
+          
+          INDUCTIVE CASE (num_layers = k + 1):
+            ASSUME OutChannels(DenseBlock(in_ch, growth_rate, k)) = in_ch + k * growth_rate  
+            SHOW OutChannels(DenseBlock(in_ch, growth_rate, k+1)) = in_ch + (k+1) * growth_rate BY {
+              OutChannels(DenseBlock(in_ch, growth_rate, k+1))  
+                = OutChannels(DenseLayer(DenseBlock(in_ch, growth_rate, k)))   BY DEFINITION DenseBlock
+                = OutChannels(DenseBlock(in_ch, growth_rate, k)) + growth_rate  BY DEFINITION DenseLayer
+                = in_ch + k * growth_rate + growth_rate                        BY INDUCTIVE HYPOTHESIS
+                = in_ch + (k+1) * growth_rate                                  BY ALGEBRA
+            }
+        }
+    }
+
+    THEOREM ParameterEfficiency {
+      STATEMENT:
+        ∀ (growth_rate, block_config, compression, num_classes).
+          LET dense_net = DenseNetModel[growth_rate, block_config, compression, num_classes],
+              num_params = ParameterCount(dense_net),
+              num_flops = FLOPCount(dense_net, 224, 224)
+          IN num_params < 10^7 ∧ num_flops < 5 * 10^9
+
+      PROOF:
+        LET growth_rate, block_config, compression, num_classes
+        LET dense_net = DenseNetModel[growth_rate, block_config, compression, num_classes]
+        LET num_params = ParameterCount(dense_net)
+        LET num_flops = FLOPCount(dense_net, 224, 224)
+        SHOW num_params < 10^7 ∧ num_flops < 5 * 10^9 BY {
+          num_params
+            = ParameterCount(FirstConv) + ParameterCount(DenseBlocks) + ParameterCount(Output)
+            < 64*7*7*3 + (num_blocks * (growth_rate^2 * max_layers + compression*growth_rate*64)) + num_classes*64  
+            < 10^7                                                BY ARITHMETIC, BOUNDS  
+          
+          num_flops  
+            = FLOPCount(FirstConv, 224, 224) + FLOPCount(DenseBlocks, 112, 112) + FLOPCount(Output, 7, 7)
+            < (3*64*7*7*224*224 + num_blocks * (growth_rate*max_layers*56*56) + num_classes*64*7*7) * 2
+            < 5 * 10^9                                            BY ARITHMETIC, BOUNDS
+        }
+    }
+  }
+}

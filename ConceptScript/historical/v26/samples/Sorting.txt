@@ -1,0 +1,99 @@
+CONCEPT Sorting[T] {
+  LANGUAGE {
+    PRED IsSorted(A: List[T], ≤: (T, T) -> Bool) = 
+      ∀ (i, j : Nat) . i < j < |A| => A[i] ≤ A[j]
+    PRED IsPermutation(A: List[T], B: List[T]) =
+      ∀ (x : T) . Count(x, A) = Count(x, B)  
+  }
+
+  TRANSFORMERS {
+    TACTIC SortingNetwork[n : Nat](A : List[T], ≤) -> List[T] = {
+      IF |A| ≤ 1 THEN A 
+      ELSE {
+        LET evens = [A[i] | i in [0..|A|) if i % 2 = 0]
+        LET odds = [A[i] | i in [0..|A|) if i % 2 = 1]
+        LET sorted_evens = SortingNetwork[n-1](evens, ≤)  
+        LET sorted_odds = SortingNetwork[n-1](odds, ≤)
+        LET merged = Merge(sorted_evens, sorted_odds, ≤)
+        RETURN SortingNetwork[n-1](merged, ≤)
+      }
+    }
+      
+    TACTIC Merge(A : List[T], B : List[T], ≤) -> List[T] = {
+      IF A = [] THEN B
+      ELSE IF B = [] THEN A
+      ELSE IF A[0] ≤ B[0] THEN A[0] :: Merge(A[1..], B, ≤)
+      ELSE B[0] :: Merge(A, B[1..], ≤) 
+    }  
+  }
+    
+  STRUCTURE SelectionSort EXTENDS Sorting {
+    DEF Sort(A: List[T], ≤: (T, T) -> Bool) : List[T] = {
+      IF |A| ≤ 1 THEN A
+      ELSE {  
+        LET i = ArgMin(A, ≤)
+        LET x = A[i]
+        x :: Sort(Remove(A, i), ≤)
+      }
+    } 
+      
+    REQUIRE ∀ (A A' : List[T]) (≤ : (T, T) -> Bool) . 
+      IsPermutation(A, A') ∧ IsSorted(A', ≤) <=> A' = Sort(A, ≤)
+  }
+
+  STRUCTURE MergeSort EXTENDS Sorting {
+    DEF Sort(A: List[T], ≤: (T, T) -> Bool) : List[T] = {
+      IF |A| ≤ 1 THEN A 
+      ELSE {
+        LET m = ⌊|A| / 2⌋
+        LET left = Sort(A[..m], ≤)
+        LET right = Sort(A[m..], ≤) 
+        Merge(left, right, ≤)
+      }
+    }
+
+    REQUIRE ∀ (A A' : List[T]) (≤ : (T, T) -> Bool) .
+      IsPermutation(A, A') ∧ IsSorted(A', ≤) <=> A' = Sort(A, ≤)
+  }
+    
+  PROOFS {
+    THEOREM SelectionSortCorrect {
+      STATEMENT:
+        ∀ (A : List[T]) (≤ : (T, T) -> Bool) . 
+          IsPermutation(A, SelectionSort.Sort(A, ≤)) ∧ 
+          IsSorted(SelectionSort.Sort(A, ≤), ≤)
+            
+      PROOF:
+        BY Induction on |A|
+        BASE CASE: |A| ≤ 1
+          SelectionSort.Sort(A, ≤) = A
+          HENCE IsPermutation(A, SelectionSort.Sort(A, ≤))
+          IsSorted(A, ≤) vacuously true
+        
+        INDUCTIVE CASE: 
+          IH: ∀ (A : List[T]) . |A| = k => 
+                IsPermutation(A, SelectionSort.Sort(A, ≤)) ∧
+                IsSorted(SelectionSort.Sort(A, ≤), ≤)
+          ASSUME |A| = k + 1
+          
+          LET i = ArgMin(A, ≤), x = A[i], A' = Remove(A, i) 
+          
+          SelectionSort.Sort(A, ≤)
+            = x :: SelectionSort.Sort(A', ≤)
+            = x :: A''                         by IH
+            
+          IsPermutation(A, x :: A'')
+            <=> IsPermutation(A', A'') ∧ Count(x, A) = 1 + Count(x, A'')   
+            <== IsPermutation(A', A'')         by IH
+                Count(x, A) = 1 + Count(x, A') by definition of Remove
+                Count(x, A') = Count(x, A'')   by IH
+          
+          IsSorted(x :: A'', ≤)  
+            <== x ≤ A''[0] ∧ IsSorted(A'', ≤)
+            <== x = Min(A, ≤) ∧ IsSorted(A'', ≤)  
+            <== IsSorted(A'', ≤)               by IH
+                  
+        QED
+    }
+  }
+}

@@ -1,0 +1,101 @@
+CONCEPT ProgramSynthesis {
+
+  LANGUAGE {
+    TYPE Program
+    TYPE Specification
+    TYPE Example = (Input, Output)
+    TYPE Constraint
+    TYPE Feature
+    TYPE Score = ℝ
+    
+    FUNC Satisfy : Program -> Specification -> 𝔹 
+    FUNC Behavior : Program -> Input -> Output
+    FUNC Consistent : Program -> 𝒫(Example) -> 𝔹
+    FUNC ExtractConstraints : Specification -> 𝒫(Constraint)
+    FUNC ExtractExamples : Specification -> 𝒫(Example)
+    FUNC FeatureVector : Program -> Vector[Feature]
+    FUNC Distance : Vector[Feature] -> Vector[Feature] -> ℝ⁺
+    
+    PRED ValidProgram : Program -> 𝔹
+    PRED PartiallyCorrect : Program -> Specification -> 𝔹
+    
+    NOTATION "⟦·⟧" = Behavior
+    NOTATION "P ⊨ S" = Satisfy(P, S)
+    NOTATION "P ∼ 𝓔" = Consistent(P, 𝓔)
+    NOTATION "φ(·)" = FeatureVector
+  }
+  
+  STRUCTURE {
+    DEF ValidProgram(P) <-> P is syntactically valid and type-safe
+    
+    DEF Satisfy(P, S) <-> ValidProgram(P) ∧ 
+                           (∀ c ∈ ExtractConstraints(S). P satisfies c) ∧
+                           (∀ (i, o) ∈ ExtractExamples(S). ⟦P⟧(i) = o)
+                          
+    DEF Consistent(P, 𝓔) <-> ∀ (i, o) ∈ 𝓔. ⟦P⟧(i) = o
+    
+    DEF PartiallyCorrect(P, S) <-> ValidProgram(P) ∧ P ∼ ExtractExamples(S)
+    
+    REWRITE Generalize : (P₁ ∼ 𝓔) ∧ (P₂ ∼ 𝓔) ∧ (φ(P₁) ≺ φ(P₂)) -> P₂
+      WHERE ≺ is a partial order on Feature
+    
+    REWRITE Abstract : (P₁ ∼ 𝓔) ∧ (φ(P₁) = φ(P₂)) ∧ (Size(P₂) < Size(P₁)) -> P₂
+  }
+  
+  PROOFS {
+    THEOREM Synthesis {
+      STATEMENT: 
+        ∀ S:Specification. ∃ P:Program. P ⊨ S
+      
+      PROOF {
+        DEFINE Synthesize(S) = {
+          𝓔 := ExtractExamples(S)
+          𝓒 := ExtractConstraints(S)
+          P := SearchValidPrograms(𝓔, 𝓒)
+          WHILE ¬(P ⊨ S) DO {
+            𝓔' := 𝓔 ∪ {(i, o) | (i, o) ∈ GenerateExamples(S) ∧ ⟦P⟧(i) ≠ o} 
+            P := SearchValidPrograms(𝓔', 𝓒)
+            P := Generalize(P, 𝓔')
+            P := Abstract(P)
+          }
+          RETURN P
+        }
+        
+        ASSUME [S : Specification]
+        LET P = Synthesize(S)
+        SHOW P ⊨ S BY construction
+      }
+    }
+    
+    TACTIC SearchValidPrograms(𝓔, 𝓒) {
+      GENERATE candidate programs P consistent with 𝓔
+      FILTER P satisfying constraints 𝓒 
+      RANK P by Distance(φ(P), φ(P₀)) for some desired P₀
+      RETURN top-ranked P
+    }
+    
+    TACTIC GenerateExamples(S) {
+      GENERATE inputs i covering feature space
+      RETURN (i, o) where o is computed via S  
+    }
+    
+    TACTIC Generalize(P, 𝓔) {
+      FIND P' such that P' ∼ 𝓔 ∧ φ(P) ≺ φ(P')
+      RETURN P'
+    }
+    
+    TACTIC Abstract(P) {
+      FIND P' such that φ(P) = φ(P') ∧ Size(P') < Size(P)
+      RETURN P'
+    }
+  }
+}
+
+This Concept formalizes the key ideas in program synthesis:
+
+Searching for programs consistent with examples and constraints
+Iterative refinement by generating additional examples
+Generalization and abstraction to find "better" programs
+Ranking synthesized programs by distance to some target in feature space
+
+The main theorem states that for any specification, a satisfying program exists and can be found by the synthesis procedure. The tactics define heuristics used in the synthesis process.

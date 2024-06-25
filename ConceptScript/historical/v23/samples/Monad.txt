@@ -1,0 +1,175 @@
+CONCEPT Monad {
+
+  LANGUAGE {
+    TYPE Object
+    TYPE Morphism(A : Object, B : Object)
+    TYPE Endofunctor(F : Object -> Object, Map : ∀ {A B : Object} . Morphism(A, B) -> Morphism(F(A), F(B)))
+    TYPE NaturalTransformation(F : Endofunctor, G : Endofunctor, Component : ∀ {A : Object} . Morphism(F(A), G(A)))
+
+    FUNC Compose(F : Endofunctor, G : Endofunctor) : Endofunctor
+    FUNC IdEndofunctor : Endofunctor
+    FUNC IdMorphism(A : Object) : Morphism(A, A)
+
+    NOTATION "F ∘ G" = Compose(F, G)
+    NOTATION "1" = IdEndofunctor
+    NOTATION "1_A" = IdMorphism(A)
+    NOTATION "η : F ⟹ G" = NaturalTransformation(η, F, G)
+  }
+
+  STRUCTURE {
+    DEF Monad {
+      M : Endofunctor
+      η : 1 ⟹ M  ; Unit
+      μ : M ∘ M ⟹ M  ; Multiplication
+      
+      LAWS {
+        LeftIdentity : ∀ {A : Object} . μ_A ∘ η_(M(A)) = 1_(M(A))
+        RightIdentity : ∀ {A : Object} . μ_A ∘ M(η_A) = 1_(M(A))
+        Associativity : ∀ {A : Object} . μ_A ∘ μ_(M(A)) = μ_A ∘ M(μ_A)
+      }
+    }
+
+    DEF Kleisli(M : Monad) {
+      OBJECTS = OBJECTS(C)
+      MORPHISMS(A, B) = C(A, M(B))
+      
+      COMPOSE(f : A ~> B, g : B ~> C) : A ~> C = 
+        μ_C ∘ M(g) ∘ f
+      
+      IDENTITY(A) : A ~> A = 
+        η_A
+    }
+  }
+
+  PROOFS {
+    THEOREM MonadLaws {
+      STATEMENT : ∀ (M : Monad) . 
+        LeftIdentity(M) ∧ RightIdentity(M) ∧ Associativity(M)
+
+      PROOF {
+        ASSUME [M : Monad] [A : Object]
+
+        SHOW LeftIdentity(M) BY {
+          μ_A ∘ η_(M(A))
+          = μ_A ∘ M(1_A) ∘ η_(M(A))  ; Functor preserves identity
+          = μ_A ∘ M(1_A ∘ η_A)       ; Naturality of η
+          = μ_A ∘ M(η_A)             ; Left identity of 1_A
+          = 1_(M(A))                 ; Right identity law of monad
+        }
+
+        SHOW RightIdentity(M) BY {
+          μ_A ∘ M(η_A)
+          = μ_A ∘ (M ∘ M)(η_A)       ; Composition of functors
+          = (μ ∘ M)(η)_A             ; Horizontal composition of natural transformations
+          = (1_M ∘ η)_A              ; Right identity law of monad
+          = (η ∘ 1)_A                ; Interchange law of natural transformations
+          = η_(M(A)) ∘ 1_(M(A))      ; Functor preserves identity
+          = 1_(M(A))                 ; Left identity of 1_(M(A))
+        }
+
+        SHOW Associativity(M) BY {
+          μ_A ∘ μ_(M(A))
+          = μ_A ∘ (μ ∘ M)(μ_A)       ; Horizontal composition of natural transformations
+          = (μ ∘ μ_M)(μ_A)           ; Interchange law of natural transformations
+          = (μ ∘ (M ∘ μ))(μ_A)       ; Associativity of functor composition
+          = μ_A ∘ M(μ_A) ∘ μ_(M(A))  ; Horizontal composition of natural transformations
+          = μ_A ∘ M(μ_A)             ; Associativity law of monad
+        }
+      }
+    }
+
+    THEOREM KleisliCategory {
+      STATEMENT : ∀ (M : Monad) . Category(Kleisli(M))
+
+      PROOF {
+        ASSUME [M : Monad]
+        
+        LET C = Kleisli(M)
+        
+        ; Composition is associative
+        ASSUME [A B C D : Object] [f : A ~> B] [g : B ~> C] [h : C ~> D]
+        
+        SHOW (h •• g) •• f = h •• (g •• f) BY {
+          (h •• g) •• f
+          = μ_D ∘ M(h •• g) ∘ f
+          = μ_D ∘ M(μ_D ∘ M(h) ∘ g) ∘ f
+          = μ_D ∘ M(μ_D) ∘ M(M(h)) ∘ M(g) ∘ f
+          = μ_D ∘ μ_(M(D)) ∘ M(M(h)) ∘ M(g) ∘ f
+          = μ_D ∘ M(μ_D) ∘ M(M(h)) ∘ M(g) ∘ f   ; Associativity law of monad
+          = μ_D ∘ M(μ_D ∘ M(h) ∘ g) ∘ f
+          = μ_D ∘ M(h •• g) ∘ f
+          = h •• (g •• f)
+        }
+        
+        ; Identity morphisms
+        ASSUME [A B : Object] [f : A ~> B]
+        
+        SHOW 1_B •• f = f BY {
+          1_B •• f
+          = μ_B ∘ M(1_B) ∘ f
+          = μ_B ∘ M(η_B) ∘ f
+          = μ_B ∘ η_(M(B)) ∘ f   ; Naturality of η
+          = 1_(M(B)) ∘ f         ; Left identity law of monad
+          = f
+        }
+        
+        SHOW f •• 1_A = f BY {
+          f •• 1_A
+          = μ_B ∘ M(f) ∘ 1_A
+          = μ_B ∘ M(f) ∘ η_A
+          = μ_B ∘ M(f ∘ η_A)    ; Naturality of η
+          = μ_B ∘ M(f)          ; Right identity of 1_A
+          = f                   ; Right identity law of monad
+        }
+        
+        HENCE Category(Kleisli(M)) BY CategoryAxioms
+      }
+    }
+    
+    THEOREM MonadFromAdjunction {
+      STATEMENT : ∀ (F : C -> D) (G : D -> C) (η : 1_C ⟹ G ∘ F) (ε : F ∘ G ⟹ 1_D) .
+        IsAdjunction(F, G, η, ε) -> Monad(G ∘ F, η, G(ε_F) ∘ μ^(G∘F))
+        
+      PROOF {
+        ASSUME [F : C -> D] [G : D -> C] 
+               [η : 1_C ⟹ G ∘ F] [ε : F ∘ G ⟹ 1_D] [IsAdjunction(F, G, η, ε)]
+        
+        LET M = G ∘ F
+            η_M = η
+            μ_M = G(ε_F) ∘ μ^(G∘F)
+        
+        SHOW Monad(M, η_M, μ_M) BY {
+          ; Left identity law
+          ∀ (A : Object) . 
+            μ_(M(A)) ∘ η_(M(A))
+            = G(ε_(F(A))) ∘ μ^(G∘F)_(M(A)) ∘ η_(M(A))
+            = G(ε_(F(A))) ∘ G(F(η_(M(A))))
+            = G(ε_(F(A)) ∘ F(η_(M(A))))   ; Functoriality of G
+            = G(1_(F(A)))                 ; Triangle identity of adjunction
+            = 1_(G(F(A)))                 ; Functoriality of G
+            = 1_(M(A))
+          
+          ; Right identity law  
+          ∀ (A : Object) .
+            μ_(M(A)) ∘ M(η_A)
+            = G(ε_(F(A))) ∘ μ^(G∘F)_(M(A)) ∘ M(η_A)
+            = G(ε_(F(A))) ∘ G(F(G(ε_(F(A))))) ∘ G(F(η_A))
+            = G(ε_(F(A)) ∘ F(G(ε_(F(A)))) ∘ F(η_A))   ; Functoriality of G
+            = G(ε_(F(A)) ∘ F(1_(G(F(A)))))            ; Triangle identity of adjunction
+            = G(ε_(F(A)))
+            = 1_(M(A))                               ; Counit-unit equation of adjunction
+          
+          ; Associativity law
+          ∀ (A : Object) .
+            μ_(M(A)) ∘ μ^(G∘F)_(M(A))
+            = G(ε_(F(A))) ∘ μ^(G∘F)_(M(A)) ∘ μ^(G∘F)_(M(A))
+            = G(ε_(F(A))) ∘ G(F(G(ε_(F(A))))) ∘ μ^(G∘F)_(M(A))
+            = G(ε_(F(A)) ∘ F(G(ε_(F(A))))) ∘ μ^(G∘F)_(M(A))   ; Functoriality of G
+            = G(1_(F(A))) ∘ μ^(G∘F)_(M(A))                    ; Triangle identity of adjunction
+            = μ^(G∘F)_(M(A))
+            = μ_(M(A)) ∘ M(μ_(M(A)))                          ; Definition of μ_M
+        }
+      }
+    }
+  }
+}

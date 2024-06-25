@@ -1,0 +1,95 @@
+CONCEPT AdaptiveMetamaterial_v1 {
+  IMPORT ComputationalMatter_v1.*
+
+  STRUCTURE {
+    [Goal:
+      Synthesize a 2D metamaterial m that can:
+       1. Self-assemble into a target topology T from raw components
+       2. Adapt its structure to optimize for different objectives O
+       3. Efficiently perform computation t in a distributed manner
+       4. Maintain stability and robustness under perturbations
+    ]
+     
+    [TargetTopology:
+      T := hex_lattice(N, L)  ; Hexagonal lattice with nodes N and links L
+    ]
+    
+    [ComponentLibrary: 
+      C := { mems(F, S), polymer(E, H), conductor(R, C) }
+        F: Flexibility, S: Strength  ; Mechanical properties
+        E: Elasticity, H: Hardness   ; Material properties
+        R: Conductivity, C: Capacity ; Electrical properties
+    ]
+
+    [ObjectiveLibrary:
+      O := { max_stiffness, max_toughness, min_weight, max_conductivity }
+    ]
+    
+    [ComputationLibrary:
+      T := { pattern_formation(P), edge_detection(I), consensus(V) }
+        P: Patterns, I: Images, V: Variables
+    ]
+    
+    [Synthesis:
+      m := m{s(T, C, D), p(L, F), a(E, U, H)}
+      
+      S := s(hex_lattice(N, L),               ; Target topology
+              constraints(DOF, Linf),         ; Constraints on motion  
+              domains(rect(W, H), {mems, polymer, conductor}))
+              
+      P := p(program{
+              asm_rules(T, C),               ; Self-assembly logic
+              opt_rules(T, O),               ; Structural adaptation logic
+              comp_rules(T, T)               ; Distributed computation logic  
+            },
+            dataflow{
+              nbr(X, T) -> in(X, T),         ; Neighbor data flow  
+              state(X) -> out(X, T)          ; State output flow
+            })
+            
+      A := { asm_action(E_asm, U_asm, H_asm),   ; Self-assembly action
+             opt_action(E_opt, U_opt, H_opt),   ; Optimization action
+             comp_action(E_cp, U_cp, H_cp) }    ; Computation action
+    ]
+      
+    [Properties: 
+      Programmable{m}           ; Metamaterial is programmable
+      Universal{m, {T}}         ; Can form the target toplogy
+      Reconfigurable{m, m'}     ; Can adapt structure m -> m'  
+      Efficient{m, E_total, T}  ; Efficient wrt energy and tasks
+      Robust{m, ε_tol, δ_tol}   ; Robust to ε, δ perturbations
+    ]
+  }
+  
+  PROOF {
+    proof Realizable{m}
+    {
+      @StructureOptimization{m, max_stiffness} 
+        proves Optimized{m, max_stiffness}
+        
+      @ProgramOptimization{P, m, E_total}
+        proves Efficient{m, E_total, T}
+        
+      @StructureReconfiguration{m, m', asm_rules}
+        proves Reconfigurable{m, m'}
+        
+      @InductiveReasoning{m, t, T}
+        fix t ∈ {pattern_formation, edge_detection, consensus},
+        proves m ⊢ t
+        
+      @ProgramParallelization{comp_rules, opt_rules}
+        proves ⟨comp_rules ∥ opt_rules⟩{m, T}
+        
+      hence Realizable{m}
+    }
+  }
+}
+
+In this Concept, we define the goal of synthesizing a 2D adaptive metamaterial that can self-assemble, optimize its structure, perform distributed computation, and maintain robustness.
+We specify the target topology as a hexagonal lattice, and the component library consisting of MEMS, polymers, and conductors with various mechanical, material, and electrical properties.
+The objective and computation libraries define the optimization goals and computational tasks we want the metamaterial to perform.
+The synthesis section constructs the metamaterial m using the Matter primitive from the imported Concept. It specifies the structure S with the target topology, motion constraints, and component domains. The program P contains the logic for self-assembly, optimization, and computation, along with the dataflow between neighboring components. The actions A define the actual assembly, optimization, and computation behaviors.
+Finally, the properties section asserts that the synthesized metamaterial is programmable, universal, reconfigurable, efficient, and robust, as desired.
+The proof sketch demonstrates the realizability of the metamaterial by using various tactics from the imported Concept to establish the required properties. Notably, it shows that the metamaterial can be optimized for stiffness, reconfigured via self-assembly rules, and perform the target computations efficiently and in parallel.
+This example illustrates how the ComputationalMatter_v1 Concept can be leveraged to design complex, adaptive metamaterials with provable properties. The modularity and reusability of the Concept allows us to quickly prototype and reason about different metamaterial designs.
+Let me know if you have any questions or if you'd like to explore further applications of this Concept!

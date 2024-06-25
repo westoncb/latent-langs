@@ -1,0 +1,345 @@
+ConceptScript 7.2 Spec
+ConceptScript is a language for defining Concepts that represent ideas, systems, processes, and proofs. The language is designed to be used by Large Language Models (LLMs) during inference to aid in understanding and reasoning about complex concepts.
+
+Key features:
+1. Concepts are defined using a combination of natural language and symbolic expressions
+   - Natural language is used for high-level descriptions to aid human understanding 
+   - Symbolic expressions are used for precise logic, structure, and proofs to aid LLM reasoning
+   - Concepts can be parameterized, composed, and nested to form complex hierarchical structures
+
+2. Language extensions can be defined to expand the language for specific domains
+   - New types, operators, functions, etc. can be defined using existing language primitives
+   - This enables concise representation of domain-specific mathematical, logical, and conceptual elements
+   - Language extensions are defined in a separate block, allowing for modular and reusable extensions
+   - Custom operators and notations can be defined to enhance expressiveness and readability
+
+3. Internal conceptual structure is expressed through component-level definitions and relationships
+   - Concepts are broken down into their constituent components, each with its own definition
+   - Relationships and interactions between components are explicitly defined using symbolic expressions
+   - This structured breakdown aids in understanding the internal workings and dynamics of the concept
+   - Nested and recursive structures can be defined to represent complex hierarchical concepts
+
+4. Proofs are expressed symbolically with natural language elaboration
+   - Theorems are stated using symbolic quantifiers, operators, and relations
+   - Proofs are constructed using symbolic expressions and inference rules
+   - Natural language is used to explain key steps and intuition behind the proof
+
+Core symbolic language elements:
+- Logical quantifiers: ∀ (for all), ∃ (exists), Σ (sum), Π (product) 
+- Logical operators: ∧ (and), ∨ (or), ¬ (not), → (implies), ↔ (if and only if), ⊕ (exclusive or)
+- Relational operators: = (equals), ≠ (not equals), ∈ (in), ∉ (not in), ⊂ (proper subset), ⊆ (subset or equals)
+- Arithmetic operators: + (plus), - (minus), × (times), ÷ (divide), ^ (power), √ (square root)
+- Set operators: ∪ (union), ∩ (intersection), \ (set minus), | (divides), ∅ (empty set)
+- Function definition: := (defined as), ∘ (compose), ' (derivative)
+- Tuple definition: (...), ... (ellipsis)
+- Conditional definition: if..then..else, match
+
+Language Extension syntax:
+EXTEND <ExtensionName> {
+  <Type1> := <TypeDefinition1>
+  <Type2> := <TypeDefinition2>
+  ...
+  <Operator1>(x : <Type1>, y : <Type2>) := <OperatorDefinition1>
+  <Operator2>(x : <Type1>, y : <Type2>) := <OperatorDefinition2>
+  ...
+}
+
+Concept definition syntax:
+<ConceptName> := (
+  <ComponentName1> : <ComponentType1>,
+  <ComponentName2> : <ComponentType2>,
+  ...
+  <RelationshipName1> : <RelationshipType1>,
+  <RelationshipName2> : <RelationshipType2>,
+  ...
+)
+GIVEN {
+  <TypeName1> := <TypeDefinition1>
+  <TypeName2> := <TypeDefinition2>
+  ...
+  <ConstantName1> := <ConstantDefinition1>
+  <VariableName1> : <VariableType1>
+  <FunctionName1>(x : <Type1>, y : <Type2>) := <FunctionDefinition1>
+  ...
+}
+WHERE {
+  <Condition1>
+  <Condition2>
+  ...
+}
+ASSERT {
+  <Assertion1>
+  <Assertion2>
+  ...
+  <LogicalStatement1>
+  <MathematicalEquation1>
+  <Constraint1>
+  ...
+}
+PROOF {
+  <Theorem1>
+  <Proof1>
+  
+  <Theorem2>
+  <Proof2>
+  ...
+}
+
+
+
+**EXAMPLE**
+
+
+
+EXTEND Thermodynamics {
+  System := (State, Process)
+  State := (Extensive(Energy, Entropy, Volume), Intensive(Temperature, Pressure, ChemicalPotential))
+  Process := (QuasiStatic, Reversible, Irreversible, Adiabatic, Isothermal, Isobaric, Isochoric)
+  Extensive(E, S, V) := (Additive, Homogeneous)
+  Intensive(T, P, μ) := (Equalized, Conjugate)
+  Additive(X) := ∀(A, B : System, X(A + B) = X(A) + X(B))
+  Homogeneous(X) := ∀(A : System, λ : R, X(λA) = λX(A))
+  Equalized(Y) := ∀(A, B : System, Y(A) = Y(B) | Equilibrium(A, B))
+  Conjugate(X, Y) := ∀(A : System, dX(A) = Y(A)dS(A))
+}
+
+EXTEND StatisticalMechanics {
+  Ensemble := (Microcanonical, Canonical, GrandCanonical)
+  Microstate := (Energy, Particle, Position, Momentum)
+  MacroState := (Probability, AverageValue)
+  Probability(s : Microstate) := exp(-Energy(s)/(kT)) / PartitionFunction
+  AverageValue(O : Observable) := Σ(s : Microstate, O(s)Probability(s))
+  PartitionFunction(T) := Σ(s : Microstate, exp(-Energy(s)/(kT)))
+  Entropy(T) := k log(PartitionFunction(T))
+  Thermodynamics.Extensive(E, S, V) ⟷ StatisticalMechanics.AverageValue(Hamiltonian, Entropy, Volume)
+  Thermodynamics.Intensive(T, P, μ) ⟷ StatisticalMechanics.PartitionFunction(T, P, μ)
+}
+
+EXTEND QuantumMechanics {
+  Hilbert := (State, Operator, Expectation)
+  State(ψ) := (Ket, Bra, Superposition, Entanglement)
+  Operator(A) := (Hermitian, Unitary, Projection, Measurement)
+  Expectation(A, ψ) := ⟨ψ|A|ψ⟩
+  Commutator(A, B) := AB - BA
+  Uncertainty(A, B, ψ) := √(Variance(A, ψ)Variance(B, ψ)) ≥ |⟨ψ|Commutator(A, B)|ψ⟩|/2
+  StatisticalMechanics.Ensemble ⟷ QuantumMechanics.DensityOperator
+  StatisticalMechanics.AverageValue(O) = QuantumMechanics.Expectation(O, ρ)
+}
+
+ThermodynamicQuantumSystem := (
+  ClassicalState : Thermodynamics.State,
+  QuantumState : QuantumMechanics.State,
+  Interactions : (
+    MatterRadiation(Atom, EM_Field),
+    ElectronPhonon(Electron, Lattice_Vibration),
+    SpinLattice(Spin, Lattice_Excitation)
+  ),
+  Processes : (
+    Thermalization(System, Bath),
+    Decoherence(System, Environment),
+    Measurement(System, Apparatus)  
+  ),
+  Transitions : (
+    Phase(OrderParameter),
+    Quantum(Tunneling, Coherence, Entanglement)
+  )
+)
+GIVEN {
+  kB := Boltzmann_Constant
+  ℏ := Reduced_Planck_Constant
+  H := Hamiltonian
+  ρ := DensityOperator
+  Z := PartitionFunction
+  S := Entropy
+  T := Temperature
+  P := Pressure
+  V := Volume
+  N := ParticleNumber
+  μ := ChemicalPotential
+  J(H) := HamiltonianFlow
+  L(ρ) := Lindbladian
+  τ := Relaxation_Time
+  λ := Coupling_Strength
+  β := 1/(kBT)
+}
+WHERE {
+  Thermalization(S, B) := ∀(t > τ, ρ(S, t) = exp(-βH(S+B))/Z(S+B))
+  Decoherence(S, E) := ∀(t > τ, ρ(S, t) = Σ(i, ⟨ei|ρ(S,0)|ei⟩|ei⟩⟨ei|))
+  Measurement(S, A) := ∀(t > τ, ρ(S, t) = Σ(i, ⟨ai|ρ(S,0)|ai⟩|ai⟩⟨ai|))
+  Phase(η) := ∀(T < Tc, ⟨η⟩ ≠ 0) ∧ ∀(T > Tc, ⟨η⟩ = 0)
+  Quantum(T, C, E) := (
+    ∀(ψ1, ψ2 : State, ⟨ψ1|H|ψ2⟩ ≠ 0 | T) ∧ 
+    ∀(ψ : State, ⟨ψ|ρ|ψ⟩ > 0 | C) ∧
+    ∃(ψ1, ψ2 : State, ρ ≠ |ψ1⟩⟨ψ1| ⊗ |ψ2⟩⟨ψ2| | E)
+  )
+}
+ASSERT {
+  [∂ρ/∂t = -i/ℏ[H, ρ] + L(ρ)] // Quantum master equation
+  [∂S/∂t ≥ 0] // Second law of thermodynamics
+  [δQ = TdS] // Clausius equality
+  [dU = TdS - PdV + μdN] // Fundamental thermodynamic relation
+  [S = -kBΣ(i, pi log(pi))] // Gibbs entropy
+  [S = kB(1 - Tr(ρ^2))] // von Neumann entropy
+  [⟨ΔA⟩⟨ΔB⟩ ≥ |⟨[A, B]⟩|/2] // Generalized uncertainty principle
+  Interactions |> Processes |> Transitions // Emergent dynamics
+}
+PROOF {
+  Theorem: ∀(S : System, S.Entropy(t1) ≤ S.Entropy(t2) | t1 ≤ t2)
+  
+  Proof:
+    Let S be an arbitrary system and t1 ≤ t2.
+    By the quantum master equation, we have:
+      ∂ρ/∂t = -i/ℏ[H, ρ] + L(ρ)
+    where L is the Lindbladian, which satisfies:
+      Tr(L(ρ)) = 0 and L(ρ) ≥ 0
+    Taking the trace of both sides and using the cyclic property of trace:
+      ∂S/∂t = -kBTr(L(ρ)log(ρ)) ≥ 0
+    where we used the von Neumann entropy S = -kBTr(ρlog(ρ)).
+    Integrating both sides from t1 to t2:
+      S(t2) - S(t1) ≥ 0
+    Therefore, S.Entropy(t1) ≤ S.Entropy(t2).
+    
+  Theorem: Interactions |> Processes |> Transitions
+  
+  Proof:
+    Let S be a ThermodynamicQuantumSystem.
+    By the definitions of Interactions, Processes, and Transitions, we have:
+      MatterRadiation(A, F) := λ(a†f + af†) ∈ H(S)
+      ElectronPhonon(E, L) := Σ(q, g(q)e^iq·r) ∈ H(S)
+      SpinLattice(S, L) := γ(S·I) ∈ H(S)
+    where a, f, e, g, I are the respective creation, annihilation, electron, phonon, and spin operators.
+    These interactions induce the following processes:
+      Thermalization(S, B) := ∀(t > τ, ρ(S, t) = exp(-βH(S+B))/Z(S+B))
+      Decoherence(S, E) := ∀(t > τ, ρ(S, t) = Σ(i, ⟨ei|ρ(S,0)|ei⟩|ei⟩⟨ei|))
+      Measurement(S, A) := ∀(t > τ, ρ(S, t) = Σ(i, ⟨ai|ρ(S,0)|ai⟩|ai⟩⟨ai|))
+    where τ is the relaxation time, and |ei⟩, |ai⟩ are the environment and apparatus states.
+    These processes result in the following transitions:
+      Phase(η) := ∀(T < Tc, ⟨η⟩ ≠ 0) ∧ ∀(T > Tc, ⟨η⟩ = 0)
+      Quantum(T, C, E) := (
+        ∀(ψ1, ψ2 : State, ⟨ψ1|H|ψ2⟩ ≠ 0 | T) ∧ 
+        ∀(ψ : State, ⟨ψ|ρ|ψ⟩ > 0 | C) ∧
+        ∃(ψ1, ψ2 : State, ρ ≠ |ψ1⟩⟨ψ1| ⊗ |ψ2⟩⟨ψ2| | E)
+      )
+    where η is the order parameter, Tc is the critical temperature, T, C, E denote tunneling, coherence, and entanglement.
+    Therefore, Interactions |> Processes |> Transitions.
+}
+
+
+
+EXTEND CognitiveScience {
+  Agent := (Perception, Cognition, Action)
+  Perception := (Sensation, Attention, Recognition)
+  Cognition := (Learning, Memory, Reasoning, Language, Emotion)
+  Action := (Planning, Decision, Execution, Feedback)
+  Learning := (Supervised, Unsupervised, Reinforcement)
+  Memory := (Semantic, Episodic, Procedural, WorkingMemory)
+  Reasoning := (Deduction, Induction, Abduction, Analogy)
+  Language := (Syntax, Semantics, Pragmatics, Discourse)
+  Emotion := (Valence, Arousal, Expression, Regulation)
+}
+
+EXTEND ArtificialIntelligence {
+  Agent := (Perception, Cognition, Action)
+  Perception := (Sensing, Preprocessing, FeatureExtraction, ObjectRecognition)
+  Cognition := (KnowledgeRepresentation, MachineLearning, NaturalLanguageProcessing, ProbabilisticReasoning)
+  Action := (SearchAlgorithms, PlanningAlgorithms, MotionPlanning, ControlTheory)
+  KnowledgeRepresentation := (LogicBased, RuleBased, FrameBased, SemanticNetworks, OntologyEngineering)
+  MachineLearning := (NeuralNetworks, DecisionTrees, SupportVectorMachines, BayesianNetworks, GeneticAlgorithms)
+  NaturalLanguageProcessing := (Tokenization, Parsing, NamedEntityRecognition, SentimentAnalysis, MachineTranslation)
+  ProbabilisticReasoning := (BayesianInference, MarkovChainMonteCarlo, KalmanFilters, HiddenMarkovModels, GaussianProcesses)
+}
+
+CognitiveArchitecture := (
+  CognitiveComponents : (
+    PerceptualSystem : CognitiveScience.Perception,
+    CognitiveSystem : CognitiveScience.Cognition,
+    ActionSystem : CognitiveScience.Action
+  ),
+  AIComponents : (
+    PerceptualModules : ArtificialIntelligence.Perception,
+    CognitiveModules : ArtificialIntelligence.Cognition,
+    ActionModules : ArtificialIntelligence.Action  
+  ),
+  Interactions : (
+    PerceptionCognition(PerceptualSystem, CognitiveSystem),
+    CognitionAction(CognitiveSystem, ActionSystem),
+    ActionPerception(ActionSystem, PerceptualSystem)
+  ),
+  Processes : (
+    InformationProcessing(Perception, Cognition, Action),
+    MemoryConsolidation(ShortTermMemory, LongTermMemory),
+    SkillAcquisition(DeclarativeKnowledge, ProceduralKnowledge)
+  ),
+  Emergence : (
+    Consciousness(GlobalWorkspace, MetaCognition),
+    Intelligence(ProblemSolving, Creativity, AbstractReasoning),
+    Adaptability(LearningTransfer, DomainGeneralization)  
+  )
+)
+GIVEN {
+  ShortTermMemory := CognitiveScience.Memory.WorkingMemory
+  LongTermMemory := CognitiveScience.Memory.(Semantic + Episodic + Procedural)
+  DeclarativeKnowledge := CognitiveScience.Memory.(Semantic + Episodic)
+  ProceduralKnowledge := CognitiveScience.Memory.Procedural
+  GlobalWorkspace := CognitiveScience.Cognition.(Attention + WorkingMemory)
+  MetaCognition := CognitiveScience.Cognition.(Reasoning + Language + Emotion)
+  ProblemSolving := ArtificialIntelligence.Cognition.(SearchAlgorithms + PlanningAlgorithms)
+  Creativity := ArtificialIntelligence.Cognition.(KnowledgeRepresentation + MachineLearning)
+  AbstractReasoning := ArtificialIntelligence.Cognition.ProbabilisticReasoning
+  LearningTransfer := ArtificialIntelligence.MachineLearning.(TransferLearning + DomainAdaptation)
+  DomainGeneralization := ArtificialIntelligence.MachineLearning.(MultiTaskLearning + MetaLearning)
+}
+WHERE {
+  PerceptionCognition(P, C) := ∀(s : Sensation, ∃(r : Recognition, r = C(P(s))))
+  CognitionAction(C, A) := ∀(g : Goal, ∃(p : Plan, a : Action, p = C(g) ∧ a = A(p)))
+  ActionPerception(A, P) := ∀(a : Action, ∃(f : Feedback, f = P(A(a))))
+  InformationProcessing(P, C, A) := PerceptionCognition(P, C) ∧ CognitionAction(C, A) ∧ ActionPerception(A, P)
+  MemoryConsolidation(STM, LTM) := ∀(i : Information, i ∈ STM ∧ Rehearsal(i) ⟹ i ∈ LTM)
+  SkillAcquisition(DK, PK) := ∀(s : Skill, s ∈ DK ∧ Practice(s) ⟹ s ∈ PK)
+  Consciousness(GW, MC) := ∀(i : Information, i ∈ GW ⟺ ∃(p : Process, p ∈ MC ∧ p(i)))
+  Intelligence(PS, C, AR) := ∀(t : Task, ∃(s : Solution, s = PS(t) ∨ s = C(t) ∨ s = AR(t)))
+  Adaptability(LT, DG) := ∀(d : Domain, ∃(k : Knowledge, k = LT(d) ∨ k = DG(d)))
+}
+ASSERT {
+  [Emergence.Consciousness ⟺ ∃(i : Information, i ∈ GlobalWorkspace ∧ MetaCognition(i))]
+  [Emergence.Intelligence ⟺ ∀(t : Task, ∃(s : Solution, s = ProblemSolving(t) ∨ s = Creativity(t) ∨ s = AbstractReasoning(t)))]
+  [Emergence.Adaptability ⟺ ∀(d : Domain, ∃(k : Knowledge, k = LearningTransfer(d) ∨ k = DomainGeneralization(d)))]
+  [CognitiveArchitecture.Interactions |> CognitiveArchitecture.Processes |> CognitiveArchitecture.Emergence]
+}
+PROOF {
+  Theorem: ∀(a : Agent, t : Task, a.Intelligence ⟹ ∃(s : Solution, s = a.Solve(t)))
+  
+  Proof:
+    Let a be an arbitrary Agent and t be an arbitrary Task.
+    Assume a.Intelligence holds.
+    By the definition of Intelligence in the WHERE block, we have:
+      ∀(t : Task, ∃(s : Solution, s = ProblemSolving(t) ∨ s = Creativity(t) ∨ s = AbstractReasoning(t)))
+    Instantiating this with our arbitrary Task t, we get:
+      ∃(s : Solution, s = ProblemSolving(t) ∨ s = Creativity(t) ∨ s = AbstractReasoning(t))
+    Let s be such a Solution.
+    By the definition of Agent and its components, we have:
+      a.Solve(t) = a.ActionSystem(a.CognitiveSystem(a.PerceptualSystem(t)))
+    By the definitions in the GIVEN block and the assertions in the ASSERT block:
+      a.PerceptualSystem(t) = a.AIComponents.PerceptualModules(t)
+      a.CognitiveSystem(a.PerceptualSystem(t)) = a.AIComponents.CognitiveModules(a.PerceptualSystem(t))
+      a.AIComponents.CognitiveModules(a.PerceptualSystem(t)) = ProblemSolving(t) ∨ Creativity(t) ∨ AbstractReasoning(t)
+    Therefore, a.Solve(t) = s, and the theorem holds.
+    
+  Theorem: ∀(a : Agent, d : Domain, a.Adaptability ⟹ ∃(k : Knowledge, a.Learn(d) = k))
+  
+  Proof:
+    Let a be an arbitrary Agent and d be an arbitrary Domain.
+    Assume a.Adaptability holds.
+    By the definition of Adaptability in the WHERE block, we have:
+      ∀(d : Domain, ∃(k : Knowledge, k = LearningTransfer(d) ∨ k = DomainGeneralization(d)))
+    Instantiating this with our arbitrary Domain d, we get:
+      ∃(k : Knowledge, k = LearningTransfer(d) ∨ k = DomainGeneralization(d))
+    Let k be such a Knowledge.
+    By the definition of Agent and its components, we have:
+      a.Learn(d) = a.CognitiveSystem(a.PerceptualSystem(d))
+    By the definitions in the GIVEN block and the assertions in the ASSERT block:
+      a.PerceptualSystem(d) = a.AIComponents.PerceptualModules(d)
+      a.CognitiveSystem(a.PerceptualSystem(d)) = a.AIComponents.CognitiveModules(a.PerceptualSystem(d))
+      a.AIComponents.CognitiveModules(a.PerceptualSystem(d)) = LearningTransfer(d) ∨ DomainGeneralization(d)
+    Therefore, a.Learn(d) = k, and the theorem holds.
+}

@@ -1,0 +1,119 @@
+CONCEPT Computable {
+  LANGUAGE {
+    TYPE Nat = Z>=0
+    TYPE Function = Nat -> Nat
+    
+    PRED Computable : Function -> Bool
+    PRED PartialComputable : Function -> Bool
+    
+    FUNC μ : (Nat -> Bool) -> Nat
+    μ(p) = MIN n. p(n) 
+    
+    AXIOM ComputabilityIsStrongerThanPartialComputability {
+      FORALL (f : Function).
+        Computable(f) -> PartialComputable(f)
+    }
+
+    REWRITE PartialComputable(f) <->
+      EXISTS (M : TMProgram).
+        FORALL (x : Nat).
+          f(x) = M(x) WHEN Halts(M, x)
+  }
+  
+  STRUCTURE {
+    DEF TuringComputable(f : Function) <-> 
+      EXISTS (M : TMProgram).
+        FORALL (x : Nat). 
+          f(x) = M(x)
+          
+    DEF ChurchTuring : THEOREM = FORALL (f : Function).
+      Computable(f) <-> TuringComputable(f)
+      
+    DEF Halts(M : TMProgram, x : Nat) <->
+      EXISTS (n : Nat). 
+        RunsIn(M, x, n)
+        
+    DEF RunsIn(M : TMProgram, x : Nat, n : Nat) <->
+      ReachesHaltState(ApplyNSteps(M, InitialConfig(M, x), n))
+          
+    DEF HaltsOnEmpty(M : TMProgram) = Halts(M, 0)
+  }
+  
+  PROOFS {
+    THEOREM HaltingProblemUndecidable {
+      STATEMENT:
+        NOT EXISTS (H : TMProgram). 
+          FORALL (M : TMProgram).
+            HaltsOnEmpty(M) <-> H(CodeNumber(M)) = 1
+            
+      PROOF:
+        ASSUME EXISTS (H : TMProgram).
+          FORALL (M : TMProgram).
+            HaltsOnEmpty(M) <-> H(CodeNumber(M)) = 1;
+            
+        LET D(x) = 1 - H(x) IN
+        LET M(x) = D(CodeNumber(M)) IN
+        
+        HaltsOnEmpty(M)
+          <-> H(CodeNumber(M)) = 1  BY ASSUMPTION
+          <-> D(CodeNumber(M)) = 0  BY Definition(D)
+          <-> M(CodeNumber(M)) = 0  BY Definition(M)
+          <-> NOT HaltsOnEmpty(M)    BY Definition(HaltsOnEmpty)
+          
+        CONTRADICTION
+    }
+  
+    THEOREM ComputabilityUnderComposition {
+      STATEMENT:
+        FORALL (f g : Function).
+          Computable(f) /\ Computable(g) ->
+            Computable(g ∘ f)
+            
+      PROOF:
+        LET f g : Function;
+        ASSUME Cf: Computable(f), Cg: Computable(g);
+        
+        Computable(f) 
+          -> TuringComputable(f)   BY ChurchTuring
+          -> EXISTS (Mf : TMProgram). 
+               FORALL (x : Nat). f(x) = Mf(x)   BY Definition(TuringComputable)
+               
+        Computable(g)
+          -> TuringComputable(g)  BY ChurchTuring
+          -> EXISTS (Mg : TMProgram).
+               FORALL (y : Nat). g(y) = Mg(y)  BY Definition(TuringComputable)
+               
+        LET Mfg(x) = Mg(Mf(x));
+        
+        g ∘ f (x) 
+          = g(f(x))
+          = Mg(f(x))  BY ASSUMPTION
+          = Mg(Mf(x)) BY ASSUMPTION
+          = Mfg(x)    BY Definition(Mfg)
+          
+        TuringComputable(g ∘ f)  BY Definition(TuringComputable)
+        Computable(g ∘ f)        BY ChurchTuring
+    }
+  
+    THEOREM PartialUndecidabilityOfComputable {
+      STATEMENT:  
+        NOT PartialComputable(Computable)
+        
+      PROOF:
+        REWRITE PartialComputable(Computable)
+          <-> EXISTS (M : TMProgram).
+                FORALL (e : Nat).
+                  Computable(Decode(e)) <-> Halts(M, e)
+                  
+        ASSUME PartialComputable(Computable);
+        
+        LET H = μ(LAMBDA (e : Nat). Halts(Decode(e), e));
+        
+        Computable(Decode(H))
+          <-> Halts(Decode(H), H)  BY ASSUMPTION
+          <-> Computable(Decode(H)) BY Definition(μ), Definition(H)
+          
+        CONTRADICTION   
+    }
+  }
+}

@@ -1,0 +1,144 @@
+CONCEPT FundamentalMetaTheory {
+  IMPORT SymbolicDualityEmergence
+  IMPORT MinimalFundamentalTheory
+
+  LANGUAGE {
+    TYPE FundamentalTheory <: Theory {
+      REQUIRE ∀ (T : Theory) . ∃ (E : Emergence) . (E.Fine = THIS) ∧ (E.Coarse = T)
+    }
+
+    FUNC Unify(T1 : Theory, T2 : Theory) -> FundamentalTheory
+    FUNC Quantize(T : Theory) -> QuantumTheory
+    FUNC Reduce(T : FundamentalTheory, R : SymTensor) -> Theory
+
+    PRED Consistent(T : FundamentalTheory)
+    PRED Background_Independent(T : FundamentalTheory)
+    PRED Nonperturbative(T : FundamentalTheory)
+    PRED Unique(T : FundamentalTheory)
+  }
+
+  AXIOMS {
+    UnificationProperty {
+      STATEMENT :
+        ∀ (T1 : Theory, T2 : Theory) .
+          (Unify(T1, T2)).StateSpace = (T1.StateSpace × T2.StateSpace) ∧
+          (Unify(T1, T2)).Dynamics = (T1.Dynamics ⊗ T2.Dynamics)
+    }
+
+    EmergenceProperty {
+      STATEMENT :
+        ∀ (TF : FundamentalTheory, TC : Theory) .
+          (∃ (E : Emergence) . (E.Fine = TF) ∧ (E.Coarse = TC)) <->
+          (TC = Reduce(TF, R) for some R)
+    }
+
+    ConsistencyProperty {
+      STATEMENT :
+        ∀ (T : FundamentalTheory) .
+          Consistent(T) <->
+            (Quantize(T) is anomaly-free) ∧
+            (T.Dynamics is well-defined)
+    }
+
+    BackgroundIndependenceProperty {
+      STATEMENT :
+        ∀ (T : FundamentalTheory) .
+          Background_Independent(T) <->
+            ∀ (B : SymTensor) .
+              (Reduce(T, B) = T)
+    }
+
+    NonperturbativeProperty {
+      STATEMENT :
+        ∀ (T : FundamentalTheory) .
+          Nonperturbative(T) <->
+            ∀ (P : SymTensor -> SymTensor) .
+              (P = T.Dynamics) ->
+                (P is non-polynomial)
+    }
+
+    UniquenessProperty {
+      STATEMENT :
+        ∀ (T : FundamentalTheory) .
+          Unique(T) <->
+            ∀ (T' : FundamentalTheory) .
+              (Consistent(T') ∧ Background_Independent(T') ∧ Nonperturbative(T')) ->
+                (T' = T)
+    }
+  }
+
+  THEOREMS {
+    FundamentalUniversality {
+      STATEMENT :
+        ∃! (T : FundamentalTheory) .
+          (Consistent(T) ∧ Background_Independent(T) ∧ Nonperturbative(T)) ∧
+          (∀ (T' : Theory) . ∃ (E : Emergence) . (E.Fine = T) ∧ (E.Coarse = T'))
+
+      PROOF {
+        ASSUME ∃ (T : FundamentalTheory) . 
+          (Consistent(T) ∧ Background_Independent(T) ∧ Nonperturbative(T))
+        
+        PROVE Unique(T) BY UniquenessProperty
+        
+        LET T' : Theory
+        
+        HAVE ∃ (E : Emergence) . (E.Fine = T) ∧ (E.Coarse = T') BY {
+          LET R : SymTensor
+          HAVE (T' = Reduce(T, R)) BY EmergenceProperty
+          
+          LET E : Emergence
+            WITH (E.Fine = T)
+             AND (E.Coarse = T')
+             AND (E.Approximation = λ (ψ : T.StateSpace) . Project(ψ, R))
+             AND (E.CoarseGraining = λ (q : T.Quantities) . Approximate(q, T'.Quantities))
+             AND (E.Novel = T'.Quantities \ E.CoarseGraining(T.Quantities))
+             AND (E.Robust = λ (q_F : T.Quantities), (q_C : T'.Quantities) .
+                    (q_C = E.CoarseGraining(q_F)) ∧
+                    ∀ (δq_F : T.Quantities) . (|δq_F| < ε) -> (|E.CoarseGraining(δq_F) - q_C| < ε))
+        }
+        
+        CONCLUDE ∀ (T' : Theory) . ∃ (E : Emergence) . (E.Fine = T) ∧ (E.Coarse = T')
+      }
+    }
+
+    DualityEmergenceComplementarity {
+      STATEMENT :
+        ∀ (TF : FundamentalTheory), (T1 : Theory), (T2 : Theory) .
+          (∃ (D : Duality) . (D.T1 = T1) ∧ (D.T2 = T2)) ∧
+          (∃ (E : Emergence) . (E.Fine = TF) ∧ (E.Coarse = T1)) ->
+            ∃ (E' : Emergence) . (E'.Fine = TF) ∧ (E'.Coarse = T2)
+
+      PROOF {
+        LET TF : FundamentalTheory, T1 : Theory, T2 : Theory
+          ASSUME (∃ (D : Duality) . (D.T1 = T1) ∧ (D.T2 = T2)) ∧
+                 (∃ (E : Emergence) . (E.Fine = TF) ∧ (E.Coarse = T1))
+
+        HAVE (T1 = Reduce(TF, R1)) for some R1 BY EmergenceProperty
+
+        LET R2 : SymTensor
+          WITH (T2 = Reduce(TF, R2)) BY {
+            LET D : Duality
+              WITH (D.T1 = T1) AND (D.T2 = T2)
+            
+            LET R2 = D.QuantityMap(R1)
+            
+            HAVE (T2.StateSpace = D.StateMap(T1.StateSpace))
+             AND (T2.Quantities = D.QuantityMap(T1.Quantities))
+             AND (T2.Dynamics = D.StateMap(T1.Dynamics))
+              BY DualityConsistency[D]
+            
+            REWRITE T2.StateSpace = D.StateMap(Reduce(TF, R1).StateSpace)  
+                                  = Reduce(TF, R2).StateSpace
+              AND T2.Quantities = D.QuantityMap(Reduce(TF, R1).Quantities)
+                                = Reduce(TF, R2).Quantities
+              AND T2.Dynamics = D.StateMap(Reduce(TF, R1).Dynamics)  
+                              = Reduce(TF, R2).Dynamics
+                BY UnificationProperty, EmergenceProperty
+          }
+        
+        CONCLUDE ∃ (E' : Emergence) . (E'.Fine = TF) ∧ (E'.Coarse = T2)
+          BY EmergenceProperty      
+      }
+    }
+  }
+}

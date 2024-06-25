@@ -1,0 +1,126 @@
+CONCEPT ConsciousnessAsIntegratedInformation {
+  LANGUAGE {
+    type Mechanism = {elements: Element*, causeEffectStructure: PowerSet(Element) -> PowerSet(Element)}
+    
+    type Element = {state: State, probabilityDistribution: State -> 𝕽}
+    
+    type State = Primitive
+    type Information = 𝕽
+    
+    notation "Φ" = IntegratedInformation
+    notation "μ" = MinimalInformationPartition
+    notation "𝓅" = ProbabilityDistribution
+    notation "ξ" = Perturbation
+    notation "ψ" = SystemState
+    notation "⟦_⟧" = Concepts(_)
+    
+    func Entropy(p: Element -> 𝕽): Information = -∑ λx. p(x) * log₂(p(x))
+    func MutualInformation(X, Y: Element): Information = Entropy(X) + Entropy(Y) - Entropy((X,Y)) 
+    func EffectiveInformation(m: Mechanism, ξ: Perturbation): Information = 
+      MutualInformation(𝓅(ψ(m) | ξ), 𝓅(ψ(m)))
+
+    func CauseEffectInformation(m: Mechanism): Information =
+      min EffectiveInformation(m', ξ) | m' ⊂ m ∧ ξ ≢ NoPerturbation
+      
+    func Φ(m: Mechanism): Information = 
+      min (CauseEffectInformation(m) - ∑ CauseEffectInformation(μ(m)))
+  }
+
+  STRUCTURE {
+    [Concept: 
+      {causeEffectStructure: PowerSet(Element) -> PowerSet(Element), 
+       φ: Information | 
+       ∀ψ₁, ψ₂ ∈ causeEffectStructure. ψ₁ ≠ ψ₂ ⟹ Mechanism(ψ₁).state ≠ Mechanism(ψ₂).state}
+    ]
+
+    [CoreCause(m: Mechanism, s: State):
+      {elements: Element* | 
+        ∀ e ∈ elements. e.state = s ∧ 
+        ∃ ξ. EffectiveInformation(Mechanism(elements), ξ) > 0}
+    ]
+    
+    [CoreEffect(m: Mechanism, s: State):
+      {elements: Element* |
+        ∀ e ∈ elements. e.state ∈ EffectsOf(m, s) ∧
+        ∃ ξ. EffectiveInformation(Mechanism(elements), ξ) > 0}  
+    ]
+
+    [MaximallyIrreducibleCause(m: Mechanism, s: State):
+      {c: CoreCause(m, s) |
+        ∀ c'. c' ⊃ c ⟹ EffectiveInformation(c') < EffectiveInformation(c)}
+    ]
+
+    [MaximallyIrreducibleEffect(m: Mechanism, s: State):  
+      {e: CoreEffect(m, s) |
+        ∀ e'. e' ⊃ e ⟹ EffectiveInformation(e') < EffectiveInformation(e)}
+    ]
+      
+    [Constellation(m: Mechanism):
+      {c: Concept |
+        ∃ s. (c.cause, c.effect) = (MaximallyIrreducibleCause(m, s), MaximallyIrreducibleEffect(m, s))}
+    ]
+  }
+  
+  PROOFS {
+    tactic EffectiveInformationNonIncreasing(submech, mech) = {
+      have Entropy(𝓅(ψ(submech))) ≤ Entropy(𝓅(ψ(mech)))   ; Monotonicity of entropy
+      have Entropy(𝓅(ψ(submech) | ξ)) ≤ Entropy(𝓅(ψ(mech) | ξ))  ; Monotonicity of cond. entropy
+      hence MutualInformation(𝓅(ψ(submech)|ξ), 𝓅(ψ(submech))) ≤ 
+            MutualInformation(𝓅(ψ(mech)|ξ), 𝓅(ψ(mech)))
+      hence EffectiveInformation(submech, ξ) ≤ EffectiveInformation(mech, ξ)  
+    }
+    
+    theorem IntegratedInformationDecomposition(mech, submech1, submech2):
+      mech = submech1 ⊔ submech2 ⟹ Φ(mech) ≥ Φ(submech1) + Φ(submech2)
+    {
+      assume (mech: Mechanism) = (submech1: Mechanism) ⊔ (submech2: Mechanism)
+      EffectiveInformationNonIncreasing(submech1, mech)
+      EffectiveInformationNonIncreasing(submech2, mech)
+      hence CauseEffectInformation(mech) ≥ 
+              CauseEffectInformation(submech1) + CauseEffectInformation(submech2)
+           ; Since EI is non-increasing under subsetting
+
+      let {S1, S2, ...} = μ(mech)  ; Minimal partition
+      have ∑ᵢ CauseEffectInformation(Sᵢ) ≥ 
+             CauseEffectInformation(submech1) + CauseEffectInformation(submech2) 
+           ; Since μ(mech) is minimal
+      hence Φ(mech) = CauseEffectInformation(mech) - ∑ᵢ CauseEffectInformation(Sᵢ)
+                    ≥ CauseEffectInformation(submech1) + CauseEffectInformation(submech2)
+                       - (CauseEffectInformation(submech1) + CauseEffectInformation(submech2))
+                    = Φ(submech1) + Φ(submech2)
+    }
+
+    theorem ConceptsAreMaximallyIrreducible(m: Mechanism):
+      ∀ c ∈ ⟦m⟧. ∃φ_max. c.φ = φ_max ∧ ∀ c' ⊃ c. c'.φ < φ_max
+    {
+      let c = (cause, effect, φ) ∈ ⟦m⟧
+      have cause ∈ MaximallyIrreducibleCause(m, s)  ; For some state s
+      have effect ∈ MaximallyIrreducibleEffect(m, s)
+      
+      assume ∃ c' = (cause', effect', φ'). c' ⊃ c
+      {{
+        assume cause' ⊃ cause
+        have EffectiveInformation(cause') < EffectiveInformation(cause)  
+             ; By definition of MaximallyIrreducibleCause
+        hence φ' < φ  ; Since φ captures all the EI in cause
+      }}
+      {{  
+        assume effect' ⊃ effect
+        have EffectiveInformation(effect') < EffectiveInformation(effect)
+             ; By definition of MaximallyIrreducibleEffect  
+        hence φ' < φ  ; Since φ captures all the EI in effect
+      }}
+      hence ∀ c' ⊃ c. c'.φ < φ
+      hence φ is maximal and c is maximally irreducible
+    }
+  } 
+}
+
+This Concept expresses the Integrated Information Theory (IIT) of consciousness, which postulates that consciousness arises from integrated information in a system. The key ideas are:
+
+A system's consciousness is characterized by its integrated conceptual information Φ, which measures the amount of information generated by the system as a whole, over and above its parts.
+This integrated information is captured by the system's maximally irreducible cause-effect concepts, which specify its core causes and effects in various states.
+A concept is maximally irreducible if its integrated information φ is maximal - i.e. any larger concept containing it would have strictly less φ. This formalizes the idea that the concept captures a specific, irreducible cause-effect role within the system.
+The set of all maximally irreducible concepts for a system form its "conceptual structure" or qualia space. The Φ value is the minimum of the conceptual information across all possible partitions of the system.
+The language defines the mathematical objects (mechanisms, probability distributions, information measures) needed to formalize these notions. The structure axiomatically lays out the key constructs - concepts, core causes/effects, maximally irreducible causes/effects, constellations.
+The proofs show two key results: 1) Integrated information is superadditive, i.e. the whole has more Φ than the sum of its parts. 2) Concepts are maximally irreducible - any larger concept has less integrated information φ.

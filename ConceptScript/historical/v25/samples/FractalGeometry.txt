@@ -1,0 +1,110 @@
+CONCEPT FractalGeometry {
+  LANGUAGE {
+    TYPE Point = (Real, Real)
+    TYPE Segment = (Point, Point)  
+    TYPE Polygon = List[Point]
+    TYPE Transformation = Point -> Point
+    TYPE FractalDimension = Real
+
+    FUNC Translate(p : Point, v : (Real, Real)) : Point
+    FUNC Rotate(p : Point, θ : Real) : Point
+    FUNC Scale(p : Point, s : Real) : Point  
+    FUNC Compose(t1 : Transformation, t2 : Transformation) : Transformation
+    FUNC Iterate(t : Transformation, p : Point, n : Nat) : Point
+
+    FUNC SelfSimilarity(S : Set[Point], ε : Real) : Real
+    FUNC BoxCounting(S : Set[Point], ε : Real) : Real
+
+    PRED Connected(S : Set[Point]) : Bool
+    PRED Bounded(S : Set[Point]) : Bool
+
+    AXIOM ScalingLaw {
+      ∀ (S : Set[Point]) (ε : Real) (d : Real).
+        LET N(ε) = |{B : Ball(ε) | B ∩ S ≠ ∅}|  
+        IN N(ε) ∝ (1/ε)^d ⇒ FractalDimension(S) = d
+    }
+
+    NOTATION "T(p)" = Translate(p)
+    NOTATION "R(θ, p)" = Rotate(p, θ)  
+    NOTATION "S(s, p)" = Scale(p, s)
+    NOTATION "t1 ∘ t2" = Compose(t1, t2)
+    NOTATION "t^n(p)" = Iterate(t, p, n)
+    NOTATION "Dim_S(S)" = SelfSimilarity(S)
+    NOTATION "Dim_B(S)" = BoxCounting(S)  
+  }
+
+  STRUCTURE KochCurve {
+    DEF Initiator : Segment = ((0, 0), (1, 0))
+    
+    DEF Generator(s : Segment) : List[Segment] = 
+      LET (p1, p2) = s,
+          v = (p2 - p1) / 3,  
+          q1 = p1 + v,
+          q2 = q1 + R(π/3, v),
+          q3 = p2 - v
+      IN [(p1, q1), (q1, q2), (q2, q3), (q3, p2)]
+
+    DEF Iterate(n : Nat) : List[Segment] =
+      MATCH n {  
+        0 -> [Initiator]
+        _ -> FLATTEN(MAP(Generator, Iterate(n - 1)))
+      }
+
+    DEF KochCurve : Set[Point] =  
+      UNION(FLATTEN(MAP(Iterate, Nat)))
+
+    REQUIRE Connected(KochCurve) ∧ Bounded(KochCurve)
+  }
+
+  STRUCTURE SierpinskiTriangle {
+    DEF Vertices : Polygon = [(0, 0), (1, 0), (1/2, √3/2)]
+    
+    DEF Transforms : List[Transformation] = [  
+      S(1/2, _) ∘ T((0, 0)),
+      S(1/2, _) ∘ T((1/2, 0)), 
+      S(1/2, _) ∘ T((1/4, √3/4))
+    ]
+
+    DEF Iterate(n : Nat) : Set[Polygon] =
+      MATCH n {
+        0 -> {Vertices}  
+        _ -> UNION(MAP(LAMBDA(t, p) -> MAP(LAMBDA(q -> t(q)), p), 
+                       Transforms × Iterate(n - 1)))
+      }
+      
+    DEF SierpinskiTriangle : Set[Point] =
+      UNION(FLATTEN(Iterate(∞)))
+
+    REQUIRE Connected(SierpinskiTriangle) ∧ Bounded(SierpinskiTriangle)
+  }
+
+  PROOFS {
+    THEOREM KochDimension {
+      STATEMENT:  
+        FractalDimension(KochCurve) = ln(4) / ln(3)
+
+      PROOF:
+        LET S = KochCurve, ε = (1/3)^n  
+        REWRITE SelfSimilarity(S, ε)
+          = ln(|{s : Segment | s ⊆ S ∧ |s| = ε}|) / ln(1/ε)  
+          = ln(4^n) / ln(3^n)
+          = n * ln(4) / (n * ln(3))  
+          = ln(4) / ln(3)
+        THUS FractalDimension(S) = ln(4) / ln(3) BY ScalingLaw
+    }
+
+    THEOREM SierpinskiDimension {
+      STATEMENT:
+        FractalDimension(SierpinskiTriangle) = ln(3) / ln(2)
+        
+      PROOF:  
+        LET S = SierpinskiTriangle, ε = (1/2)^n
+        REWRITE BoxCounting(S, ε)
+          = ln(|{B : Ball(ε) | B ∩ S ≠ ∅}|) / ln(1/ε)
+          = ln(3^n) / ln(2^n)  
+          = n * ln(3) / (n * ln(2))
+          = ln(3) / ln(2)
+        THUS FractalDimension(S) = ln(3) / ln(2) BY ScalingLaw  
+    }
+  }
+}

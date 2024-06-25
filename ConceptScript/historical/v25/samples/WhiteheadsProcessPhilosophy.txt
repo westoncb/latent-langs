@@ -1,0 +1,104 @@
+CONCEPT WhiteheadsProcessPhilosophy {
+  LANGUAGE {
+    TYPE Entity
+    TYPE Occasion = (Creation, ManyDeterminations, OneConcrescence)
+    TYPE Prehension = (Subject, Datum, SubjectiveForms)
+    TYPE Proposition = (Logical, AbstractPotentiality)
+    TYPE EternalObject  
+    TYPE Creativity
+    TYPE God
+
+    FUNC Concrescence : List[Prehension] -> Occasion
+    FUNC Transition : Occasion -> Creativity -> List[Occasion]
+    FUNC Satisfaction : Occasion -> Entity
+    FUNC Vision : God -> List[EternalObject]
+
+    PRED Applicable : EternalObject -> Occasion -> Bool
+    PRED Ingressed : EternalObject -> Occasion -> Bool
+
+    AXIOM CreativityCausesTransition {
+      ∀ (o : Occasion) (c : Creativity) (o' : List[Occasion]).
+        o' ∈ Transition(o, c) ⇒ Causes(o, o')   
+    }  
+
+    AXIOM IngredientCausation {
+      ∀ (p : Prehension) (o : Occasion).
+        p.Subject = o ⇒ Causes(p.Datum, o)
+    }
+
+    AXIOM VisionGuidesConcrescences {
+      ∀ (o : Occasion) (es : List[EternalObject]).
+        es ⊆ Vision(God) ∧ ∀ (e : EternalObject). e ∈ es ⇒ Applicable(e, o) 
+        ⇒ ∃ (o' : Occasion). o' ∈ Transition(o, Creativity) ∧ ∀ (e : EternalObject). e ∈ es ⇒ Ingressed(e, o')
+    }
+
+    NOTATION "()" = Creativity
+    NOTATION "([])" = Vision(God)
+  }
+
+  STRUCTURE WorldOccasions {
+    FUNC Actual : Occasion -> Bool
+    DEF Actual(o) ⇔ ∃ (s : Entity). s = Satisfaction(o) 
+
+    LET InitialOccasion : Occasion
+    DEF Occasions = { o | ∃ (n : Nat). o ∈ Transition^n(InitialOccasion, Creativity) } 
+    REQUIRE ∀ (o : Occasion). Actual(o) ⇔ o ∈ Occasions
+  }
+
+  PROOFS {
+    THEOREM CreativityNecessary {
+      STATEMENT:
+        ∀ (o : Occasion). Causes(Creativity, o)
+
+      PROOF:
+        LET o : Occasion  
+        BY CreativityCausesTransition
+        HAVE ∀ (o' : List[Occasion]).
+          o ∈ o' ⇒ Causes((Transition^(-1))(o'), o)
+        HENCE Causes(Creativity, o)  
+    }
+
+    THEOREM WorldHasNoStart {
+      STATEMENT:  
+        ∀ (o : Occasion). Actual(o) ⇒ ∃ (o' : Occasion). Actual(o') ∧ Causes(o', o)
+
+      PROOF:
+        LET o : Occasion
+        ASSUME Actual(o)
+        SO o ∈ Occasions  
+          BY DEFINITION Actual, Occasions
+        CASES o = InitialOccasion  
+        CASE o = InitialOccasion:
+          SHOW Causes(Creativity, o)  
+            BY CreativityNecessary
+          LET God : Entity
+          SHOW Actual(God) ∧ Causes(God, o)
+            BY DEFINITION God, Vision
+        CASE o ≠ InitialOccasion:  
+          o ∈ Transition(Transition^(-1)(o), Creativity)
+            BY DEFINITION Occasions
+          LET o' = (Transition^(-1))(o)
+          SHOW Actual(o') ∧ Causes(o', o)  
+            BY DEFINITION Occasions, CreativityCausesTransition
+    }
+
+    THEOREM PropositionsDirectWorld {  
+      STATEMENT:
+        ∀ (o : Occasion) (p : Proposition). 
+          Ingressed(p.AbstractPotentiality, o) ⇒ Satisfies(o, p.Logical)  
+
+      PROOF:  
+        LET o : Occasion, p : Proposition
+        ASSUME Ingressed(p.AbstractPotentiality, o)
+        HENCE ∃ (e : EternalObject) (es : List[EternalObject]). 
+          es ⊆ Vision(God) ∧ e ∈ es ∧ Applicable(e, Transition^(-1)(o)) ∧ e = p.AbstractPotentiality
+          BY VisionGuidesConcrescences, DEFINITION Applicable, Ingressed
+        LET e : EternalObject, es : List[EternalObject]
+          SUCH THAT es ⊆ Vision(God) ∧ e ∈ es ∧ Applicable(e, Transition^(-1)(o)) ∧ e = p.AbstractPotentiality
+        e ⊨ p.Logical  
+          BY DEFINITION Proposition, Applicable
+        SHOW Satisfies(o, p.Logical)
+          BY DEFINITION Satisfaction
+      }
+    }
+  }

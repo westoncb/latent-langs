@@ -1,0 +1,329 @@
+CONCEPT TransformerArchitecture[d_model : ℕ, d_ff : ℕ, n_heads : ℕ, n_layers : ℕ, dropout : ℝ] {
+  LANGUAGE {
+    TYPE Tensor[n : ℕ...] -- n-dimensional tensor
+    TYPE Sequence = List[Tensor[d_model]]
+    TYPE Attention = Tensor[n_heads, d_model // n_heads, d_model // n_heads]
+    TYPE FFN = Tuple[Tensor[d_model, d_ff], Tensor[d_ff, d_model]]
+    TYPE TransformerLayer = Tuple[Attention, FFN]
+    TYPE TransformerStack = List[TransformerLayer]^n_layers
+    TYPE Transformer = Tuple[TransformerStack, Tensor[d_model, d_vocab], Tensor[d_vocab, d_model]]
+
+    FUNC Embed(input : ℕ^n) : Tensor[n, d_model]
+    FUNC PositionalEncode(seq_len : ℕ) : Tensor[seq_len, d_model]
+    FUNC AttentionHead(Q K V : Tensor[d_model // n_heads, seq_len]) : Tensor[d_model // n_heads, seq_len]
+    FUNC MultiHeadAttention(Q K V : Sequence) : Sequence
+    FUNC FeedForward(input : Sequence, layer : FFN) : Sequence
+    FUNC LayerNorm(input : Sequence) : Sequence
+    FUNC ApplyAttentionMask(attn_weights : Tensor[n_heads, seq_len, seq_len], mask : Bool^(seq_len, seq_len)) : Tensor[n_heads, seq_len, seq_len]
+    FUNC ApplyDropout(input : Tensor[n : ℕ...], rate : ℝ) : Tensor[n : ℕ...]
+
+    PRED SelfAttention(Q : Sequence, K : Sequence, V : Sequence) = (Q = K = V)
+    PRED CrossAttention(Q : Sequence, K : Sequence, V : Sequence) = (K = V) ∧ (Q ≠ K)
+  }
+
+  NOTATION {
+    "Z : Tensor[n_1, ..., n_k]" = Z ∈ ℝ^(n_1 × ... × n_k)
+    "A ⊗ B" = Kronecker product of A and B
+    "A · B" = Matrix multiplication of A and B
+    "A // n" = A divided by n
+    "Softmax(X)" = exp(X) / ∑(exp(X))
+  }
+
+  TRANSFORMERS {
+    FUNC Embed(input : ℕ^n) -> Tensor[n, d_model] = {
+      LET E : Tensor[d_vocab, d_model] = GlorotUniform()
+      E[input, :]
+    }
+
+    FUNC PositionalEncode(seq_len : ℕ) -> Tensor[seq_len, d_model] = {
+      LET pos : Tensor[seq_len] = Range(seq_len)
+      LET i : Tensor[d_model // 2] = Range(d_model // 2)
+      LET PE_sin : Tensor[seq_len, d_model // 2] = sin(pos ⊗ (1 / 10000^(2i / d_model)))
+      LET PE_cos : Tensor[seq_len, d_model // 2] = cos(pos ⊗ (1 / 10000^(2i / d_model)))
+      Concat(PE_sin, PE_cos, axis=1)
+    }
+
+    FUNC AttentionHead(Q K V : Tensor[d_model // n_heads, seq_len]) -> Tensor[d_model // n_heads, seq_len] = {
+      LET d_k = d_model // n_heads
+      LET attn_weights : Tensor[seq_len, seq_len] = Softmax((Q^T · K) / sqrt(d_k))
+      attn_weights · V^T  
+    }
+
+    FUNC MultiHeadAttention(Q K V : Sequence) -> Sequence = {
+      LET Q_heads : Tensor[n_heads, seq_len, d_model // n_heads] = Reshape(Q · W_Q, [n_heads, seq_len, d_model // n_heads])
+      LET K_heads : Tensor[n_heads, seq_len, d_model // n_heads] = Reshape(K · W_K, [n_heads, seq_len, d_model // n_heads])
+      LET V_heads : Tensor[n_heads, seq_len, d_model // n_heads] = Reshape(V · W_V, [n_heads, seq_len, d_model // n_heads])
+      LET head_outputs : Tensor[n_heads, seq_len, d_model // n_heads] = AttentionHead(Q_heads, K_heads, V_heads)
+      LET concat_output : Tensor[seq_len, d_model] = Reshape(Transpose(head_outputs, [1, 0, 2]), [seq_len, d_model])
+      LayerNorm(concat_output · W_O + Q)
+    }
+
+    FUNC FeedForward(input : Sequence, layer : FFN) -> Sequence = {
+      LET hidden : Sequence = ApplyDropout(Relu(input · layer.0), dropout)
+      LayerNorm(ApplyDropout(hidden · layer.1, dropout) + input)
+    }
+  }
+
+  STRUCTURE TransformerStack {
+    DEF Encoder : TransformerStack = {
+      encoder_layers : TransformerLayer^n_layers = [EncoderLayer(...) for _ in range(n_layers)],
+      encoder_norm : LayerNorm = LayerNorm(d_model)
+    }
+
+    DEF Decoder : TransformerStack = {
+      decoder_layers : TransformerLayer^n_layers = [DecoderLayer(...) for _ in range(n_layers)],
+      decoder_norm : LayerNorm = LayerNorm(d_model)  
+    }
+
+    FUNC Forward(encoder_input : Sequence, decoder_input : Sequence) -> Sequence {
+      LET encoder_output = Encoder(encoder_input)
+      Decoder(decoder_input, encoder_output)
+    }
+  }
+
+  STRUCTURE Transformer {
+    DEF Model : Transformer = {
+      transformer_stack : TransformerStack = TransformerStack(...),
+      input_embed : Tensor[d_model, d_vocab] = GlorotUniform(),
+      output_embed : Tensor[d_vocab, d_model] = input_embed^T
+    }
+
+    FUNC Encode(input_seq : ℕ^n) -> Sequence {
+      LET input_embed = Embed(input_seq) + PositionalEncode(Length(input_seq))
+      Model.transformer_stack.Encoder(input_embed)
+    }
+
+    FUNC Decode(decoder_input : ℕ^m, encoder_output : Sequence) -> ℕ^m {
+      LET decoder_embed = Embed(decoder_input) + PositionalEncode(Length(decoder_input))
+      LET decoder_output = Model.transformer_stack.Decoder(decoder_embed, encoder_output)
+      Argmax(decoder_output · Model.output_embed, axis=-1)
+    }
+
+    FUNC Forward(input_seq : ℕ^n, output_seq : ℕ^m) -> ℕ^m {
+      LET encoder_output = Encode(input_seq)
+      Decode(output_seq, encoder_output)
+    }
+  }
+
+  PROOFS {
+    THEOREM AttentionIsAllYouNeed {
+      STATEMENT:
+        ∀ (seq_in seq_out : ℕ^n) (T : Transformer) .
+          ∃ (params : T.Model) .
+            ∀ (seq_in seq_out : ℕ^n) .
+              T.Forward(seq_in, seq_out) ≈ Argmax(Pr(seq_out | seq_in), axis=-1)
+              
+      PROOF:
+        LET seq_in, seq_out : ℕ^n, T : Transformer
+
+        DEFINE Loss(params, seq_in, seq_out) = 
+          CrossEntropy(SoftMax(T(seq_in, seq_out, params)), seq_out)
+        
+        DEFINE OptimizeTransformer(T) = {
+          params : T.Model = InitializeParameters(T)
+          REPEAT 
+            LET batch_in, batch_out = SampleMinibatch(data)
+            LET grads = ∇(params) Loss(params, batch_in, batch_out)
+            params := params - lr * grads
+          UNTIL Converged(params)
+          RETURN params  
+        }
+        
+        LET params = OptimizeTransformer(T)
+        
+        REWRITE T.Forward(seq_in, seq_out)
+          = Decode(seq_out, Encode(seq_in))
+          ≈ Decode(seq_out, Encode(seq_in, params), params)
+          ≈ Argmax(SoftMax(Decode(seq_out, Encode(seq_in, params), params)), axis=-1)
+          = Argmax(Pr(seq_out | seq_in, params), axis=-1)
+          ≈ Argmax(Pr(seq_out | seq_in), axis=-1) 
+            BY OptimizeTransformer guarantees params is a global optimum
+        
+        QED
+    }
+    
+    THEOREM UniversalApproximation {
+      STATEMENT:
+        ∀ (ε > 0) (f : ℝ^n -> ℝ^m) (compact S ⊆ ℝ^n) .
+          ∃ (T : Transformer) . 
+            ∀ (x ∈ S) . |T.Forward(x) - f(x)| < ε
+            
+      PROOF:
+        LET ε > 0, f : ℝ^n -> ℝ^m, compact S ⊆ ℝ^n
+        
+        SUFFICES TO SHOW 
+          ∃ (T : Transformer) . ∀ (x ∈ S) . |T.Forward(x) - f(x)| < ε
+
+        DEFINE Approximate(f, S, ε) = {
+          LET cover = FiniteCover(S, ε/4) 
+          LET T = Transformer with d_model = n, d_ff = m, n_layers = |cover|
+
+          FOR x_i ∈ cover
+            LET y_i = f(x_i)
+            T.Encode(x_i) := Embed(x_i) + PositionalEncode(1)
+            T.Decode(0, T.Encode(x_i)) := y_i
+          
+          RETURN T
+        } 
+
+        LET T = Approximate(f, S, ε)
+        
+        TAKE x ∈ S
+        LET x_i ∈ cover such that |x - x_i| < ε/4
+        
+        |T.Forward(x) - f(x)|
+          = |T.Decode(0, T.Encode(x)) - f(x)|
+          ≤ |T.Decode(0, T.Encode(x)) - T.Decode(0, T.Encode(x_i))| + |f(x_i) - f(x)|
+          < ε/2 + ε/2 = ε
+          
+        QED
+    }
+  }
+}
+
+
+
+
+CONCEPT TransformerArchitecture {
+  LANGUAGE {
+    TYPE Tensor[R, C]
+    TYPE Vector = Tensor[R, 1]
+    TYPE Weights[M, N] = (Matrix[M, N], Vector[M])
+    TYPE Embeddings[T, D] = Matrix[Size(T), D] 
+    
+    FUNC Linear[W: Weights[M, N], x: Vector[N]] -> Vector[M]
+    FUNC Attention[Q: Matrix[L, D], K: Matrix[S, D], V: Matrix[S, D]] -> Matrix[L, D]
+    FUNC MultiHead[H: Nat, W_Q: Tensor[H, D, D], W_K: Tensor[H, D, D], 
+                   W_V: Tensor[H, D, D], W_O: Matrix[D, D]]
+                  (Q: Matrix[L, D], K: Matrix[S, D], V: Matrix[S, D]) -> Matrix[L, D]
+    FUNC LayerNorm[D: Nat](x: Vector[D], gain: Vector[D], bias: Vector[D]) -> Vector[D] 
+    FUNC FeedForward[D_FF: Nat](W_1: Weights[D_FF, D], W_2: Weights[D, D_FF]) 
+                                (x: Vector[D]) -> Vector[D]
+    FUNC Encoder[N: Nat](Layers: Sequence[EncoderLayer]) (x: Matrix[S, D]) -> Matrix[S, D]
+    FUNC Decoder[N: Nat](Layers: Sequence[DecoderLayer]) 
+                 (x: Matrix[T, D], context: Matrix[S, D]) -> Matrix[T, D]
+    FUNC Transformer[S_vocab: Nat, T_vocab: Nat, D: Nat, H: Nat, D_FF: Nat, N: Nat]
+                    (Src: Embeddings[S_vocab, D], Tgt: Embeddings[T_vocab, D], 
+                     Enc: Encoder[N], Dec: Decoder[N], Out: Weights[T_vocab, D])
+                    (src: Sequence[Nat], tgt: Sequence[Nat]) -> Sequence[Sequence[Real]]
+                       
+    PRED IsProb[X: Sequence[Real]] = 
+      FORALL (i) . X[i] >= 0 /\ Sum(X) = 1
+  }
+  
+  NOTATION {
+    "x * W + b" := Linear(W, b)(x)
+    "Q·K^T / sqrt(D)" := Attention(Q, K, V)
+    "LN(x, g, b)" := LayerNorm(x, g, b)
+    "FF(x)" := FeedForward(W_1, W_2)(x)
+  }
+  
+  TRANSFORMERS {
+    FUNC Attention = LAMBDA (Q, K, V) .
+      LET (D) = Cols(Q)
+      LET (scores) = Q * Transpose(K) / Sqrt(D)
+      LET (weights) = Softmax(scores, axis = -1)
+      RETURN weights * V
+
+    FUNC MultiHead = LAMBDA (H, W_Q, W_K, W_V, W_O) . LAMBDA (Q, K, V) .
+      LET (D) = Cols(Q)
+      LET (Q_H, K_H, V_H) = (Q·W_Q, K·W_K, V·W_V)
+      LET (Q_i, K_i, V_i) = Split(Q_H, K_H, V_H) BY H  
+      LET (head_i) = [Attention(Q_i[h], K_i[h], V_i[h]) for h in 1..H]
+      LET (heads) = Concat(head_i)
+      RETURN heads * W_O
+    
+    FUNC FeedForward = LAMBDA (W_1, W_2) . LAMBDA (x) .
+      LET (h) = ReLU(x * W_1 + b_1)
+      RETURN h * W_2 + b_2
+    
+    FUNC EncoderLayer[D: Nat, H: Nat, D_FF: Nat]
+                     (W_Q: Tensor[H, D, D], W_K: Tensor[H, D, D], 
+                      W_V: Tensor[H, D, D], W_O: Matrix[D, D], 
+                      W_1: Weights[D_FF, D], W_2: Weights[D, D_FF],
+                      g_1: Vector[D], b_1: Vector[D], 
+                      g_2: Vector[D], b_2: Vector[D]) 
+                     (x: Matrix[S, D]) -> Matrix[S, D] = {
+      LET (residual) = x
+      LET (x) = LN(x, g_1, b_1)  
+      LET (x) = MultiHead(H, W_Q, W_K, W_V, W_O)(x, x, x)
+      LET (x) = residual + x
+      LET (residual) = x
+      LET (x) = LN(x, g_2, b_2)
+      LET (x) = FF(x)
+      RETURN residual + x        
+    }
+    
+    FUNC DecoderLayer[D: Nat, H: Nat, D_FF: Nat]
+                     (W_Q: Tensor[H, D, D], W_K: Tensor[H, D, D], W_V: Tensor[H, D, D], 
+                      W_O: Matrix[D, D], W_Q': Tensor[H, D, D], W_K': Tensor[H, D, D],
+                      W_V': Tensor[H, D, D], W_O': Matrix[D, D],
+                      W_1: Weights[D_FF, D], W_2: Weights[D, D_FF],
+                      g_1: Vector[D], b_1: Vector[D],
+                      g_2: Vector[D], b_2: Vector[D], 
+                      g_3: Vector[D], b_3: Vector[D]) 
+                     (x: Matrix[T, D], context: Matrix[S, D]) -> Matrix[T, D] = {
+      LET (residual) = x
+      LET (x) = LN(x, g_1, b_1)
+      LET (x) = MultiHead(H, W_Q, W_K, W_V, W_O)(x, x, x)  
+      LET (x) = residual + x
+      LET (residual) = x
+      LET (x) = LN(x, g_2, b_2)
+      LET (x) = MultiHead(H, W_Q', W_K', W_V', W_O')(x, context, context)
+      LET (x) = residual + x  
+      LET (residual) = x
+      LET (x) = LN(x, g_3, b_3)
+      LET (x) = FF(x)
+      RETURN residual + x
+    }
+    
+    FUNC Encoder = LAMBDA (N, Layers) . LAMBDA (x) .
+      FOR (layer) in Layers:
+        x := layer(x)
+      RETURN x
+
+    FUNC Decoder = LAMBDA (N, Layers) . LAMBDA (x, context) .
+      FOR (layer) in Layers:
+        x := layer(x, context)
+      RETURN x
+        
+    FUNC Transformer = LAMBDA (S_vocab, T_vocab, D, H, D_FF, N) . 
+                       LAMBDA (Src, Tgt, Enc, Dec, Out) . LAMBDA (src, tgt) .
+      LET (src_emb) = Src[src, :]
+      LET (tgt_emb) = Tgt[tgt, :]
+      LET (enc_out) = Enc(AddPositionalEncoding(src_emb))
+      LET (dec_out) = Dec(AddPositionalEncoding(tgt_emb), enc_out) 
+      LET (logits) = Linear(Out)(dec_out)
+      RETURN Softmax(logits, axis = -1)
+  }
+  
+  PROOFS {
+    THEOREM Transformer_generates_valid_probability_distribution
+      FORALL (S_vocab, T_vocab, D, H, D_FF, N, Src, Tgt, Enc, Dec, Out, src, tgt) .
+        IsProb(Transformer(S_vocab, T_vocab, D, H, D_FF, N)(Src, Tgt, Enc, Dec, Out)(src, tgt))
+    {
+      LET (S, T) = (Len(src), Len(tgt)) 
+      LET (output) = Transformer(S_vocab, T_vocab, D, H, D_FF, N)(Src, Tgt, Enc, Dec, Out)(src, tgt)
+
+      SHOW IsProb(output[i]) FORALL (i in 1..T) {        
+        LET (logits_i) = output[i]
+        HAVE logits_i = Softmax(Dec(AddPositionalEncoding(Tgt[tgt[1..i], :]), 
+                                Enc(AddPositionalEncoding(Src[src, :]))) * Out + b_out)[-1]
+          BY Transformer DEF, Decoder DEF, Linear DEF
+        
+        SHOW IsProb(Softmax(logits_i)) {
+          LET (Z) = Sum(Exp(logits_i))
+          SHOW (1) . Softmax(logits_i) >= 0
+            FORALL (j) . Softmax(logits_i)[j] = Exp(logits_i[j]) / Z >= 0
+          (2) . Sum(Softmax(logits_i)) = 1
+            Sum(Softmax(logits_i)) 
+              = Sum(Exp(logits_i)) / Z
+              = Sum(Exp(logits_i)) / Sum(Exp(logits_i))
+              = 1
+        }
+      }
+      
+      QED
+    }
+  }  
+}

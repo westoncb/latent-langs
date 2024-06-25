@@ -1,0 +1,85 @@
+CONCEPT ProofOptimizationDynamics {
+  EXTENDS InferentialDynamics {
+    type PseudoProof<L>
+    type ProofSpace<L>
+    type ProofLandscape<L>
+
+    func Entropy<L>(p: PseudoProof<L>): ℝ
+    func SemanticFit<L>(p: PseudoProof<L>, l: Language<L>): ℝ
+    func Project<L>(p: PseudoProof<L>): Proof<L>
+    func Gradient<L>(f: PseudoProof<L> -> ℝ, p: PseudoProof<L>): PseudoProof<L>
+    
+    pred IsProof<L>(p: PseudoProof<L>)
+    pred IsValidProof<L>(p: PseudoProof<L>, l: Language<L>)
+    
+    notation "H[p]" = Entropy(p)
+    notation "Fit[p, l]" = SemanticFit(p, l)
+    notation "∇f[p]" = Gradient(f, p)
+    notation "p̂" = Project(p)
+
+    func ProofLandscape<L>(l: Language<L>): ProofSpace<L> -> ℝ {
+      λp. H[p] - Fit[p, l]
+    }
+
+    infer OptimalProof<L>(l: Language<L>):  
+      argmin {ProofLandscape<L>(l)(p) | IsValidProof<L>(p, l)}
+
+    infer GradientDescentStep<L>(l: Language<L>, p: PseudoProof<L>, 
+                                 α: ℝ⁺, β: ℝ⁺):
+      let p' = p - α * ∇H[p] + β * ∇Fit[p, l] in
+      IsProof<L>(p̂') ∧ ProofLandscape<L>(l)(p̂') ≤ ProofLandscape<L>(l)(p̂)
+
+    infer GradientDescentConvergence<L>(l: Language<L>, p₀: PseudoProof<L>,
+                                         α: ℝ⁺, β: ℝ⁺):
+      let p(t) = Iterate(GradientDescentStep<L>(l, -, α, β), t)(p₀) in 
+      ∃p*: Proof<L>. IsValidProof<L>(p*, l) ∧
+                      lim (λt. ProofLandscape<L>(l)(p(t))) = ProofLandscape<L>(l)(p*)
+  }
+  
+  STRUCTURE {
+    ; Entropy-Fit Trade-off
+    ∀L, l: Language<L>, p: PseudoProof<L>. 
+      IsValidProof<L>(p, l) -> Fit[p, l] ≥ H[⟦l⟧] - H[p]
+
+    ; Projection Optimality  
+    ∀L, p: PseudoProof<L>. 
+      IsProof<L>(p̂) ∧ ∀q: Proof<L>. H[p̂] ≤ H[q] + dist(p, q)
+
+    ; Gradient Consistency
+    ∀L, f: PseudoProof<L> -> ℝ, p: PseudoProof<L>, ε: ℝ⁺.
+      f(p + ε * ∇f[p]) ≥ f(p) + O(ε)
+  }  
+
+  PROOFS {
+    theorem OptimalityOfConvergence<L>: 
+      ∀(l: Language<L>, p₀: PseudoProof<L>, α: ℝ⁺, β: ℝ⁺, p*: Proof<L>).
+        GradientDescentConvergence<L>(l, p₀, α, β) ∧ 
+        lim (λt. ProofLandscape<L>(l)(p(t))) = ProofLandscape<L>(l)(p*)
+        ->
+        OptimalProof<L>(l) = p*
+    {
+      assume l: Language<L>, p₀: PseudoProof<L>, α: ℝ⁺, β: ℝ⁺, p*: Proof<L>
+      assume GradientDescentConvergence<L>(l, p₀, α, β)
+      assume lim (λt. ProofLandscape<L>(l)(p(t))) = ProofLandscape<L>(l)(p*)
+
+      have IsValidProof<L>(p*, l)   ; by GradientDescentConvergence<L>
+
+      let L* = ProofLandscape<L>(l)
+      have ∀p: PseudoProof<L>. IsValidProof<L>(p, l) -> L*(p̂) ≥ L*(p*)
+      proof {
+        assume p: PseudoProof<L>
+        assume IsValidProof<L>(p, l)
+        have Fit[p, l] ≥ H[⟦l⟧] - H[p]   ; by Entropy-Fit Trade-off
+        calc L*(p̂) 
+             = H[p̂] - Fit[p̂, l]
+             ≥ H[p̂] - H[⟦l⟧] + H[p]   ; by above
+             ≥ H[p*] - H[⟦l⟧] + H[p]   ; by Projection Optimality
+             ≥ H[p*] - Fit[p*, l]      ; by Entropy-Fit Trade-off
+             = L*(p*)                  ; by definition
+      }
+
+      hence OptimalProof<L>(l) = argmin {L*(p) | IsValidProof<L>(p, l)} = p*
+    }
+  }  
+}
+

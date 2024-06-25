@@ -1,0 +1,131 @@
+CONCEPT ParallelPHT {
+  IMPORTS {
+    ShapeSpace
+    HVM2
+  }
+
+  LANGUAGE {
+    TYPE ShapeData
+    TYPE PHTData = PersistenceDiagram^d
+    TYPE Direction = S^(d-1)
+
+    FUNC Sample(M : Shape) : ShapeData
+    FUNC Reconstruct(D : ShapeData) : Shape
+    FUNC ToDirection(i : ℕ) : Direction
+    FUNC Compute(D : ShapeData, v : Direction) : PersistenceDiagram
+
+    FUNC Split(Ds : List[ShapeData], n : ℕ) : List[List[ShapeData]]
+    FUNC Merge(PHTs : List[List[PHTData]]) : List[PHTData]
+  }
+
+  STRUCTURE ParallelPHTKernel 
+    REFINES GPUKernel {
+
+    TRANSITION ComputePHT(D : ShapeData, i : ℕ) : PersistenceDiagram {
+      VAR v : Direction = ToDirection(i)
+      Compute(D, v)
+    }
+
+    TRANSITION Run(Ds : List[ShapeData]) : List[PHTData] {
+      VAR n : ℕ = ThreadsPerBlock
+      VAR batches : List[List[ShapeData]] = Split(Ds, n)
+
+      VAR diagrams : List[List[PHTData]] = []
+      FOREACH batch : batches {
+        VAR es : GPUExecutionState = InitState(batch)
+        
+        FOR i : 0 .. d-1 {
+          FOREACH D : batch {
+            es.redexes.Insert(
+              Spawn(
+                tc, 
+                LET pd : PersistenceDiagram = ComputePHT(D, i)
+                IN AppendTo(diagrams[i], pd)
+              )
+            )
+          }
+          SUPER.Run(es)
+        }
+      }
+
+      Merge(diagrams)
+    }
+  }
+
+  STRUCTURE Main {
+    FUNC PHT(M : Shape) : List[PersistenceDiagram] {
+      VAR D : ShapeData = Sample(M)
+      
+      VAR kernel : ParallelPHTKernel
+      kernel.Run([D])
+    }
+
+    TRANSITION ComputePHTs(Ms : List[Shape]) : List[List[PersistenceDiagram]] {
+      VAR Ds : List[ShapeData] = Map(Sample, Ms)
+      
+      VAR kernel : ParallelPHTKernel
+      kernel.Run(Ds)  
+    }
+  }
+  
+  PROOFS {
+    THEOREM Correctness {
+      STATEMENT:
+        ∀ (M : Shape) . 
+          LET Ds : List[PersistenceDiagram] = Main.PHT(M)
+          IN ∀ (i : 0 .. d-1) . Ds[i] = PH^i(M)
+
+      PROOF:
+        LET M : Shape, D : ShapeData = Sample(M)
+
+        <1>1 ∀ (i : 0 .. d-1) . ComputePHT(D, i) = PH^i(M)
+          BY Definitions of ComputePHT, Compute, ToDirection, PHT  
+
+        <1>2 QED  
+          BY <1>1, Definitions of Main.PHT, ParallelPHTKernel.Run
+    }
+
+    THEOREM Speedup {
+      STATEMENT:  
+        ∃ (c : R^>0) . ∀ (Ms : List[Shape]) . 
+          LET Ts : List[List[PersistenceDiagram]] = Main.ComputePHTs(Ms)
+              Tp : List[List[PersistenceDiagram]] = ParallelMain.ComputePHTs(Ms)
+          IN Speedup(Ts, Tp) ≥ c · |Ms|
+
+      PROOF:
+        <1>1 Speedup(Ts, Tp) = 
+               (∑_{i=1}^{|Ms|} PHTime(Ms[i])) / (PHTime(Ms[1]) + c1·|Ms|/P)
+          WHERE PHTime(M) is time to compute PHT(M) sequentially
+                P is number of GPU processors
+                c1 is overhead constant
+          BY Definition of Speedup, Amdahl's Law  
+
+        <1>2 ∃ (c2 : R^>0) . PHTime(Ms[1]) ≤ c2 · (∑_{i=1}^{|Ms|} PHTime(Ms[i])) / |Ms|
+          BY Averaging argument
+
+        <2>1 c2 · |Ms| = c2 · (|Ms|·P) / P ≤ c2/c1 · (∑_{i=1}^{|Ms|} PHTime(Ms[i])) / c1
+          BY <1>2 and algebra
+        
+        <2>2 CHOOSE c : R^>0 SUCH THAT c ≤ c2/c1
+
+        <2>3 QED  
+          BY <1>1, <2>1, <2>2 and algebra
+    }
+  }
+}
+
+The key ideas are:
+
+We define types for ShapeData (a sampled representation of a Shape suitable for computation), PHTData (the output persistence diagrams), and Direction.
+The Sample function converts a Shape to ShapeData, while Reconstruct goes the other way. ToDirection maps an index to a point on the sphere S^(d-1). Compute calculates the persistence diagram for a given ShapeData and direction.
+Split and Merge are utility functions for dividing a list of ShapeData into batches and combining the resulting list of lists of PHTData.
+The ParallelPHTKernel refines the GPUKernel from HVM2. Its Run function takes a list of ShapeData, splits it into batches, and spawns a ComputePHT task for each ShapeData and direction. These tasks are executed in parallel by the underlying HVM2 kernel.
+The Main structure provides a PHT function that computes the PHT of a single shape, and a ComputePHTs function that computes the PHTs of a list of shapes in parallel.
+The Correctness theorem states that the parallel PHT computation yields the same result as the sequential computation.
+The Speedup theorem asserts that the parallel computation achieves a speedup proportional to the number of shapes, under certain assumptions about the distribution of computation times and overhead costs.
+
+This Concept leverages the parallel execution capabilities of HVM2 to efficiently compute the PHTs of a large number of shapes. The key aspects are:
+
+The decomposition of the problem into independent tasks (computing the persistence diagram for each shape and direction).
+The use of the Spawn primitive to generate these tasks.
+The automatic load balancing and synchronization provided by the HVM2 runtime.

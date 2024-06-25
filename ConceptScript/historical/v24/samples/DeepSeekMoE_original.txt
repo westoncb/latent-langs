@@ -1,0 +1,278 @@
+CONCEPT DeepSeekMoE_original {
+  LANGUAGE {
+    TYPE Token
+    TYPE Expert
+    TYPE SharedExpert <: Expert
+    TYPE RoutedExpert <: Expert
+    TYPE Embedding = Vector[Real, d]
+    TYPE FFN = Embedding -> Embedding
+    TYPE AdamWOptimizer = (
+      lr : Real,
+      beta1 : Real, 
+      beta2 : Real,
+      eps : Real,
+      weight_decay : Real,
+      Params
+    ) -> Params
+    TYPE Corpus
+    
+    FUNC NumParams : Nat
+    FUNC NumLayers : Nat
+    FUNC NumExperts : Nat  
+    FUNC NumSharedExperts : Nat
+    FUNC NumRoutedExperts : Nat
+    FUNC HiddenDimension : Nat
+    FUNC NumAttentionHeads : Nat
+    FUNC RoutedExpertsPerToken : Nat
+    FUNC RelativeExpertSize : Real
+    FUNC SequenceLength : Nat 
+    FUNC BatchSize : Nat
+    FUNC InitStdDev : Real
+    FUNC ActivationFactor : Real
+    
+    FUNC Tokenize : Corpus -> List(Token)  
+    FUNC TrainTokenizer : Corpus -> Tokenizer
+    FUNC SampleTrainingData : Corpus -> (Nat, List(List(Token)))
+    
+    FUNC Initialize : Params
+    FUNC Optimizer : AdamWOptimizer
+    FUNC Train : (Corpus, Params) -> Params
+    
+    FUNC Router : Token -> List(RoutedExpert)
+    FUNC Eval : Expert -> Embedding -> Embedding  
+    FUNC Combine : List(Embedding) -> Embedding
+    
+    FUNC ExpertLoss : (List(Real), List(Real)) -> Real
+    FUNC DeviceLoss : (List(Real), List(Real)) -> Real
+    
+    PRED Specialized : Expert -> Bool
+    
+    AXIOM LoadBalanceLemma {
+      ∀ (t : Token) (experts : List(RoutedExpert)).
+        Uniform(Map(Expert -> Real, e -> P(Route(t) = e), experts))  
+    }
+    
+    NOTATION "𝑁" = NumExperts
+    NOTATION "𝐾𝑠" = NumSharedExperts
+    NOTATION "𝑚" = ActivationFactor
+    NOTATION "𝐾" = NumRoutedExperts 
+    NOTATION "𝑑" = HiddenDimension
+  }
+  
+  STRUCTURE TRAINED_MODEL {
+    REQUIRE NumParams = NumLayers * (
+      12 * HiddenDimension^2 +
+      13 * HiddenDimension + 
+      (NumLayers - 1) * (
+        NumSharedExperts * RelativeExpertSize * 8 * HiddenDimension^2 + 
+        NumRoutedExperts * RelativeExpertSize * 8 * HiddenDimension^2  
+      )
+    )
+    
+    REQUIRE NumExperts = NumSharedExperts + NumRoutedExperts
+    
+    REQUIRE ∀ (layer : 1..NumLayers - 1).
+      REQUIRE NumSharedExperts(layer) = NumSharedExperts
+      REQUIRE NumRoutedExperts(layer) = NumRoutedExperts
+      REQUIRE ∀ (expert : Expert) ∈ layer.
+        Dimension(expert) = 4 * RelativeExpertSize * HiddenDimension
+        
+    REQUIRE PERFORMANCE(
+      Accuracy(DeepSeekMoE(2B), Benchmarks) > Accuracy(GShard(2B), Benchmarks),
+      Accuracy(DeepSeekMoE(2B), Benchmarks) ≈ Accuracy(GShard(2.9B), Benchmarks),
+      Accuracy(DeepSeekMoE(2B), Benchmarks) ≈ Accuracy(Dense(2B), Benchmarks)
+    )
+      
+    REQUIRE PERFORMANCE(  
+      Accuracy(DeepSeekMoE(16B), Benchmarks) ≈ Accuracy(DeepSeek(7B), Benchmarks),
+      Accuracy(DeepSeekMoE(16B), Benchmarks) ≈ Accuracy(LLaMA2(7B), Benchmarks)  
+    )
+    
+    REQUIRE PERFORMANCE(
+      Accuracy(DeepSeekMoE(145B), Benchmarks) > Accuracy(GShard(137B), Benchmarks),
+      Accuracy(DeepSeekMoE(145B), Benchmarks) ≈ Accuracy(DeepSeek(67B), Benchmarks) 
+    )
+    
+    REQUIRE SINGLE_GPU_DEPLOYABLE(
+      (NumParams < 16.5B) AND
+      (ActivatedParams = NumSharedExperts * 8 * RelativeExpertSize * HiddenDimension^2 + 
+                         RoutedExpertsPerToken * 8 * RelativeExpertSize * HiddenDimension^2
+                        < 3B)
+    )
+  }
+  
+  STRUCTURE TRAINING_PROCESS {
+    DEF Tokenizer : Tokenizer = TrainTokenizer(Corpus)  
+    DEF Vocab : Nat = MATCH NumParams {
+      2B -> 8K
+      16B -> 100K  
+      145B -> 100K
+    }
+    
+    DEF (NumTokens, TokenizedData) : (Nat, List(List(Token))) =
+      SampleTrainingData(Corpus) WHERE MATCH NumParams {  
+        2B -> NumTokens = 100B
+        16B -> NumTokens = 2T
+        145B -> NumTokens = 245B  
+      }
+      
+    DEF InitParams : Params = Initialize(Params) WHERE InitStdDev = 0.006
+    
+    DEF TrainedParams : Params = Train(
+      TokenizedData,  
+      InitParams
+    ) WHERE {
+      MATCH NumParams {
+        2B -> {
+          Optimizer = AdamWOptimizer(
+            lr = 1.08e-3, beta1 = 0.9, beta2 = 0.95, 
+            eps = 1e-8, weight_decay = 0.1
+          )
+          SequenceLength = 2K
+          BatchSize = 2K
+          NumSteps = 25K  
+          AlphaExpBal = 0.01
+        }
+        16B -> {  
+          Optimizer = AdamWOptimizer(
+            lr = 4.2e-4, beta1 = 0.9, beta2 = 0.95,
+            eps = 1e-8, weight_decay = 0.1
+          )
+          SequenceLength = 4K
+          BatchSize = 4.5K
+          NumSteps = 106449
+          AlphaExpBal = 0.001  
+        }
+        145B -> {
+          Optimizer = AdamWOptimizer(  
+            lr = 3.0e-4, beta1 = 0.9, beta2 = 0.95,
+            eps = 1e-8, weight_decay = 0.1
+          )
+          SequenceLength = 4K
+          BatchSize = 4.5K
+          NumSteps = 13K
+          AlphaExpBal = 0.003
+          AlphaDevBal = 0.05
+        }
+      }
+      INVARIANT ∀ (step : 1..NumSteps).  
+        LET lr_scale = MATCH step {
+          IN 1..2K -> step / 2K
+          IN 80%*NumSteps+1..90%*NumSteps -> 0.316
+          ELSE -> IF NumParams = 145B THEN 1 ELSE 0.1  
+        }
+        IN
+        Optimizer.lr(step) = lr_scale * Optimizer.lr
+    }
+  }
+  
+  STRUCTURE MoE(shared_experts, routed_experts) : FFN {  
+    REQUIRE NumExperts(shared_experts ++ routed_experts) = 𝑁
+    REQUIRE NumSharedExperts(shared_experts) = 𝐾𝑠
+    REQUIRE NumRoutedExperts(routed_experts) = 𝑚 * (𝑁 - 𝐾𝑠)
+    REQUIRE ∀ (e : Expert) ∈ routed_experts. Dimension(e) = 𝑑 / 𝑚
+    
+    FUNC Forward(input : List(Token)) -> List(Embedding) = {
+      LET activated_shared = 
+        Map(t -> MapReduce(Eval, Combine, shared_experts, t), input)
+      
+      LET activated_routed =  
+        FlatMap(t -> Map(Eval(t), Router(t)), input)
+      
+      Map(Combine, Zip(activated_shared, activated_routed))  
+    }
+  }
+
+  FUNC Router(t : Token) -> List(RoutedExpert) =
+    Topk(Map(e -> Softmax(DotProduct(e, t)), routed_experts), 𝑚𝐾 - 𝐾𝑠)
+    
+  FUNC ExpertLoss(frequencies, probabilities) : Real = 
+    𝛼_exp * Sum(Zip(frequencies, probabilities))
+    
+  FUNC DeviceLoss(frequencies, probabilities) : Real =  
+    𝛼_dev * Sum(Map(Combine, Zip(frequencies, probabilities)))
+
+  PROOFS {
+    THEOREM ExpertSpecialization {  
+      STATEMENT: ∀ (input : List(Token)).
+        LET routed_experts = Drop(𝐾𝑠, MoE.experts) IN  
+        ∀ (e : RoutedExpert) ∈ Activate(input, routed_experts).
+          Specialized(e)
+          
+      PROOF:
+        LET N = NumRoutedExperts,  
+            K = RoutedExpertsPerToken,
+            old_N = N / 4, 
+            old_K = 2 IN {
+          NumCombinations(N, K)  
+            > NumCombinations(old_N, old_K) BY CombinatoricsLemma
+          HENCE HigherSpecialization(routed_experts)
+        }
+    }
+    
+    THEOREM ComputationEfficiency {
+      STATEMENT: ∀ (input : List(Token)).  
+        ComputationCost(DeepSeekMoE, input) ≈ 40% * ComputationCost(DenseModel, input)
+          
+      PROOF:  
+        MATCH NumParams {
+          16B -> {  
+            ActivatedParams(DeepSeekMoE)
+              = NumSharedExperts * 8 * RelativeExpertSize * HiddenDimension^2 + 
+                RoutedExpertsPerToken * 8 * RelativeExpertSize * HiddenDimension^2
+              ≈ (2 * 4 + 6 * 4) * HiddenDimension^2  
+              ≈ 32 * HiddenDimension^2
+                  
+            TotalParams(DenseModel) 
+              ≈ 12 * NumLayers * HiddenDimension^2
+              ≈ 12 * 28 * HiddenDimension^2  
+              ≈ 80 * HiddenDimension^2
+                
+            THEREFORE  
+              ComputationCost(DeepSeekMoE, input) / ComputationCost(DenseModel, input) 
+                ≈ ActivatedParams(DeepSeekMoE) / TotalParams(DenseModel)
+                ≈ 40%
+          }
+          
+          145B -> {
+            ActivatedParams(DeepSeekMoE)  
+              ≈ (4 * 2 + 12 * 2) * HiddenDimension^2
+              ≈ 32 * HiddenDimension^2
+              
+            ActivatedParams(DeepSeekMoE, HalfRouted)
+              ≈ (2 * 2 + 6 * 2) * HiddenDimension^2  
+              ≈ 16 * HiddenDimension^2
+                
+            TotalParams(DenseModel)
+              ≈ 12 * 62 * HiddenDimension^2
+              ≈ 176 * HiddenDimension^2
+                
+            THEREFORE
+              ComputationCost(DeepSeekMoE, input) / ComputationCost(DenseModel, input)
+                ≈ 32 / 176 ≈ 18.2%  
+                
+              ComputationCost(DeepSeekMoE, HalfRouted, input) / ComputationCost(DenseModel, input)  
+                ≈ 16 / 176 ≈ 9.1%
+          }
+        }
+    }
+    
+    THEOREM ParameterRedundancy {
+      STATEMENT: ∀ (ratio : Real).  
+        LET accuracy_drop(model, ratio) = 
+              Accuracy(model, full_experts) - Accuracy(model, (1-ratio) * full_experts) IN
+        accuracy_drop(DeepSeekMoE, ratio) > accuracy_drop(GShard, ratio)  
+        
+      PROOF:  
+        LET shared_pct = NumSharedExperts / NumExperts,
+            routed_pct = 1 - shared_pct IN {
+          ASSUME accuracy_drop(GShard, ratio) = routed_pct * ratio  
+          ASSUME accuracy_drop(DeepSeekMoE, ratio) = 
+            shared_pct * 0 + routed_pct * 2 * ratio
+          
+          PROVE accuracy_drop(DeepSeekMoE, ratio) > accuracy_drop(GShard, ratio) BY
+            routed_pct * 2 * ratio > routed_pct * ratio  
+        }
+    }
+  }
+}

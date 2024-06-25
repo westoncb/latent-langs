@@ -1,0 +1,149 @@
+CONCEPT SimplyTypedLambdaCalculus {
+  PARAMETERS {
+    Var : TYPE
+  }
+
+  CONTEXT {
+    TYPES {
+      INDUCTIVE Type {
+        CASE Base
+        CASE Arrow(Type, Type)
+      }
+      
+      INDUCTIVE Term {
+        CASE Var(Var)
+        CASE Abs(Var, Type, Term)
+        CASE App(Term, Term)
+      }
+      
+      Value := Abs(_, _, _)
+      
+      ENV := MAP(Var, Type)
+    }
+
+    NOTATION {
+      INFIX "⊢" := TypeOf
+      INFIX "→" := Arrow
+      PREFIX "λ" := Abs
+      MIXFIX "M[x ↦ N]" := Subst(M, x, N)
+      INFIX "~>" := Reduces
+    }
+    
+    STRUCTURES {
+      STRUCTURE Typing {
+        TypeOf(env : ENV, t : Term) -> Type
+          CASE Var(x) => env(x)
+          CASE Abs(x, T, t) => T → TypeOf(env ∪ {x : T}, t)
+          CASE App(f, t) => (
+            LET S = TypeOf(env, f)
+            LET T = TypeOf(env, t)
+            REQUIRE S IS Arrow(_, U) 
+            REQUIRE S.1 = T
+            U  
+          )
+          
+        AXIOM Soundness {
+          env ⊢ t : T ⇒ (t ~>* v ⇒ env ⊢ v : T)
+        }
+      }
+      
+      STRUCTURE Semantics {  
+        Subst(t : Term, x : Var, s : Term) : Term
+          CASE Var(y) => IF y = x THEN s ELSE t
+          CASE Abs(y, T, t) => IF y = x THEN t ELSE Abs(y, T, t[x ↦ s])
+          CASE App(f, t) => App(f[x ↦ s], t[x ↦ s])
+          
+        Reduces(t : Term, t' : Term)
+          CASE App(Abs(x, _, t), s) => t[x ↦ s]
+          CASE App(f, t) => App(f', t) WHERE f ~> f'
+          CASE App(f, t) => App(f, t') WHERE t ~> t'
+      }
+    }
+  }
+   
+  TRANSFORMERS {
+    REWRITE ArrowAssoc {
+      (S → T) → U <=> S → (T → U)  
+    }
+    
+    SIMPLIFY SubstId {
+      t[x ↦ Var(x)] <=> t
+    }
+    
+    SIMPLIFY SubstVar {
+      Var(x)[y ↦ s] <=> IF x = y THEN s ELSE Var(x)  
+    }
+    
+    SIMPLIFY SubstAbs {
+      Abs(x, T, t)[y ↦ s] <=> IF x = y THEN Abs(x, T, t) 
+                                 ELSE Abs(x, T, t[y ↦ s])
+                                 WHERE x NOT_FREE_IN s
+    }
+    
+    SIMPLIFY SubstApp {
+      App(f, t)[x ↦ s] <=> App(f[x ↦ s], t[x ↦ s])  
+    }
+    
+    REWRITE SubstLemma {
+      (λx:T.t)[y ↦ s] <=> λx:T.(t[y ↦ s])  
+        WHERE x =/= y AND x NOT_FREE_IN s
+    }
+    
+    SIMPLIFY Progress {
+      env ⊢ t : T ⇒ t IS_VALUE ∨ (∃ t' . t ~> t')  
+    }
+    
+    SIMPLIFY Preservation {
+      env ⊢ t : T ∧ t ~> t' ⇒ env ⊢ t' : T
+    }
+  }
+  
+  PROOFS {
+    THEOREM ChurchRosser {
+      t ~>* t1 ∧ t ~>* t2 ⇒ ∃ t3 . t1 ~>* t3 ∧ t2 ~>* t3
+    }
+    PROOF {
+      ASSUME t ~>* t1 AND t ~>* t2
+      
+      <1>. CASE t1 = t2 TRIVIAL
+      
+      <2>. CASE t1 IS_VALUE ∨ t2 IS_VALUE
+        BY ValueDeterminacy TRIVIAL
+        
+      <3>. CASE ∃ s1 s2 . t ~> s1 ~>* t1 ∧ t ~> s2 ~>* t2
+        <3>.1. LET s1, s2 SUCH_THAT t ~> s1 ~>* t1 AND t ~> s2 ~>* t2
+        <3>.2. SHOW ∃ s3 . s1 ~>* s3 ∧ s2 ~>* s3
+          BY DiamondProperty APPLIED_TO (t, s1, s2)
+        <3>.3. LET s3 SUCH_THAT s1 ~>* s3 AND s2 ~>* s3
+        <3>.4. LET t3 = s3
+        <3>.5. SHOW t1 ~>* t3 BY TransitivityOfReduction(s1, t1, t3)
+        <3>.6. SHOW t2 ~>* t3 BY TransitivityOfReduction(s2, t2, t3)
+        
+      CONCLUDE ∃ t3 . t1 ~>* t3 ∧ t2 ~>* t3
+      QED
+    }
+    
+    THEOREM TypeSafety {
+      ∅ ⊢ t : T ⇒ (t ~>* v ∧ ∅ ⊢ v : T) ∨ (t ↑)
+    }
+    PROOF BY TypeSoundness, Progress, Preservation {
+      PROVE ∅ ⊢ t : T ⇒ (t ~>* v ∧ ∅ ⊢ v : T)
+      PROVE ∅ ⊢ t : T ⇒ t IS_VALUE ∨ (∃ t' . t ~> t')
+      PROVE ∅ ⊢ t : T ∧ t ~> t' ⇒ ∅ ⊢ t' : T   
+    }
+  }
+   
+  EXAMPLES {
+    EXAMPLE SKI {
+      LET S = λx:Base→Base→Base. λy:Base→Base. λz:Base. x z (y z)
+      LET K = λx:Base. λy:Base. x
+      LET I = λx:Base. x
+        
+      THEN ∅ ⊢ S : (Base→Base→Base) → (Base→Base) → Base → Base
+      AND ∅ ⊢ K : Base → Base → Base 
+      AND ∅ ⊢ I : Base → Base
+        
+      THEN (S K K) ~>* I BECAUSE (S K K x) ~>* (K x (K x)) ~>* x
+    }
+  }
+}

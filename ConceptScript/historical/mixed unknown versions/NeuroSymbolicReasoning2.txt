@@ -1,0 +1,59 @@
+CONCEPT NeuroSymbolicReasoning:
+
+EXTEND NeuralNetworks:
+  Layer := (Input, Hidden, Output)
+  Connection := (Weight, Activation)
+  Architecture := Compose(Layer_1, ..., Layer_n; Connection_1, ..., Connection_m)
+  
+EXTEND SymbolicLogic:
+  Atom := Entity | Predicate | Function 
+  Formula := Atom | Connective(Formula_1, ..., Formula_n)
+  Rule := Implication(Antecedent, Consequent)
+  Theory := Set(Formula_1, ..., Formula_n)
+  
+DEFINE NeuroSymbolicNet := Architecture(
+  InputLayer(Atom),
+  HiddenLayer_1(And, Or, Not), 
+  HiddenLayer_2(Implication, Equivalence),
+  HiddenLayer_3(ForAll, Exists),
+  OutputLayer(Formula)
+)
+
+ASSERT ∀(NS : NeuroSymbolicNet, T : Theory):
+  ∃(w : Weights(NS)) Entails(NS(w), T) 
+
+THEOREM NeuroSymbolicLearnability:
+  ∀(T : Theory) ∃(NS : NeuroSymbolicNet, D : Data, L : LossFunction, O : Optimizer):
+    Train(NS, D, L, O) ⟹ 
+      (Accuracy(NS, D) > 1 - ε) *
+      ∀(f ∈ T) Pr(NS ⊢ f) > 1 - δ
+
+PROOF:
+  Represent T in NS: 
+    - Atoms as input features
+    - Connectives, quantifiers as hidden layers 
+    - Formulas as output
+  Generate D from T:
+    - Sample models of T
+    - Positive examples satisfy f ∈ T
+    - Negative examples violate some f ∈ T
+  Define L to reward:
+    - Classifying D correctly
+    - Satisfying rules of inference
+      - Modus ponens: (p ⟹ q) * p ⊢ q
+      - And-elimination: (p * q) ⊢ p
+      - ...
+  Optimize w via O to minimize L on D
+  Large capacity + symbolic constraints ⟹ converges to T
+  Generalization bounds from statistical learning theory apply
+
+
+  This Concept proposes a neuro-symbolic architecture that integrates neural networks and symbolic logic to learn logical theories from data. The key ideas are:
+
+Represent logical formulas and inference rules in the architecture of the neural network itself.
+Generate training data from the target logical theory.
+Use a loss function that rewards both correctly classifying the data and satisfying the rules of logical inference.
+Optimize the network weights to provably converge to a network that approximates the target theory.
+The Theorem and Proof establish learnability results by appealing to the expressive capacity of neural nets combined with the inductive bias provided by the symbolic constraints, along with generalization bounds from statistical learning theory.
+
+Of course, many details would need to be worked out further, but this sketches a high-level idea for integrating neural and symbolic approaches in a principled way to learn rich logical theories. Let me know if you would like me to try expressing any other concepts!

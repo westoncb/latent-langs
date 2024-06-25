@@ -1,0 +1,96 @@
+CONCEPT AmyloidBetaAccumulation {
+  LANGUAGE {
+    TYPE Neuron
+    TYPE Synapse
+    TYPE AmyloidBeta
+    
+    FUNC Produce : Neuron ⊸ (AmyloidBeta ⊗ Neuron)
+    FUNC Accumulate : AmyloidBeta ⊸ Synapse ⊸ Synapse
+    FUNC Degrade : AmyloidBeta ⊸ Unit
+    
+    PRED Normal : Neuron -> Type
+    PRED Impaired : Neuron -> Type
+    
+    CLASS Monoid(A) {
+      mempty : A
+      mappend : A -> A -> A
+    }
+    
+    INSTANCE Monoid(Synapse) {
+      mempty = EmptySynapse
+      mappend = Merge
+    }
+    
+    REWRITE Merge(Accumulate(a, s1), s2) = Accumulate(a, Merge(s1, s2))
+  }
+  
+  STRUCTURE {
+    DEF Normal(n) = ∀(a : AmyloidBeta). 
+      LET (a', n') = Produce(n) IN Degrade(a') ⊗ Normal(n')
+      
+    DEF Impaired(n) = ∃(a : AmyloidBeta) (s : Synapse).
+      LET (a', n') = Produce(n) IN Accumulate(a', s) ⊗ Impaired(n')
+  }
+  
+  PROOFS {
+    THEOREM NormalNeuronsSustainable {
+      STATEMENT: ∀(n : Neuron). Normal(n) -> □Normal(n)
+      
+      PROOF:
+        LET n : Neuron
+        ASSUME Normal(n)
+        SHOW □Normal(n) BY {
+          REWRITE Normal(n)
+            = ∀(a : AmyloidBeta). 
+                LET (a', n') = Produce(n) IN Degrade(a') ⊗ Normal(n')
+            = ∀(a : AmyloidBeta). 
+                LET (a', n') = Produce(n) IN 
+                  LET _ = Degrade(a') IN Normal(n')  ; Tensor elimination
+            = ∀(a : AmyloidBeta). 
+                LET (_, n') = Produce(n) IN Normal(n')  ; Unit elimination
+            = □Normal(n)  ; Löb induction
+        }
+    }
+    
+    THEOREM ImpairedNeuronsUnsustainable {
+      STATEMENT: ∀(n : Neuron). Impaired(n) -> ◇∃(s : Synapse). Unsustainable(s)
+        WHERE Unsustainable(s) = ∀(a : AmyloidBeta). Accumulate(a, s) = s
+      
+      PROOF:
+        LET n : Neuron
+        ASSUME Impaired(n)
+        SHOW ◇∃(s : Synapse). Unsustainable(s) BY {
+          REWRITE Impaired(n)
+            = ∃(a : AmyloidBeta) (s : Synapse).
+                LET (a', n') = Produce(n) IN Accumulate(a', s) ⊗ Impaired(n')
+            = ∃(a : AmyloidBeta) (s : Synapse).
+                LET (a', n') = Produce(n) IN 
+                  LET s' = Accumulate(a', s) IN Impaired(n') ⊗ s'  ; Tensor introduction
+          
+          LET a : AmyloidBeta, s : Synapse
+          ASSUME LET (a', n') = Produce(n) IN 
+                   LET s' = Accumulate(a', s) IN Impaired(n') ⊗ s'
+          
+          SHOW ◇Unsustainable(s) BY {
+            REWRITE Unsustainable(s)
+              = ∀(b : AmyloidBeta). Accumulate(b, s) = s
+              = ∀(b : AmyloidBeta). Merge(Accumulate(b, s), mempty) = s  ; Monoid right identity
+              = ∀(b : AmyloidBeta). Accumulate(b, Merge(s, mempty)) = s  ; Rewrite rule
+              = Unsustainable(Merge(s, mempty))
+            
+            SHOW ◇Unsustainable(Merge(s, mempty)) BY {
+              HAVE Impaired(n') ⊗ s'
+              REWRITE s' 
+                = Accumulate(a', s)
+                = Merge(Accumulate(a', s), mempty)  ; Monoid right identity
+                = Accumulate(a', Merge(s, mempty))  ; Rewrite rule
+              
+              SHOW ◇Unsustainable(Accumulate(a', Merge(s, mempty))) BY {
+                APPLY ImpairedNeuronsUnsustainable  ; Recursive application
+              }
+            }
+          }
+        }
+    }
+  }
+}

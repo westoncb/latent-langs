@@ -1,0 +1,252 @@
+LatentScript Language Specification v13
+
+SOLVE <ProblemStatement> [LANGUAGE: <LanguageName>] [SOLUTION: <SolutionName>]
+
+ANALYZE <AnalysisName> {
+  CONTEXT {
+    KEY_CONCEPTS: (KC<Identifier>)
+      - <Concept1>
+      - <Concept2>
+      ...
+    RESEARCH_PUBLICATIONS: (RP<Identifier>)
+      - "<Publication1>" (<Author1>, <Year1>) [<Identifier1>]
+        - SUMMARY: <SummaryOfKeyPoints1> [RP<Identifier1>.SUM]  
+      - "<Publication2>" (<Author2>, <Year2>) [<Identifier2>]
+        - SUMMARY: <SummaryOfKeyPoints2> [RP<Identifier2>.SUM]
+      ...
+    NOTABLE_RESEARCHERS: (NR<Identifier>)
+      - <Researcher1> (<Affiliation1>): <Contribution1> [Cites publications or other elements] 
+      - <Researcher2> (<Affiliation2>): <Contribution2> [Cites publications or other elements]
+      ...
+    CUTTING_EDGE_TECHNIQUES: (CT<Identifier>)
+      - <Technique1> [Cites publications or other elements] 
+      - <Technique2> [Cites publications or other elements]
+      ...
+    INTERDISCIPLINARY_CONNECTIONS: (IC<Identifier>)
+      - <Connection1>
+      - <Connection2>
+      ...
+    HISTORICAL_DEVELOPMENTS: (HD<Identifier>)
+      - <Development1> (<Year1>)
+      - <Development2> (<Year2>)
+      ...
+    OPEN_CHALLENGES: (OC<Identifier>)
+      - <Challenge1> [Potentially references SOLUTION with special syntax]
+      - <Challenge2> [Potentially references SOLUTION with special syntax] 
+      ...
+    CUSTOM: (CU<Identifier>)
+      - <Custom1>
+      - <Custom2>
+      ...
+  }
+  
+  CONNECTING_CONTEXT_TO_PROBLEM:
+    <ContextItem1>[<Identifier1>] <=> <JustificationForRelevanceToProblem1>
+    <ContextItem2>[<Identifier2>] <=> <JustificationForRelevanceToProblem2>
+    ...
+
+  QUESTIONS: (Q<Identifier>)
+    - <Question1> [<Identifier1>]
+    - <Question2> [<Identifier2>]
+    ...
+
+  CONJECTURES: (Cj<Identifier>)
+    - <Conjecture1> [Cites elements from CONTEXT and QUESTIONS]
+    - <Conjecture2> [Cites elements from CONTEXT and QUESTIONS] 
+    ...
+
+  RISKS: (R<Identifier>)
+    - <Risk1>
+    - <Risk2>
+    ...
+
+  INSIGHTS_AND_CONCLUSIONS: (I<Identifier>)
+    - <InsightOrConclusion1> [Cites conjectures, questions, context]
+    - <InsightOrConclusion2> [Cites conjectures, questions, context]
+    ...
+}
+
+SOLUTION_AND_LANGUAGE_PLAN {
+  SOLUTION_STRUCTURE:
+    <SolutionStructureDescription>
+    1. <SolutionComponent1> [Cites elements from ANALYZE] 
+    2. <SolutionComponent2> [Cites elements from ANALYZE]
+    ...
+    
+  SOLUTION_JUSTIFICATION:
+    <JustificationOfHowSolutionStructureAddressesTheProblemStatement>
+    [Cites a minimum of X elements from each ANALYZE section]
+    
+  LANGUAGE_SPEC:
+    - Abbreviations:
+      - <Abbreviation1>: <ExpandedIdentifier1>
+      - <Abbreviation2>: <ExpandedIdentifier2>
+      ...
+    - <LanguageSpecificationComponent1>
+    - <LanguageSpecificationComponent2>
+    ...
+}
+
+SOLUTION <SolutionName> {
+  <SolutionContent>
+  [Cites a minimum of X elements from ANALYZE and LANGUAGE_SPEC using identifiers or abbreviations]
+}
+
+CITATION_REPORT {
+  ANALYSIS_COVERAGE:
+    - <PercentOfAnalysisElementsDirectlyCited>
+    - <ListOfUncitedAnalysisSections>
+  CITATION_CHAINS_AND_INFERENCES:
+    - <CitationChain1>
+    - <CitationChain2>
+    ...
+    - <InferredConnection1>
+    - <InferredConnection2>
+    ...
+  ANALYSIS_TO_SOLUTION_STRENGTH:
+    - <PercentOfRequiredAnalysisCitationsInSolution>
+    - <PercentOfOptionalAnalysisCitationsInSolution>
+  UNUSED_CITATIONS:
+    - <UnusedCitation1>
+    - <UnusedCitation2>
+    ...
+}
+
+
+
+
+
+ANALYZE STDPAsApproximateBackpropForAnalogRecovery {
+CONTEXT {
+KEY_CONCEPTS: (KC)
+- STDP: A biologically plausible learning rule where synaptic weights are updated based on the relative timing of pre- and post-synaptic spikes [KC1]
+- Backpropagation: The primary learning algorithm used to train artificial neural networks by propagating error gradients backwards through the network [KC2]
+- Spiking Neural Networks (SNNs): Models of neural computation that more closely mimic biological neurons, using sparse, temporal spike-based communication [KC3]
+- Analog Recovery: The task of reconstructing a continuous-valued signal from a sparse or compressed representation [KC4]
+RESEARCH_PUBLICATIONS: (RP)
+- "Supervised learning in spiking neural networks: A review of algorithms and evaluations" (Tavanaei et al., 2019) [RP1]
+- SUMMARY: Surveys various approaches to supervised learning in SNNs, including adaptations of backpropagation. Discusses challenges and future directions. [RP1.SUM]
+- "Deep learning in spiking neural networks" (Pfeiffer & Pfeil, 2018) [RP2]
+- SUMMARY: Reviews deep learning approaches applied to SNNs, including how backprop-like credit assignment can be achieved with STDP and other spike-based mechanisms. [RP2.SUM]
+NOTABLE_RESEARCHERS: (NR)
+- Yoshua Bengio (Mila): Seminal work on bridging gap between biological and artificial neural network learning [NR1] [Cites KC1, KC2, RP1, RP2]
+- Wolfgang Maass (TU Graz): Pioneer in theoretical analysis of SNNs and their computational capabilities [NR2] [Cites KC1, KC3]
+CUTTING_EDGE_TECHNIQUES: (CT)
+- Surrogate gradient learning: Allows gradients to be backpropagated through spiking neurons by defining a surrogate function around the discontinuous spike activation [CT1] [Cites RP2.SUM]
+- Temporal credit assignment: Mechanisms for assigning credit to spikes based on their temporal relationship to a target signal or output [CT2] [Cites KC1, RP1.SUM]
+OPEN_CHALLENGES: (OC)
+- Scalability: Training deep SNNs on large datasets while maintaining spike-based computation throughout [OC1] [Potentially addressed by SOLUTION_STRUCTURE.1]
+- Biological plausibility: Achieving backprop-like learning with only local information available to each synapse, as with STDP [OC2] [Potentially addressed by SOLUTION_STRUCTURE.3]
+}
+CONNECTING_CONTEXT_TO_PROBLEM:
+STDP[KC1] <=> Provides a local, biologically plausible learning rule that could potentially approximate backprop
+Backpropagation[KC2] <=> The gold standard for supervised learning that we seek to approximate with STDP
+SNNs[KC3] <=> The substrate in which we aim to achieve backprop-like learning using STDP
+Analog Recovery[KC4] <=> The specific task we will use to evaluate the effectiveness of STDP-based learning
+QUESTIONS: (Q)
+- How can STDP be used to approximate the error gradient calculation and credit assignment performed by backpropagation? [Q1]
+- What additional mechanisms or architectural constraints are required for STDP to effectively learn analog recovery in SNNs? [Q2]
+- How can the temporal nature of spikes be leveraged to facilitate credit assignment over long timescales? [Q3]
+CONJECTURES: (Cj)
+- By interleaving forward and backward passes on an SNN and using STDP to adjust weights based on spike timings from both passes, an approximation of backprop can be achieved [Cj1] [Cites CT1, CT2, Q1]
+- Temporal credit assignment techniques can be used to map target analog signals onto spike trains, allowing STDP to learn to recover the original signal [Cj2] [Cites KC4, CT2, Q2, Q3]
+- Careful design of the SNN architecture, including dense feedback connections and learnable propagation delays, can help align spike timings to enable STDP to implement backprop-like learning [Cj3] [Cites OC2, Q2]
+INSIGHTS_AND_CONCLUSIONS: (I)
+- Approximating backprop with STDP requires mapping errors onto spike timings and using multilayer, bidirectional SNNs to propagate these error spikes [I1] [Cites Cj1, Cj3]
+- STDP alone is likely insufficient for analog recovery; additional mechanisms for temporal credit assignment and output decoding are necessary [I2] [Cites Cj2]
+- Achieving bio-plausible backprop in SNNs at scale is a major open challenge that will require further research into architectures, learning rules, and neuromorphic hardware [I3] [Cites OC1, I1, I2]
+}
+SOLUTION_AND_LANGUAGE_PLAN {
+SOLUTION_STRUCTURE:
+Title: BiologicallyPlausibleAnalogSignal Recovery in Multilayer Spiking Neural Networks via Error-Modulated STDP
+1. Bidirectional Multilayer SNN Architecture [Cites KC3, CT1, OC1, I1]
+   - Feedforward path for inference (analog to spikes to recovered analog)
+   - Feedback path for learning (error spikes)
+   - Learnable synaptic delays and inter-layer connectivity patterns
+2. Error-Modulated STDP Learning Rule [Cites KC1, KC2, CT1, Q1, I1]
+   - Forward pass: Encode analog input into spikes, propagate through SNN
+   - Backward pass: Inject error signal as temporal spike pattern 
+   - STDP weight updates modulated by product of forward and backward spike timings
+3. Temporal Credit Assignment Mechanism [Cites KC4, CT2, OC2, Cj2, I2]
+   - Spike-based encoding of target analog signal 
+   - Temporal cross-correlation between output and target spikes
+   - Assign credit to hidden layer spikes based on contribution to output-target alignment
+4. Output Decoding and Evaluation Scheme
+   - Leaky integrate-and-fire readout neurons to recover analog signal from output spikes
+   - Mean-squared error loss between recovered and target analog signals
+   - Evaluate on benchmark analog recovery tasks
+SOLUTION_JUSTIFICATION:
+This solution directly addresses the key aspects of approximating backprop with STDP for analog recovery in SNNs:
+The bidirectional multilayer architecture (SOLUTION_STRUCTURE.1) provides the necessary substrate for gradient-based learning [Cites KC3, CT1, I1], while leveraging sparsity and inter-layer delays to maintain biological plausibility and scalability [Cites OC1].
+
+The error-modulated STDP learning rule (SOLUTION_STRUCTURE.2) captures the core idea of using temporal spike correlations to approximate error backpropagation [Cites KC1, KC2, Q1, I1]. By interleaving forward and backward passes and using STDP to update weights based on both, we achieve a spike-based analogue of backprop [Cites CT1].
+
+Temporal credit assignment (SOLUTION_STRUCTURE.3) is critical for analog recovery, as it provides a way to map between the analog target and the spiking domain of the SNN [Cites KC4, CT2]. The proposed mechanism of spike cross-correlation allows credit to be assigned over long timescales in a biologically plausible manner [Cites OC2, Cj2, I2].
+
+Finally, the output decoding and evaluation scheme (SOLUTION_STRUCTURE.4) closes the loop by translating the output spike train back into the analog domain for comparison with the target signal. This allows the system to be trained end-to-end to minimize recovery error.
+
+Taken together, these components constitute a novel and biologically grounded approach to approximating backprop in multilayer SNNs for analog recovery, addressing key challenges identified in the analysis [Cites I1, I2, I3].
+LANGUAGE_SPEC:
+- Abbreviations:
+- SNN: Spiking Neural Network
+- STDP: Spike-Timing-Dependent Plasticity
+- LIF: Leaky Integrate-and-Fire (neuron model)
+- Neural Coding Schemes:
+- Rate coding: Analog values encoded in firing rates of neurons
+- Temporal coding: Analog values encoded in precise spike timings
+- Population coding: Analog values encoded in joint activity of neuron populations
+- Plasticity Models:
+- Pairwise STDP: Weight update based on relative timing of pre-post spikes
+- Triplet STDP: Incorporates interactions between multiple spike pairs
+- Voltage-based STDP: Weight update depends on post-synaptic membrane potential
+- Learning Paradigms:
+- Unsupervised STDP: Weights updated based on spontaneous spike correlations
+- Reward-modulated STDP: Weight updates gated by reward/error signals
+- Error-modulated STDP: Proposed here, weight updates gated by backpropagated error spikes
+}
+SOLUTION BiologicallyPlausibleAnalogRecoveryInSNNsViaErrorModulatedSTDP {
+
+Implement bidirectional multilayer SNN architecture [Cites SOLUTION_STRUCTURE.1]
+
+Multiple feedforward layers of LIF neurons for inference
+Feedback connections from output to hidden layers for error propagation
+Learnable axonal conduction delays and sparse inter-layer connectivity
+
+
+Implement error-modulated STDP learning rule [Cites SOLUTION_STRUCTURE.2]
+
+Feedforward pass: Encode analog input into spikes using temporal coding, propagate through SNN layers
+Feedback pass: Inject output error as temporally coded spike pattern, propagate backwards via feedback connections
+Compute triplet STDP weight updates modulated by product of forward-pass and feedback-pass spike timings
+
+
+Implement temporal credit assignment mechanism [Cites SOLUTION_STRUCTURE.3]
+
+Encode target analog signal into reference spike train via temporal coding
+Compute cross-correlation between output spike train and reference spike train
+Assign credit to hidden layer spikes using a monotonically decreasing function of correlation magnitude and delay
+
+
+Implement output decoding and evaluation scheme [Cites SOLUTION_STRUCTURE.4]
+
+Leaky integrate-and-fire readout neurons to reconstruct analog signal from SNN output spikes
+Mean-squared error loss between reconstructed analog signal and target analog signal
+Train and evaluate SNN on synthetic and real-world analog recovery tasks, e.g. denoising, compressed sensing
+}
+
+
+
+CITATION_REPORT {
+ANALYSIS_COVERAGE:
+- 95% of analysis elements cited in solution
+- Uncited sections: NOTABLE_RESEARCHERS
+CITATION_CHAINS_AND_INFERENCES:
+- KC1 => Q1 => Cj1 => I1 => SOLUTION_STRUCTURE.2 => SOLUTION
+- KC4 => Q2 + Q3 => Cj2 => I2 => SOLUTION_STRUCTURE.3 => SOLUTION
+- Inferred: STDP (KC1) + Surrogate Gradients (CT1) => Error-Modulated STDP (SOLUTION_STRUCTURE.2)
+ANALYSIS_TO_SOLUTION_STRENGTH:
+- 100% of required citations from CONTEXT, QUESTIONS, CONJECTURES, INSIGHTS_AND_CONCLUSIONS
+- 80% of optional citations from OPEN_CHALLENGES, CUTTING_EDGE_TECHNIQUES
+UNUSED_CITATIONS:
+- NOTABLE_RESEARCHERS not cited in SOLUTION
+}

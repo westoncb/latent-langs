@@ -1,0 +1,152 @@
+CONCEPT TopologicalQuantumFieldTheory {
+
+  LANGUAGE {
+    TYPE Object = Manifold
+    TYPE Morphism = Cobordism
+    TYPE Operator = VectorSpace -> VectorSpace
+    TYPE Algebra = Category(VectorSpace, Operator)
+
+    FUNC Dimension : ℕ
+    FUNC Codomain : Object -> Object
+    FUNC Domain : Object -> Object
+    FUNC Compose : Morphism -> Morphism -> Morphism
+    FUNC Disjoint : Object -> Object -> Object
+    FUNC Empty : Object
+    FUNC Assign : Object -> VectorSpace
+    FUNC Map : Morphism -> Operator
+    FUNC Tensor : VectorSpace -> VectorSpace -> VectorSpace
+
+    NOTATION "M : A -> B" = Morphism(M, A, B)
+    NOTATION "F ∘ G" = Compose(F, G)
+    NOTATION "A ⊔ B" = Disjoint(A, B)
+    NOTATION "∅" = Empty
+    NOTATION "Z(A)" = Assign(A)
+    NOTATION "Z(M)" = Map(M)
+    NOTATION "U ⊗ V" = Tensor(U, V)
+  }
+
+  STRUCTURE {
+    AXIOM ObjectIdentity : 
+      ∀ (A : Object) . Codomain(A) = A AND Domain(A) = A
+
+    AXIOM MorphismComposition :
+      ∀ (F : A -> B) (G : B -> C) . 
+        Codomain(F) = Domain(G) -> Codomain(F ∘ G) = Codomain(G) AND Domain(F ∘ G) = Domain(F)
+
+    AXIOM MorphismIdentity :
+      ∀ (A : Object) . ∃ (Id_A : A -> A) . 
+        ∀ (F : A -> B) . F ∘ Id_A = F AND
+        ∀ (G : C -> A) . Id_A ∘ G = G
+
+    AXIOM Associativity :
+      ∀ (F : A -> B) (G : B -> C) (H : C -> D) .
+        (F ∘ G) ∘ H = F ∘ (G ∘ H)
+
+    AXIOM DisjointCommutativity :
+      ∀ (A B : Object) . A ⊔ B = B ⊔ A
+
+    AXIOM DisjointAssociativity :
+      ∀ (A B C : Object) . (A ⊔ B) ⊔ C = A ⊔ (B ⊔ C)
+
+    AXIOM EmptyDisjoint :
+      ∀ (A : Object) . A ⊔ ∅ = A
+
+    AXIOM FunctorAssignment :
+      ∀ (A : Object) . Z(A) : VectorSpace
+
+    AXIOM FunctorMap :
+      ∀ (M : A -> B) . Z(M) : Z(A) -> Z(B)
+
+    AXIOM FunctorComposition :
+      ∀ (F : A -> B) (G : B -> C) . Z(F ∘ G) = Z(F) ∘ Z(G)
+
+    AXIOM FunctorIdentity :
+      ∀ (A : Object) . Z(Id_A) = Id_{Z(A)}
+
+    AXIOM TensorFunctor :
+      ∀ (A B : Object) . Z(A ⊔ B) = Z(A) ⊗ Z(B)
+
+    AXIOM TensorEmpty :
+      Z(∅) = ℂ
+  }
+
+  PROOFS {
+    THEOREM FunctorPreservesIdentity {
+      STATEMENT : ∀ (A : Object) . Z(Id_A) = Id_{Z(A)}
+
+      PROOF {
+        ASSUME [A : Object]
+
+        SHOW Z(Id_A) : Z(A) -> Z(A) BY FunctorMap
+
+        LET F : A -> A
+        HAVE : Z(F ∘ Id_A) = Z(F) BY {
+          Z(F ∘ Id_A) 
+          = Z(F) ∘ Z(Id_A)   BY FunctorComposition
+          = Z(F) ∘ Id_{Z(A)}  BY FunctorIdentity
+          = Z(F)              BY CategoryIdentity
+        }
+
+        HAVE : Z(Id_A ∘ F) = Z(F) BY {
+          Z(Id_A ∘ F)
+          = Z(Id_A) ∘ Z(F)    BY FunctorComposition
+          = Id_{Z(A)} ∘ Z(F)  BY FunctorIdentity
+          = Z(F)              BY CategoryIdentity
+        }
+
+        SHOW Z(Id_A) = Id_{Z(A)} BY UniqueIdentity
+      }
+    }
+
+    THEOREM FunctorPreservesComposition {
+      STATEMENT : ∀ (F : A -> B) (G : B -> C) . Z(F ∘ G) = Z(F) ∘ Z(G)
+
+      PROOF {
+        ASSUME [F : A -> B] [G : B -> C]
+
+        SHOW Z(F ∘ G) : Z(A) -> Z(C) BY FunctorMap
+
+        SHOW Z(F) ∘ Z(G) : Z(A) -> Z(C) BY {
+          HAVE : Z(F) : Z(A) -> Z(B) BY FunctorMap
+          HAVE : Z(G) : Z(B) -> Z(C) BY FunctorMap
+          HENCE Z(F) ∘ Z(G) : Z(A) -> Z(C) BY OperatorComposition
+        }
+
+        SHOW Z(F ∘ G) = Z(F) ∘ Z(G) BY FunctorComposition
+      }
+    }
+
+    THEOREM TQFTIsSymmetricMonoidalFunctor {
+      STATEMENT : TQFT(Z) : (ManifoldCategory, ⊔, ∅) -> (AlgebraCategory, ⊗, ℂ)
+
+      PROOF {
+        SHOW Z : ManifoldCategory -> AlgebraCategory BY {
+          ASSUME [A : Object] [B : Object] [F : A -> B]
+          SHOW Z(A) : VectorSpace BY FunctorAssignment
+          SHOW Z(B) : VectorSpace BY FunctorAssignment
+          SHOW Z(F) : Z(A) -> Z(B) BY FunctorMap
+        }
+
+        SHOW MonoidalFunctor(Z) BY {
+          ASSUME [A : Object] [B : Object]
+          SHOW Z(A ⊔ B) = Z(A) ⊗ Z(B) BY TensorFunctor
+          SHOW Z(∅) = ℂ BY TensorEmpty
+        }
+
+        SHOW SymmetricStructure(ManifoldCategory, ⊔) BY {
+          ASSUME [A : Object] [B : Object]
+          SHOW A ⊔ B = B ⊔ A BY DisjointCommutativity
+          SHOW (A ⊔ B) ⊔ C = A ⊔ (B ⊔ C) BY DisjointAssociativity
+          SHOW A ⊔ ∅ = A BY EmptyDisjoint
+        }
+
+        SHOW SymmetricStructure(AlgebraCategory, ⊗) BY {
+          ; Proof omitted, relies on properties of tensor product of vector spaces
+        }
+
+        HENCE TQFT(Z) : (ManifoldCategory, ⊔, ∅) -> (AlgebraCategory, ⊗, ℂ)
+          BY SymmetricMonoidalFunctorDefinition
+      }
+    }
+  }
+}

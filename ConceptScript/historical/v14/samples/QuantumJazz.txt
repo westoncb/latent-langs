@@ -1,0 +1,61 @@
+CONCEPT QuantumJazz {
+  LANGUAGE {
+    type Chord = Set<Note>
+    type Note = (Pitch, Duration)
+    type Pitch = Frequency
+    type Duration = BeatCount
+    
+    type Particle = (Mass, Charge, Spin)
+    type Interaction = Particle -> Particle -> AmplitudeProbability
+    
+    notation "♮" = Naturalness
+    notation "🎼" = Harmonicity
+    notation "🎷" = JazzyCombination
+    
+    func Progression(c1: Chord, c2: Chord): Chord =
+      {n | n ∈ c1 ♮ c2 ∧ 🎼(n, c1, c2)}
+      
+    func Naturalness(n: Note, c: Chord): 𝔹 = 
+      n.Pitch ∈ Consonance(c) ∨ (n.Duration = 🎷(c))
+        
+    func Interaction(p1: Particle, p2: Particle): Event =
+      let a = Amplitude(FeynmanDiagram(p1, p2));
+      a > 0 ? Scatter(p1, p2) : Bind(p1, p2)
+  }
+
+  STRUCTURE {
+    [QuantumParticle(p) ⇔ Chord(p.State)
+      ↦ A quantum particle's state is like a musical chord.
+    ]
+
+    [QuantumInteraction(i) ⇔ Progression(i.Input, i.Output)  
+      ↦ Particle interactions are like chord progressions.
+    ]
+    
+    [FeynmanDiagram(i) ≅ JazzImprovisation(i.Input, i.Output)
+      ↦ Feynman diagrams are the "jazz improvisations" of particle physics.
+    ]
+  }
+
+  PROOFS {
+    theorem QuantumHarmony:
+      ∀i: Interaction. 
+        let c1 = i.Input, c2 = i.Output;
+        Harmonicity(c1, c2) ⇒ Amplitude(FeynmanDiagram(i)) > 0
+    {
+      assume i: Interaction
+      let c1 = i.Input, c2 = i.Output
+      assume Harmonicity(c1, c2)
+
+      have ∀n ∈ Progression(c1, c2). Naturalness(n, c1) ∧ Naturalness(n, c2)  
+        ; by definition of Progression and Harmonicity
+      hence JazzyCombination(c1, c2)
+        ; by jazz theory (trust me on this one 😉)
+        
+      have FeynmanDiagram(i) ≅ JazzImprovisation(c1, c2)
+        ; by FeynmanDiagram structure  
+      hence Amplitude(FeynmanDiagram(i)) > 0
+        ; by amplitude of jazzy diagrams
+    }
+  }
+}

@@ -1,0 +1,412 @@
+CONCEPT UniversalTuringMachine {
+  LANGUAGE {
+    TYPE State
+    TYPE Symbol
+    TYPE Direction = {Left, Right, Stay}
+    TYPE Tape = List[Symbol]
+    TYPE Head = Nat
+    TYPE Configuration = (State, Tape, Head) 
+    TYPE TransitionFunction = State -> Symbol -> (State, Symbol, Direction)
+    TYPE TuringMachine = (State, Symbol, TransitionFunction, State, State)
+    
+    FUNC Blank : Symbol
+    FUNC StartState[M : TuringMachine] : State
+    FUNC HaltState[M : TuringMachine] : State
+    FUNC Transition[M : TuringMachine] : TransitionFunction
+    FUNC InitialConfig[M : TuringMachine](input : Tape) : Configuration
+    FUNC Step[M : TuringMachine](c : Configuration) : Configuration
+    FUNC Run[M : TuringMachine](input : Tape) : Tape
+    FUNC Halt[M : TuringMachine](c : Configuration) : Bool
+    FUNC Accepts[M : TuringMachine](input : Tape) : Bool
+    
+    PRED Computable(f : Tape -> Tape) = 
+      ∃ (M : TuringMachine) . ∀ (input : Tape) . Run[M](input) = f(input)
+    
+    AXIOM TuringCompleteness {
+      ∀ (f : Tape -> Tape) . Computable(f) <=> 
+        ∃ (M : TuringMachine) . ∀ (input : Tape) . Run[M](input) = f(input)
+    }
+  }
+  
+  NOTATION {
+    "(q, s) -> (p, t, d)" = Transition[M](q)(s) = (p, t, d)
+    "M ⊢ c1 -> c2" = Step[M](c1) = c2
+    "M ⊢* c1 ->! c2" = Halt[M](c2) ∧ (∃ (n : Nat) . (M ⊢)^n (c1) = c2)
+  }
+  
+  TRANSFORMERS {
+    FUNC NextConfig[M : TuringMachine](c : Configuration) -> Configuration = {
+      LET (q, tape, pos) = c
+      LET (q', s', d) = Transition[M](q)(tape[pos])
+      LET tape' = tape with [pos := s']
+      LET pos' = match d with {
+        Left => pos - 1,
+        Right => pos + 1,
+        Stay => pos
+      }
+      (q', tape', pos')
+    }
+    
+    PROC RunTM[M : TuringMachine](input : Tape) -> Tape = {
+      LET c = InitialConfig[M](input)
+      WHILE not Halt[M](c):
+        c := Step[M](c)
+      RETURN c.Tape  
+    }
+    
+    PROC AcceptTM[M : TuringMachine](input : Tape) -> Bool = {
+      LET c = InitialConfig[M](input)
+      WHILE not Halt[M](c):
+        c := Step[M](c)
+      RETURN c.State = HaltState[M]
+    }
+    
+    TACTIC SelfInterpreter(M : TuringMachine) = {
+      LET U : TuringMachine = (
+        {q_0, q_1, q_2, q_3, q_4, q_5, q_h},
+        {0, 1, #, _},
+        {
+          (q_0, 0) -> (q_1, #, Right),
+          (q_0, 1) -> (q_1, #, Right),
+          (q_0, #) -> (q_5, #, Right),
+          (q_1, 0) -> (q_2, 0, Right),
+          (q_1, 1) -> (q_2, 1, Right),
+          (q_1, #) -> (q_1, #, Right),
+          (q_2, 0) -> (q_3, M.Transition(0), Right),
+          (q_2, 1) -> (q_3, M.Transition(1), Right),
+          (q_2, #) -> (q_4, #, Left),
+          (q_3, s) -> (q_2, s, Right),
+          (q_4, 0) -> (q_4, 0, Left),
+          (q_4, 1) -> (q_4, 1, Left),
+          (q_4, #) -> (q_0, #, Right),
+          (q_5, _) -> (q_h, _, Stay)
+        },
+        q_0,
+        q_h
+      )
+      
+      SHOW ∀ (input : Tape) . Run[U](<M> + # + input) = Run[M](input)
+    }
+  }
+  
+  STRUCTURE Interpreter {
+    DEF Encode[M : TuringMachine] : Tape = 
+      Concat[
+        Encode[M.States], 
+        Encode[M.Symbols],
+        Encode[M.Transition],
+        Encode[M.StartState],
+        Encode[M.HaltState]
+      ]
+    
+    DEF Decode(t : Tape) : TuringMachine = (
+      Decode[Take[t, States]], 
+      Decode[Take[t, Symbols]],
+      Decode[Take[t, Transition]],
+      Decode[Take[t, StartState]],
+      Decode[Take[t, HaltState]]
+    )
+    
+    REQUIRE ∀ (M : TuringMachine) . Decode(Encode[M]) = M
+  }
+  
+  PROOFS {
+    THEOREM UniversalityTheorem {
+      STATEMENT:
+        ∃ (U : TuringMachine) . ∀ (M : TuringMachine) (input : Tape) .
+          Run[U](Encode[M] + # + input) = Run[M](input)
+      
+      PROOF:
+        LET U = SelfInterpreter(M)
+        
+        LET M : TuringMachine, input : Tape
+        LET c_M = InitialConfig[M](input)
+        LET c_U = InitialConfig[U](Encode[M] + # + input)
+        
+        SHOW Run[U](Encode[M] + # + input) = Run[M](input) BY {
+          SUFFICES_TO_SHOW ∀ (n : Nat) . (U ⊢)^n (c_U) = Encode[M ⊢^n c_M]
+          
+          BY Induction on n
+          BASE_CASE: n = 0
+            SHOW (U ⊢)^0 (c_U) = c_U = Encode[c_M] = Encode[M ⊢^0 c_M]
+          
+          INDUCTIVE_CASE: (U ⊢)^n (c_U) = Encode[M ⊢^n c_M] => (U ⊢)^(n+1) (c_U) = Encode[M ⊢^(n+1) c_M]
+            ASSUME (H) : (U ⊢)^n (c_U) = Encode[M ⊢^n c_M]
+            LET c_U' = (U ⊢)^n (c_U), c_M' = M ⊢^n c_M
+            
+            SHOW U ⊢ c_U' -> Encode[M ⊢ c_M' -> M ⊢^(n+1) c_M] BY {
+              LET (q_U, tape_U, pos_U) = c_U'
+              LET (q_M, tape_M, pos_M) = c_M'
+              
+              CASES on q_U
+              CASE q_0: 
+                REWRITE tape_U = Encode[M] + # + tape_M
+                REWRITE U ⊢ (q_0, Encode[M] + # + tape_M, pos_U) 
+                          -> (q_1, Encode[M] + # + tape_M, pos_U+1)
+                HENCE U ⊢ c_U' -> Encode[c_M']
+                
+              CASE q_1:
+                REWRITE tape_U = Encode[M] + # + tape_M
+                REWRITE U ⊢ (q_1, Encode[M] + # + tape_M, pos_U)
+                          -> (q_2, Encode[M] + # + tape_M, pos_U+1)
+                HENCE U ⊢ c_U' -> Encode[c_M']
+                
+              CASE q_2:
+                REWRITE tape_U = Encode[M] + # + tape_M
+                REWRITE U ⊢ (q_2, Encode[M] + # + tape_M, pos_U)
+                          -> (q_3, Encode[M] + # + tape_M[pos_M := M.Transition(tape_M[pos_M])], pos_U+1)
+                HENCE U ⊢ c_U' -> Encode[M ⊢ c_M' -> M ⊢^(n+1) c_M]
+                
+              CASE q_3:
+                REWRITE tape_U = Encode[M] + # + tape_M
+                REWRITE U ⊢ (q_3, Encode[M] + # + tape_M, pos_U)
+                          -> (q_2, Encode[M] + # + tape_M, pos_U+1)
+                HENCE U ⊢ c_U' -> Encode[M ⊢^(n+1) c_M]
+                
+              CASE q_4:
+                REWRITE tape_U = Encode[M] + # + tape_M
+                REWRITE U ⊢ (q_4, Encode[M] + # + tape_M, pos_U)
+                          -> (q_4, Encode[M] + # + tape_M, pos_U-1)
+                          -> ... 
+                          -> (q_0, Encode[M] + # + tape_M, 0)
+                HENCE U ⊢^k c_U' -> Encode[M ⊢^(n+1) c_M] for some k
+                
+              CASE q_5:
+                REWRITE tape_U = Encode[M] + # + tape_M
+                REWRITE U ⊢ (q_5, Encode[M] + # + tape_M, pos_U)
+                          -> (q_h, Encode[M] + # + tape_M, pos_U)
+                HENCE U ⊢ c_U' ->! Encode[M ⊢^n c_M ->! c_M'] BY H
+            }
+            
+            THUS (U ⊢)^(n+1) (c_U) = Encode[M ⊢^(n+1) c_M]
+        }
+        
+        THEREFORE Run[U](Encode[M] + # + input) = Run[M](input)
+        
+        QED
+    }
+    
+    THEOREM HaltingProblem {
+      STATEMENT:
+        ¬∃ (H : TuringMachine) . ∀ (M : TuringMachine) (input : Tape) .
+          Accepts[H](Encode[M] + # + input) <=> Halts(Run[M](input))
+      
+      PROOF:
+        ASSUME (H) : ∃ (H : TuringMachine) . ∀ (M : TuringMachine) (input : Tape) .
+                       Accepts[H](Encode[M] + # + input) <=> Halts(Run[M](input))
+        
+        LET Diag(M) = {
+          LET d = Encode[M] + # + Encode[M]
+          IF Accepts[H](d) THEN Loop ELSE Halt  
+        }
+        
+        LET D = Encode[Diag]
+        
+        SHOW Accepts[H](D + # + D) <=> ¬Accepts[H](D + # + D) BY {
+          REWRITE Accepts[H](D + # + D)
+            <=> Accepts[H](Encode[Diag] + # + Encode[Diag]) BY def. of D
+            <=> Halts(Run[Diag](Encode[Diag])) BY H
+            <=> IF Accepts[H](D + # + D) THEN Loop ELSE Halt BY def. of Diag
+            <=> ¬Accepts[H](D + # + D)
+        }
+        
+        THUS Accepts[H](D + # + D) <=> ¬Accepts[H](D + # + D)
+        HENCE Contradiction
+        
+        THEREFORE ¬∃ (H : TuringMachine) . ∀ (M : TuringMachine) (input : Tape) .
+                    Accepts[H](Encode[M] + # + input) <=> Halts(Run[M](input))
+        
+        QED
+    }
+  }
+}
+
+
+
+CONCEPT UniversalTuringMachine[Alphabet] {
+  LANGUAGE {
+    TYPE Symbol <: Alphabet
+    TYPE State
+    TYPE Direction = (Left | Right)
+    TYPE Transition = (State, Symbol, Symbol, Direction, State)
+    TYPE TM = (Set[State], State, Set[State], List[Transition])
+    
+    FUNC Simulate[M: TM, input: List[Symbol]]: Bool
+    
+    PRED Halts[M: TM, input: List[Symbol]]: Bool
+    PRED Accepts[M: TM, input: List[Symbol]]: Bool
+    
+    AXIOM halts_iff_accepts_or_rejects:
+      FORALL (M: TM, input: List[Symbol]) . 
+        Halts(M, input) <=> Accepts(M, input) \/ (Simulate(M, input) = False)
+  }
+  
+  NOTATION {
+    "(q, a, b, d, p)" = (q, a, b, d, p) : Transition
+    "[t1, ..., tn]" = [t1, ..., tn] : List[Transition]
+    "(Q, q0, F, delta)" = (Q, q0, F, delta) : TM
+  }
+  
+  TRANSFORMERS {
+    TACTIC SimulateTM[M: TM, input: List[Symbol], step_limit: Nat]: Bool = {
+      LET (Q, q0, F, delta) = M
+      LET (state, tape) = (q0, input)
+      LET steps = 0
+      WHILE state NOTIN F AND steps < step_limit:
+        MATCH (state, tape) WITH
+        | (q, []) => LET (_, _, b, d, p) = CHOOSE t IN delta WHERE t.1 = q AND t.2 = " " 
+                     IN (tape, state) := (IF d = Left THEN ([b], p) ELSE ([b, " "], p))
+        | (q, a::rest) => LET (_, _, b, d, p) = CHOOSE t IN delta WHERE t.1 = q AND t.2 = a
+                          IN (tape, state) := (IF d = Left THEN (b::rest, p) ELSE (rest ++ [b], p))  
+        steps := steps + 1
+      RETURN state IN F
+    }
+    
+    REWRITE Simulate = LAMBDA (M: TM, input: List[Symbol]) . SimulateTM(M, input, 1000)
+    
+    TACTIC AcceptsTM[M: TM, input: List[Symbol]]: Bool = {
+      Simulate(M, input)  
+    }
+    
+    REWRITE Accepts = AcceptsTM
+    
+    TACTIC HaltsTM[M: TM, input: List[Symbol]]: Bool = {
+      LET result = Simulate(M, input)
+      result \/ not result
+    }
+    
+    REWRITE Halts = HaltsTM
+  }
+  
+  STRUCTURE ExampleTM[input_alphabet: Set[Symbol], tape_alphabet: Set[Symbol]] EXTENDS UniversalTuringMachine[tape_alphabet] {
+    LET start : State = 0
+    LET accept : State = 1
+    LET reject : State = 2
+    LET states : Set[State] = {start, accept, reject}
+    LET input_symbols : Set[Symbol] = input_alphabet
+    LET tape_symbols : Set[Symbol] = tape_alphabet
+    LET blank : Symbol = " "
+    REQUIRE blank NOTIN input_symbols
+
+    LET transition[(q,a,b,d,p): Transition] = 
+      q = start /\ a = "0" /\ b = "0" /\ d = Right /\ p = start
+      \/ q = start /\ a = "1" /\ b = "1" /\ d = Right /\ p = start
+      \/ q = start /\ (a = " " \/ a NOTIN input_symbols) /\ b = " " /\ d = Right /\ p = accept
+      
+    LET M : TM = (states, start, {accept}, GENERATE t:Transition SATISFYING transition)
+    
+    REQUIRE FORALL (a: Symbol) . a IN input_alphabet => Accepts(M, [a])
+    REQUIRE FORALL (a: Symbol) . a NOTIN input_alphabet => not Accepts(M, [a])
+  }
+  
+  PROOFS {
+    THEOREM utm_halts_theorem[] {
+      STATEMENT:
+        EXISTS (U: TM) . 
+          FORALL (M: TM, input: List[Symbol]) .
+            Accepts(U, Encode(M) ++ input) <=> Halts(M, input)
+      PROOF:
+        LET U = (
+          {q_start, q_accept, q_reject, q_sim},
+          q_start,
+          {q_accept},
+          [
+            (q_start, " ", " ", Right, q_sim),
+            (q_sim, " ", " ", Right, q_accept),
+            (q_sim, "0", "0", Right, q_sim), 
+            (q_sim, "1", "1", Right, q_sim), 
+            (q_sim, "[", "[", Right, q_state), 
+            (q_state, "0", "0", Right, q_state),
+            (q_state, "1", "1", Right, q_state),
+            (q_state, " ", " ", Right, q_char),
+            (q_char, "0", "0", Right, q_char),  
+            (q_char, "1", "1", Right, q_char),
+            (q_char, " ", " ", Right, q_dir),
+            (q_dir, "0", "0", Right, q_state),
+            (q_dir, "1", "1", Right, q_state),
+            (q_dir, " ", " ", Right, q_sim)
+          ]
+        )
+
+        LET Encode[M: TM]: List[Symbol] = {
+          LET (Q, q0, F, delta) = M
+          LET encode_state[q: State]: List[Symbol] = 
+            IF q = q0 THEN "00"
+            ELSE IF q IN F THEN "01"  
+            ELSE "1" ++ BinaryString(Index(Q, q))
+          LET encode_symbol[s: Symbol]: List[Symbol] =
+            IF s = " " THEN "00" 
+            ELSE "1" ++ BinaryString(Index(Alphabet, s))
+          LET encode_direction[d: Direction]: List[Symbol] =
+            IF d = Left THEN "0" ELSE "1"
+          LET encode_transition[(q,a,b,d,p): Transition]: List[Symbol] =
+            "[" ++ encode_state(q) ++ " " 
+                ++ encode_symbol(a) ++ " "
+                ++ encode_symbol(b) ++ " "  
+                ++ encode_direction(d) ++ " "
+                ++ encode_state(p) ++ "]"
+          RETURN Concat(MAP encode_transition delta)
+        }
+
+        SHOW FORALL (M: TM, input: List[Symbol]) . 
+               Accepts(U, Encode(M) ++ input) <=> Halts(M, input)
+        {
+          LET M : TM, input : List[Symbol]
+          SHOW Accepts(U, Encode(M) ++ input) <=> Halts(M, input) {
+            ASSUME (A) : Accepts(U, Encode(M) ++ input)
+            LET (Q, q0, F, delta) = M
+            LET (state, tape) = (q0, input)
+            LET steps = 0
+            WHILE state NOTIN F AND steps < 1000: {
+              LET (q,a,b,d,p) = CHOOSE t IN delta 
+                                WHERE t.1 = state AND t.2 = Head(tape)
+              REWRITE Accepts(U, Encode(M) ++ tape) <=>
+                Accepts(U, Encode(M) ++ IF d = Left THEN b::Rest(tape)
+                                         ELSE Rest(tape) ++ [b])
+                BY SimulateTM {A}
+              CASES (d, Head(tape))
+              CASE (Left, s):
+                tape := b :: Rest(tape)
+              CASE (Right, " "):
+                tape := [b, " "]
+              CASE (Right, s):
+                tape := Rest(tape) ++ [b] 
+              state := p
+              steps := steps + 1
+            }
+            SHOW Halts(M, input) {
+              CASES state
+              CASE q IN F:  
+                REWRITE Accepts(U, Encode(M) ++ tape) <=> True
+                  BY SimulateTM {A}
+                HENCE Accepts(M, input)
+                HENCE Halts(M, input) BY halts_iff_accepts_or_rejects  
+              CASE q NOTIN F:
+                REWRITE Accepts(U, Encode(M) ++ tape) <=> False
+                  BY SimulateTM {steps = 1000}
+                HENCE not Accepts(M, input)  
+                HENCE Halts(M, input) BY halts_iff_accepts_or_rejects
+            }  
+            
+            ASSUME (B) : Halts(M, input)
+            CASES Accepts(M, input)
+            CASE True:
+              LET (state, tape) = Run(M, input) 
+              REWRITE Accepts(U, Encode(M) ++ input) <=> 
+                Accepts(U, Encode(M) ++ tape)
+                BY SimulateTM
+              REWRITE Accepts(U, Encode(M) ++ tape) <=> True  
+                BY SimulateTM {state IN F}
+            CASE False:
+              LET (state, tape) = Run(M, input)
+              REWRITE Accepts(U, Encode(M) ++ input) <=>
+                Accepts(U, Encode(M) ++ tape)  
+                BY SimulateTM
+              REWRITE Accepts(U, Encode(M) ++ tape) <=> False
+                BY SimulateTM {state NOTIN F, steps = 1000}  
+          }  
+        }
+        QED
+    }
+  }
+}

@@ -1,0 +1,108 @@
+// Mystery Scenario Concept
+
+MysteryScenario(
+    Setting:_,
+    Characters:_,
+    Plot:_,
+    Theme:_,
+    Clues:_,
+    RedHerrings:_,
+    Solution:_
+) :: {
+    DEF[
+        ∈: In,
+        ⊆: Subset,
+        ∪: Union,
+        ∩: Intersection,
+        ⊷: ProgressiveAbstraction,
+        ⧙: IterativeRefinement,
+        ⋐: HierarchicalDecomposition
+    ]
+
+    Setting(Locations:_, Time:_, Atmosphere:_) :: {
+        [⊷ WorldBuilding]
+        [⋐ (Geography, Culture, History)]
+        [Atmosphere ∈ (Mysterious, Eerie, Surreal, Tense)]
+    }
+
+    Character(Name:_, Role:_, Traits:_, Motivations:_) :: {
+        [Role ∈ (Protagonist, Suspect, Witness, Victim, Helper)]
+        [Traits ⊆ (Appearance, Personality, Skills, Background)]
+        [Motivations ⊆ (Personal, Interpersonal, External)]
+    }
+
+    Plot(Premise:_, Progression:_, Twist:_, Revelation:_) :: {
+        [Progression ⊆ (Introduction, Exploration, Complication, Confrontation)]
+        [Twist ∈ (Unexpected, Contradictory, Shocking)]
+        [Revelation ∈ (Surprising, Insightful, Transformative)]
+    }
+
+    Theme(Concept:_, Exploration:_, Message:_) :: {
+        [Concept ∈ (Truth, Perception, Identity, Morality, Power)]
+        [Exploration ⊆ (Literal, Metaphorical, Psychological, Sociological)]
+        [Message ∈ (Explicit, Implicit, Ambiguous)]
+    }
+
+    Clue(Description:_, Type:_, Significance:_, Visibility:_) :: {
+        [Type ∈ (Object, Dialogue, Observation, Inference)]
+        [Significance ∈ (Crucial, Supportive, Contextual)]
+        [Visibility ∈ (Apparent, Hidden, Obscured)]
+    }
+
+    RedHerring(Description:_, Deception:_, Misdirection:_) :: {
+        [Deception ∈ (Contradictory, Misleading, Distracting)]
+        [Misdirection ∈ (False, Irrelevant, Tangential)]
+    }
+
+    Solution(Explanation:_, Revelation:_, Consequence:_) :: {
+        [Revelation ∈ (Surprising, Inevitable, Ambiguous)]
+        [Consequence ∈ (Resolution, Transformation, Ambiguity)]
+    }
+}
+
+// Example usage
+
+[DailyMystery_20240623 |>
+    MysteryScenario(
+        Setting:[
+            Locations(Place:AbandonedThemePark, Place:FoggyLake, Place:EchoingCave),
+            Time:LateEvening,
+            Atmosphere:Eerie
+        ],
+        Characters:[
+            Character(Name:DetectiveSmith, Role:Protagonist, Traits:Observant, Motivations:JusticeSeeking),
+            Character(Name:MsRose, Role:Suspect, Traits:Secretive, Motivations:ProtectingIdentity),
+            Character(Name:DrGreen, Role:Witness, Traits:Forgetful, Motivations:ClearingName)
+        ],
+        Plot:[
+            Premise(Event:MysterDisappearFromAmuesmentPark),
+            Progression:[
+                Introduction(Scene:PoliceCallScene),
+                Exploration(Activity:InvestigatePark),
+                Complication(Encounter:ShadowyFigure),
+                Confrontation(Scene:ConfrontMsRose)
+            ],
+            Twist(Event:DrGreenConfession),
+            Revelation(Truth:CorporateConspiracy)
+        ],
+        Theme:[
+            Concept:Perception,
+            Exploration:Psychological,
+            Message:AppearancesDeceive
+        ],
+        Clues:[
+            Clue(Description:TornLabCoat, Type:Object, Significance:Crucial),
+            Clue(Description:Conversation_MsRose_DrGreen, Type:Dialogue, Significance:Supportive),
+            Clue(Description:HiddenRoomInCave, Type:Observation, Significance:Crucial)
+        ],
+        RedHerrings:[
+            RedHerring(Description:BrokenSecurityCamera, Deception:Contradictory),
+            RedHerring(Description:AnonymousThreateningLetter, Misdirection:Irrelevant)
+        ],
+        Solution:[
+            Explanation:DrGreen_PerformingIllegalExperiments,
+            Revelation:MsRose_SecretlyInvestigatingDrGreen,
+            Consequence:Transformation_AmusementPark_Reopened
+        ]
+    ) $ DailyMystery{Date:2024-06-23, Difficulty:Intermediate, TwitterTrend:#AbandonedParks}
+]

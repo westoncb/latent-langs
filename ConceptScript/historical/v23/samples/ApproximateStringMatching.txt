@@ -1,0 +1,154 @@
+CONCEPT ApproximateStringMatching {
+
+  LANGUAGE {
+    TYPE String = [ℕ]ℕ
+    TYPE Regex = String -> 𝔹
+    TYPE EditDistance = ℕ
+    TYPE TrieNode[M : ℕ] = ⟨children: Vector[M](TrieNode[M]) | isEnd: 𝔹⟩ 
+
+    FUNC LevenshteinDistance : String -> String -> EditDistance
+    FUNC HammingDistance : String -> String -> EditDistance
+    FUNC BuildTrie[M : ℕ] : 𝒫(String) -> TrieNode[M]
+    FUNC ApproxTrie[M k : ℕ] : String -> TrieNode[M] -> EditDistance -> 𝒫(String)
+
+    PRED Match : Regex -> String -> 𝔹
+    NOTATION "d(x, y)" = LevenshteinDistance(x, y)
+    NOTATION "(x)ᵣ" = ExactStrings(x, r)
+    NOTATION "(x)ᵣₖ" = ApproxStrings(x, r, k)
+  }
+
+  STRUCTURE {
+    DEF LevenshteinDistance(s₁, s₂) = MEMOIZE 𝜆(i, j).
+        IF i = 0 THEN j
+        ELSE IF j = 0 THEN i
+        ELSE IF s₁[i] = s₂[j] THEN RECUR(i-1, j-1)
+        ELSE 1 + min(RECUR(i-1, j), RECUR(i, j-1), RECUR(i-1, j-1))
+      APPLIED AT (|s₁|, |s₂|)
+
+    DEF HammingDistance(s₁, s₂) = ∑ (i : 1..|s₁|) IF s₁[i] ≠ s₂[i] THEN 1 ELSE 0
+      PRE |s₁| = |s₂|
+
+    DEF BuildTrie[M] (𝒟 : 𝒫(String)) -> TrieNode[M] =
+      ⟨children ↦ (c : 0..M-1) ↦ BuildTrie[M](Drop1(Select(𝒟, (s : String) ↦ s[0] = c)))
+       isEnd ↦ "" ∈ 𝒟⟩
+         
+    DEF ApproxTrie[M k] (s : String, node : TrieNode[M], dist : EditDistance) -> 𝒫(String) =
+      IF dist < 0 THEN ∅ 
+      ELSE IF s = "" THEN IF node.isEnd ∧ dist = 0 THEN {""} ELSE ∅
+      ELSE LET c = s[0], s' = s[1..] IN
+             (node.children[c] |> ApproxTrie[M k](s', ·, dist)) --Exact match
+        ∪ (⋃ (i : 0..M-1) node.children[i] |> ApproxTrie[M k](s', ·, dist-1)) --Insertion
+        ∪ ApproxTrie[M k](s', node, dist-1) --Deletion
+        ∪ (⋃ (i : 0..M-1) IF i ≠ c THEN node.children[i] |> ApproxTrie[M k](s', ·, dist-1) ELSE ∅) --Substitution
+        
+    DEF Match(r : Regex, s : String) <-> s ∈ ExactStrings(r) 
+    DEF ExactStrings(r : Regex) = {s : String | r(s)}    
+    DEF ApproxStrings(r : Regex, k : EditDistance) = {t : String | ∃ s ∈ (r)ᵣ. d(s, t) ≤ k}    
+  }
+
+  PROOFS {
+    THEOREM LevenshteinEditProperties {
+      STATEMENT : ∀ (s₁ s₂ : String) . d(s₁, s₂) =
+        min {|T| : T ∈ EditTranscripts(s₁, s₂)} 
+        WHERE EditTranscripts(s₁, s₂) = 
+          {T : [EditOperation]* | ApplyEdits(s₁, T) = s₂}
+          
+      PROOF {
+        ASSUME [s₁ s₂ : String]
+
+        DEFINE EditCost(op : EditOperation) = CASE op OF
+          | Insert _ -> 1 
+          | Delete _ -> 1
+          | Replace _ _ -> 1
+          | Match _ -> 0
+
+        HAVE : ∀ T ∈ EditTranscripts(s₁, s₂) . |T| ≥ ∑ (op ∈ T) EditCost(op) BY PositivityOfCosts
+
+        DEFINE OptimalTranscript = 
+          MEMOIZE 𝜆(i, j).
+            IF i = 0 THEN [Insert(s₂[k]) for k in 1..j]
+            ELSE IF j = 0 THEN [Delete(s₁[k]) for k in 1..i]
+            ELSE IF s₁[i] = s₂[j] THEN Match(s₁[i]) :: RECUR(i-1, j-1)
+            ELSE LET (op, T) = argmin (
+                    (Delete(s₁[i]), RECUR(i-1, j)),
+                    (Insert(s₂[j]), RECUR(i, j-1)), 
+                    (Replace(s₁[i], s₂[j]), RECUR(i-1, j-1))
+                 ) BY EditCost(op) + |T|
+                 IN op :: T
+          APPLIED AT (|s₁|, |s₂|)
+
+        HAVE OptimalityLemma : ∀ (i j : ℕ) . ∀ T ∈ EditTranscripts(s₁[1..i], s₂[1..j]) .
+          |OptimalTranscript(i, j)| ≤ |T| 
+          PROOF BY INDUCTION
+
+        CHOOSE T* = OptimalTranscript(|s₁|, |s₂|)
+
+        HAVE : |T*| = ∑ (op ∈ T*) EditCost(op) BY ConstructionOfT*
+        HAVE : ∀ T ∈ EditTranscripts(s₁, s₂) . |T*| ≤ |T| BY OptimalityLemma
+
+        SHOW d(s₁, s₂) = |T*| = min {|T| : T ∈ EditTranscripts(s₁, s₂)} BY DefinitionOfLevenshtein
+      }
+    }
+
+    THEOREM ApproximateTrieCorrectness[M k : ℕ] {
+      STATEMENT : ∀ (𝒟 : 𝒫(String)) (s : String) .
+        ApproxTrie[M k](s, BuildTrie[M](𝒟), k) = {t ∈ 𝒟 | d(s, t) ≤ k}
+        
+      PROOF {
+        ASSUME [𝒟 : 𝒫(String)] [s : String] 
+        LET root = BuildTrie[M](𝒟)
+
+        DEFINE ApproxTrieInductive[dist : ℕ](t : String, node : TrieNode[M]) -> 𝒫(String) =
+          IF dist < 0 THEN ∅ 
+          ELSE IF t = "" THEN IF node.isEnd ∧ dist = 0 THEN {""} ELSE ∅
+          ELSE LET c = t[0], t' = t[1..] IN
+                 (node.children[c] |> ApproxTrieInductive[dist](t', ·)) --Exact match
+            ∪ (⋃ (i : 0..M-1) node.children[i] |> ApproxTrieInductive[dist-1](t', ·)) --Insertion
+            ∪ ApproxTrieInductive[dist-1](t', node) --Deletion
+            ∪ (⋃ (i : 0..M-1) IF i ≠ c THEN node.children[i] |> ApproxTrieInductive[dist-1](t', ·) ELSE ∅) --Substitution
+
+        HAVE CorrectnessLemma : ∀ (dist : ℕ) (t : String) (node : TrieNode[M]) .
+            ApproxTrieInductive[dist](t, node) = {u ∈ Strings(node) | d(t, u) ≤ dist}
+          WHERE Strings(node) = {u : String | ∃ p : String . u = p ++ [sym | node' ← nodesOnPathTo(node), sym ← node'.children, node'.isEnd]}
+          PROOF BY INDUCTION ON |t|
+
+        SHOW ApproxTrie[M k](s, root, k) = {t ∈ 𝒟 | d(s, t) ≤ k} BY {
+          ApproxTrie[M k](s, root, k) 
+            = ApproxTrieInductive[k](s, root) BY DefinitionOfApproximateTrie
+            = {u ∈ Strings(root) | d(s, u) ≤ k} BY CorrectnessLemma
+            = {u ∈ 𝒟 | d(s, u) ≤ k} BY DefinitionOfBuildTrie
+        }
+      }
+    }
+
+    THEOREM RegexApproximationTheorem {
+      STATEMENT : ∀ (r : Regex) (k : ℕ) (s : String) . 
+        Match(r, s) <-> ∃ t ∈ (s)ᵣₖ . Match(r, t)
+
+      PROOF {
+        ASSUME [r : Regex] [k : ℕ] [s : String]
+
+        SHOW Match(r, s) -> ∃ t ∈ (s)ᵣₖ . Match(r, t) BY {
+          ASSUME Match(r, s)
+          WITNESS s 
+          HAVE : s ∈ (s)ᵣₖ BECAUSE d(s, s) = 0 ≤ k
+          HENCE ∃ t ∈ (s)ᵣₖ . Match(r, t)
+        }
+
+        SHOW (∃ t ∈ (s)ᵣₖ . Match(r, t)) -> Match(r, s) BY {
+          ASSUME ∃ t ∈ (s)ᵣₖ . Match(r, t)
+          LET t ∈ (s)ᵣₖ SUCH THAT Match(r, t)
+
+          HAVE : d(s, t) ≤ k ∧ t ∈ (r)ᵣ BY {
+            d(s, t) ≤ k BY DefinitionOfApproxStrings
+            t ∈ (r)ᵣ BY DefinitionOfMatch
+          }
+          
+          HAVE : s ∈ (r)ᵣₖ BY DefinitionOfApproxStrings
+
+          HENCE Match(r, s) BY DefinitionOfMatch
+        }
+      }
+    }
+  }
+}

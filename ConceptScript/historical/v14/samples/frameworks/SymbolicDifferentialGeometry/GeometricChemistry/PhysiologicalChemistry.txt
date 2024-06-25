@@ -1,0 +1,105 @@
+CONCEPT PhysiologicalChemistry {
+  EXTENDS GeometricChemistry {
+    type Biomolecule = (Molecule, Function)
+    type Function = Enumeration(Catalysis, Signaling, Structure, Transport, ...)
+    
+    type Enzyme = (Biomolecule, Substrate, Product)
+    type Substrate = Molecule
+    type Product = Molecule
+    type Cofactor = Molecule
+    
+    type Receptor = (Biomolecule, Ligand, Effector)
+    type Ligand = Molecule
+    type Effector = Enumeration(Agonist, Antagonist, Modulator, ...)
+    
+    type Pathway = (Reactions: List<ChemicalReaction>, Regulation: List<Regulation>)
+    type Regulation = (Regulator: Biomolecule, Target: Biomolecule, Effect: Enumeration(Activation, Inhibition))
+    
+    type CompartmentStructure = (Compartments: List<Compartment>, Membranes: List<Membrane>)
+    type Compartment = (Contents: List<Biomolecule>, Volume: ℝ, pH: ℝ, Voltage: ℝ, ...)  
+    type Membrane = (Composition: List<Biomolecule>, Permeability: Function(Molecule, ℝ))
+    
+    type TransportProcess = (Solute: Molecule, Source: Compartment, Sink: Compartment, Mechanism: TransportMechanism)  
+    type TransportMechanism = Enumeration(Passive, Facilitated, Active, ...)
+    
+    type SignalingCascade = (Receptor: Receptor, Messengers: List<Molecule>, Effectors: List<Biomolecule>)
+    
+    type MetabolicNetwork = (Metabolites: List<Molecule>, Reactions: List<MetabolicReaction>, Fluxes: List<MetabolicFlux>)
+    type MetabolicReaction = (Substrates: List<Molecule>, Products: List<Molecule>, Enzyme: Enzyme, Compartment: Compartment)
+    type MetabolicFlux = (Reaction: MetabolicReaction, Rate: ℝ)
+  }
+  
+  STRUCTURE {
+    MichaelisMenten(E: Enzyme, S: Substrate, P: Product): 
+      v = k_cat * [E] * [S] / (K_M + [S])
+      relating the reaction velocity v to the substrate concentration [S] 
+      
+    MassActionKinetics(R: ChemicalReaction):
+      Rate(R) = k * ∏ [Reactant]^Stoichiometry
+      where k is the rate constant and the product is over all reactants
+      
+    HillEquation(L: Ligand, R: Receptor, K: Real, n: ℕ):
+      θ = [L]^n / (K^n + [L]^n) 
+      where θ is the fraction of receptors bound and n is the Hill coefficient
+      
+    NernstEquation(Ion: Molecule, Compartment1: Compartment, Compartment2: Compartment):
+      E = (R * T / (z * F)) * ln([Ion]₂ / [Ion]₁)
+      relating the voltage difference E to the ion concentrations
+      
+    GoldmanHodgkinKatzEquation(P_Na, P_K, P_Cl: Permeability, [Na]₁, [Na]₂, [K]₁, [K]₂, [Cl]₁, [Cl]₂: ℝ):
+      V = (R * T / F) * ln((P_Na * [Na]₁ + P_K * [K]₁ + P_Cl * [Cl]₂) / (P_Na * [Na]₂ + P_K * [K]₂ + P_Cl * [Cl]₁))
+      giving the resting membrane potential V in terms of ion permeabilities and concentrations
+  }
+  
+  PROOFS {
+    theorem SteadyStateApproximation(E: Enzyme, S: Substrate, P: Product):
+      MichaelisMenten(E, S, P) under the assumptions:
+        d[ES]/dt = 0 and [E]₀ = [E] + [ES]
+    {
+      let k₁, k₋₁, k_cat be the rate constants for E + S ⇌ ES → E + P
+      have d[ES]/dt = k₁ * [E] * [S] - (k₋₁ + k_cat) * [ES]
+      assume d[ES]/dt = 0  ; Steady state approximation
+      hence k₁ * [E] * [S] = (k₋₁ + k_cat) * [ES] = k₋₁ * [ES] + k_cat * [ES]
+      
+      let K_M = (k₋₁ + k_cat) / k₁ be the Michaelis constant
+      have [E]₀ = [E] + [ES]  ; Conservation of total enzyme
+      have [E] = [E]₀ - [ES]
+      
+      substitute:
+        k₁ * ([E]₀ - [ES]) * [S] = k₋₁ * [ES] + k_cat * [ES]
+        k₁ * [E]₀ * [S] - k₁ * [ES] * [S] = k₋₁ * [ES] + k_cat * [ES]
+        k₁ * [E]₀ * [S] = k₋₁ * [ES] + k_cat * [ES] + k₁ * [ES] * [S] = (k₋₁ + k_cat) * [ES] + k₁ * [ES] * [S]
+          = K_M * k₁ * [ES] + k₁ * [ES] * [S]  ; By definition of K_M
+          = k₁ * [ES] * (K_M + [S])
+      
+      hence k₁ * [E]₀ * [S] = k₁ * [ES] * (K_M + [S])
+      hence [ES] = [E]₀ * [S] / (K_M + [S])
+      
+      let v = k_cat * [ES] be the reaction velocity
+      hence v = k_cat * [E]₀ * [S] / (K_M + [S]) 
+    }
+      
+    theorem ElectrochemicalEquilibrium(Ion: Molecule, Compartment1: Compartment, Compartment2: Compartment):
+      NernstEquation(Ion, Compartment1, Compartment2) at equilibrium
+    {
+      let z be the charge of Ion
+      let [Ion]₁ and [Ion]₂ be the concentrations of Ion in Compartment1 and Compartment2
+      let E be the voltage difference between Compartment1 and Compartment2
+      
+      at equilibrium:
+        μ₁ = μ₂  ; Equality of electrochemical potentials
+        μ₁⁰ + R * T * ln([Ion]₁) + z * F * ϕ₁ = μ₂⁰ + R * T * ln([Ion]₂) + z * F * ϕ₂
+          ; Electrochemical potential as a function of chemical potential μ⁰, concentration [Ion], and electric potential ϕ
+      
+      assume μ₁⁰ = μ₂⁰  ; Same standard chemical potential
+      have E = ϕ₂ - ϕ₁  ; Definition of voltage difference
+      
+      rearrange:
+        R * T * ln([Ion]₁) + z * F * ϕ₁ = R * T * ln([Ion]₂) + z * F * ϕ₂
+        R * T * ln([Ion]₁) - R * T * ln([Ion]₂) = z * F * ϕ₂ - z * F * ϕ₁
+        R * T * ln([Ion]₁ / [Ion]₂) = z * F * (ϕ₂ - ϕ₁)  
+        R * T * ln([Ion]₁ / [Ion]₂) = z * F * E
+      hence E = (R * T / (z * F)) * ln([Ion]₂ / [Ion]₁)
+    }
+  }
+}

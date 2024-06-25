@@ -1,0 +1,79 @@
+CONCEPT SocialNetwork {
+  LANGUAGE {
+    TYPE User
+    TYPE Post
+    TYPE Like
+    
+    FUNC CreateUser : User
+    FUNC CreatePost(User) : Post
+    FUNC LikePost(User, Post) : Like ⊸ Post
+    FUNC UnlikePost(User, Post, Like) : Post
+    
+    PRED Likes(User, Post) : Bool
+    
+    CLASS Countable(A) {
+      Count : A -> Int
+    }
+    
+    REWRITE Likes(u, LikePost(u, p)) = True
+    REWRITE Likes(u, UnlikePost(u, p, l)) = False
+    
+    AXIOM UnlikeIdempotent {
+      ∀ (u : User) (p : Post) (l : Like).
+        UnlikePost(u, UnlikePost(u, p, l), l) = UnlikePost(u, p, l)
+    }
+  }
+  
+  STRUCTURE {
+    INSTANCE Countable(Like) {
+      Count(l) = 1
+    }
+    
+    INSTANCE Countable(A) => Countable(List(A)) {
+      Count([]) = 0
+      Count(x :: xs) = Count(x) + Count(xs)
+    }
+
+    DEF TotalLikes(Countable(A)) : List(A) -> Int = Count
+    
+    DEF LikesPost(u : User, p : Post) -> Bool =
+      CASE p OF
+        LikePost(v, q) -> u = v || LikesPost(u, q)
+        UnlikePost(v, q, l) -> u = v && LikesPost(u, q)
+        _ -> False
+  }
+  
+  PROOFS {
+    THEOREM LikeCount {
+      STATEMENT: ∀ (u : User) (p : Post) (ls : List(Like)).
+        TotalLikes(LikePost(u, p, ls)) = TotalLikes(ls) + 1
+      PROOF:
+        LET u : User, p : Post, ls : List(Like);
+        REWRITE TotalLikes(LikePost(u, p, ls))
+          = Count(LikePost(u, p, ls)) BY Definition(TotalLikes)
+          = Count(ls) + 1 BY Definition(Count);
+        QED
+    }
+    
+    THEOREM UnlikePreservesLikes {
+      STATEMENT: ∀ (u : User) (p : Post) (l : Like).
+        LikesPost(u, UnlikePost(u, p, l)) = LikesPost(u, p)
+      PROOF:
+        LET u : User, p : Post, l : Like;
+        SHOW LikesPost(u, UnlikePost(u, p, l)) = LikesPost(u, p) BY {
+          LikesPost(u, UnlikePost(u, p, l))
+          = u = u && LikesPost(u, p) BY Definition(LikesPost)
+          = LikesPost(u, p) BY AndTrue
+        };
+        QED
+    }
+    
+    THEOREM UnlikeIdempotence(u : User, p : Post, l : Like) {
+      STATEMENT: UnlikePost(u, UnlikePost(u, p, l), l) = UnlikePost(u, p, l)
+      PROOF:
+        REWRITE UnlikePost(u, UnlikePost(u, p, l), l)
+          = UnlikePost(u, p, l) BY UnlikeIdempotent;
+        QED
+    }
+  }
+}

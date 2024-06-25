@@ -1,0 +1,160 @@
+CONCEPT GeometricAttention {
+  PARAMETERS {
+    d : Nat -- Ambient dimension
+    𝕜 : Field -- Coefficient field
+    N : Nat -- Sequence length
+  }
+
+  CONTEXT {
+    TYPES {
+      Shape := CS(ℝ^d)
+      PHT := D^b(Shv(DIR × ℝ, 𝕜))
+      Seq(T) := FUNC(Fin(N), T)
+      GeomAttention := FUNC(Shape, Seq(Shape), Seq(Shape)) -> Shape
+    }
+
+    STRUCTURES {
+      STRUCTURE PHT_Embedding {
+        FIELD Embed : Shape -> PHT
+        AXIOM Functoriality(f : Shape -> Shape) {
+          Embed(f(M)) ≃ f^*(Embed(M))
+        }
+      }
+
+      STRUCTURE GeomDotProductAttention IMPLEMENTS GeomAttention {
+        PARAMETERS {
+          embed : PHT_Embedding
+        }
+
+        FIELD Alignment(K : Shape, Q : Shape) -> Real := 
+          InnerProduct(embed.Embed(K), embed.Embed(Q)) / SQRT(DIM(PHT))
+
+        IMPLEMENT FUNC(Q : Shape, Ks : Seq(Shape), Vs : Seq(Shape)) -> Shape
+          WITH Reconstruct(Σ_i α_i * embed.Embed(Vs[i]))
+          WHERE α = SoftMax(Seq(Alignment(Ks[i], Q) for i in Fin(N)))
+
+        FIELD Reconstruct : PHT -> Shape
+          AXIOM ReconstructEmbed {
+            ∀ M : Shape . Reconstruct(embed.Embed(M)) ≃ M
+          }
+      }
+
+      STRUCTURE GeomMultiheadAttention(h : Nat) IMPLEMENTS GeomAttention {
+        PARAMETERS {
+          Heads : FUNC(Fin(h), GeomAttention)
+          Concat : FUNC(Seq(Shape), Shape^h)
+          Proj : FUNC(Shape^h, Shape)
+        }
+
+        IMPLEMENT FUNC(Q : Shape, Ks : Seq(Shape), Vs : Seq(Shape)) -> Shape
+          WITH Proj(Concat(Seq(Heads[i](Q, Ks, Vs) for i in Fin(h))))
+      }
+    }
+
+    NOTATION {
+      ⟨K, Q⟩ := Alignment(K, Q)
+      Σ_i x_i := SUM(i = 0 to N - 1, x_i)
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE GeomLinearity {
+      GeomAttention(a * Ks + b * Ks', Q, a * Vs + b * Vs') <=>
+        a * GeomAttention(Ks, Q, Vs) + b * GeomAttention(Ks', Q, Vs')
+      WHERE a * Ks := Seq(ScalarMult(a, Ks[i]) for i in Fin(N))
+            Ks + Ks' := Seq(ShapeAdd(Ks[i], Ks'[i]) for i in Fin(N))
+    }
+
+    SIMPLIFY IgnoreQueryOrder {
+      GeomAttention(Ks, PERMUTE(Qs), Vs) <=> GeomAttention(Ks, Qs, Vs)
+    }
+
+    SIMPLIFY IgnoreKeyValueOrder {
+      GeomAttention(PERMUTE(Ks), Q, PERMUTE(Vs)) <=> 
+        PERMUTE(GeomAttention(Ks, Q, Vs))
+    }
+  }
+
+  PROOFS {
+    THEOREM GeomAttentionPreservesHomology {
+      FORALL (Q : Shape, Ks Vs : Seq(Shape), i : Nat) .
+        PHT^i(GeomDotProductAttention(Q, Ks, Vs)) ≃ 
+          Σ_j α_j * PHT^i(Vs[j])
+      WHERE α = SoftMax(Seq(⟨Ks[j], Q⟩ for j in Fin(N)))
+    }
+    PROOF {
+      <1>. LET att = GeomDotProductAttention(Q, Ks, Vs)
+      <2>. att = Reconstruct(Σ_j α_j * embed.Embed(Vs[j])) [BY DEF GeomDotProductAttention]
+      <3>. PHT^i(att) ≃ PHT^i(Reconstruct(Σ_j α_j * embed.Embed(Vs[j]))) [BY <2>]
+      <4>. PHT^i(Reconstruct(Σ_j α_j * embed.Embed(Vs[j]))) ≃
+           Σ_j α_j * PHT^i(Vs[j]) [BY Functoriality, ReconstructEmbed]
+      <5>. QED [BY <3>, <4>]
+    }
+
+    THEOREM GeomAttentionStability {
+      FORALL (Q Q' : Shape, Ks Ks' Vs Vs' : Seq(Shape), d : Met) .
+        d(GeomDotProductAttention(Q, Ks, Vs), GeomDotProductAttention(Q', Ks', Vs')) ≤
+          C * (d(Q, Q') + MAX(d(Ks[i], Ks'[i])) + MAX(d(Vs[i], Vs'[i])))
+      WHERE C is a constant depending on the Lipschitz constants of Embed, Reconstruct, and SoftMax
+    }
+    PROOF {
+      ASSUME Q Q' : Shape, Ks Ks' Vs Vs' : Seq(Shape), d : Met
+      <1>. LET att = GeomDotProductAttention(Q, Ks, Vs)
+           LET att' = GeomDotProductAttention(Q', Ks', Vs')
+      <2>. d(att, att') ≤ d(Reconstruct(Σ_i α_i * embed.Embed(Vs[i])),
+                            Reconstruct(Σ_i α'_i * embed.Embed(Vs'[i])))
+           [BY DEF GeomDotProductAttention]
+      <3>. ≤ L_R * d(Σ_i α_i * embed.Embed(Vs[i]), Σ_i α'_i * embed.Embed(Vs'[i]))
+           [BY Lipschitz continuity of Reconstruct]
+      <4>. ≤ L_R * (d(Σ_i α_i * embed.Embed(Vs[i]), Σ_i α_i * embed.Embed(Vs'[i])) +
+                    d(Σ_i α_i * embed.Embed(Vs'[i]), Σ_i α'_i * embed.Embed(Vs'[i])))
+           [BY triangle inequality]
+      <5>. ≤ L_R * (MAX(α_i) * L_E * MAX(d(Vs[i], Vs'[i])) +
+                    L_S * (L_A * d(Q, Q') + L_A * MAX(d(Ks[i], Ks'[i]))))
+           [BY Lipschitz continuity of Embed, SoftMax, and Alignment]
+      <6>. ≤ C * (d(Q, Q') + MAX(d(Ks[i], Ks'[i])) + MAX(d(Vs[i], Vs'[i])))
+           [BY collecting terms]
+      <7>. QED
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE SphericalAttention {
+      DEFINE S^2 = {x ∈ ℝ^3 | ‖x‖ = 1}
+      
+      LET embed = PHT_Embedding WITH {
+        Embed(M : S^2) := PHT_M
+      }
+      
+      LET satt = GeomDotProductAttention WITH {
+        embed := embed
+      }
+      
+      LET Q = NorthPole
+      LET Ks = Seq(RandomPointsOn(S^2, N))
+      LET Vs = Seq(RandomPointsOn(S^2, N))
+      
+      THEN satt(Q, Ks, Vs) ∈ S^2
+      AND Dgm(satt(Q, Ks, Vs)) ≃ [[], [(0,∞)], []]
+    }
+
+    EXAMPLE TorusAttention {
+      DEFINE T^2 = S^1 × S^1
+      
+      LET embed = PHT_Embedding WITH {
+        Embed(M : T^2) := PHT_M
+      }
+      
+      LET tatt = GeomMultiheadAttention(4) WITH {
+        Heads := λ i . GeomDotProductAttention WITH { embed := embed }
+      }
+      
+      LET Q = (0, 0)
+      LET Ks = Seq(RandomPointsOn(T^2, N))
+      LET Vs = Seq(RandomPointsOn(T^2, N))
+      
+      THEN tatt(Q, Ks, Vs) ∈ T^2
+      AND Dgm(tatt(Q, Ks, Vs)) ≃ [[], [(0,∞), (0,∞)], [(0,∞)], []]
+    }
+  }
+}

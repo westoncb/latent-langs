@@ -1,0 +1,140 @@
+CONCEPT McLuhanPlayboyInterview1969 {
+  LANGUAGE {
+    TYPE Medium
+    TYPE Sense <: Medium
+    TYPE Technology <: Medium
+    TYPE Culture
+    TYPE Society
+    TYPE Environment
+    TYPE Message  
+    TYPE Extension
+    TYPE Reversal
+    TYPE Retrieval
+    TYPE Tetrad
+
+    FUNC Create(m: Medium): Environment
+    FUNC Extend(m: Medium, s: Sense): Extension  
+    FUNC Transform(e: Environment, s: Society): Society
+    FUNC Retrieve(e: Environment): Retrieval
+    FUNC Reverse(m: Medium): Reversal
+    FUNC Carry(m: Medium, msg: Message): 𝔹
+    
+    PRED Amplify(t: Technology, s: Sense, c: Culture): 𝔹
+    PRED Obsolesce(t: Technology, s: Sense, c: Culture): 𝔹
+    PRED Enhance(m: Medium, msg: Message): 𝔹
+    PRED Balance(c: Culture, s: Sense): 𝔹
+    PRED Dominant(s: Sense, c: Culture): 𝔹
+    PRED Visible(e: Environment): 𝔹
+    PRED Tribal(s: Society): 𝔹
+    PRED Literate(s: Society): 𝔹
+    PRED Electric(s: Society): 𝔹
+    PRED Holistic(s: Society): 𝔹
+    PRED Fragmented(s: Society): 𝔹
+    PRED Simultaneous(e: Environment): 𝔹
+    PRED Individualistic(e: Environment): 𝔹
+    PRED Participatory(e: Environment): 𝔹
+    PRED Inclusive(e: Environment): 𝔹
+    PRED Visual(c: Culture): 𝔹  
+    PRED Tactile(c: Culture): 𝔹
+    PRED Iconic(c: Culture): 𝔹
+
+    AXIOM LawOfMedia {
+      ∀ (m: Medium). 
+        ∃ (t: Tetrad). 
+          t = (Extend(m, _), Obsolesce(m, _), Retrieve(Create(m)), Reverse(m))
+    }
+
+    AXIOM ExtensionsAmplifyAndObsolesce {  
+      ∀ (t: Technology) (s: Sense) (c: Culture).
+        Extend(t, s) => (Amplify(t, s, c) ∧ Obsolesce(t, s, c))
+    }
+
+    AXIOM EnvironmentIsInvisible {
+      ∀ (e: Environment). ¬Visible(e)  
+    }
+
+    AXIOM RetrievalOfPreviousForm {
+      ∀ (m: Medium) (e_old: Environment) (e_new: Environment).
+        Create(m) = e_new => Retrieve(e_new) = e_old
+    }
+
+    AXIOM ReversalIntoOpposite {
+      ∀ (m: Medium).
+        ∃ (opp_m: Medium). 
+          Reverse(m) = opp_m ∧ (∀ (p: 𝔹). (p ↔ ¬p)[m ↦ opp_m] )
+    }
+
+    AXIOM MediumIsMessage {
+      ∀ (m: Medium) (msg: Message).  
+        Carry(m, msg) => ¬Enhance(m, msg)
+    }
+  }
+
+  STRUCTURE TribalOralSociety {
+    REQUIRE ∀ (s: Sense). Balance(this, s)
+    REQUIRE ∃ (s: Sense). Dominant(s, this) ∧ s = Audile  
+    REQUIRE ∀ (e: Environment | Create(_) = e). 
+              Simultaneous(e) ∧ Inclusive(e) ∧ ¬Visual(this) ∧ ¬Literate(this)
+    REQUIRE Tribal(this) ∧ Holistic(this)
+  }
+
+  STRUCTURE LiterateVisualSociety {
+    REQUIRE ∀ (s: Sense). ¬Balance(this, s)
+    REQUIRE ∃ (s: Sense). Dominant(s, this) ∧ s = Visual
+    REQUIRE ∀ (e: Environment | Create(_) = e).
+              ¬Simultaneous(e) ∧ Individualistic(e) ∧ Visual(this) ∧ Literate(this)  
+    REQUIRE ¬Tribal(this) ∧ Fragmented(this) 
+  }
+
+  STRUCTURE ElectricRetriebalSociety {
+    REQUIRE ∀ (s: Sense). Balance(this, s)
+    REQUIRE ∃ (s: Sense). Dominant(s, this) ∧ s = Tactile
+    REQUIRE ∀ (e: Environment | Create(_) = e).
+              Simultaneous(e) ∧ Participatory(e) ∧ ¬Visual(this) ∧ ¬Literate(this)
+    REQUIRE Tribal(this) ∧ Holistic(this)  
+  }
+
+  PROOFS {
+    THEOREM PhoneticAlphabetTransformedOralToLiterate {
+      ASSUME Extend(PhoneticAlphabet, Visual) 
+             ∧ Dominant(Visual, LiterateVisualSociety)
+      SHOW Transform(
+            Create(PhoneticAlphabet), 
+            TribalOralSociety
+           ) = LiterateVisualSociety
+    }
+
+    THEOREM PrintAmplifiedVisualObsolescedOther {
+      ASSUME Printing(p) ∧ PrintedBook(b)  
+      SHOW Amplify(p, Visual, Western) 
+           ∧ ∀ (s: Sense). s ≠ Visual => Obsolesce(b, s, Western)
+    }
+
+    THEOREM ElectricMediaTransformedLiterateToRetribal {
+      LET RealityTV(r) ∧ Internet(i) IN {
+        ASSUME Electric(r) ∧ Electric(i) 
+               ∧ ∀ (s: Sense). Balance(ElectricRetriebalSociety, s)
+        SHOW Transform(
+                Create(r) ⊔ Create(i), 
+                LiterateVisualSociety
+              ) = ElectricRetriebalSociety
+      }
+    }
+
+    THEOREM TelevisionIsTactileNotVisual {
+      ASSUME Television(t)
+      SHOW Tactile(t) ∧ ¬Visual(t)
+      HENCE ∀ (m: Message). Carry(t, m) => Participatory(Create(t))
+    }
+
+    THEOREM ComputerExtendsCNSRetrievesTribal {  
+      LET Consciousness(c) IN {
+        ASSUME Computer(comp) ∧ Extend(comp, c)  
+        SHOW Retrieve(Create(comp)) = TribalOralSociety
+        HENCE Holistic(
+                Transform(Create(comp), LiterateVisualSociety)  
+              )
+      }
+    }
+  }
+}

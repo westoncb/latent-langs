@@ -1,0 +1,138 @@
+METALANGUAGE MetamaterialCFC {
+  type Material = (Composition, Structure, Properties, Fields)
+  type Composition = (Energy, Density)
+  type Structure = (Geometry, Topology, Bonding)
+  type Properties = (Function, Response)
+  type Fields = (Potential, Wavefunction, Domain)
+  
+  func PropertyFunctional(m: Material, p: Properties): Real = 
+    ∫(m.Fields.Domain, m.Properties.Function(p, m))
+
+  func EnergyDensity(m: Material): Real =
+    ∑(i, m.Composition.Density(m.Composition[i]) * 
+         (m.Structure.Potential(m.Structure, i) + 
+          m.Properties.Kinetic(m.Properties, i)))
+
+  func ActionFunctional(m: Material): Real =
+    ∫(m.Fields.Domain, m.Fields.Lagrangian(m.Fields, m, ∇(m.Fields)) - 
+      EnergyDensity(m))
+
+  pred Symmetry(m: Material, p: Properties, g: Transformation) =
+    PropertyFunctional(g(m), p) = PropertyFunctional(m, p)
+
+  pred Invariance(m: Material, p: Properties, g: Transformation) =
+    δ(PropertyFunctional(m, p), g) = 0
+
+  pred Covariance(m: Material, p: Properties, g: Transformation) =
+    PropertyTensor(g(m), p) = g(PropertyTensor(m, p))
+
+  pred Universality(m: Material, p: Properties, ms: [Material], η: Real) =
+    ∀(m' ∈ ms, |PropertyFunctional(m, p) - PropertyFunctional(m', p)| < η)
+
+  pred Constraint(m: Material, p: Properties, bounds: (Real, Real)) =
+    bounds.0 ≤ PropertyFunctional(m, p) ≤ bounds.1
+
+  pred Optimize(m: Material, p: Properties, target: (Material, Real)) =
+    |PropertyFunctional(m, p) - PropertyFunctional(target.0, p)| ≥ target.1
+
+  func EffectiveProperty(m: Material, p: Properties, ms: [Material], η: Real): Real =
+    ∑(i, VolumeRatio(ms[i], m) * PropertyFunctional(ms[i], p)) + O(η)
+
+  pred FieldEquations(m: Material, f: Fields) =
+    δ(ActionFunctional(m), f) = 0
+
+  pred ConservationLaw(m: Material, j: CurrentDensity, q: ChargeDensity) =
+    ∇ • j(m.Fields, m) = q(m)
+  
+  infer Homogenization(m: Material, p: Properties, ms: [Material], η: Real):
+    Universality(m, p, ms, η) --> 
+      PropertyFunctional(m, p) = EffectiveProperty(m, p, ms, η) + O(η)
+
+  infer SymmetryAnalysis(m: Material, p: Properties, g: Transformation):
+    Symmetry(m, p, g) --> 
+      ∃(m' ⊂ m, PropertyFunctional(m, p) = PropertyFunctional(m', p))
+
+  infer CovarianceAnalysis(m: Material, p: Properties, g: Transformation):
+    Covariance(m, p, g) -->
+      PropertyTensor(m, p) = Δ(g) * PropertyFunctional(m, p) + ε(g)
+
+  infer FieldEquivalence(m: Material, f: Fields):
+    FieldEquations(m, f) <--> ∃(j: CurrentDensity, q: ChargeDensity, ConservationLaw(m, j, q))
+
+  infer TopologyOptimization(m: Material, p: Properties):
+    (∃(m' ⊂ m, PropertyFunctional(m, p) = PropertyFunctional(m', p))) -->
+      ∃(t: Topology, 
+        (m with Structure := (m.Structure with Topology := t)) 
+        satisfies Optimize(m, p, (_, _)))
+
+  rewrite PerturbativeExpansion(m: Material, p: Properties, δm: Material, n: Nat):
+    (∀(k ∈ [1..n], |δ(PropertyFunctional(m, p), δm, k)| ≤ c[k] * |δm|^k)) ~>
+      PropertyFunctional(m + δm, p) = 
+        ∑(k ∈ [0..n], 1/k! * δ(PropertyFunctional(m, p), δm, k)) + 
+        o(|δm|^n)
+
+  rewrite EffectiveMediumApproximation(m: Material, ms: [Material], p: Properties, ε: Real):
+    (∀(i, |PropertyFunctional(ms[i], p) - PropertyFunctional(m, p)| ≤ ε)) ~>
+      PropertyFunctional(m, p) = 
+        F(∑(i, VolumeRatio(ms[i], m) * G(PropertyFunctional(ms[i], p)))) + 
+        O(ε)
+
+  rewrite VariationalOptimization(m: Material, p: Properties, δm: Material):
+    (δ(PropertyFunctional(m, p), δm) = 0) ~>
+      ∃(λ: Real, δ(PropertyFunctional(m, p) - λ * Constraint(m, p, _), δm) = 0)
+}
+
+THEORY PhotonicCrystal : MetamaterialCFC {
+  structure Crystal {
+    composition: Composition
+    structure: Structure
+    bandGap: (Real, Real)
+  }
+
+  theorem PhotonicBandGap(c: Crystal):
+    ∃(ω_1, ω_2: Real, 
+      ∀(k: Vector, ω: Real,
+        (ω_1 ≤ ω ≤ ω_2) --> 
+        ∑(n, θ(ω - ω_n(c.structure, k)) - θ(ω - ω_n_plus_1(c.structure, k))) = 1))
+
+  theorem CrystalSymmetry(c: Crystal, g: Transformation):
+    Symmetry(c, PhotonicBandGap, g)
+
+  conjecture TopologicallyOptimizedCrystal:
+    ∃(c: Crystal,
+      Constraint(c, Density, (1, 5)) ∧
+      Optimize(c, PhotonicBandGap, (Vacuum, 0.5)))
+      
+  proof OptimizedPhotonics: TopologicallyOptimizedCrystal {
+    let si: Composition = (ε_si, 2.33)
+    let air: Composition = (ε_air, 0.0012)
+    
+    let lattice: Geometry = Cubic(500e-9)
+    let gyroid: Topology = Gyroid(300e-9)
+    let bonding: Bonding = Covalent(2 * ElectronVolt)
+    
+    let structure: Structure = (lattice, gyroid, bonding)
+    
+    let crystal: Crystal = (0.8 * si + 0.2 * air, structure, (_, _))
+    
+    {
+      FieldEquivalence(crystal, MaxwellEquations)
+      SymmetryAnalysis(crystal, PhotonicBandGap, TranslationalSymmetry)
+      Homogenization(crystal, PhotonicBandGap, [si, air], 0.01)
+      PerturbativeExpansion(crystal, Permittivity, air, 2)
+      EffectiveMediumApproximation(crystal, [si, air], Permittivity, 0.1)
+      
+      by VariationalOptimization(crystal, PhotonicBandGap, _)
+    }
+    
+    crystal satisfies TopologicallyOptimizedCrystal by {
+      Constraint(crystal, Density, (1, 5)) by {
+        ; Density calculation
+      }
+      
+      Optimize(crystal, PhotonicBandGap, (Vacuum, 0.5)) by {
+        ; Band gap optimization
+      }
+    }
+  }
+}

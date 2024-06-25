@@ -1,0 +1,138 @@
+CONCEPT SimplyTypedLambdaCalculus {
+  LANGUAGE {
+    ; Types
+    type Type
+    type BaseType <: Type
+    type ArrowType <: Type
+    (_→_) : Type × Type -> ArrowType
+
+    ; Terms  
+    type Term
+    type Variable <: Term
+    type Abstraction <: Term
+    type Application <: Term
+    (ƛ_:_._) : Variable × Type × Term -> Abstraction
+    (_∙_) : Term × Term -> Application
+
+    ; Contexts
+    type Context = [(Variable, Type)]
+    (_⊢_:_) : Context × Term × Type
+
+    ; Substitution
+    [_↦_]_ : Term × Variable × Term -> Term
+  }
+
+  RULES {
+    ; Typing rules
+    Γ, x : T ⊢ x : T                                   ; Axiom
+    Γ, x : T₁ ⊢ t : T₂ -> Γ ⊢ (ƛx:T₁.t) : (T₁ → T₂)   ; Abstraction
+    Γ ⊢ t₁ : (T₁ → T₂) , Γ ⊢ t₂ : T₁ -> Γ ⊢ (t₁ ∙ t₂) : T₂   ; Application
+    
+    ; Reduction rules
+    (ƛx:T.t) ∙ s ~~> [s ↦ x]t                          ; Beta reduction    
+    t ~~> t' -> (ƛx:T.t) ~~> (ƛx:T.t')                 ; Xi reduction
+    t ~~> t' -> (t ∙ s) ~~> (t' ∙ s)                   ; Application left    
+    s ~~> s' -> (t ∙ s) ~~> (t ∙ s')                   ; Application right
+  }
+  
+  THEOREMS {
+    Progress: ∀t:Term, T:Type. (⊢ t : T) -> (Value(t) ∨ ∃t'. t ~~> t')
+    Preservation: ∀t,t':Term, T:Type. (⊢ t : T) ∧ (t ~~> t') -> (⊢ t' : T)
+    Normalization: ∀t:Term, T:Type. (⊢ t : T) -> ∃v:Value. (t ~~>* v) ∧ (⊢ v : T)
+  }
+  
+  PROOFS {
+    theorem Progress {
+      assume t:Term, T:Type
+      assume ⊢ t : T
+      
+      by induction on the typing derivation of ⊢ t : T {
+        case Axiom:
+          t = x for some x:Variable
+          have Value(x)
+          
+        case Abstraction:
+          t = (ƛx:T₁.t') for some x:Variable, T₁:Type, t':Term
+          have Value(ƛx:T₁.t')
+          
+        case Application:
+          t = (t₁ ∙ t₂) for some t₁,t₂:Term
+          ⊢ t₁ : (T₁ → T) and ⊢ t₂ : T₁ for some T₁:Type by inversion
+          by IH on ⊢ t₁ : (T₁ → T) {
+            case Value(t₁):
+              t₁ = (ƛx:T₁.t') for some x:Variable, t':Term by inversion
+              have (ƛx:T₁.t') ∙ t₂ ~~> [t₂ ↦ x]t' by Beta reduction
+            case ∃t₁'. t₁ ~~> t₁':
+              have (t₁ ∙ t₂) ~~> (t₁' ∙ t₂) by Application left
+          }
+      }
+    }
+    
+    theorem Preservation {
+      assume t,t':Term, T:Type
+      assume ⊢ t : T and t ~~> t'
+      
+      by induction on the reduction derivation of t ~~> t' {
+        case Beta:
+          t = (ƛx:T₁.s) ∙ r and t' = [r ↦ x]s for some x:Variable, T₁:Type, s,r:Term
+          ⊢ (ƛx:T₁.s) : (T₁ → T) and ⊢ r : T₁ by inversion
+          ⊢ s : T by inversion
+          ⊢ [r ↦ x]s : T by Substitution Lemma
+          
+        case Xi:
+          t = (ƛx:T₁.s) and t' = (ƛx:T₁.s') for some x:Variable, T₁:Type, s,s':Term
+          s ~~> s'
+          ⊢ (ƛx:T₁.s) : (T₁ → T)
+          ⊢ s : T by inversion
+          ⊢ s' : T by IH
+          ⊢ (ƛx:T₁.s') : (T₁ → T) by Abstraction rule
+          
+        case Application-Left:  
+          t = (s₁ ∙ s₂) and t' = (s₁' ∙ s₂) for some s₁,s₁',s₂:Term
+          s₁ ~~> s₁'
+          ⊢ (s₁ ∙ s₂) : T
+          ⊢ s₁ : (T₁ → T) and ⊢ s₂ : T₁ for some T₁:Type by inversion
+          ⊢ s₁' : (T₁ → T) by IH  
+          ⊢ (s₁' ∙ s₂) : T by Application rule
+          
+        case Application-Right:
+          t = (s₁ ∙ s₂) and t' = (s₁ ∙ s₂') for some s₁,s₂,s₂':Term
+          s₂ ~~> s₂'
+          ⊢ (s₁ ∙ s₂) : T
+          ⊢ s₁ : (T₁ → T) and ⊢ s₂ : T₁ for some T₁:Type by inversion
+          ⊢ s₂' : T₁ by IH
+          ⊢ (s₁ ∙ s₂') : T by Application rule
+      }
+    }
+    
+    theorem Normalization {
+      assume t:Term, T:Type
+      assume ⊢ t : T
+      
+      by induction on the structure of t {
+        case Variable:
+          t = x for some x:Variable
+          have Value(x)
+          
+        case Abstraction:  
+          t = (ƛx:T₁.t') for some x:Variable, T₁:Type, t':Term
+          ⊢ t' : T₂ for some T₂:Type by inversion
+          obtain v':Value and t' ~~>* v' and ⊢ v' : T₂ by IH
+          have (ƛx:T₁.t') ~~>* (ƛx:T₁.v') by Xi reduction
+          have Value(ƛx:T₁.v')
+          have ⊢ (ƛx:T₁.v') : (T₁ → T₂) by Abstraction rule
+          
+        case Application:
+          t = (t₁ ∙ t₂) for some t₁,t₂:Term  
+          ⊢ t₁ : (T₁ → T) and ⊢ t₂ : T₁ for some T₁:Type by inversion
+          obtain v₁:Value and t₁ ~~>* v₁ and ⊢ v₁ : (T₁ → T) by IH
+          obtain v₂:Value and t₂ ~~>* v₂ and ⊢ v₂ : T₁ by IH
+          v₁ = (ƛx:T₁.s) for some x:Variable, s:Term by Canonical Forms Lemma
+          have (t₁ ∙ t₂) ~~>* ((ƛx:T₁.s) ∙ v₂) by Application reduction
+          have ((ƛx:T₁.s) ∙ v₂) ~~> [v₂ ↦ x]s by Beta reduction
+          obtain v:Value and [v₂ ↦ x]s ~~>* v and ⊢ v : T by Substitution Lemma and IH
+          have (t₁ ∙ t₂) ~~>* v by transitivity of ~~>*
+      }
+    }
+  }
+}

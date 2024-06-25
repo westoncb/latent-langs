@@ -1,0 +1,185 @@
+CONCEPT TuringMachine {
+  LANGUAGE {
+    TYPE Tape = List(Symbol)
+    TYPE State = Nat
+    TYPE Symbol = Nat
+    TYPE Direction = Left | Right
+
+    CLASS Monoid(M) {
+      mempty : M
+      mappend : M -> M -> M
+    }
+
+    INSTANCE Monoid(Tape) {
+      mempty = []
+      mappend = Append
+    }
+
+    FUNC Append : Tape -> Tape -> Tape
+    Append([], ys) = ys
+    Append(x :: xs, ys) = x :: Append(xs, ys)
+
+    PRED Accepts : TuringMachine -> Tape -> Bool
+
+    REWRITE Assoc(mappend(mappend(x, y), z)) = mappend(x, mappend(y, z))
+    REWRITE LeftId(mappend(mempty, x)) = x
+    REWRITE RightId(mappend(x, mempty)) = x
+  }
+
+  STRUCTURE {
+    DEF TuringMachine {
+      states : List(State),
+      initialState : State,
+      finalStates : List(State),
+      blank : Symbol,
+      delta : State -> Symbol -> (State, Symbol, Direction)
+    }
+
+    DEF Step(tm, tape, state, pos) =
+      CASE delta(state, Read(tape, pos)) OF
+        (newState, newSymbol, dir) ->
+          LET newTape = Write(tape, pos, newSymbol) IN
+          (newTape, newState, Move(pos, dir))
+
+    DEF Run(tm, tape) =
+      LET (finalTape, finalState, _) = 
+        UNTIL (λ(_, state, _). state ∈ finalStates)
+              (Step(tm, _, _, _))
+              (tape, initialState, 0)
+      IN finalState ∈ finalStates
+
+    INSTANCE Monoid(TuringMachine) {
+      mempty = TuringMachine([], 0, [], 0, λ_ _. (0, 0, Right))
+      mappend(tm1, tm2) = {
+        states = Append(states(tm1), states(tm2)),
+        initialState = initialState(tm1),
+        finalStates = finalStates(tm2),
+        blank = blank(tm1),
+        delta = λstate symbol.
+          IF state < Length(states(tm1)) THEN
+            delta(tm1, state, symbol)
+          ELSE
+            LET (newState, newSymbol, dir) = delta(tm2, state - Length(states(tm1)), symbol) IN
+            (newState + Length(states(tm1)), newSymbol, dir)
+      }
+    }
+  }
+
+  PROOFS {
+    THEOREM Extensional {
+      STATEMENT: ∀ (tm1 tm2 : TuringMachine).
+        (∀ tape. Accepts(tm1, tape) <-> Accepts(tm2, tape)) ->
+        tm1 = tm2
+      PROOF:
+        LET tm1, tm2 : TuringMachine
+        ASSUME ∀ tape. Accepts(tm1, tape) <-> Accepts(tm2, tape)
+        SHOW tm1 = tm2 BY {
+          states(tm1) = states(tm2) BY {
+            LET tape1 = Encode(states(tm1))
+            LET tape2 = Encode(states(tm2))
+            Accepts(tm1, tape1) BY AcceptsEncoding(tm1)
+            Accepts(tm2, tape1) BY ASSUMPTION
+            states(tm2) = Decode(tape1) BY AcceptsEncoding(tm2)
+            states(tm1) = Decode(tape1) BY Definition(tape1)
+          },
+          initialState(tm1) = initialState(tm2) BY {
+            LET tape1 = Encode(initialState(tm1))
+            LET tape2 = Encode(initialState(tm2))
+            Accepts(tm1, tape1) BY AcceptsEncoding(tm1)
+            Accepts(tm2, tape1) BY ASSUMPTION
+            initialState(tm2) = Decode(tape1) BY AcceptsEncoding(tm2)
+            initialState(tm1) = Decode(tape1) BY Definition(tape1)
+          },
+          finalStates(tm1) = finalStates(tm2) BY {
+            LET tape1 = Encode(finalStates(tm1))
+            LET tape2 = Encode(finalStates(tm2))
+            Accepts(tm1, tape1) BY AcceptsEncoding(tm1)
+            Accepts(tm2, tape1) BY ASSUMPTION
+            finalStates(tm2) = Decode(tape1) BY AcceptsEncoding(tm2)
+            finalStates(tm1) = Decode(tape1) BY Definition(tape1)
+          },
+          blank(tm1) = blank(tm2) BY {
+            LET tape1 = [blank(tm1)]
+            LET tape2 = [blank(tm2)]
+            Accepts(tm1, tape1) BY AcceptsBlank(tm1)
+            Accepts(tm2, tape1) BY ASSUMPTION
+            blank(tm2) = Head(tape1) BY AcceptsBlank(tm2)
+            blank(tm1) = Head(tape1) BY Definition(tape1)
+          },
+          delta(tm1) = delta(tm2) BY {
+            LET tape = ArbitraryTape
+            Accepts(tm1, tape) <-> Accepts(tm2, tape) BY ASSUMPTION
+            LET (t1, s1, p1) = Run(tm1, tape)
+            LET (t2, s2, p2) = Run(tm2, tape)
+            s1 ∈ finalStates(tm1) <-> s2 ∈ finalStates(tm2) BY {
+              Accepts(tm1, tape) <-> s1 ∈ finalStates(tm1) BY Definition(Run)
+              Accepts(tm2, tape) <-> s2 ∈ finalStates(tm2) BY Definition(Run)
+            }
+            t1 = t2 ∧ s1 = s2 ∧ p1 = p2 BY {
+              (t1, s1, p1) = UNTIL ... (Step(tm1, _, _, _)) ...
+              (t2, s2, p2) = UNTIL ... (Step(tm2, _, _, _)) ...
+              ∀ n. UNTIL n ... (Step(tm1, _, _, _)) ... = UNTIL n ... (Step(tm2, _, _, _)) ...
+                BY {
+                  INDUCE ON n
+                  CASE 0: TRIVIAL
+                  CASE n + 1:
+                    LET (t1', s1', p1') = UNTIL n ... (Step(tm1, _, _, _)) ...
+                    LET (t2', s2', p2') = UNTIL n ... (Step(tm2, _, _, _)) ...
+                    t1' = t2' ∧ s1' = s2' ∧ p1' = p2' BY IH
+                    LET (t1'', s1'', p1'') = Step(tm1, t1', s1', p1')
+                    LET (t2'', s2'', p2'') = Step(tm2, t2', s2', p2')
+                    s1'' = delta(tm1, s1', Read(t1', p1')).0
+                    s2'' = delta(tm2, s2', Read(t2', p2')).0
+                    s1' = s2' ∧ t1' = t2' ∧ p1' = p2' BY IH
+                    Read(t1', p1') = Read(t2', p2')
+                    delta(tm1, s1', Read(t1', p1')).0 = delta(tm2, s2', Read(t2', p2')).0
+                    s1'' = s2''
+                    ...
+                }
+            }
+            delta(tm1) = delta(tm2) BY {
+              ∀ state symbol. delta(tm1, state, symbol) = delta(tm2, state, symbol) BY {
+                LET tape = [symbol] ++ Blanks(state)
+                LET (_, s1, _) = Run(tm1, tape)
+                LET (_, s2, _) = Run(tm2, tape)
+                s1 = s2 BY PREVIOUS
+                delta(tm1, state, symbol).0 = s1 BY Definition(Run)
+                delta(tm2, state, symbol).0 = s2 BY Definition(Run)
+                ...
+              }
+            }
+          }
+        }
+    }
+
+    THEOREM Composition {
+      STATEMENT: ∀ (tm1 tm2 : TuringMachine) (tape : Tape).
+        Accepts(mappend(tm1, tm2), tape) <->
+        (∃ tape'. Accepts(tm1, tape) ∧ Accepts(tm2, tape'))
+      PROOF:
+        LET tm1, tm2 : TuringMachine, tape : Tape
+        SHOW Accepts(mappend(tm1, tm2), tape) <-> (∃ tape'. Accepts(tm1, tape) ∧ Accepts(tm2, tape')) BY {
+          Accepts(mappend(tm1, tm2), tape)
+          <-> Run(mappend(tm1, tm2), tape) BY Definition(Accepts)
+          <-> LET (finalTape, finalState, _) = 
+                UNTIL (λ(_, state, _). state ∈ finalStates(mappend(tm1, tm2)))
+                      (Step(mappend(tm1, tm2), _, _, _))
+                      (tape, initialState(mappend(tm1, tm2)), 0)
+              IN finalState ∈ finalStates(mappend(tm1, tm2))
+              BY Definition(Run)
+          <-> LET (midTape, midState, midPos) =
+                UNTIL (λ(_, state, _). state ∈ finalStates(tm1))
+                      (Step(tm1, _, _, _))
+                      (tape, initialState(tm1), 0),
+                  (finalTape, finalState, _) =
+                UNTIL (λ(_, state, _). state ∈ finalStates(tm2))
+                      (Step(tm2, _, _, _))
+                      (midTape, midState + Length(states(tm1)), midPos)
+              IN finalState ∈ finalStates(tm2)
+              BY Definition(mappend)
+          <-> ∃ tape'. Run(tm1, tape) ∧ Run(tm2, tape') BY Definition(Run)
+          <-> ∃ tape'. Accepts(tm1, tape) ∧ Accepts(tm2, tape') BY Definition(Accepts)
+        }
+    }
+  }
+}

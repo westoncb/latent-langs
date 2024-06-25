@@ -1,0 +1,98 @@
+CONCEPT Computability {
+  LANGUAGE {
+    ; Computation models
+    type M = TM | λ | μ-rec | ...    ; Turing machines, lambda calculus, mu-recursion, etc.
+    
+    ; Computable functions and sets
+    Computable ⊆ (N -> N)
+    Decidable, Enumerable, Coenumerable ⊆ ℘(N) 
+    
+    ; Encodings and representations
+    ⌜_⌝ : M -> N                 ; Gödel numbering of machines/functions
+    ⟦_⟧ : N -> (N -> N)           ; Interpretation of encoded machine as a function
+    
+    ; Machines as data, Universal Turing Machine
+    UTM : TM
+    ∀m : TM. ∀i : N. UTM(⌜m⌝, i) ~> m(i)   ; UTM simulates m on input i
+    
+    ; Halting problem
+    Halts : TM × N -> Bool
+    Halts(m, i) <-> (m(i) terminates)
+    
+    ; Diagonalization tactic
+    Diag{F : N -> N} : N -> N
+    Diag{F}(n) = 1 - F(n, n)
+  }
+
+  STRUCTURE {
+    ; Church-Turing Thesis: all 'reasonable' models of computation are equivalent
+    ∀f : (N -> N). f ∈ Computable <-> (∃m : TM. ∀i. ⟦⌜m⌝⟧(i) ~> f(i))
+                                  <-> (∃e : λ. ∀i. (e i) ~> f(i)) 
+                                  <-> ...
+    
+    ; Computable sets and their complements
+    ∀S ⊆ N. S ∈ Decidable <-> S ∈ Computable ∧ (N \ S) ∈ Computable
+    ∀S ⊆ N. S ∈ Enumerable <-> S ∈ Computable ∨ (N \ S) ∈ Coenumerable
+    
+    ; Universality implies undecidability
+    ∀U : M. (∀m : M. ∃i. U(i) ~> m) -> ¬Decidable(Halts)
+  }
+  
+  PROOFS {
+    theorem HaltingProblemUndecidable: ¬Decidable(Halts) {
+      assume Decidable(Halts)
+      
+      define D(n) = if Halts(n, n) then loop_forever else 1
+      have D : N -> N
+      have D ∈ Computable  ; by assumption and definition of D
+      
+      obtain d : TM where ∀i. d(i) ~> D(i)  ; by Church-Turing Thesis
+      have ⌜d⌝ : N  ; by encoding d
+      
+      consider D(⌜d⌝)
+      case Halts(⌜d⌝, ⌜d⌝):
+        have D(⌜d⌝) ~> loop_forever  ; by definition of D
+        have d(⌜d⌝) ↓  ; since D(⌜d⌝) loops
+        contradiction  ; Halts(⌜d⌝, ⌜d⌝) but d(⌜d⌝) doesn't halt
+      case ¬Halts(⌜d⌝, ⌜d⌝):  
+        have D(⌜d⌝) ~> 1  ; by definition of D
+        have d(⌜d⌝) ↓  ; since D(⌜d⌝) terminates
+        contradiction  ; ¬Halts(⌜d⌝, ⌜d⌝) but d(⌜d⌝) halts
+    }
+    
+    theorem UniversalityImpliesUndecidability: 
+      ∀U : M. (∀m : M. ∃i. U(i) ~> m) -> ¬Decidable(Halts) 
+    {
+      assume U : M and ∀m : M. ∃i. U(i) ~> m
+      assume Decidable(Halts)
+      
+      define D(n) = if Halts(U, n) then loop_forever else 1
+      have D : M  ; by assumption and definition of D
+      
+      obtain i where U(i) ~> D  ; by universality of U
+      
+      consider Halts(U, i)
+      case Halts(U, i):
+        have U(i) ~> D ~> loop_forever  ; by definition of D 
+        contradiction  ; U(i) doesn't halt
+      case ¬Halts(U, i):
+        have U(i) ~> D ~> 1  ; by definition of D
+        contradiction  ; U(i) halts
+    }
+    
+    theorem ComputablyEnumerableUndecidable:
+      ∀S ⊆ N. S ∈ Enumerable -> S ∉ Decidable
+    {
+      assume S ∈ Enumerable
+      assume S ∈ Decidable
+      
+      have χ_S ∈ Computable where χ_S(n) = if n ∈ S then 1 else 0  ; characteristic function
+      have K = { ⌜m⌝ | m : TM, ∃i. m(i) ~> 1 }  ; halting problem for machines outputting 1
+      have K ∈ Enumerable  ; by dovetailing
+      have K ≤_m S where f(n) = μi. χ_S(⟨n, i⟩)  ; many-one reduction from K to S
+      hence K ∈ Decidable  ; by decidability of S and computability of reduction f
+      
+      contradiction  ; K is undecidable by HaltingProblemUndecidable
+    }
+  }
+}

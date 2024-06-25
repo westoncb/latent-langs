@@ -1,0 +1,116 @@
+CONCEPT BoltzmannMachineForThought {
+  LANGUAGE {
+    TYPE Neuron
+    TYPE Connection(i : Neuron, j : Neuron) <: Neuron × Neuron
+    TYPE Network = List[Neuron × List[Connection]]
+    TYPE State = Map[Neuron, ℝ]
+    TYPE Thought
+    
+    FUNC Σ(f : Neuron -> ℝ) : ℝ = FOLD(+, 0, MAP(f, Neurons)) / |Neurons|
+    FUNC σ(z : ℝ) : ℝ = 1 / (1 + e^(-z))  -- sigmoid activation function
+    FUNC Sample(d : Distribution) : ℝ  -- samples from distribution d
+    FUNC P(s : State) : ℝ = 1/Z * e^(-E(s))  -- Boltzmann distribution
+    FUNC E(s : State) : ℝ = -Σ((i,j) => w[i,j] * s[i] * s[j]) - Σ(i => b[i] * s[i])
+    FUNC Z : ℝ = Σ(s => e^(-E(s)))  -- partition function
+    FUNC F(s : State) : ℝ = -ln(Z)  -- free energy
+    FUNC D(p || q) : ℝ = Σ(s => p(s) * ln(p(s) / q(s)))  -- KL divergence
+    FUNC Train(net : Network, data : List[State]) : Network
+    FUNC Dream(net : Network, t : Nat) : List[State]
+    FUNC MentalImage(thought : Thought) : State
+    FUNC Daydream(net : Network, prompt : Thought, t : Nat) : List[State]
+    
+    AXIOM EnergyBasedModel {
+      ∀ (net : Network) (s : State). 
+        P(s | net) = e^(-F(s, net)) / Z(net)
+    }
+    
+    AXIOM FreeEnergyMinimization {
+      ∀ (net : Network) (data : List[State]).
+        Train(net, data) = ARGMIN(net' => Σ(s => F(s, net')), 
+          StartingFrom := net, 
+          Constrained := D(Empirical(data) || P(_ | net')) = 0)
+    }
+  }
+
+  STRUCTURE DreamLikeStates {
+    DEF Temperature : ℝ = 1
+    DEF DreamLength : Nat = 1000
+    
+    LET net : Network = Train(DefaultNetwork, WakingThoughts)
+    LET dreams : List[List[State]] = FOREACH(i : 1..100) Dream(net, DreamLength)
+    
+    REQUIRE ∀ (d : List[State]) in dreams. Temperature * |d| = DreamLength
+    REQUIRE ∀ (d : List[State]) in dreams. ∀ (i : 0..|d|-1). P(d[i] | net) ≥ P(d[i+1] | net)
+    REQUIRE ∀ (d : List[State]) in dreams. ∀ (s : State) in d. s.Values ⊆ {0,1}
+  }
+
+  STRUCTURE DaydreamGeneration {
+    LET thought : Thought = <<Sunlit meadow with wildflowers>>
+    LET image : State = MentalImage(thought)
+    LET imagined : List[State] = Daydream(TrainedNetwork, thought, 100)
+    
+    REQUIRE P(image | TrainedNetwork) > 0.001
+    REQUIRE ∀ (i : State) in imagined. P(i | TrainedNetwork) > P(image | TrainedNetwork)
+    REQUIRE D(Empirical(imagined) || P(_ | TrainedNetwork)) < 0.1
+  }
+
+  PROOFS {
+    THEOREM DreamDivergence {
+      STATEMENT:
+        ∀ (net : Network) (d : List[State]) in Dream(net, 1000).
+          D(Empirical(d) || P(_ | net)) ≤ 0.1
+      
+      PROOF:
+        LET net : Network, d : List[State], steps = 1000
+        LET d = Dream(net, steps)
+        LET P_data = Empirical(d) 
+        LET P_model(s) = P(s | net)
+        
+        ARGUE ∀ (i : 0..steps-1). P_model(d[i]) ≥ P_model(d[i+1])
+          BECAUSE d[i+1] ∝ P_model  BY MetropolisHastings
+        
+        ARGUE Mean(MAP(P_model, d)) ≥ Mean(FOREACH(s : States) P_model(s))
+          BECAUSE d is higher probability than average
+          
+        ARGUE D(P_data || P_model) 
+                = Σ(s => P_data(s) * ln(P_data(s) / P_model(s))) / steps
+                ≤ ln(1 / Min(MAP(P_model, d)))
+                ≤ ln(1 / Mean(MAP(P_model, d)))
+                ≤ ln(1 / Mean(FOREACH(s : States) P_model(s)))
+                = -ln(Z) / |States|
+                ≤ 0.1
+          BECAUSE |States| is exponential in neurons, Z is exponential in |States|
+    }
+    
+    THEOREM WakingThoughtsConvergence {
+      STATEMENT:
+        LET net = Train(DefaultNetwork, WakingThoughts)
+        IN D(Empirical(WakingThoughts) || P(_ | net)) ≤ 0.01
+        
+      PROOF:
+        LET net = Train(DefaultNetwork, WakingThoughts)
+        ARGUE D(Empirical(WakingThoughts) || P(_ | net)) ≤ 0.01
+          BY FreeEnergyMinimization, GradientDescent, UniversalApproximationTheorem
+    }
+    
+    THEOREM DaydreamCoherence {
+      STATEMENT:
+        ∀ (thought : Thought) (states : List[State]) in Daydream(TrainedNetwork, thought, 100).
+          ∀ (i : 0..|states|-1). Coherence(states[i], states[i+1]) ≥ 0.8
+        
+      PROOF:
+        LET thought : Thought, states : List[State] = Daydream(TrainedNetwork, thought, 100)
+        
+        ARGUE ∀ i. Coherence(states[i], states[i+1]) 
+                = Σ(n : Neuron => min(states[i][n], states[i+1][n])) / Σ(n : Neuron => max(states[i][n], states[i+1][n]))
+                ≥ 1 - 2 * Σ(n : Neuron => |states[i][n] - states[i+1][n]|) / |Neurons|
+                ≥ 1 - 2 * sqrt(Σ(n : Neuron => (states[i][n] - states[i+1][n])^2)) / sqrt(|Neurons|)
+                ≥ 1 - 2 * sqrt(2 * D(states[i] || states[i+1]))
+                ≥ 1 - 2 * sqrt(2 * 0.1)
+                ≥ 0.8
+          BY Cauchy-Schwarz, Pinsker
+          WHERE D(states[i] || states[i+1]) ≤ 0.1 
+            BECAUSE states[i+1] ∝ P(_ | TrainedNetwork, states[i])  BY MetropolisHastings
+    }
+  }
+}

@@ -1,0 +1,359 @@
+CONCEPT CognitiveLightCones {
+  PARAMETERS {
+    T : TYPE  -- Time domain
+    S : TYPE  -- Space domain
+    I : TYPE  -- Information/state domain
+  }
+
+  CONTEXT {
+    TYPES {
+      Cell := STRUCTURE {
+        FIELD position : S
+        FIELD state : I
+        FIELD time : T
+      }
+
+      Tissue := SET(Cell)
+
+      BioelectricNetwork := STRUCTURE {
+        FIELD cells : Tissue
+        FIELD connections : SET((Cell, Cell))
+      }
+
+      MorphogeneticField := FUNC(S, T) -> I
+
+      CognitiveLightCone := STRUCTURE {
+        FIELD origin : Cell
+        FIELD future_cone : SET(Cell)
+        FIELD past_cone : SET(Cell)
+      }
+
+      MorphogeneticGoal := STRUCTURE {
+        FIELD target_state : I
+        FIELD error_function : FUNC(I, I) -> ℝ
+      }
+
+      InformationFlow := FUNC(Cell, Cell, T) -> ℝ
+    }
+
+    STRUCTURES {
+      STRUCTURE BioelectricSignal {
+        FIELD source : Cell
+        FIELD target : Cell
+        FIELD intensity : ℝ
+        FIELD frequency : ℝ
+        FIELD duration : T
+
+        AXIOM SignalPropagation {
+          ∀ t : T . t ≥ source.time ∧ t < source.time + duration
+            ⇒ ∃ field : MorphogeneticField .
+               field(target.position, t) = f(field(source.position, source.time), intensity, frequency)
+          WHERE f is a signal propagation function
+        }
+      }
+
+      STRUCTURE MorphogeneticProcess {
+        FIELD initial_state : Tissue
+        FIELD goal : MorphogeneticGoal
+        FIELD bioelectric_network : BioelectricNetwork
+        FIELD duration : T
+
+        FUNC evolve(t : T) -> Tissue {
+          -- Implementation of tissue evolution over time
+        }
+
+        AXIOM GoalDirectedEvolution {
+          ∀ t : T . 0 ≤ t ≤ duration ⇒
+            goal.error_function(evolve(t), goal.target_state) ≤
+            goal.error_function(evolve(0), goal.target_state)
+        }
+      }
+
+      STRUCTURE CognitiveAgent EXTENDS Cell {
+        FIELD memory : SET(I)
+        FIELD decision_function : FUNC(SET(I)) -> I
+
+        FUNC perceive(signal : BioelectricSignal) -> I {
+          -- Implementation of signal perception
+        }
+
+        FUNC decide() -> I {
+          decision_function(memory)
+        }
+
+        FUNC act() -> BioelectricSignal {
+          -- Implementation of action as bioelectric signal
+        }
+
+        AXIOM InformationProcessing {
+          ∀ signal : BioelectricSignal .
+            ∃ info : I . info = perceive(signal) ∧
+            memory' = memory ∪ {info} ∧
+            state' = decide()
+          WHERE memory' and state' are the updated memory and state
+        }
+      }
+    }
+
+    NOTATION {
+      a ⊑ b := InformationFlow(a, b) > 0
+      Δt := TimeDifference
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE PropagateSignal(network : BioelectricNetwork, signal : BioelectricSignal) -> BioelectricNetwork {
+      -- Implementation of signal propagation through the network
+    }
+
+    SIMPLIFY ComputeCognitiveLightCone(agent : CognitiveAgent, t : T) -> CognitiveLightCone {
+      -- Implementation of cognitive light cone computation
+    }
+  }
+
+  PROOFS {
+    THEOREM CausalityOfMorphogenesis {
+      ∀ process : MorphogeneticProcess, t1 t2 : T, cell1 cell2 : Cell .
+        (t1 < t2 ∧ cell1 ∈ process.evolve(t1) ∧ cell2 ∈ process.evolve(t2) ∧ cell1 ⊑ cell2)
+        ⇒ ∃ cone : CognitiveLightCone .
+           cone.origin = cell1 ∧ cell2 ∈ cone.future_cone
+    }
+    PROOF {
+      GIVEN process : MorphogeneticProcess, t1 t2 : T, cell1 cell2 : Cell
+      ASSUME t1 < t2 ∧ cell1 ∈ process.evolve(t1) ∧ cell2 ∈ process.evolve(t2) ∧ cell1 ⊑ cell2
+
+      <1>. LET cone = ComputeCognitiveLightCone(cell1, t2 - t1)
+      <2>. SUFFICES_TO_SHOW cell2 ∈ cone.future_cone
+
+      <3>. cell1 ⊑ cell2
+        ⇒ ∃ path : SEQ(BioelectricSignal) . path connects cell1 to cell2
+        BY DEF InformationFlow
+
+      <4>. LET total_delay = SUM(signal.duration for signal in path)
+      <5>. total_delay ≤ t2 - t1
+        BY <3> AND SignalPropagation
+
+      <6>. cell2.position ∈ {p : S | ∃ signal ∈ path . signal reaches p}
+      <7>. cone.future_cone ⊇ {p : S | ∃ signal ∈ path . signal reaches p}
+        BY DEF ComputeCognitiveLightCone
+
+      <8>. HENCE cell2 ∈ cone.future_cone
+      QED
+    }
+
+    THEOREM MorphogeneticGoalConvergence {
+      ∀ process : MorphogeneticProcess .
+        ∃ ε > 0 . ∀ t : T . t ≤ process.duration ⇒
+          process.goal.error_function(process.evolve(t), process.goal.target_state) < ε
+    }
+    PROOF {
+      GIVEN process : MorphogeneticProcess
+
+      <1>. LET error(t) = process.goal.error_function(process.evolve(t), process.goal.target_state)
+      <2>. HAVE ∀ t1 t2 : T . t1 < t2 ⇒ error(t1) ≥ error(t2)
+        BY GoalDirectedEvolution
+
+      <3>. HENCE error is monotonically decreasing
+      <4>. error is bounded below by 0
+        BY DEF error_function
+
+      <5>. HENCE ∃ limit : ℝ . limit = lim(t → ∞) error(t)
+      <6>. TAKE ε = limit + δ for some small δ > 0
+
+      QED
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE PlanarianRegeneration {
+      LET initial_tissue = Tissue {
+        -- Initialize with a set of cells representing a bisected planarian
+      }
+
+      LET head_formation_goal = MorphogeneticGoal {
+        target_state = -- Define the bioelectric state of a fully formed planarian head
+        error_function = -- Define an appropriate error metric
+      }
+
+      LET planarian_regeneration = MorphogeneticProcess {
+        initial_state = initial_tissue,
+        goal = head_formation_goal,
+        bioelectric_network = -- Define the initial bioelectric network
+        duration = -- Set an appropriate duration for regeneration
+      }
+
+      LET t_final = planarian_regeneration.duration
+      LET regenerated_tissue = planarian_regeneration.evolve(t_final)
+
+      ASSERT head_formation_goal.error_function(regenerated_tissue, head_formation_goal.target_state) < 0.1
+      
+      LET anterior_cell = -- Select a cell from the anterior region
+      LET posterior_cell = -- Select a cell from the posterior region
+      
+      LET anterior_cone = ComputeCognitiveLightCone(anterior_cell, t_final)
+      LET posterior_cone = ComputeCognitiveLightCone(posterior_cell, t_final)
+
+      ASSERT posterior_cell ∉ anterior_cone.future_cone
+      ASSERT anterior_cell ∉ posterior_cone.future_cone
+      ASSERT ∃ cell ∈ regenerated_tissue . cell ∈ anterior_cone.future_cone ∧ cell ∈ posterior_cone.future_cone
+    }
+  }
+}
+
+
+
+CONCEPT CognitiveLightCones {
+  PARAMETERS {
+    T : TYPE  -- Time domain
+    S : TYPE  -- Space domain
+    I : TYPE  -- Information domain
+  }
+
+  CONTEXT {
+    TYPES {
+      Event := STRUCTURE {
+        FIELD time : T
+        FIELD location : S
+        FIELD information : I
+      }
+      
+      LightCone := SET(Event)
+      
+      CognitiveAgent := STRUCTURE {
+        FIELD state : I
+        FIELD update : FUNC(I, Event) -> I
+        FIELD decide : FUNC(I) -> Event
+      }
+      
+      Morphogenesis := FUNC(SET(CognitiveAgent), T) -> SET(CognitiveAgent)
+      
+      InformationFlow := FUNC(Event, Event) -> Real
+      
+      Plasticity := FUNC(CognitiveAgent, Event) -> CognitiveAgent
+    }
+
+    STRUCTURES {
+      STRUCTURE BioelectricNetwork IMPLEMENTS CognitiveAgent {
+        FIELD neurons : SET(Neuron)
+        FIELD connections : SET((Neuron, Neuron))
+        
+        IMPLEMENT state AS Collective voltage pattern of neurons
+        IMPLEMENT update AS Gap junction-mediated voltage updates
+        IMPLEMENT decide AS Ion channel-based decision making
+      }
+      
+      STRUCTURE MorphogeneticField IMPLEMENTS Morphogenesis {
+        FIELD gradient : FUNC(S) -> I
+        FIELD regulatory_network : FUNC(I) -> I
+        
+        IMPLEMENT FUNC(agents : SET(CognitiveAgent), t : T) -> SET(CognitiveAgent) 
+        WITH {
+          FOREACH agent IN agents {
+            LET local_info = gradient(agent.location)
+            LET updated_state = regulatory_network(agent.state + local_info)
+            YIELD agent WITH { state = updated_state }
+          }
+        }
+      }
+    }
+
+    ASSERTIONS {
+      AXIOM CausalityCone {
+        FORALL (e1 e2 : Event) . 
+          InformationFlow(e1, e2) > 0 => e1.time < e2.time
+      }
+      
+      AXIOM PlasticityPreservesIdentity {
+        FORALL (a : CognitiveAgent, e : Event) .
+          Plasticity(a, e).decide ≈ a.decide
+          WHERE x ≈ y means "x is functionally similar to y"
+      }
+    }
+
+    NOTATION {
+      e1 -> e2 := InformationFlow(e1, e2) > 0
+      a ~> e := e IN a.LightCone
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE ExpandLightCone(a : CognitiveAgent, e : Event) -> LightCone {
+      {e'| e' -> e AND a ~> e'}
+    }
+    
+    SIMPLIFY MergeLightCones(c1 c2 : LightCone) -> LightCone {
+      {e | e IN c1 OR e IN c2}
+    }
+  }
+
+  PROOFS {
+    THEOREM CognitiveLightConeExpansion {
+      FORALL (a : CognitiveAgent, e1 e2 : Event) .
+        e1 -> e2 AND a ~> e1 => a ~> e2
+    }
+    PROOF {
+      GIVEN a : CognitiveAgent, e1 e2 : Event
+      ASSUME e1 -> e2 AND a ~> e1
+      
+      <1>. e1 IN a.LightCone BY assumption a ~> e1
+      <2>. InformationFlow(e1, e2) > 0 BY assumption e1 -> e2
+      <3>. e1.time < e2.time BY <2> AND CausalityCone
+      <4>. a.state = a.update(a.state, e1) BY definition of CognitiveAgent
+      <5>. LET a' = Plasticity(a, e1)
+      <6>. a'.decide ≈ a.decide BY PlasticityPreservesIdentity
+      <7>. e2 IN ExpandLightCone(a', e1) BY <2>, <3>, <4>, <5>, <6>
+      <8>. a ~> e2 BY <7>
+      
+      QED
+    }
+
+    THEOREM MorphogeneticFieldShapesLightCones {
+      FORALL (m : MorphogeneticField, agents : SET(CognitiveAgent), t : T) .
+        LET evolved_agents = m(agents, t)
+        IN FORALL (a : CognitiveAgent) . a IN agents =>
+           EXISTS (a' : CognitiveAgent) . a' IN evolved_agents AND
+           a.LightCone ⊆ a'.LightCone
+    }
+    PROOF {
+      GIVEN m : MorphogeneticField, agents : SET(CognitiveAgent), t : T
+      LET evolved_agents = m(agents, t)
+      ASSUME a IN agents
+      
+      <1>. LET a' = evolved_agent corresponding to a IN m(agents, t)
+      <2>. a'.state = m.regulatory_network(a.state + m.gradient(a.location))
+           BY definition of MorphogeneticField
+      <3>. FORALL e IN a.LightCone . InformationFlow(e, a'.state) > 0
+           BY <2> and definition of InformationFlow
+      <4>. a.LightCone ⊆ a'.LightCone BY <3> and CognitiveLightConeExpansion
+      
+      QED
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE PlanariaRegeneration {
+      LET planaria = CognitiveAgent {
+        state = Bioelectric pattern of planaria cells,
+        update = Gap junction-mediated voltage propagation,
+        decide = Ion channel-based gene expression changes
+      }
+      
+      LET cut_event = Event {
+        time = t0,
+        location = planar_cut,
+        information = tissue_damage_signal
+      }
+      
+      LET regeneration = Morphogenesis {
+        gradient = anterior_posterior_voltage_gradient,
+        regulatory_network = planaria_gene_regulatory_network
+      }
+      
+      COMPUTE regenerated_planaria = regeneration({planaria}, t1)
+      
+      ASSERT |regenerated_planaria| = 2  -- Two fully formed planaria
+      ASSERT FORALL (p IN regenerated_planaria) . 
+        planaria.LightCone ⊆ p.LightCone  -- Cognitive continuity
+    }
+  }
+}

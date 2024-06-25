@@ -1,0 +1,187 @@
+CONCEPT PrimaryStrategiesInPlants {
+  LANGUAGE {
+    TYPE Species
+    TYPE Trait
+    TYPE Habitat
+    TYPE Environment = (Habitat, Timepoint)
+    TYPE Biomass = Species -> Real
+    TYPE Stress = Constraint[Productivity]
+    TYPE Disturbance = Destruction[Biomass]
+    TYPE Competition = Interaction[Species, Resources]
+    
+    FUNC Productivity(h: Habitat, t: Timepoint): Real
+    FUNC StressLevel(e: Environment): Stress  
+    FUNC DisturbanceFrequency(e: Environment): Real
+    FUNC CompetitionIntensity(e: Environment): Competition
+    FUNC RelativeAbundance(s: Species, e: Environment): Real
+    FUNC ColonizationRate(s: Species, e: Environment): Real
+    FUNC ExtinctionRate(s: Species, e: Environment): Real
+
+    PRED Viable(s: Species, e: Environment)
+    PRED Dominant(s: Species, e: Environment)
+
+    AXIOM CompetitiveExclusion {
+      ∀ (s1 s2: Species) (e: Environment).
+        Dominant(s1, e) ∧ Dominant(s2, e) ⇒ s1 = s2  
+    }
+
+    AXIOM SupplyDemand {
+      ∀ (e: Environment) (r: Resource).
+        SUM(s: Species) OF Consumption(s, r, e) ≤ Supply(r, e)
+    }
+
+    NOTATION "∂/∂t" = PartialDerivative[Timepoint]
+  }
+
+  STRUCTURE LifeHistoryTraits {
+    DEF GrowthRate : Trait = λ (s: Species). 
+      LET dB/dt = λ e. ∂/∂t Biomass(s, e)
+      IN Mean(e FROM AllEnvironments) OF dB/dt(e)
+
+    DEF MaxSize : Trait = λ (s: Species).
+      Max(e FROM AllEnvironments) OF Biomass(s, e)
+
+    DEF SeedMass : Trait = λ (s: Species).
+      Mean(e FROM AllEnvironments) OF Mass(Seeds(s, e))
+
+    DEF SeedNumber : Trait = λ (s: Species).
+      Mean(e FROM AllEnvironments) OF Count(Seeds(s, e))
+      
+    DEF LeafLifespan : Trait = λ (s: Species).
+      Mean(l FROM Leaves(s)) OF Lifespan(l)
+
+    DEF RootShootRatio : Trait = λ (s: Species).
+      Mean(e FROM AllEnvironments) OF Biomass(Roots(s, e)) / Biomass(Shoots(s, e))
+  }
+
+  STRUCTURE VegetationDynamics {
+    DEF PopulationChange : Species -> Environment -> Real = λ s e.
+      ColonizationRate(s, e) - ExtinctionRate(s, e)
+
+    DEF Succession(e: Environment, t: Timepoint) : Habitat = 
+      MATCH t WITH
+      | 0 -> Habitat(e)
+      | t' -> LET e' = (Succession(e, t'-1), t')
+              IN Habitat((s: Species) -> RelativeAbundance(s, e'))
+
+    DEF CompetitionCoefficient(s1: Species, s2: Species) : Real =
+      LET a12 = Mean(e FROM AllEnvironments) OF 
+        CompetitionEffect(s1, s2, e) / CompetitionEffect(s1, s1, e)
+      IN Sqrt(a12 * a21)  WHERE a21 = <<symmetric case>>
+  }
+
+  STRUCTURE StrategyTraits {
+    INCLUDE LifeHistoryTraits
+
+    DEF Competitive: Species = TRAITS {
+      GrowthRate: High
+      MaxSize: Large  
+      SeedMass: Small
+      SeedNumber: Large
+      LeafLifespan: Short
+      RootShootRatio: Variable
+    }
+
+    DEF StressTolerant: Species = TRAITS {
+      GrowthRate: Low  
+      MaxSize: Variable
+      SeedMass: Large
+      SeedNumber: Small 
+      LeafLifespan: Long
+      RootShootRatio: High
+    }
+
+    DEF Ruderal: Species = TRAITS {
+      GrowthRate: High
+      MaxSize: Small
+      SeedMass: Small  
+      SeedNumber: Large
+      LeafLifespan: Short 
+      RootShootRatio: Low
+    }
+  }
+
+  STRUCTURE HabitatConditions {
+    DEF LowStressLowDisturbance(e: Environment) = 
+      StressLevel(e) IS Low ∧ DisturbanceFrequency(e) IS Low
+
+    DEF HighStressLowDisturbance(e: Environment) =
+      StressLevel(e) IS High ∧ DisturbanceFrequency(e) IS Low  
+
+    DEF LowStressHighDisturbance(e: Environment) =
+      StressLevel(e) IS Low ∧ DisturbanceFrequency(e) IS High
+      
+    DEF HighStressHighDisturbance(e: Environment) = 
+      StressLevel(e) IS High ∧ DisturbanceFrequency(e) IS High
+  }
+
+  PROOFS {
+    THEOREM CSRStrategies {
+      STATEMENT:  
+        ∀ (e: Environment).
+          LowStressLowDisturbance(e) => Dominant(Competitive, e) ∧
+          HighStressLowDisturbance(e) => Dominant(StressTolerant, e) ∧
+          LowStressHighDisturbance(e) => Dominant(Ruderal, e) ∧  
+          HighStressHighDisturbance(e) => ¬∃ (s: Species). Viable(s, e)
+
+      PROOF:
+        LET e: Environment
+        
+        CASE LowStressLowDisturbance(e):
+          HAVE ∀ (s: Species). 
+            RelativeAbundance(s, e) ∝ GrowthRate(s) * CompetitionCoefficient(s, Competitive)
+            BY <<Competitive Exclusion under low stress low disturbance>>
+          HENCE Dominant(Competitive, e)
+        
+        CASE HighStressLowDisturbance(e):
+          HAVE ∀ (s: Species).
+            RelativeAbundance(s, e) ∝ 1 / MortalityRate(s, e)  
+            BY <<Survival advantageous under high stress>>
+          HAVE MortalityRate(StressTolerant, e) < MortalityRate(Competitive, e)  
+            BY StressTolerant TRAITS MaxSize, LeafLifespan, RootShootRatio
+          HENCE Dominant(StressTolerant, e)
+
+        CASE LowStressHighDisturbance(e):  
+          HAVE ∀ (s: Species).
+            ColonizationRate(s, e) ∝ SeedNumber(s) / SeedMass(s)
+            BY <<Colonization ability key in disturbed habitats>>
+          HAVE SeedNumber(Ruderal) / SeedMass(Ruderal) > 
+               SeedNumber(Competitive) / SeedMass(Competitive)
+            BY Ruderal TRAITS SeedMass, SeedNumber
+          HENCE Dominant(Ruderal, e)
+        
+        CASE HighStressHighDisturbance(e):
+          HAVE ∀ (s: Species). ¬Viable(s, e)  
+            BY <<Stress and disturbance preclude establishment>>
+          HENCE ¬∃ (s: Species). Viable(s, e)
+
+        QED
+    }
+
+    THEOREM SuccessionPathways {
+      STATEMENT:
+        ∀ (e: Environment) (t: Timepoint).
+          LowStressLowDisturbance(e) => 
+            ∃ (t1 t2 : Timepoint). t1 < t2 ∧
+              Dominant(Ruderal, (Succession(e, t1), t1)) ∧
+              Dominant(Competitive, (Succession(e, t2), t2))
+              
+      PROOF:
+        LET e: Environment
+        ASSUME LowStressLowDisturbance(e)
+
+        LET t1 = FIND t. Dominant(Ruderal, (Succession(e, t), t))
+          USING <<Ruderals dominate early in succession>>
+        
+        LET t2 = FIND t > t1. Dominant(Competitive, (Succession(e, t), t))  
+          USING <<Competitors dominate late succession under low stress>>
+
+        SHOW t1 < t2 ∧ 
+             Dominant(Ruderal, (Succession(e, t1), t1)) ∧
+             Dominant(Competitive, (Succession(e, t2), t2))
+          BY CHOICE OF t1, t2
+      
+        QED
+    }
+  }
+}

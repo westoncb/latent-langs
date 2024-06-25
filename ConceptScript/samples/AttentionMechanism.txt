@@ -1,0 +1,151 @@
+CONCEPT AttentionMechanism {
+  PARAMETERS {
+    KEY : TYPE
+    QUERY : TYPE
+    VALUE : TYPE
+    N : Nat  -- sequence length
+  }
+
+  CONTEXT {
+    TYPES {
+      Seq(T) := FUNC(Fin(N), T)
+      Attention(K, Q, V) := FUNC(Q, Seq(K), Seq(V)) -> V
+      Alignment(K, Q) := FUNC(K, Q) -> Real
+      Distribution(n : Nat) := List(Real) WITH_CONSTRAINT (
+        ∀ ps : Distribution(n) . SUM(ps) = 1 ∧ ∀ i . 0 ≤ ps[i] ≤ 1
+      )
+    }
+
+    NOTATION {
+      ⟨k, q⟩ := Alignment(k, q)
+      SoftMax(xs) := xs[i] / SUM(j = 0 to LEN(xs) - 1, xs[j])
+      Σ_i x_i := SUM(i = 0 to N - 1, x_i)
+    }
+
+    STRUCTURES {
+      STRUCTURE DotProductAttention IMPLEMENTS Attention(KEY, QUERY, VALUE) {
+        IMPLEMENT Alignment(k : KEY, q : QUERY) -> Real
+          WITH ⟨q, k⟩ / SQRT(DIM(KEY))
+
+        IMPLEMENT FUNC(q : QUERY, ks : Seq(KEY), vs : Seq(VALUE)) -> VALUE
+          WITH Σ_i α_i * vs[i]
+          WHERE α = SoftMax(Seq(⟨ks[i], q⟩ for i in Fin(N)))
+
+        AXIOM DotProductPreservesMagnitude {
+          ∀ k : KEY, q : QUERY . |⟨k, q⟩| ≤ |q| * |k|
+        }
+      }
+
+      STRUCTURE MultiheadAttention(h : Nat) IMPLEMENTS Attention(KEY, QUERY, VALUE) {
+        PARAMETERS {
+          Heads : FUNC(Fin(h), Attention(KEY, QUERY, VALUE))
+          Concat : FUNC(Seq(VALUE), VALUE^h)
+          Proj : FUNC(VALUE^h, VALUE)
+        }
+
+        IMPLEMENT FUNC(q : QUERY, ks : Seq(KEY), vs : Seq(VALUE)) -> VALUE
+          WITH Proj(Concat(Seq(Heads[i](q, ks, vs) for i in Fin(h))))
+
+        AXIOM OrthogonalHeads {
+          ∀ i j : Fin(h), q : QUERY, k : KEY . i =/= j ⇒ ⟨Heads[i].Alignment(k, q), Heads[j].Alignment(k, q)⟩ = 0
+        }
+      }
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE Linearity {
+      Attention(a * ks + b * ks', qs, a * vs + b * vs') <=>
+        a * Attention(ks, qs, vs) + b * Attention(ks', qs, vs')
+    }
+
+    SIMPLIFY IgnoreQueryOrder {
+      Attention(ks, PERMUTE(qs), vs) <=> Attention(ks, qs, vs)
+    }
+
+    SIMPLIFY IgnoreKeyValueOrder {
+      Attention(PERMUTE(ks), qs, PERMUTE(vs)) <=> 
+        PERMUTE(Attention(ks, qs, vs))
+    }
+
+    REWRITE SoftmaxInvariance(U : Unitary(QUERY)) {
+      SoftMax(Seq(⟨ks[i], U(q)⟩ for i in Fin(N))) <=>
+        SoftMax(Seq(⟨ks[i], q⟩ for i in Fin(N)))
+    }
+  }
+
+  PROOFS {
+    THEOREM DotProductAttentionLinearity {
+      FORALL (a b : Real, ks ks' : Seq(KEY), q : QUERY, vs vs' : Seq(VALUE)) .
+        DotProductAttention(a * ks + b * ks', q, a * vs + b * vs') =
+          a * DotProductAttention(ks, q, vs) + b * DotProductAttention(ks', q, vs')
+    } BY Linearity
+
+    THEOREM MultiheadAttentionInvariance {
+      FORALL (q : QUERY, ks : Seq(KEY), vs : Seq(VALUE),
+              U_heads : FUNC(Fin(h), Unitary(QUERY)),
+              U_concat : Unitary(VALUE^h),
+              U_proj : Unitary(VALUE)) .
+        LET m = MultiheadAttention(h)
+            m' = m WITH {
+              Heads := λ i . m.Heads[i] WITH {Alignment := λ k q . U_heads[i](m.Heads[i].Alignment(k, q))},
+              Concat := λ v . U_concat(m.Concat(v)),
+              Proj := λ x . U_proj(m.Proj(x))
+            }
+        IN m(q, ks, vs) = m'(q, ks, vs)
+    }
+    PROOF {
+      ASSUME q : QUERY, ks : Seq(KEY), vs : Seq(VALUE),
+             U_heads : FUNC(Fin(h), Unitary(QUERY)),
+             U_concat : Unitary(VALUE^h),
+             U_proj : Unitary(VALUE)
+
+      m'(q, ks, vs)
+        = U_proj(m'.Proj(U_concat(m'.Concat(Seq(m'.Heads[i](q, ks, vs) for i in Fin(h)))))) [BY DEF Apply]
+        = U_proj(m.Proj(U_concat(m.Concat(Seq(
+            m.Heads[i](U_heads[i](q), ks, vs) for i in Fin(h)))))) [BY DEF m', Heads]
+        = U_proj(m.Proj(U_concat(m.Concat(Seq(
+            Σ_j SoftMax(Seq(m.Heads[i].Alignment(ks[j], U_heads[i](q)) for j in Fin(N)))[j] * vs[j]
+            for i in Fin(h)))))) [BY DEF Heads, DotProductAttention]
+        = U_proj(m.Proj(U_concat(m.Concat(Seq(
+            Σ_j SoftMax(Seq(m.Heads[i].Alignment(ks[j], q) for j in Fin(N)))[j] * vs[j]
+            for i in Fin(h)))))) [BY SoftmaxInvariance]
+        = U_proj(m.Proj(U_concat(m.Concat(Seq(
+            m.Heads[i](q, ks, vs) for i in Fin(h)))))) [BY DEF Heads, DotProductAttention]
+        = U_proj(m.Proj(m.Concat(Seq(m.Heads[i](q, ks, vs) for i in Fin(h))))) [BY Unitary_Invariance]
+        = m(q, ks, vs) [BY DEF Apply, Unitary_Invariance]
+      QED
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE SelfAttention {
+      DEFINE T = Real^d
+      DEFINE SelfAttention(d : Nat, h : Nat) = MultiheadAttention(h) WITH {
+        KEY = T
+        QUERY = T
+        VALUE = T
+      }
+
+      LET sa = SelfAttention(512, 8)
+      
+      THEN ∀ q : T, ks vs : Seq(T) . sa(q, ks, vs) : T
+    }
+
+    EXAMPLE CrossAttention {
+      DEFINE K = Real^d_k 
+      DEFINE Q = Real^d_q
+      DEFINE V = Real^d_v
+      
+      DEFINE CrossAttention(d_k d_q d_v : Nat, h : Nat) = MultiheadAttention(h) WITH {
+        KEY = K
+        QUERY = Q
+        VALUE = V
+      }
+
+      LET ca = CrossAttention(512, 128, 512, 8)
+      
+      THEN ∀ q : Q, ks : Seq(K), vs : Seq(V) . ca(q, ks, vs) : V
+    }
+  }  
+}

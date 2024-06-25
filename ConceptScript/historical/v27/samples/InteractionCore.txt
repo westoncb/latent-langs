@@ -1,0 +1,293 @@
+CONCEPT InteractionCore {
+  SYNTAX {
+    -- Terms
+    t ::= x                   -- Variables
+        | λx:A.t              -- Abstraction
+        | t t                 -- Application
+        | <t, t>              -- Pair
+        | t ⊗ t               -- Tensor
+        | t ⊕ t               -- Choice
+        | !t                  -- Replication
+        | t || t              -- Parallel composition
+        | (t)                 -- Grouping
+        | let x = t in t      -- Let binding
+        | case t of           -- Pattern matching
+            | <x, y> -> t
+            | x ⊗ y -> t
+            | x ⊕ y -> t
+      
+    -- Types  
+    A ::= X                   -- Type variables
+        | 1                   -- Unit type
+        | A ⊸ B               -- Linear function type
+        | A & B               -- With (product) type
+        | A ⊗ B               -- Tensor (multiplicative conjunction) type  
+        | A ⊕ B               -- Plus (additive disjunction) type
+        | !A                  -- Of course (exponential) type
+        | ?A                  -- Why not (exponential) type
+
+    -- Interaction Nets
+    n ::= x                   -- Wire links  
+        | [t]                 -- Nodes
+        | n || n              -- Parallel composition 
+        | (n)                 -- Grouping
+        | ?                   -- Holes
+
+    -- Interaction Rules
+    r ::= n ~> n              -- Binary interaction
+        | <n> ~> n            -- Unary interaction  
+        | x ~> t              -- η-expansion
+  }
+  
+  TYPING {
+    -- Typing judgments
+    Γ ⊢ t : A   -- Term t has type A under context Γ
+    
+    -- Interaction Net Typing
+    Γ ⊢ₙ n : A   -- Net n has type A under context Γ
+
+    -- Typing rules for terms (similar to CoreInteractionCalculus)  
+    ...
+
+    -- Typing rules for interaction nets
+    x: ⊢ₙ x: ?                                 -- Wire
+
+    Γ ⊢ t: A     
+    ------------------- [t]  
+    Γ ⊢ₙ [t]: A
+
+    Γ ⊢ₙ n: A   Δ ⊢ₙ m: B
+    --------------------- (|| Par)   
+    Γ,Δ ⊢ₙ n || m: A ⊗ B
+
+    Γ ⊢ₙ n: A
+    ----------- (?)  
+    Γ ⊢ₙ ?: ?A
+      
+    -- Typing rules for interaction rules
+    Γ ⊢ₙ n: A   Δ ⊢ₙ m: A
+    --------------------- (~> Rule)  
+    Γ,Δ ⊢ₙ n ~> m: OK
+
+    Γ,x:A ⊢ₙ n: C
+    ------------------- (<> Rule)
+    Γ ⊢ₙ <n>: A ~> C
+
+    ----------- (Eta)
+    x: ⊢ₙ x ~> t: OK
+  }
+
+  TRANSLATION {
+    -- Translation from terms to interaction nets
+    [x] = x
+    [λx:A.t] = ?A || [t]  
+    [t u] = ([t] || [u]) ~> ?
+    [<t, u>] = [t] || [u]
+    [t ⊗ u] = [t] ⊗ [u]  
+    [t ⊕ u] = [t] ⊕ [u]
+    [!t] = ![t]
+    [t || u] = [t] || [u]  
+    [(t)] = ([t])
+    [let x = t in u] = <[t]> ~> [u]  
+    [case t of <x, y> -> u  
+             | x ⊗ y -> v  
+             | x ⊕ y -> w] = <[t]> ~> ([u] ⊕ [v] ⊕ [w])
+
+    -- Translation from interaction rules to term reductions
+    [n ~> m] = [n] ▷ [m]       -- Parallel one-step reduction  
+    [<n> ~> m] = [n] ▷ᵤ [m]    -- Unary one-step reduction
+    [x ~> t] = x ▷η t         -- η-reduction
+  }
+
+  ABSTRACT_MACHINE {
+    -- Interaction Abstract Machine (IAM)
+    iam ::= · ⊢ t ↓ [·]             -- Eval state (term and net context)  
+          | [n] ⊢ₙ c ↓ [m]         -- Interaction state (nets and net context)
+          | v ⊢ₙ c ↑ [m]           -- Return state (value and net context)
+    
+    c ::= □                       -- Hole  
+        | c || [n]                 -- Parallel net context
+        | <c>                      -- Unary net context
+    
+    v ::= λx:A.t                  -- Function value
+        | <v, v>                   -- Pair value
+
+    -- IAM transitions
+    · ⊢ t ↓ [·]                   ↦   [t] ⊢ₙ □ ↓ [·]                                      (Init)   
+    [x] ⊢ₙ c ↓ [m]                ↦   [m] ⊢ₙ c{x → m} ↓ [m]                               (Link)
+    [n] ⊢ₙ c ↓ [m]  n ~> n'       ↦   [n'] ⊢ₙ c ↓ [m]                                     (Reduce)
+    <[?A]> ⊢ₙ c ↓ [m]              ↦   [m] ⊢ₙ c ↑ λx:A.[m]                                 (Abstract)
+    ([n] || [m]) ⊢ₙ c ↓ [p]        ↦   [p] ⊢ₙ c ↓ [n || m]                                 (Join)
+    <?> ⊢ₙ c ↓ [m]                ↦   [m] ⊢ₙ c ↑ <v, v'>  where v ⊗ v' = [m]              (Split)
+    <[n ⊕ m]> ⊢ₙ c ↓ [p]          ↦   ([n] ⊢ₙ c ↓ [p]) ⊕ ([m] ⊢ₙ c ↓ [p])                 (Case)
+    ([!n]) ⊢ₙ c ↓ [m]              ↦   [n] ⊢ₙ c ↓ [!m]                                     (Promote)
+    v ⊢ₙ c ↑ [m]                 ↦   [m] ⊢ₙ c ↓ [v]                                      (Apply)
+    · ⊢ₙ □ ↑ v                    ↦   v                                                  (Final)
+  }
+
+  THEORY {
+    -- Theoretical properties and results
+    
+    -- Subject reduction: Well-typed terms reduce to well-typed terms
+    THEOREM Subject_Reduction {
+      ∀ t, t', A. · ⊢ t : A  ∧  t ▷ t'  ⇒  · ⊢ t' : A   
+    }
+
+    -- Progress: A well-typed closed term is either a value or can be reduced
+    THEOREM Progress {
+      ∀ t, A. · ⊢ t : A  ⇒  (Value(t) ∨ ∃ t'. t ▷ t')
+    }
+
+    -- Termination: IAM evaluation always terminates for well-typed terms 
+    THEOREM Termination {
+      ∀ t, A. · ⊢ t : A  ⇒  ∃ v. · ⊢ t ↓ [·] ↦* v
+    }
+
+    -- Soundness of Translation: Term reduction corresponds to net reduction
+    THEOREM Translation_Soundness {
+      ∀ t, u. t ▷ u  ⇔  ∃ c, [t] ⊢ₙ □ ↓ [·] ↦+ [u] ⊢ₙ c ↓ [·]
+    }
+
+    -- Completeness of Translation: Net reduction corresponds to term reduction
+    THEOREM Translation_Completeness {
+      ∀ n, m, c. [n] ⊢ₙ c ↓ [m]  ⇒  ∃ t, u. [t] = n ∧ [u] = m ∧ t ▷* u
+    }
+
+    -- Confluence: IAM evaluation is confluent
+    THEOREM Confluence {
+      ∀ t, v, v'. · ⊢ t ↓ [·] ↦* v  ∧  · ⊢ t ↓ [·] ↦* v'  ⇒  v = v'
+    }
+
+    -- Consistency: There are no closed proofs of contradiction
+    THEOREM Consistency { 
+      ∄ t. · ⊢ t : 0
+    }
+  }
+}
+
+
+
+
+
+
+
+CONCEPT CoreInteractionCalculus {
+  SYNTAX {
+    -- Terms
+    t ::= x                   -- Variables
+        | λx.t                -- Abstraction
+        | t t                 -- Application
+        | <t, t>              -- Pair
+        | t ⊗ t               -- Tensor
+        | t ⊕ t               -- Choice
+        | !t                  -- Replication
+        | t || t              -- Parallel composition
+        | (t)                 -- Grouping
+        | let x = t in t      -- Let binding
+        | case t of           -- Pattern matching
+            | <x, y> -> t
+            | x ⊗ y -> t
+            | x ⊕ y -> t
+      
+    -- Types  
+    A ::= X                   -- Type variables
+        | 1                   -- Unit type
+        | A ⊸ B               -- Linear function type
+        | A & B               -- Product type
+        | A ⊗ B               -- Tensor product type  
+        | A ⊕ B               -- Sum type
+        | !A                  -- Exponential (replication) type
+  }
+  
+  TYPING {
+    -- Typing judgments
+    Γ ⊢ t : A   -- Term t has type A under context Γ
+
+    -- Typing rules
+    ----------- (Var)
+    x : A ⊢ x : A
+
+    Γ, x : A ⊢ t : B   
+    ---------------------- (Abs)
+    Γ ⊢ λx.t : A ⊸ B
+
+    Γ ⊢ t : A ⊸ B   Δ ⊢ u : A
+    ----------------------------- (App)  
+    Γ, Δ ⊢ t u : B
+
+    Γ ⊢ t : A   Δ ⊢ u : B
+    ----------------------- (&-Intro)
+    Γ, Δ ⊢ <t, u> : A & B
+
+    Γ ⊢ t : A & B   
+    ---------------- (&-Elim1)
+    Γ ⊢ t.1 : A
+
+    Γ ⊢ t : A & B
+    ---------------- (&-Elim2)  
+    Γ ⊢ t.2 : B
+
+    Γ ⊢ t : A   Δ ⊢ u : B   
+    ----------------------- (⊗-Intro)
+    Γ, Δ ⊢ t ⊗ u : A ⊗ B
+
+    Γ ⊢ t : A ⊗ B   Δ, x : A, y : B ⊢ u : C  
+    ------------------------------------------- (⊗-Elim)
+    Γ, Δ ⊢ let x ⊗ y = t in u : C
+    
+    Γ ⊢ t : A
+    --------------- (⊕-Intro1)
+    Γ ⊢ inl t : A ⊕ B
+
+    Γ ⊢ t : B  
+    --------------- (⊕-Intro2)
+    Γ ⊢ inr t : A ⊕ B
+
+    Γ ⊢ t : A ⊕ B   Δ, x : A ⊢ u : C   Δ, y : B ⊢ v : C
+    ---------------------------------------------------- (⊕-Elim)
+    Γ, Δ ⊢ case t of inl x -> u | inr y -> v : C
+
+    Γ ⊢ t : A
+    ------------- (!-Intro)
+    Γ ⊢ !t : !A  
+
+    Γ, x : !A, y : !A ⊢ t : B
+    -------------------------- (!-Elim)
+    Γ, z : !A ⊢ let !x = z in let !y = z in t : B
+  }
+
+  REDUCTION {
+    -- Reduction rules  
+    (λx.t) u          ~> [u/x]t                        (β-reduction)
+    let <x, y> = t in u  ~>  [t.1/x, t.2/y]u          (&-reduction) 
+    let x ⊗ y = t ⊗ u in v  ~>  [t/x, u/y]v           (⊗-reduction)
+    case (inl t) of inl x -> u | inr y -> v  ~>  [t/x]u   (⊕-reduction1)
+    case (inr t) of inl x -> u | inr y -> v  ~>  [t/y]v   (⊕-reduction2)
+    let !x = !t in u  ~>  [t/x]u                    (!-reduction)
+  }
+  
+  THEORY {
+    -- Theoretical properties and results
+    
+    -- Subject reduction: Well-typed terms remain well-typed under reduction.
+    THEOREM SubjectReduction {
+      ∀ Γ, t, t', A. Γ ⊢ t : A  ∧  t ~> t'  ⇒  Γ ⊢ t' : A   
+    }
+
+    -- Strong normalization: Well-typed terms always terminate.
+    THEOREM StrongNormalization {
+      ∀ Γ, t, A. Γ ⊢ t : A  ⇒  ∃ n. t ~>ⁿ v  ∧  IsNormalForm(v)
+    }
+
+    -- Consistency: There are no closed proofs of contradiction.
+    THEOREM Consistency { 
+      ∄ t. ⊢ t : 1 ⊕ 1
+    }
+
+    -- Linear logic embedding: The type system corresponds to intuitionistic linear logic.
+    THEOREM LinearLogicCorrespondence {
+      Γ ⊢ t : A  ⇔  [Γ] ⊢ᴵᴸᴸ [t] : [A]
+      WHERE [Γ], [t], [A] = Translation from CoreInteractionCalculus to ILL
+    }
+  }
+}

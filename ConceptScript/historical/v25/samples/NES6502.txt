@@ -1,0 +1,193 @@
+CONCEPT NES6502 {
+  LANGUAGE {
+    TYPE Byte = Bit[8]
+    TYPE Word = Bit[16]
+    TYPE Address = Word
+    TYPE Opcode = Byte
+    TYPE Memory = Address -> Byte
+    TYPE Stack = List[Byte]
+    
+    FUNC Fetch : (Address, Memory) -> Opcode
+    FUNC Execute : (Opcode, State) -> State
+    FUNC Run : Memory -> State
+  
+    PRED ValidAddress : Address -> Bool
+    PRED ValidOpcode : Opcode -> Bool
+  }
+  
+  STRUCTURE State {
+    pc : Address         ; Program Counter
+    sp : Byte            ; Stack Pointer  
+    a : Byte             ; Accumulator
+    x : Byte             ; X Register
+    y : Byte             ; Y Register
+    p : Byte             ; Status Register
+    mem : Memory
+
+    INIT(m : Memory) {
+      pc := 0xFFFC
+      sp := 0xFD  
+      a  := 0x00
+      x  := 0x00
+      y  := 0x00      
+      p  := 0x24
+      mem := m
+    }
+
+    DEF NextByte() -> Byte = {
+      LET b = mem[pc]
+      pc := pc + 1
+      RETURN b   
+    }
+
+    DEF NextWord() -> Word = {
+      LET lo = NextByte()
+      LET hi = NextByte()
+      RETURN (hi : Word) << 8 | (lo : Word)
+    }
+
+    DEF ReadByte(addr : Address) -> Byte = {
+      RETURN mem[addr]
+    }
+
+    DEF WriteByte(addr : Address, data : Byte) -> State = {
+      mem := mem[addr => data]
+      RETURN SELF
+    }
+
+    DEF PushByte(data : Byte) -> State = {      
+      WriteByte(0x0100 | (sp : Address), data)
+      sp := sp - 1
+      RETURN SELF
+    }
+
+    DEF PullByte() -> Byte = {
+      sp := sp + 1
+      RETURN ReadByte(0x0100 | (sp : Address))  
+    }
+
+    DEF PushWord(data : Word) -> State = {
+      PushByte((data >> 8) : Byte)
+      PushByte((data & 0xFF) : Byte)
+      RETURN SELF  
+    }
+
+    DEF PullWord() -> Word = {
+      LET lo = PullByte()
+      LET hi = PullByte()
+      RETURN ((hi : Word) << 8) | (lo : Word)
+    }
+
+    DEF Branch(cond : Bool) -> State = {
+      IF cond THEN {
+        LET offset = NextByte()
+        IF offset & 0x80 THEN 
+          pc := pc - ((!(offset : Word) + 1) : Address) 
+        ELSE
+          pc := pc + (offset : Address)
+      } ELSE {
+        pc := pc + 1
+      }  
+      RETURN SELF
+    }
+  }
+
+  STRUCTURE StatusRegister {
+    n : Bit  ; Negative
+    v : Bit  ; Overflow 
+    b : Bit  ; Break
+    d : Bit  ; Decimal (not used in NES)
+    i : Bit  ; Interrupt Disable
+    z : Bit  ; Zero
+    c : Bit  ; Carry
+
+    FUNC ToFlags : Byte = {
+      (n << 7) | (v << 6) | (b << 4) | 
+      (d << 3) | (i << 2) | (z << 1) | c
+    }
+
+    FUNC FromFlags(p : Byte) = {
+      n := p >> 7 & 0x1
+      v := p >> 6 & 0x1
+      b := p >> 4 & 0x1
+      d := p >> 3 & 0x1
+      i := p >> 2 & 0x1
+      z := p >> 1 & 0x1
+      c := p & 0x1
+    }  
+  }
+
+  PROOFS {
+    TACTIC ValidState(s) -> 𝔹 = {
+      ValidAddress(s.pc)
+      0 ≤ s.sp < 256
+      0 ≤ s.a < 256
+      0 ≤ s.x < 256
+      0 ≤ s.y < 256
+      0 ≤ s.p < 256
+      ∀ a. ValidAddress(a) => 0 ≤ s.mem[a] < 256
+    }
+
+    THEOREM NextByteValid {
+      ∀ (s : State). ValidState(s) => {
+        LET s' = s.NextByte()  
+        0 ≤ s'.pc < 65536 ∧ 
+        ∀ (a : Address). ValidAddress(a) => 0 ≤ s'.mem[a] < 256 
+      }
+
+      PROOF {
+        LET s : State
+        ASSUME ValidState(s)
+
+        LET b = s.mem[s.pc]        
+        s.pc >= 0 ∧ s.pc < 65536 BY ValidState(s)
+        0 ≤ b < 256 BY ValidState(s)
+
+        LET s' = s WITH [pc := s.pc + 1]
+
+        0 ≤ s'.pc < 65536 BY s.pc < 65535  ; Assumed true on NES
+        ∀ (a : Address). 
+          ValidAddress(a) => 0 ≤ s'.mem[a] < 256 BY {
+            IF a = s.pc THEN
+              s'.mem[a] = b ∧ 0 ≤ b < 256 
+            ELSE  
+              s'.mem[a] = s.mem[a] ∧ 0 ≤ s.mem[a] < 256 BY ValidState(s)
+          }
+      }
+    }
+    
+    THEOREM NextWordValid {
+      ∀ (s : State). ValidState(s) => {
+        LET s' = s.NextWord()
+        0 ≤ s'.pc < 65536 ∧
+        ∀ (a : Address). ValidAddress(a) => 0 ≤ s'.mem[a] < 256
+      }
+      
+      PROOF {
+        LET s : State
+        ASSUME ValidState(s)
+
+        LET s1 = s.NextByte()
+        0 ≤ s1.pc < 65536 ∧
+        ∀ (a : Address). 
+          ValidAddress(a) => 0 ≤ s1.mem[a] < 256 
+            BY NextByteValid
+
+        LET lo = s.mem[s.pc]
+        0 ≤ lo < 256 BY ValidState(s)
+
+        LET s' = s1.NextByte()        
+        0 ≤ s'.pc < 65536 ∧
+        ∀ (a : Address). 
+          ValidAddress(a) => 0 ≤ s'.mem[a] < 256
+            BY NextByteValid[s <- s1]
+
+        LET hi = s1.mem[s1.pc]        
+        0 ≤ hi < 256 BY NextByteValid
+        
+        LET w = ((hi : Word) << 8) | (lo : Word)
+        0 ≤ w < 65536 BY 0 ≤ hi,lo < 256
+      }  
+    }
+  }
+}

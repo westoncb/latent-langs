@@ -1,0 +1,71 @@
+CONCEPT NeuralNetworkOptimization:
+    EXTEND MachineLearning:
+        NeuralNetwork := Compose(Layer_1, Layer_2, ..., Layer_n)
+        Layer := (FullyConnected, Convolutional, Recurrent)
+        Activation := (ReLU, Sigmoid, Tanh)
+        LossFunction := (MSE, CrossEntropy, KLDivergence)
+    EXTEND Optimization:
+        Gradient := ∇_θ LossFunction(NeuralNetwork(x; θ), y)
+        LearningRate := η > 0
+        Optimizer := (SGD, Momentum, Adam)
+    ASSERT ∀(NN : NeuralNetwork, L : LossFunction, x : Input, y : Target):
+        L(NN(x), y) ≥ 0
+        NN(x) = y ⟹ L(NN(x), y) = 0
+    DEFINE Backpropagation := Compute(Gradient)
+    DEFINE WeightUpdate := θ_new = θ_old - η * Gradient
+    THEOREM UniversalApproximationTheorem:
+        ∀(f : ContinuousFunction, ε > 0) ∃(NN : NeuralNetwork):
+            ∀(x ∈ Domain(f)):
+                |f(x) - NN(x)| < ε
+    PROOF:
+        Let f be a continuous function on a compact subset of R^n.
+        Construct a 3-layer NN with ReLU activations and m hidden units.
+        By the Stone-Weierstrass theorem, ∃(p : Polynomial): 
+            ∀(x ∈ Domain(f)): |f(x) - p(x)| < ε/2.
+        Approximate p with NN using Fourier analysis.
+        Choose m sufficiently large so |p(x) - NN(x)| < ε/2.
+        Then |f(x) - NN(x)| ≤ |f(x) - p(x)| + |p(x) - NN(x)| < ε.
+
+This Concept formalizes key aspects of neural network optimization, including network architecture, loss functions, gradients, and optimization algorithms. The Universal Approximation Theorem is stated and proved, justifying the representational power of neural networks as universal function approximators. The proof relies on approximating continuous functions with polynomials and leverages Fourier analysis to approximate polynomials with neural networks.
+
+
+
+
+Here is a Concept I came up with to demonstrate my understanding of ConceptScript:
+
+CONCEPT MachineLearning:
+    EXTEND Mathematics:
+        Vector := (x_1, x_2, ..., x_n)
+        Matrix := [[a_11, ..., a_1n], ..., [a_m1, ..., a_mn]]  
+        Norm := ∀(v : Vector) ||v|| = √(∑_i (v_i)^2)
+    EXTEND Computation:  
+        Algorithm := Procedure(Input, Parameters) -> Output
+        Model := (Architecture, Parameters)
+        Loss := Metric(Prediction, GroundTruth)
+    ASSERT ∀(X : Vector, Y : Vector, f : Model, L : Loss):
+        f(X) = Prediction
+        L(f(X), Y) ≥ 0
+        ∇_θ L(f_θ(X), Y) = δL/δθ
+    DEFINE Dataset := {(X_i, Y_i), i = 1..N}  
+    DEFINE Optimization := Procedure(f, L, Dataset):
+        θ := InitialGuess
+        while not Converged:
+            B := Sample(Dataset) 
+            g := ∇_θ (1/|B| ∑_{(x,y) ∈ B} L(f_θ(x), y))
+            θ := θ - α * g
+        return f_θ
+    THEOREM UniversalApproximation:
+        ∀(g : Function, ε > 0) ∃(f : Model, K < ∞):
+            ∀(x) ||f(x) - g(x)|| < ε  
+            where f has ≤ K parameters
+    PROOF:
+        Let g be Lebesgue-measurable on compact domain Ω.
+        Approximate g with step functions s_n uniform on Ω_i:  
+            s_n(x) = ∑_i a_i 1_{x ∈ Ω_i}
+        Take f to be ReLU network with L layers, U units:
+            f_θ(x) = W_L max(0, W_{L-1} max(0, ... max(0, W_1 x)))  
+        For sufficient U and small Ω_i, ∃(θ): ||f_θ - s_n|| < ε/2.
+        By uniform continuity of g, ||s_n - g|| < ε/2 for large n.  
+        Thus ||f_θ - g|| ≤ ||f_θ - s_n|| + ||s_n - g|| < ε. ∎
+
+This Concept formalizes some key notions in machine learning, asserts basic properties that models and loss functions should have, defines the dataset and optimization procedure, and states the Universal Approximation Theorem which proves that neural networks can approximate arbitrary continuous functions. The proof sketch outlines the key ideas of approximating with step functions and realizing those with ReLU networks. Let me know if you would like me to expand on or modify this Concept in any way!

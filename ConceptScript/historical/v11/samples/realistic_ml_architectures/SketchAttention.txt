@@ -1,0 +1,88 @@
+CONCEPT SketchAttention {
+  LANGUAGE {
+    func zeros(shape : (ℕ, ℕ)) : Matrix[Float]
+    func dot(x : Vector[Float], y : Vector[Float]) : Float
+    func softmax(x : Vector[Float]) : Vector[Float]
+    func min(C : Sketch[ℝ^d]) : Float
+    func max(C : Sketch[ℝ^d]) : Float
+    
+    axiom softmax_sum_to_one:
+      ∀x ∈ ℝ^d, sum(softmax(x)) = 1
+  }
+
+  STRUCTURE {
+    [d := Dimensionality of token embeddings]
+    [n := Maximum sequence length]
+    [k := Number of hash functions in the sketch]
+    [m := Size of each hash table in the sketch]
+
+    [Sketch := { h₁ : ℝ^d → [m], ..., h_k : ℝ^d → [m] } ↦ Set of hash functions for sketching]
+    [SketchTable := [m] → List[ℝ^d] ↦ Hash table for storing sketched embeddings]
+    
+    [Query : ℝ^(n×d) ↦ Query embeddings]
+    [Context : Sketch[ℝ^d] ↦ Sketched context embeddings]
+    
+    [AttentionWeights(Q, C) := 
+      let W := zeros(n × k)
+      for i in 1..n:
+        for j in 1..k:
+          let idx := C.h_j(Q[i])
+          let S_j := C.tables[j][idx]
+          let w_ij := softmax(dot(Q[i], S_j))
+          W[i, j] := w_ij
+      W
+    ]
+    
+    [AttentionOutput(Q, C) :=
+      let W := AttentionWeights(Q, C)
+      let Y := zeros(n × d)
+      for i in 1..n:
+        for j in 1..k:
+          let idx := C.h_j(Q[i])
+          let S_j := C.tables[j][idx]
+          let y_ij := sum(W[i, j] * S_j)
+          Y[i] := Y[i] + y_ij
+      Y
+    ]
+    
+    [SketchAttention(Q, C) := AttentionOutput(Q, C)]
+  }
+  
+  PROOFS {
+    theorem attention_weights_sum_to_one:
+      ∀Q ∈ ℝ^(n×d), ∀C : Sketch[ℝ^d], ∀i ∈ 1..n,
+      sum(AttentionWeights(Q, C)[i]) = 1
+    {
+      let Q ∈ ℝ^(n×d), C : Sketch[ℝ^d], i ∈ 1..n by hypothesis
+      
+      let W := AttentionWeights(Q, C) by definition
+      
+      for j in 1..k:
+        let idx := C.h_j(Q[i]) by definition
+        let S_j := C.tables[j][idx] by definition
+        W[i, j] = softmax(dot(Q[i], S_j)) by definition of AttentionWeights
+      
+      sum(W[i]) = sum(softmax(dot(Q[i], S_j)) for j in 1..k)
+                = 1 by softmax_sum_to_one
+    }
+    
+    theorem attention_output_bounds:
+      ∀Q ∈ ℝ^(n×d), ∀C : Sketch[ℝ^d], 
+      ∀i ∈ 1..n, ∀j ∈ 1..d,
+      AttentionOutput(Q, C)[i, j] ∈ [min(C), max(C)]
+    {
+      let Q ∈ ℝ^(n×d), C : Sketch[ℝ^d], i ∈ 1..n, j ∈ 1..d by hypothesis
+      
+      let W := AttentionWeights(Q, C) by definition
+      let Y := AttentionOutput(Q, C) by definition
+      
+      Y[i, j] = sum(W[i, l] * C.tables[l][C.h_l(Q[i])][j] for l in 1..k) by definition of AttentionOutput
+              ≥ min(C) * sum(W[i, l] for l in 1..k)
+              = min(C) by attention_weights_sum_to_one
+              
+      Y[i, j] = sum(W[i, l] * C.tables[l][C.h_l(Q[i])][j] for l in 1..k) by definition of AttentionOutput
+              ≤ max(C) * sum(W[i, l] for l in 1..k)
+              = max(C) by attention_weights_sum_to_one
+    }
+  }
+}

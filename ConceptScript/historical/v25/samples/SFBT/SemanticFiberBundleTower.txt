@@ -1,0 +1,166 @@
+CONCEPT SemanticFiberBundleTower {
+  LANGUAGE {
+    TYPE Tensor
+    TYPE StructuralTensor <: Tensor
+    TYPE ContentTensor <: Tensor
+    TYPE Embedding <: Tensor
+    TYPE Manifold
+    TYPE TangentVector[M : Manifold, p : M]
+    TYPE TangentBundle[M : Manifold] = Bundle(M, (p : M) ↦ TangentSpace(M, p))
+    TYPE CotangentVector[M : Manifold, p : M]
+    TYPE CotangentBundle[M : Manifold] = Bundle(M, (p : M) ↦ CotangentSpace(M, p)) 
+    TYPE Fiber[B : Manifold, F : Manifold, p : B] <: Manifold
+    TYPE FiberBundle(B : Manifold, F : Manifold) <: Manifold
+    TYPE SemanticFrequency <: Real
+    TYPE PartialConfig[F : Manifold](f : F)
+    
+    FUNC Decode : Embedding -> String
+    FUNC Encode(s : String) : Embedding
+    FUNC π[B : Manifold, F : Manifold](E : FiberBundle(B, F)) : E -> B
+    FUNC ι[B : Manifold, F : Manifold, p : B](E : FiberBundle(B, F)) : Fiber(B, F, p) -> E
+    FUNC PullbackBundle[B : Manifold, E : FiberBundle(_, _), f : _ -> B]
+         (E : FiberBundle(B, F))(f : C -> B) : FiberBundle(C, F)
+    FUNC PushforwardBundle[B : Manifold, E : FiberBundle(_, _), f : B -> _]  
+         (E : FiberBundle(B, F))(f : B -> C) : FiberBundle(C, F)
+    FUNC ParallelTransport[B : Manifold, F : Manifold, γ : Curve[B]]
+         (E : FiberBundle(B, F))(e : E, γ : Curve[B], t : Real) : E
+    FUNC HorizontalLift[B : Manifold, F : Manifold]
+         (E : FiberBundle(B, F))(v : TangentVector[B, π(e)]) : TangentVector[E, e]  
+    FUNC PossibilityCone[B : Manifold, F : Manifold]
+         (E : FiberBundle(B, F))(e : E) : SubManifold(E)
+
+    AXIOM Projection {
+      ∀ (B : Manifold) (F : Manifold) (E : FiberBundle(B, F)) (p : B). π(ι(E)(Fiber(B, F, p))) = p  
+    }
+
+    AXIOM Embedding {
+      ∀ (s : String). Decode(Encode(s)) = s  
+    }
+  }
+
+  STRUCTURE EmbeddingSpace {
+    LET E : Manifold
+    REQUIRE ∀ (e : E). e : Embedding
+    
+    FUNC Distance : E × E -> Real
+    
+    REQUIRE ∀ (e1 e2 : E). Distance(e1, e2) ≥ 0
+    REQUIRE ∀ (e : E). Distance(e, e) = 0
+    REQUIRE ∀ (e1 e2 : E). Distance(e1, e2) = Distance(e2, e1)
+    REQUIRE ∀ (e1 e2 e3 : E). Distance(e1, e3) ≤ Distance(e1, e2) + Distance(e2, e3)
+    
+    FUNC Neighbor(e : E, r : Real) -> Set(E) = {e' : E | Distance(e, e') < r}
+    
+    REQUIRE ∀ (e : E) (ε : Real). ∃ (δ : Real). 
+      ∀ (e' : E). e' ∈ Neighbor(e, δ) => Decode(e') ∈ Neighbor(Decode(e), ε)  
+  }
+
+  STRUCTURE SemanticFiber[B : EmbeddingSpace, F : Manifold, p : B] {
+    REQUIRE F : EmbeddingSpace
+    DEF Content(f : Fiber(B, F, p)) : ContentTensor = f
+    DEF Structure(f : Fiber(B, F, p)) : StructuralTensor = π(f)
+  }
+
+  STRUCTURE SemanticBundle[B : EmbeddingSpace, F : Manifold] EXTENDS FiberBundle(B, F) {
+    REQUIRE ∀ (p : B). SemanticFiber(B, F, p)
+    LET freq : SemanticFrequency
+
+    FUNC ConfigureFiber[p : B](pc : PartialConfig[Fiber(B, F, p)], f : Fiber(B, F, p)) : Fiber(B, F, p)
+  
+    REQUIRE ∀ (e : E) (v : TangentVector[B, π(e)]) (ε : Real). ∃ (δ : Real).
+      ∀ (w : TangentVector[E, e]).
+        Magnitude(w) < δ =>  
+        Distance(e, ParallelTransport(E)(e, ExpGeodesic(π(e), v), ε)) < ε
+        
+    REQUIRE ∀ (e : E). PossibilityCone(E)(e) ⊆ E
+  }
+
+  STRUCTURE TowerLevel[n : Nat] {
+    CASE n == 0 : 
+      LET Base : EmbeddingSpace
+    CASE n > 0 : 
+      LET Below : TowerLevel[n-1]
+      LET E : SemanticBundle[Below.Base, Manifold]
+
+    REQUIRE ∀ (e : E).
+      LET struct_content_ratio = Complexity(Structure(e)) / Complexity(Content(e))
+      REQUIRE struct_content_ratio > 1
+      REQUIRE struct_content_ratio > 
+        IF n == 1 THEN 1 ELSE Below.struct_content_ratio
+        
+    REQUIRE ∀ (e : E).
+      LET sparsity = Sparsity(Structure(e))
+      REQUIRE sparsity > 0
+      REQUIRE sparsity > IF n == 1 THEN 0 ELSE Below.sparsity
+  }
+
+  STRUCTURE SemanticFiberBundleTower {
+    LET N : Nat  -- height of the tower
+    REQUIRE ∀ (n : Nat). n < N => TowerLevel[n]
+
+    DEF Levels : List(TowerLevel) = [TowerLevel[n] | n ∈ [0..N)]
+    DEF Base : EmbeddingSpace = Levels[0].Base
+    DEF Top : SemanticBundle = Levels[N-1].E
+
+    -- Navigation and Processing Operations
+
+    FUNC FollowFiber(start : Base, fiberSeq : List(Fiber)) : Top = 
+      MATCH fiberSeq WITH
+      | [] -> ι(Top)(Fiber(Levels[N-2].E, Top, start))
+      | f :: fs -> 
+          LET level = Levels[Length(fiberSeq) - 1]
+          IN FollowFiber(π(ConfigureFiber(level.E)(f, ι(level.E)(f))), fs)
+
+    FUNC TraceBack(e : Top) : List(Fiber) =
+      MATCH Levels WITH
+      | [] -> []
+      | l :: ls -> 
+          LET f = Fiber(l.Below.E, l.E, π(e))
+          IN f :: TraceBack(π(ConfigureFiber(l.E)(f, e)))  
+
+    FUNC Parse(input : String) : Top =
+      LET fibers : List(Fiber) = []
+      IN FOREACH (chunk, rest) IN Chunk(input) DO
+           LET embedding = Encode(chunk)
+           LET fiber = FIND (f : Fiber) 
+                         FROM (b : Base) IN Neighbor(embedding, δ)
+                         WHERE ∃ (pc : PartialConfig(f)). 
+                                 π(ConfigureFiber(Levels[Length(fibers)].E)(pc, ι(f))) = b  
+           IN fibers := fibers + [fiber]
+      IN FollowFiber(Encode(input), fibers)
+           
+    FUNC Generate(e : Top, length : Nat) : String =  
+      LET fibers = TraceBack(e)
+      IN FOREACH (i, fiberTail) IN Enum(fibers) DO
+           LET level = Levels[Length(fibers) - 1 - i]
+           LET pc = FIND (pc : PartialConfig(level.E))
+                       WHERE π(ConfigureFiber(level.E)(pc, ι(level.Base)(π(e)))) 
+                               ∈ PossibilityCone(level.E)(e)
+           IN e := ConfigureFiber(level.E)(pc, e)
+      IN Decode(π(e))
+      
+    -- Cognitive Operation Skeletons  
+
+    FUNC Analogy(t1 : StructuralTensor, t2 : StructuralTensor) : StructuralTensor =
+      -- Find shared abstract structure between t1 and t2
+      -- Construct new StructuralTensor that captures the shared structure
+      -- ... 
+
+    FUNC Generalization(ts : List(StructuralTensor)) : StructuralTensor =
+      -- Find common structural patterns across all ts 
+      -- Construct a new StructuralTensor that captures these patterns
+      -- ...
+      
+    FUNC Categorization(e : Embedding) : StructuralTensor = 
+      -- Navigate up the tower from e until a sufficiently abstract StructuralTensor is found
+      -- ...
+
+    FUNC Instantiation(t : StructuralTensor) : Embedding =
+      -- Navigate down the tower from t, making choices in PossibilityCones, until Base is reached
+      -- ...
+      
+    FUNC SemanticBlend(c1 : ContentTensor, c2 : ContentTensor) : ContentTensor = 
+      -- Construct a new ContentTensor that blends the semantic content of c1 and c2
+      -- ...
+  }
+}

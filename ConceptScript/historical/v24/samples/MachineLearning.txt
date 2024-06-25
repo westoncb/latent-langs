@@ -1,0 +1,114 @@
+CONCEPT MachineLearning {
+  LANGUAGE {
+    TYPE Dataset = List((Features, Label))
+    TYPE Features = Vector[Nat]
+    TYPE Label = Bool
+    
+    TYPE Model = Features ⊸ Label
+    TYPE LossFunction = (Label, Label) -> Real
+    
+    NOTATION "⟨" "⟩" = (,)
+    NOTATION "x" "," "..." "," "y" = Cons(x, Cons(..., Cons(y, Nil)))
+    
+    CLASS Classifier(M) {
+      Train : Dataset ⊸ M
+      Predict : M ⊸ Features ⊸ Label
+    }
+
+    FUNC Accuracy(model : Model, dataset : Dataset) -> Real
+    FUNC Precision(model : Model, dataset : Dataset, label : Label) -> Real
+    FUNC Recall(model : Model, dataset : Dataset, label : Label) -> Real
+    FUNC F1Score(precision : Real, recall : Real) -> Real
+
+    REWRITE Accuracy(model, []) = 1.0
+    REWRITE Accuracy(model, ⟨x, y⟩, ..., ⟨x', y'⟩) = 
+      (IF model(x) == y THEN 1.0 ELSE 0.0 + Accuracy(model, ⟨x', y'⟩, ...)) / 
+      (1.0 + Length(⟨x', y'⟩, ...))
+      
+    REWRITE F1Score(precision, recall) = 2 * ((precision * recall) / (precision + recall))
+  }
+  
+  STRUCTURE {
+    DEF SplitDataset(dataset : Dataset, ratio : Real) : (Dataset, Dataset) {
+      LET splitIndex = Floor(Length(dataset) * ratio)
+      ⟨Take(splitIndex, dataset), Drop(splitIndex, dataset)⟩
+    }
+    
+    DEF CrossValidate(M : Classifier, dataset : Dataset, k : Nat) : Real {
+      LET folds = Partition(dataset, k)
+      MEAN(MAP(i => {
+        LET ⟨train, test⟩ = ⟨CONCAT(TAKE(i, folds), DROP(i+1, folds)), folds[i]⟩
+        LET model = M.Train(train)
+        Accuracy(M.Predict(model), test)
+      }, RANGE(0, k)))
+    }
+  }
+  
+  PROOFS {
+    TACTIC ExpandScore(score) = REWRITE score = MATCH score WITH
+      | Accuracy(model, dataset) => 
+        (SUM(MAP((x, y) => IF model(x) == y THEN 1.0 ELSE 0.0, dataset)) / Length(dataset))
+      | Precision(model, dataset, label) =>
+        LET tp = LENGTH(FILTER((x, y) => model(x) == label AND y == label, dataset)),
+            fp = LENGTH(FILTER((x, y) => model(x) == label AND y != label, dataset))
+        IN tp / (tp + fp)
+      | Recall(model, dataset, label) =>
+        LET tp = LENGTH(FILTER((x, y) => model(x) == label AND y == label, dataset)),
+            fn = LENGTH(FILTER((x, y) => model(x) != label AND y == label, dataset)) 
+        IN tp / (tp + fn)
+        
+    TACTIC ExpandDataset(dataset) = MATCH dataset WITH
+      | [] => REWRITE dataset = []
+      | ⟨x, y⟩, ... => REWRITE dataset = ⟨x, y⟩, ...
+      
+    THEOREM F1ScoreIsHarmonicMean {
+      STATEMENT: ∀ (precision : Real) (recall : Real).
+        F1Score(precision, recall) = HarmonicMean(precision, recall)
+      
+      PROOF:
+        LET precision : Real, recall : Real
+        REWRITE F1Score(precision, recall) = 2 * ((precision * recall) / (precision + recall)) BY DEFINITION
+        REWRITE 2 * ((precision * recall) / (precision + recall))
+          = (2 * precision * recall) / (precision + recall)
+          = ((precision * recall) / ((precision + recall) / 2))
+          = HarmonicMean(precision, recall) BY DEFINITION
+    }
+    
+    THEOREM CrossValidationUnbiased(M : Classifier) {
+      STATEMENT: ∀ (dataset : Dataset) (k : Nat).
+        𝔼[CrossValidate(M, RandomPermutation(dataset), k)] = 
+        𝔼[Accuracy(M.Predict(M.Train(dataset)), dataset)]
+        
+      PROOF:
+        LET dataset : Dataset, k : Nat
+        LET folds = Partition(RandomPermutation(dataset), k)
+        
+        HAVE 𝔼[CrossValidate(M, RandomPermutation(dataset), k)]
+          = 𝔼[MEAN(MAP(i => {
+              LET ⟨train, test⟩ = ⟨CONCAT(TAKE(i, folds), DROP(i+1, folds)), folds[i]⟩
+              LET model = M.Train(train)
+              Accuracy(M.Predict(model), test)
+            }, RANGE(0, k)))] BY DEFINITION
+          
+          = MEAN(MAP(i => {
+              LET ⟨train, test⟩ = ⟨CONCAT(TAKE(i, folds), DROP(i+1, folds)), folds[i]⟩
+              𝔼[Accuracy(M.Predict(M.Train(train)), test)]
+            }, RANGE(0, k))) BY LINEARITY
+            
+          = MEAN(MAP(_ => {
+              LET ⟨train, test⟩ = SplitDataset(dataset, 1/k)
+              𝔼[Accuracy(M.Predict(M.Train(train)), test)]
+            }, RANGE(0, k))) BY {
+              RandomPermutation(dataset) is uniformly random
+              Partition(RandomPermutation(dataset), k) is k random folds
+            }
+            
+          = 𝔼[Accuracy(M.Predict(M.Train(dataset)), dataset)] BY {
+              ∀ (train : Dataset) (test : Dataset).
+                train + test = dataset ->
+                  𝔼[Accuracy(M.Predict(M.Train(train)), test)] = 
+                  𝔼[Accuracy(M.Predict(M.Train(dataset)), dataset)]
+            }
+    }
+  }
+}

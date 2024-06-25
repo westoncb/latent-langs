@@ -1,0 +1,133 @@
+CONCEPT TopologicalLanguageModel {
+  NOTATION {
+    L = language model
+    M_i = FeatureMemoryComplex of L at layer i
+    F_i = set of interpretable features in M_i
+    B_f = neighborhood of feature f in M_i
+    T_i = simplicial complex triangulation of M_i
+    P_i = PersistenceDiagram of T_i
+    φ_i = TopologicalInformationContent(M_i)
+    x ⊙ y = SemanticComposition(x, y)
+  }
+
+  LANGUAGE {
+    TYPE Prompt = String
+    TYPE Continuation = String
+    TYPE SemanticVector = [Real]
+    TYPE FeatureVector = Pattern
+    TYPE Neighborhood = (FeatureVector, Real)
+
+    FUNC LocalInterpretation(x: Prompt, i: Int, k: Int): Set[FeatureVector] =
+      {f ∈ F_i : ‖encode(x) - ρ_f‖ ≤ k * radius(B_f)}
+
+    FUNC GlobalInterpretation(x: Prompt): Seq[Set[FeatureVector]] =
+      [LocalInterpretation(x, i, 2) for i in 0..|L.layers|]
+
+    FUNC SemanticComposition(x: FeatureVector, y: FeatureVector): FeatureVector =
+      encode(decode(x) ⊙ decode(y))
+
+    FUNC SteerPrompt(x: Prompt, f: FeatureVector, α: Real): Prompt =
+      decode(steer(encode(x), f, α))
+
+    FUNC PersistentHomologyProfile(i: Int): PersistenceDiagram = 
+      VietorisRipsPersistence(T_i)
+  }
+
+  STRUCTURES {
+    STRUCTURE TopologicalMemory EXTENDS FeatureMemory {
+      FIELD Complex : Seq[SimplicialComplex] = [Triangulation(M_i) for i in 0..|L.layers|]
+      FIELD PersistenceProfiles : Seq[PersistenceDiagram] = [PersistentHomologyProfile(i) for i in 0..|L.layers|]
+      FIELD TopologicalInfo : Seq[Real] = [TopologicalInformationContent(M_i) for i in 0..|L.layers|]
+    }
+  }
+
+  THEOREMS {
+    THEOREM SemanticConsistency :
+      ∀ x : Prompt, y_1, y_2 : Continuation . 
+        GlobalInterpretation(x) ≈ GlobalInterpretation(x + y_1) ≈ GlobalInterpretation(x + y_2)
+        ⟹ SemanticRelatedness(y_1, y_2) ≫ 0
+    {
+      ARGUE:
+        - If x has same global interpretation with different continuations y_1, y_2
+        - Then neighborhoods of x, x+y_1, x+y_2 in M_i overlap substantially ∀ i
+        - So y_1, y_2 map to nearby points in semantic space defined by M_i
+        - Thus y_1, y_2 are semantically related
+    }
+
+    THEOREM CompositionConsistency :
+      ∀ x, y : FeatureVector, i : Int .
+        LocalInterpretation(decode(x ⊙ y), i, 1) ⊇ 
+          LocalInterpretation(decode(x), i, 1) ∪ LocalInterpretation(decode(y), i, 1)
+    {
+      ARGUE:  
+        - Composition x ⊙ y amplifies shared features of x and y
+        - While preserving their distinctive features
+        - So neighborhoods of x ⊙ y contain neighborhoods of both x and y
+    }
+
+    THEOREM TopologicalInfoBottleneck :
+      ∃ i* : Int . ∀ i : Int . 
+        i ≠ i* ⟹ |TopologicalInfo[i] - TopologicalInfo[i+1]| ≪ |TopologicalInfo[i*] - TopologicalInfo[i*+1]|
+    {
+      ARGUE:
+        - Topological info compresses hierarchically over layers
+        - Most compression at a critical layer i* 
+        - Persistent homology of M_i* most informative about input-output mapping
+        - Analogous to information bottleneck in DNN
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE SemanticArithmetic {
+      LET king = encode("king"), queen = encode("queen"), man = encode("man"), woman = encode("woman")
+      LET king_to_queen = SteerPrompt("The king ruled the land.", queen - king, 1.0)
+      LET man_to_woman = SteerPrompt("He worked as a firefighter.", woman - man, 1.0)
+
+      ASSERT king_to_queen ≈ "The queen ruled the land."
+      ASSERT man_to_woman ≈ "She worked as a firefighter."
+    }
+
+    EXAMPLE MetaphoricalMapping {
+      LET space = encode("space"), ocean = encode("ocean"), star = encode("star"), island = encode("island")
+      LET space_to_ocean = SteerPrompt("Getting lost in space", ocean - space, 1.0)
+      LET star_to_island = SteerPrompt("A lone star in the sky", island - star, 1.0)
+
+      ASSERT space_to_ocean ≈ "Getting lost in the ocean"  
+      ASSERT star_to_island ≈ "A lone island in the sea"
+    }
+
+    EXAMPLE TopologicalCompressionProfile {
+      LET L = GPT-3 WITH D = WebText
+      LET M_i = FeatureMemoryComplex(L.Activations(i)) for i in [0..|L.layers|]
+
+      PLOT L.TopologicalInfo vs [0..|L.layers|]
+
+      OBSERVE:
+        - Topological info decreases rapidly in early layers
+        - Reaches a minimum at a critical layer i*
+        - Slowly increases in later layers
+        - Minimum i* is the topological bottleneck  
+    }
+  }
+}
+
+The TopologicalLanguageModel Concept leverages the topological structure of the model's feature memory to enable semantically consistent prompt steering, feature composition, and analogical reasoning, while characterizing the flow of topological information through the model to identify a critical bottleneck layer. This provides a powerful framework for analyzing and controlling language model behavior based on the topology of its learned representations.
+
+
+-------
+
+The key novel ideas from the provided Concepts are:
+
+1. Representing a model's learned knowledge as a feature memory complex - a topological space formed by the neighborhoods of interpretable feature vectors. This allows analyzing the shape and structure of the model's representations.
+
+2. Steering representations and model outputs by moving activation vectors towards or away from feature neighborhoods, enabling fine-grained semantic control.
+
+3. Composing higher-order features through algebraic operations on their neighborhoods, and steering with respect to these composite features to control higher-level semantic attributes.
+
+4. Analyzing the topological properties of feature neighborhoods, such as their persistent homology, to characterize the type and scale of information encoded by the model. 
+
+5. Relating topological properties of the feature memory complex, such as its topological information content and topological correlation across layers, to generalization performance and robustness.
+
+6. Modeling the feature memory as a compressed encoding of the training data manifold, and relating its compression properties to the model's capacity, utilization, generalization, and compositionality.
+
+Building on these ideas, here is a new Concept for a topologically grounded language model:

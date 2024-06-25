@@ -1,0 +1,115 @@
+CONCEPT KarmicCycle {
+  LANGUAGE {
+    TYPE Soul
+    TYPE Karma
+    TYPE KarmicEnergy = Positive(Karma) | Negative(Karma)
+    TYPE KarmicBalance = (Positive(Karma), Negative(Karma))
+    TYPE Action
+    TYPE Lifetime = List(Action)
+    
+    FUNC GenerateKarma : Action ⊸ KarmicEnergy
+    FUNC ApplyKarma : Soul ⊸ KarmicEnergy ⊸ Soul
+    FUNC ReincarnateWith : Soul ⊸ KarmicBalance ⊸ (Soul, KarmicBalance)
+    
+    PRED Balanced : KarmicBalance -> Type
+    
+    CLASS Monoid(M) {
+      mempty : M
+      mappend : M -> M -> M
+    }
+    
+    INSTANCE Monoid(Karma) {
+      mempty = Zero
+      mappend(k1, k2) = k1 + k2
+    }
+    
+    REWRITE Simpl(mappend(mempty, k)) = k
+    REWRITE Simpl(mappend(k, mempty)) = k
+    REWRITE Assoc(mappend(mappend(k1, k2), k3)) = mappend(k1, mappend(k2, k3))
+    
+    NOTATION "+" = mappend
+  }
+  
+  STRUCTURE {
+    DEF Balanced((p, n)) = p = n
+    
+    DEF LiveLife(soul, actions) = Fold(ApplyKarma(soul), Map(GenerateKarma, actions))
+    
+    DEF Reincarnate(soul, balance) = 
+      LET (soul', balance') = ReincarnateWith(soul, balance)
+      IN IF Balanced(balance') THEN (soul', balance') ELSE Reincarnate(soul', balance')
+  }
+  
+  PROOFS {
+    THEOREM KarmaBalance {
+      STATEMENT: ∀ (soul : Soul) (actions : Lifetime) (balance : KarmicBalance).
+        Balanced(balance) ->
+        LET (soul', balance') = Reincarnate(LiveLife(soul, actions), balance)
+        IN Balanced(balance')
+        
+      PROOF:
+        LET soul : Soul, actions : Lifetime, balance : KarmicBalance
+        ASSUME Balanced(balance)
+        
+        HAVE LiveLife(soul, actions) : Soul BY {
+          REWRITE LiveLife(soul, actions)
+            = Fold(ApplyKarma(soul), Map(GenerateKarma, actions)) BY Definition(LiveLife)
+            : Soul BY {
+              Map(GenerateKarma, actions) : List(KarmicEnergy) BY {
+                SHOW ∀ (action : Action). GenerateKarma(action) : KarmicEnergy BY {
+                  LET action : Action
+                  GenerateKarma(action) : KarmicEnergy BY Definition(GenerateKarma)
+                }
+              },
+              Fold(ApplyKarma(soul), _) : Soul BY {
+                SHOW ∀ (energy : KarmicEnergy). ApplyKarma(soul, energy) : Soul BY {
+                  LET energy : KarmicEnergy
+                  ApplyKarma(soul, energy) : Soul BY Definition(ApplyKarma)
+                }
+              }
+            }
+        }
+        
+        LET soul' = LiveLife(soul, actions)
+        
+        REWRITE Reincarnate(soul', balance)
+          = LET (soul'', balance') = ReincarnateWith(soul', balance)
+            IN IF Balanced(balance') THEN (soul'', balance') ELSE Reincarnate(soul'', balance')
+          BY Definition(Reincarnate)
+        
+        LET (soul'', balance') = ReincarnateWith(soul', balance)
+        
+        SHOW Balanced(balance') BY {
+          balance' 
+            = balance' + mempty BY Simpl
+            = balance' + (mempty + mempty) BY Simpl
+            = (balance' + mempty) + mempty BY Assoc
+            = balance' + mempty BY Simpl
+            = balance' BY Simpl,
+          
+          LET (p, n) = balance'
+          
+          p = p + mempty BY Simpl
+            = p + (n + Zero) BY ASSUMPTION Balanced(balance)
+            = (p + n) + Zero BY Assoc
+            = balance + Zero BY Definition(balance)
+            = balance BY Monoid(Karma),
+            
+          n = n + mempty BY Simpl
+            = n + (p + Zero) BY ASSUMPTION Balanced(balance)
+            = (n + p) + Zero BY Assoc
+            = balance + Zero BY Definition(balance)
+            = balance BY Monoid(Karma),
+            
+          p = n BY {
+            p = balance BY ABOVE,
+            n = balance BY ABOVE
+          },
+          
+          Balanced(balance') BY Definition(Balanced)
+        }
+        
+        QED
+    }
+  }
+}

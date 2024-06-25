@@ -1,0 +1,101 @@
+CONCEPT Yoneda {
+  LANGUAGE {
+    TYPE Object
+    TYPE Morphism
+    TYPE Category
+    TYPE Functor
+    TYPE NaturalTransformation
+
+    FUNC Hom : Object -> Object -> Set[Morphism]
+    FUNC Compose : Morphism -> Morphism -> Morphism
+    FUNC Identity : Object -> Morphism
+    FUNC Op : Category -> Category
+    FUNC Yoneda : Category -> Functor[Category, Set]
+    FUNC Eval : Functor -> Object -> Set  
+
+    AXIOM CategoryAxioms {
+      ∀ (C : Category) (X Y Z : C.Object) (f : C.Hom(X, Y)) (g : C.Hom(Y, Z)).
+        Associative(C.Compose):
+          C.Compose(C.Compose(f, g), h) = C.Compose(f, C.Compose(g, h))
+        Identity(C.Identity): 
+          C.Compose(C.Identity(X), f) = f ∧ C.Compose(f, C.Identity(Y)) = f
+    }
+
+    AXIOM FunctorAxioms {
+      ∀ (C D : Category) (F : Functor(C, D)) (X Y : C.Object) (f : C.Hom(X, Y)).
+        F.Morphism(C.Identity(X)) = D.Identity(F.Object(X))
+        F.Morphism(C.Compose(f, g)) = D.Compose(F.Morphism(f), F.Morphism(g))
+    }
+
+    AXIOM NaturalTransformationAxiom {
+      ∀ (C D : Category) (F G : Functor(C, D)) (η : NaturalTransformation(F, G)) 
+        (X Y : C.Object) (f : C.Hom(X, Y)).
+        D.Compose(η(X), G.Morphism(f)) = D.Compose(F.Morphism(f), η(Y))
+    }
+  }
+
+  STRUCTURE YonedaEmbedding(C : Category) {
+    DEF Yoneda : Functor(C, Functor(Op(C), Set)) = {
+      Object(X : C.Object) = Hom(-, X) : Op(C) -> Set
+      Morphism(f : C.Hom(X, Y))(Z : C.Object)(g : C.Hom(Z, X)) = Compose(g, f)
+    }
+  }
+
+  STRUCTURE YonedaLemma(C : Category) {
+    DEF Isomorphism(F : Functor(C, Set), X : C.Object) : 
+      Hom(Yoneda(X), F) ≅ F(X) = {
+        To(η : NaturalTransformation(Yoneda(X), F)) = η(X)(Identity(X)),
+        From(x : F(X))(Y : C.Object)(f : Hom(Y, X)) = F(f)(x)
+      }
+  }
+
+  PROOFS {
+    THEOREM YonedaEmbeddingIsFaithful {
+      STATEMENT:
+        ∀ (C : Category) (X Y : C.Object) (f g : C.Hom(X, Y)).
+          Yoneda(f) = Yoneda(g) ⇒ f = g
+
+      PROOF:
+        LET C : Category, X Y : C.Object, f g : C.Hom(X, Y)
+        ASSUME (1) Yoneda(f) = Yoneda(g)
+        SHOW f = g BY {
+          REWRITE f 
+            = Compose(Identity(X), f)   BY Identity
+            = Yoneda(f)(X)(Identity(X)) BY DEFINITION Yoneda.Morphism
+            = Yoneda(g)(X)(Identity(X)) BY (1)  
+            = Compose(Identity(X), g)   BY DEFINITION Yoneda.Morphism
+            = g                         BY Identity
+        }
+    }
+
+    THEOREM YonedaLemmaIsomorphism {
+      STATEMENT:  
+        ∀ (C : Category) (F : Functor(C, Set)) (X : C.Object).
+          Isomorphism(F, X).To ∘ Isomorphism(F, X).From = Identity(F(X)) ∧
+          Isomorphism(F, X).From ∘ Isomorphism(F, X).To = Identity(Hom(Yoneda(X), F))
+
+      PROOF:
+        LET C : Category, F : Functor(C, Set), X : C.Object,
+            η : NaturalTransformation(Yoneda(X), F), x : F(X)
+        
+        SHOW Isomorphism(F, X).To(Isomorphism(F, X).From(x)) = x BY {
+          Isomorphism(F, X).To(Isomorphism(F, X).From(x))
+            = Isomorphism(F, X).From(x)(X)(Identity(X)) BY DEFINITION Isomorphism.To
+            = F(Identity(X))(x)                          BY DEFINITION Isomorphism.From  
+            = Identity(F(X))(x)                          BY FunctorAxioms
+            = x                                          BY DEFINITION Identity
+        }
+
+        SHOW Isomorphism(F, X).From(Isomorphism(F, X).To(η)) = η BY {
+          LET Y : C.Object, f : C.Hom(Y, X)
+          Isomorphism(F, X).From(Isomorphism(F, X).To(η))(Y)(f) 
+            = F(f)(Isomorphism(F, X).To(η))              BY DEFINITION Isomorphism.From
+            = F(f)(η(X)(Identity(X)))                    BY DEFINITION Isomorphism.To
+            = F(Compose(f, Identity(X)))(η(X))           BY FunctorAxioms  
+            = F(f)(η(X))                                 BY Identity
+            = η(Y)(Compose(f, Identity(X)))              BY NaturalTransformationAxiom
+            = η(Y)(f)                                    BY Identity
+        }
+    }
+  }
+}

@@ -1,0 +1,159 @@
+ConceptScript 4.0 Specification:
+
+Concepts:
+  - Concepts are the primary unit which the language deals with
+  - The language provides mechanisms for both Defining and Using Concepts
+  - Concept names are uppercase
+
+  ComponentListSpec
+    - A comma separated list of the key components comprising a Concept, with optional CardinalityContraints; this is like a parameter list when defining a function in typical languages
+
+    Example:
+      - ComponentListSpec for a Vehicle concept: *:Wheels, EngineType, +:Modalities, Name
+
+  ComponentList
+    - A list of values to be bound to as Concept components, within the constraints given by the ComponentListSpect; this is like a parameter list when calling a function
+    - Allows specifying "partial configurations" of Concepts via the wildcard operator: _
+    
+    Syntax: 
+      - param_name1:param_value1, ..., param_nameN:param_valueN
+    Example:
+      - Wheels:4, EngineType:_, Modalities:[Land, Air], Name:Car
+
+
+  ConceptUsage:
+    - Instantiations of Concepts to be used in Expressions
+    - It's up to the program author whether to provide a definition or not; depends on what level of detail they'd like to model at
+    - Syntax: ConceptName(ComponentList), or just ConceptName if it's meant to be atomic
+    - Example: AutomaticPriceDiscovery, Person(Name:Bob, HairColor:Brown, Age:32)
+    - Note:
+
+DefinitionOperators:
+  := : Define something via "is a" relation
+  ^= : Define something via "comprised of" relation
+
+Sets
+  - A collection of Concepts with no implied ordering, expressed via: (a, b, c)
+
+Sequences
+  - Concepts intended to be taken as sequential may be expressed via: [a, b, c]
+
+Annotations:
+  - Arbitrarily named annotations of concepts
+  - Syntax: annotation_name:value
+  - Examples: Goal:SpaceTravel, Risk:NuclearMeltDown, Enablement:FTLTravel
+
+Expressions:
+  - These are either Relation expressions or Transform expressions
+    - Example Relation: Consciousness <~> SelfAwareness
+    - Example Transform: Hero |> Corruption(Wealth, Power)
+  
+ConceptComponentOperators:
+  - Used to add/remove Components to/from Concepts
+  - It should be understood to be adding/remove to the Concept's ComponentListSpec
+  
+  Syntax:
+    +: inject
+    -: remove
+  Examples:
+    Warlock := Wizard + (Attitude:Bad, Staff)
+    Penguin := Bird - Feathers
+    
+  ConceptDefinition:
+    - ConceptDefinitions have a Head, Body, and Annotations
+    - Head: includes the concept name and a ComponentListSpec, e.g. TimeTravel(ComponentListSpec)
+    - Body: a block of Expressions defining Relations and Transforms on sub-concepts
+    - Annotations: a block of Annotations for the Concept; these are somewhere between 'vibes' and metadata
+    - Syntax:
+      ConceptName ^= (ComponentListSpec) :: {
+        Expression1 ; Expression2 ; Expression3
+        Expression4 ; Expression5
+      }
+      <
+        Annotation1 ; Annotation2
+      >
+    - Notes:
+      - Expressions and Annotations may either be separate by semicolons or newlines; 
+      - The Annotation block is optional
+
+
+  ConceptExtension
+
+    Examples:
+      // 1. Base Concept definition uses the "comprised of" operator
+      Vehicle ^= (+:Wheels, ?Engine, Modality) :: {
+        BODY
+      } 
+      <
+        ANNOTATIONS
+      >
+
+      // 2. ConceptExtension uses the "is a" operator in conjunction with the 'inject' operator
+      Car := Vehicle(Wheels:4, Engine(Type:_), Modality:Ground) + (
+        RegistrationState, LicensePlate
+      ) :: {
+        BODY
+      }
+      <
+        ANNOTATIONS
+      >
+
+  CardinalityConstraints:
+    !: Exactly one
+    +: At least one
+    *: Zero or more
+    ?: Optional
+    {min,max}: Between min and max (inclusive); you can use -INF and INF
+    number: Exact number;
+
+    - Note: If no CardinalityConstraint is supplied, it is implied that this is either irrelevant or implied in the current context
+    
+    Examples:
+      Manager -> +:Subordinate
+      Subordinate -> !Manager
+      Socialite := Person + FriendGroup({50, INF}:People)
+
+Relations:
+  These express assertions about relationships between concepts; they make up the bulk of the expressive power of ConceptScript
+
+  <- : Requires
+  -> : Implication or mapping
+  <-> : Bidirectional implication or equivalence
+  ~> : Uncertain implication or mapping
+  <~> : Uncertain bidirectional implication or equivalence
+  ~ : Analogy or similarity
+  ^ : Generalization or abstraction
+  v : Specialization or refinement
+  | : Either ('any' for binary relations)
+  & : All ('both' for binary relations)
+  ! : Not
+  xor : Only one
+  name : Arbitrary named relation (lowercase)
+
+  Usage:
+    - Use parens for grouping: e.g. (a -> b - (x ~ y))
+      - Note: technically this is defining a set, but the semantics work for order of operations/operating on groups too
+    - Examples: 
+        Cow V Mammal
+        Mammal ^ Cow
+        Consciousness <~> SelfAwareness
+        Wisdom ^= (Love & Knowledge & (Experience <- (+:GoodExperience & +:BadExperience)))
+        Car := (Vehicle(Wheels:4, Engine(Type:_), Ground) += LicensePlaceNumber)
+        ElectricCar := Car(Engine(Type:Electric), LicensePlateNumber:_)
+
+PartialConfigurations:
+  - Partial configurations are a powerful tool for specifying varying degrees of configurations of abstract Concepts; the more configuration options left blank via the wildcard operator: _ the more abstract it is; if all params are supplied then the Concept is fully concrete.
+
+  Example:
+    Let's see a progressive specialization of Vehicle by making these Concepts increasingly concrete
+      - Car := (Vehicle(Wheels:4, Engine(Type:_), Modality:Ground)+{LicensePlaceNumber}
+
+Transforms:
+  - As in other places Concepts used here may be arbitrary camelcase names, or they make take a param list, and they may or may not have definitions within the program
+  - Syntax: Concept |> TransformConcept
+  - Example: Hero |> Corruption(Wealth, Power)
+
+Pipelines:
+  - Represents a sequence of Transforms on concepts
+  - Syntax: [Concept |> TransformConcept1 |> ... |> TransformConceptN]
+  - Example: [SurfaceNormal |> Scale(1, 2, 1) |> Rotate(PI, 0, 0)]

@@ -1,0 +1,116 @@
+CONCEPT TopologicalDataAnalysis {
+  DECLARE {
+    Point : TYPE
+    Simplex : TYPE = [Point]
+    SimplicialComplex : TYPE = [Simplex]
+    
+    Filtration : TYPE = [SimplicialComplex]
+    PersistenceDiagram : TYPE = [Birth × Death]
+    
+    Boundary : TYPE = Simplex -> SimplicialComplex
+    Chain : TYPE = Simplex -> ℝ
+    ChainComplex : TYPE = [Chain]
+    
+    PersistentHomology : TYPE = Filtration -> [ChainComplex]
+    
+    Bottleneck : TYPE = PersistenceDiagram × PersistenceDiagram -> ℝ
+    Wasserstein : TYPE = PersistenceDiagram × PersistenceDiagram -> ℝ
+    
+    Mapper : TYPE = Lens × Cover -> SimplicialComplex
+    Lens : TYPE = Point -> ℝ
+    Cover : TYPE = ℝ -> ℘(ℝ)
+    
+    Clustering : TYPE = SimplicialComplex -> [Cluster]
+    Cluster : TYPE = [Point]
+  }
+  
+  DEFINE {
+    ; k-simplex boundary
+    ∂(s) ≜ [s[0:i] + s[i+1:] | i = 0 to |s|]
+    
+    ; Boundary matrix
+    ∂(C, k) ≜ [∂(s) | s ∈ C_k]
+    
+    ; k-chain boundary  
+    ∂(c, k) ≜ ∑{s ∈ dom(c)} c(s) * ∂(s)
+    
+    ; Chain complex boundary
+    ∂(C) ≜ [∂(_, k) | k = 0 to dim(C)]
+    
+    ; Persistent homology
+    PH(F) ≜ [Homology(C) | C ∈ F]
+    
+    ; Homology of a chain complex
+    Homology(C) ≜ [Ker(∂(C, k)) / Im(∂(C, k+1)) | k = 0 to dim(C)]
+    
+    ; Bottleneck distance
+    Bottleneck(D1, D2) ≜ inf{ε | ∃M : Matching(D1, D2). ∀(p, q) ∈ M. ||p - q||_∞ ≤ ε}
+    
+    ; Wasserstein distance
+    Wasserstein(D1, D2) ≜ inf{M : Matching(D1, D2)} (∑{(p, q) ∈ M} ||p - q||_∞^p)^(1/p)
+    
+    ; Mapper algorithm
+    Mapper(f, U) ≜ Nerve([f⁻¹(u) | u ∈ U])
+    
+    ; Nerve of a cover
+    Nerve(U) ≜ [s ⊆ U | ⋂{u ∈ s} ≠ ∅]
+    
+    ; Single linkage clustering
+    SingleLinkage(C, ε) ≜ ConnectedComponents(VietorisRipsComplex(C, ε))
+  }
+  
+  AXIOM {
+    ; Boundary of a boundary is zero
+    ∀C : ChainComplex, k : ℕ. ∂(∂(C, k), k-1) = 0
+    
+    ; Homotopy equivalence induces isomorphic homology
+    ∀C1, C2 : ChainComplex. C1 ≃ C2 ⇒ Homology(C1) ≅ Homology(C2)
+    
+    ; Persistent homology is a functor
+    ∀F1, F2 : Filtration, f : F1 -> F2. PH(f) : PH(F1) -> PH(F2)
+    
+    ; Bottleneck stability theorem
+    ∀F1, F2 : Filtration. Bottleneck(PH(F1), PH(F2)) ≤ d_GH(F1, F2)
+    
+    ; Mapper is a generalization of the Reeb graph
+    ∀f : Lens, U : Cover. Mapper(f, U) ≃ ReebGraph(f) if U is a good cover
+  }
+  
+  THEOREM PersistenceStabilityTheorem {
+    PROOF {
+      assume F1, F2 : Filtration
+      assume d_GH(F1, F2) ≤ ε
+      
+      let D1 = PH(F1)
+      let D2 = PH(F2)
+      
+      obtain M : Matching(D1, D2) by {
+        let C1 = [Complex(F1, t) | t ∈ [0, ∞]]
+        let C2 = [Complex(F2, t) | t ∈ [0, ∞]]
+        
+        let f : C1 -> C2 = InducedMap(_, _) 
+        let g : C2 -> C1 = InducedMap(_, _)
+        
+        have ∀t : ℝ. d_GH(Complex(F1, t), Complex(F2, t)) ≤ ε by assumption
+        have ∀t : ℝ. d_I(f_t, g_t) ≤ 2ε by stability of induced maps
+        
+        let M = [(Birth(c1), Birth(f(c1))) | c1 ∈ D1] ∪ 
+                [(Birth(g(c2)), Birth(c2)) | c2 ∈ D2]
+      }
+      
+      have ∀(p, q) ∈ M. |Birth(p) - Birth(q)| ≤ 2ε ∧ |Death(p) - Death(q)| ≤ 2ε by {
+        assume (p, q) ∈ M
+        
+        case (p, q) ∈ [(Birth(c1), Birth(f(c1))) | c1 ∈ D1]:
+          have |Birth(p) - Birth(q)| = |Birth(c1) - Birth(f(c1))| ≤ 2ε by stability of induced maps
+          have |Death(p) - Death(q)| = |Death(c1) - Death(f(c1))| ≤ 2ε by stability of induced maps
+          
+        case (p, q) ∈ [(Birth(g(c2)), Birth(c2)) | c2 ∈ D2]:  
+          have |Birth(p) - Birth(q)| = |Birth(g(c2)) - Birth(c2)| ≤ 2ε by stability of induced maps
+          have |Death(p) - Death(q)| = |Death(g(c2)) - Death(c2)| ≤ 2ε by stability of induced maps
+      }
+      
+      show Bottleneck(D1, D2) ≤ 2ε by definition of Bottleneck distance with M
+    }
+  }
+}

@@ -1,0 +1,191 @@
+CONCEPT DynamicKnowledgeBase {
+  LANGUAGE {
+    TYPE Fact
+    TYPE Rule = (List[Fact], Fact)
+    TYPE Context = Set[Fact] 
+    TYPE KnowledgeBase = (Set[Fact], Set[Rule])
+    
+    FUNC Antecedent : Rule -> List[Fact]
+    FUNC Consequent : Rule -> Fact
+    FUNC Infer : (KnowledgeBase, Context) -> Context
+    PRED Entails : (KnowledgeBase, Fact) -> 𝔹
+    PRED Consistent : KnowledgeBase -> 𝔹
+    
+    AXIOM Inference {
+      ∀ (kb : KnowledgeBase) (ctx : Context) (r : Rule) .
+        (Antecedent(r) ⊆ ctx) => (Consequent(r) ∈ Infer(kb, ctx))
+    }
+    
+    AXIOM Entailment {
+      ∀ (kb : KnowledgeBase) (f : Fact) .
+        Entails(kb, f) <=> (f ∈ Infer(kb, kb.facts))  
+    }
+      
+    AXIOM Consistency {
+      ∀ (kb : KnowledgeBase) .
+        Consistent(kb) <=> (∄ (f : Fact) . Entails(kb, f) ∧ Entails(kb, ~f))
+    }
+  }
+    
+  NOTATION {
+    "f1, ..., fn |- g" = "Rule(Antecedent = [f1, ..., fn], Consequent = g)"
+    "f1, ..., fn |= g" = "Entails((facts = {f1, ..., fn}, rules = {}), g)"
+  }
+    
+  TRANSFORMERS {
+    TACTIC ForwardChain(kb : KnowledgeBase, ctx : Context) -> Context {
+      LET new_facts = {
+        Consequent(r) for r in kb.rules 
+        where Antecedent(r) ⊆ ctx  
+      }
+      RETURN ctx ∪ new_facts
+    }
+    
+    FUNC Infer(kb : KnowledgeBase, ctx : Context) -> Context {
+      REPEAT ForwardChain(kb, ctx) UNTIL FixedPoint
+    }
+  }
+
+  STRUCTURE Ontology {
+    DEF Concept
+    DEF Individual
+    DEF RelationSymbol
+    DEF AttributeSymbol
+    
+    FUNC RelationExtension : RelationSymbol -> Set[List[Individual]]
+    FUNC AttributeExtension : AttributeSymbol -> Set[(Individual, Value)]
+    
+    REQUIRE {
+      ∀ (R : RelationSymbol) (args : RelationExtension(R)) .
+        Length(args) = Arity(R),
+      ∀ (A : AttributeSymbol) ((i, v) : AttributeExtension(A)) . 
+        v ∈ Range(A)  
+    }
+    
+    FUNC ConceptDefinition(c : Concept) -> Formula {
+      MATCH c WITH
+      | Atomic(p) => p  
+      | Negation(c') => ~ConceptDefinition(c')
+      | Intersection(c1, c2) => ConceptDefinition(c1) ∧ ConceptDefinition(c2)
+      | Union(c1, c2) => ConceptDefinition(c1) ∨ ConceptDefinition(c2)
+      | Quantified(R, c, arg_idx) => 
+          ∃ (i : Individual) . 
+            (i, ...) ∈ RelationExtension(R) ∧ ConceptDefinition(c)[arg_idx := i]
+    }
+    
+    FUNC InterpretConcept(c : Concept) -> Set[Individual] {
+      { i : Individual | ConceptDefinition(c)[i] }  
+    }
+  }
+
+  STRUCTURE DynamicOntologyKB 
+  EXTENDS KnowledgeBase, Ontology {
+    DEF Fact = Formula
+    
+    FUNC Update(formulas : Set[Formula], language : Ontology) {
+      LET new_facts = {
+        f for f in formulas 
+        where IsGroundAtom(f) ∧ Signature(f) ⊆ language 
+      }
+      
+      LET new_rules = {  
+        premises |- conclusion 
+        for (premises, conclusion) in formulas
+        where ¬IsGroundAtom(conclusion) ∧ Signature(conclusion) ⊆ language
+      }
+      
+      RETURN (facts ∪ new_facts, rules ∪ new_rules)
+    }
+    
+    FUNC InterpretQuery(q : Formula) -> Set[List[Individual]] {
+      LET m = Match(q, facts ∪ {Consequent(r) for r in rules})  
+      RETURN { 
+        [Subst(m, v) for v in Vars(q)] 
+        for m in m
+      }
+    }
+  }
+
+  PROOFS {
+    THEOREM Soundness {
+      STATEMENT:
+        ∀ (dkb : DynamicOntologyKB) (ctx : Context) (f : Formula) .
+          (Entails(dkb, f) ∧ (ctx ⊨ dkb.facts)) => ctx ⊨ f
+            
+      PROOF:
+        LET dkb : DynamicOntologyKB, ctx : Context, f : Formula
+        ASSUME h1 : Entails(dkb, f), h2 : ctx ⊨ dkb.facts
+        
+        SHOW ctx ⊨ f BY INDUCTION ON Entails {  
+          CASE Fact:
+            f ∈ dkb.facts 
+            HENCE ctx ⊨ f BY h2
+
+          CASE Rule:
+            ∃ (r : Rule) . 
+              (Antecedent(r) ⊆ dkb.facts ∧ Consequent(r) = f)     
+            LET r = (ant, con) WHERE ant ⊆ dkb.facts, con = f
+            HAVE ctx ⊨ ant BY h2, Monotonicity
+            HENCE ctx ⊨ f BY RuleSemantics
+            
+          CASE Infer:
+            f ∈ Infer(dkb, dkb.facts)   
+            LET ctx' = Infer(dkb, dkb.facts)
+            HAVE ctx' ⊇ dkb.facts ∧ ctx' ⊨ dkb.facts BY INDUCTION Inference Base Case
+            HAVE ctx' ⊨ f BY INDUCTION Inference
+            HENCE ctx ⊨ f BY Monotonicity
+        }
+    }
+      
+    THEOREM Completeness {
+      STATEMENT:
+        ∀ (dkb : DynamicOntologyKB) (i : Individual) (c : Concept) .
+          i ∈ InterpretConcept(c) <=> Entails(dkb, ConceptDefinition(c)[i])
+      
+      PROOF: 
+        LET dkb : DynamicOntologyKB, i : Individual, c : Concept  
+          
+        SHOW i ∈ InterpretConcept(c) => Entails(dkb, ConceptDefinition(c)[i]) {
+          LET def = ConceptDefinition(c)
+          ASSUME i ∈ InterpretConcept(c)  
+          HENCE def[i] BY SemanticInterpretation
+          SHOW Entails(dkb, def[i]) BY INDUCTION ON def {  
+            CASE Atomic: 
+              def[i] ∈ dkb.facts
+              HENCE Entails(dkb, def[i])
+            CASE Negation:
+              ∀ (f : Fact) . (dkb.facts ∪ dkb.rules ⊢ f) => ¬ Entails(dkb, def[i])
+              HENCE ∀ (k : KnowledgeBase) . Consistent(k) => ¬ Entails(k, def[i])
+              HENCE Entails(dkb, ~def[i])
+            CASES Intersection, Union:
+              Entails(dkb, d1[i]) ∧ Entails(dkb, d2[i]) 
+              WHERE (d1, d2) = (ConceptDefinition(c1), ConceptDefinition(c2))
+              HENCE Entails(dkb, (d1 ∧ d2)[i]) / Entails(dkb, (d1 ∨ d2)[i])  
+            CASE Quantified:
+              ∃ (j : Individual) . ((i, ..., j) ∈ RelationExtension(R)) ∧ Entails(dkb, def[i, j])
+              HENCE Entails(dkb, ∃ (j : Individual) . (RelationExtension(R)[i, j] ∧ def[i, j]))
+          }  
+        }
+          
+        SHOW Entails(dkb, ConceptDefinition(c)[i]) => i ∈ InterpretConcept(c) {
+          ASSUME h : Entails(dkb, ConceptDefinition(c)[i])
+          LET ctx = Infer(dkb, dkb.facts)
+          HAVE ctx ⊨ dkb.facts ∧ ctx ⊨ ConceptDefinition(c)[i] BY Soundness, h
+          HENCE ConceptDefinition(c)[i] BY Satisfiability 
+          HENCE i ∈ InterpretConcept(c) BY SemanticInterpretation
+        }
+      }
+    }
+  }
+}
+
+This Concept formalizes the idea of a dynamic knowledge base that can reason over an evolving ontology. The key components are:
+
+A KnowledgeBase consisting of a set of Facts and Rules. The language includes axioms for inference, entailment, and consistency.
+An Ontology specifying the conceptual domain in terms of Concepts, Individuals, RelationSymbols and AttributeSymbols. The ConceptDefinition function translates a Concept into a logical formula, while InterpretConcept computes its extensional interpretation.
+A DynamicOntologyKB combining the knowledge base and ontology, with operations to Update with new formulas and InterpretQuery over the evolving knowledge.
+Forward chaining Inference is defined as a transformer tactic, allowing the knowledge base to derive new facts from rules until reaching a fixed point.
+Two key theorems are proven: Soundness, showing that the inference process preserves truth, and Completeness, demonstrating that concept membership aligns with logical entailment.
+
+The notation and style aim to match the InteractionTransformer example, with a clear separation of language, transformers, structures and proofs. The concept definitions leverage pattern matching and recursion to capture the compositional structure of ontological concepts.
+Overall, this Concept provides a formal framework for dynamic knowledge representation and reasoning, unifying ideas from logic, knowledge representation, theorem proving and ontologies.

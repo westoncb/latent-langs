@@ -1,0 +1,203 @@
+Song := (
+  Meta:(
+    Title:_,
+    Artist:_,
+    Genre:Music,
+    Duration:_,
+    Tempo:_,
+    KeySignature:_,
+    TimeSignature:_
+  ),
+  Structure:(
+    Sections:[_],
+    Progression:[_]
+  ),
+  Content:(
+    Code:_,
+    Lyrics:_
+  )
+) :: {
+  Code := (
+    Format:_, 
+    Data:_
+  )
+
+  [Meta.Genre.Composition.Form.Structure ⊢ Structure]
+  [Meta.Genre.Composition.Harmony ⊢ Structure.Progression]
+  [Meta.Genre.Composition.Rhythm.Tempo ⊢ Meta.Tempo]
+  [Meta.Genre.Composition.Rhythm.Meter ⊢ Meta.TimeSignature]
+}
+
+
+// There are two version of this song in here;
+// this is the more abstract representation
+JazzSong := Song(
+  Name:"Midnight Serenade",
+  Genre:Jazz,
+  Structure:(
+    Sections:[Intro, Head, Solos, Head, Outro],
+    Progression:[ii7, V7, Imaj7, vi7, ii7, V7, Imaj7, Imaj7]
+  ),
+  Elements:(
+    Instrumentation:[Piano, AcousticBass, Drums, TenorSax, Trumpet],
+    Lyrics:"
+      Instrumental
+    ",
+    KeySignature:CMajor,
+    TimeSignature:4/4,
+    Tempo:120
+  )
+) :: {
+  [JazzSong.Structure.Progression |> ii-V-I ⊢ Jazz.Composition.Harmony.Progressions]
+  [JazzSong.Structure.Sections |> HeadSolosHead ⊢ Jazz.Composition.Form.Structure]
+  [JazzSong.Elements.Instrumentation |> StandardCombo ⊢ Jazz.SoundElements.Timbre]
+  [JazzSong.Elements.KeySignature |> MajorOrMinor ⊢ Jazz.EmergentProperties.Tonality]
+  [JazzSong.Elements.TimeSignature |> CommonTime ⊢ Jazz.Composition.Rhythm.Meter]
+  [JazzSong.Elements.Tempo |> MediumSwing ⊢ Jazz.Composition.Rhythm.Tempo]
+}
+
+
+// And this is the more concrete version of the same song
+JazzSong := Song(
+  Meta:(
+    Title:"Midnight Serenade",
+    Artist:"Claude Trio",
+    Genre:Jazz,
+    Duration:"3:30",
+    Tempo:120,
+    KeySignature:CMajor,
+    TimeSignature:4/4
+  ),
+  Structure:(
+    Sections:[Intro, Head, Solos, Head, Outro],
+    Progression:[Dm7, G7, Cmaj7, Am7, Dm7, G7, Cmaj7, Cmaj7]
+  ),
+  Content:(
+    Code:(
+      Format:MIDI,
+      Data:"
+        0, 0, Header, 1, 2, 480
+        1, 0, Start_track
+        1, 0, Title_t, \"Midnight Serenade\"
+        1, 0, Time_signature, 4, 2, 24, 8
+        1, 0, Key_signature, 0, \"major\"
+        1, 0, Tempo, 500000
+        1, 0, End_track
+        2, 0, Start_track
+        2, 0, Instrument_name_t, \"Piano\"
+        2, 0, Program_c, 1, 0
+        2, 0, Note_on_c, 1, 62, 80
+        2, 480, Note_off_c, 1, 62, 0
+        2, 480, Note_on_c, 1, 65, 80
+        2, 960, Note_off_c, 1, 65, 0
+        2, 960, Note_on_c, 1, 69, 80
+        2, 1440, Note_off_c, 1, 69, 0
+        2, 1440, Note_on_c, 1, 72, 80
+        2, 1920, Note_off_c, 1, 72, 0
+        2, 1920, End_track
+        3, 0, Start_track
+        3, 0, Instrument_name_t, \"Bass\"
+        3, 0, Program_c, 1, 32
+        3, 0, Note_on_c, 1, 36, 80
+        3, 960, Note_off_c, 1, 36, 0
+        3, 960, Note_on_c, 1, 43, 80
+        3, 1920, Note_off_c, 1, 43, 0
+        3, 1920, End_track
+        4, 0, Start_track  
+        4, 0, Instrument_name_t, \"Drums\"
+        4, 0, Program_c, 1, 128
+        4, 0, Note_on_c, 1, 42, 80
+        4, 60, Note_on_c, 1, 44, 80
+        4, 120, Note_on_c, 1, 38, 80  
+        4, 360, Note_off_c, 1, 42, 0
+        4, 360, Note_on_c, 1, 42, 80
+        4, 420, Note_off_c, 1, 44, 0
+        4, 420, Note_on_c, 1, 44, 80
+        4, 480, Note_off_c, 1, 38, 0
+        4, 480, Note_on_c, 1, 38, 80
+        4, 720, Note_off_c, 1, 42, 0
+        4, 720, Note_off_c, 1, 44, 0
+        4, 720, Note_off_c, 1, 38, 0
+        4, 720, End_track
+      "  
+    ),
+    Lyrics:"
+      Instrumental
+    "
+  )
+)
+
+
+
+ThrashSong := Song(
+  Name:"Shredding the Apocalypse",
+  Genre:Thrash,
+  Structure:(
+    Sections:[Intro, Verse, Chorus, Verse, Chorus, Bridge, Solo, Chorus, Outro],
+    Progression:[i, VI, VII, i, iv, VII, i, VI, VII, i]
+  ),
+  Elements:(
+    Instrumentation:[LeadGuitar, RhythmGuitar, BassDrum, SnareDrum, CrashCymbal, RideCymbal, HighHat, Bass],
+    Lyrics:"
+      Verse1:
+        The world is burning, the sky is falling
+        The end is near, the reaper's calling
+        Humanity's fate, in the hands of the corrupt
+        The apocalypse is here, and we're all fucked
+      Chorus:
+        Shredding the apocalypse, with our blazing riffs
+        Thrashing the establishment, with our sonic blitz
+        Shredding the apocalypse, till the world is gone
+        Thrashing the system, till the break of dawn
+      Verse2:
+        The streets are chaos, the cities in flames
+        The government's collapsed, and anarchy reigns
+        The survivors scavenge, in the ruins of the past
+        The future's a wasteland, and nothing's gonna last
+      Bridge:  
+        But we won't go quietly, into the night
+        We'll rage against the dying, of the light  
+        With our music as our weapon, and our fans as our army
+        We'll shred the apocalypse, and thrash the world's sorry
+      Solo:
+        [Face-melting guitar solo]
+    ",
+    KeySignature:EMinor,
+    TimeSignature:4/4,
+    Tempo:180
+  )
+) :: {
+  [ThrashSong.Structure.Progression |> ModalInterchange ⊢ Thrash.Composition.Harmony.Modulations]
+  [ThrashSong.Elements.Instrumentation |> DistortionAndPowerChords ⊢ Thrash.SoundElements.Timbre]
+  [ThrashSong.Elements.Lyrics |> DystopianAndRebellious ⊢ Thrash.Composition.Form.Development]
+  [ThrashSong.Elements.KeySignature |> MinorAndPentatonic ⊢ Thrash.EmergentProperties.Tonality]
+  [ThrashSong.Elements.TimeSignature |> StandardAndDriving ⊢ Thrash.Composition.Rhythm.Meter]  
+  [ThrashSong.Elements.Tempo |> FastAndRelentless ⊢ Thrash.Composition.Rhythm.Tempo]
+}
+
+
+
+ClassicalSong := Song(
+  Name:"Sonata in E Minor",
+  Genre:Classical,
+  Structure:(
+    Sections:[Exposition, Development, Recapitulation, Coda],
+    Progression:[i, III, VII, i, iv, VII, III, i, V, i]
+  ),
+  Elements:(
+    Instrumentation:[Piano],
+    Lyrics:"
+      Instrumental  
+    ",
+    KeySignature:EMinor,
+    TimeSignature:3/4,
+    Tempo:60
+  )
+) :: {
+  [ClassicalSong.Structure.Sections |> SonataForm ⊢ Classical.Composition.Form.Structure]
+  [ClassicalSong.Structure.Progression |> FunctionalHarmony ⊢ Classical.Composition.Harmony.Progressions]
+  [ClassicalSong.Elements.Instrumentation |> SoloInstrument ⊢ Classical.SoundElements.Timbre]
+  [ClassicalSong.Elements.KeySignature |> MinorKey ⊢ Classical.EmergentProperties.Tonality]
+  [ClassicalSong.Elements.TimeSignature |> TripleTime ⊢ Classical.Composition.Rhythm.Meter]  
+  [ClassicalSong.Elements.Tempo |> Adagio ⊢ Classical.Composition.Rhythm.Tempo]
+}

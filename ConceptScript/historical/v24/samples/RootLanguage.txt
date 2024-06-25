@@ -1,0 +1,350 @@
+CONCEPT RootLanguage {
+  LANGUAGE {
+    TYPE Space
+    TYPE Element
+    TYPE Relation = (Element, Element) -> Bool
+    TYPE Transformation = Element -> Element
+    TYPE Structure = (Space, Set(Relation), Set(Transformation))
+    
+    FUNC Compose(t1 : Transformation, t2 : Transformation) -> Transformation
+    FUNC Identity(s : Space) -> Transformation
+    FUNC Inverse(t : Transformation) -> Transformation
+    
+    FUNC Apply(r : Relation, e1 : Element, e2 : Element) -> Bool
+    FUNC Substitute(e : Element, s : Space) -> Element
+    FUNC Quotient(s : Space, r : Relation) -> Space
+    
+    AXIOM Composition {
+      FORALL (s : Space) (t : Transformation).
+        Compose(Identity(s), t) = t
+        Compose(t, Identity(s)) = t
+      FORALL (t1 : Transformation) (t2 : Transformation) (t3 : Transformation).  
+        Compose(Compose(t1, t2), t3) = Compose(t1, Compose(t2, t3))
+    }
+    
+    AXIOM Inversion {
+      FORALL (s : Space) (t : Transformation).
+        Compose(t, Inverse(t)) = Identity(s)
+        Compose(Inverse(t), t) = Identity(s)
+    }
+    
+    AXIOM Substitution {
+      FORALL (e : Element) (s1 : Space).
+        Substitute(e, s1) IN s1 = e
+      FORALL (e : Element) (s1 : Space) (s2 : Space).  
+        Substitute(Substitute(e, s1), s2) = Substitute(e, s2)
+    }
+    
+    AXIOM Quotient {
+      FORALL (s : Space) (r : Relation) (e1 : Element) (e2 : Element).
+        (e1 ~ e2) IN Quotient(s, r) <-> Apply(r, e1, e2)
+    }
+    
+    PRED Isomorphic(s1 : Structure, s2 : Structure)
+    PRED Homomorphic(s1 : Structure, s2 : Structure)
+    PRED StructurePreserving(h : Structure -> Structure)
+  }
+  
+  STRUCTURE {
+    DEF Product(s1 : Space, s2 : Space) : Space = {
+      (e1, e2) | e1 IN s1, e2 IN s2
+    }
+    
+    DEF Coproduct(s1 : Space, s2 : Space) : Space = {
+      (1, e) | e IN s1 
+    } ∪ {
+      (2, e) | e IN s2  
+    }
+    
+    DEF Exp(s1 : Space, s2 : Space) : Space = {
+      f | f : s1 -> s2
+    }
+    
+    DEF SubSpace(s : Space, p : Element -> Bool) : Space = {
+      e | e IN s, p(e)
+    }
+  }
+  
+  PROOFS {
+    TACTIC ElementWitness(s : Space, p : Element -> Bool) = {
+      LET e : Element ASSUME e IN s AND p(e) 
+      WITNESS e
+    }
+    
+    TACTIC RelationWitness(s : Structure, p : (Element, Element) -> Bool) = {
+      LET r : Relation = (e1, e2) -> p(e1, e2)
+      HAVE r IN s.Relation
+      WITNESS r
+    }
+    
+    TACTIC TransformationWitness(s : Structure, p : Element -> Element) = {
+      LET t : Transformation = e -> p(e)
+      HAVE t IN s.Transformation
+      WITNESS t
+    }
+    
+    TACTIC HomomorphismWitness(s1 : Structure, s2 : Structure, 
+                               f : Element -> Element,
+                               r : (Element, Element) -> Bool,
+                               t : Element -> Element) = {
+      ASSUME FORALL (e1 : Element) (e2 : Element) (e1 IN s1.Space) (e2 IN s1.Space).
+        r(e1, e2) -> Apply(IMAGE(r, f), f(e1), f(e2))
+      ASSUME FORALL (e : Element) (e IN s1.Space). 
+        f(Apply(t, e)) = Apply(IMAGE(t, f), f(e))
+      WITNESS f  
+    }
+    
+    TACTIC IsomorphismWitness(s1 : Structure, s2 : Structure,
+                              f : Element -> Element,
+                              r : (Element, Element) -> Bool,
+                              t : Element -> Element) = {
+      ASSUME FORALL (e1 : Element) (e2 : Element) (e1 IN s1.Space) (e2 IN s1.Space).
+        r(e1, e2) <-> Apply(IMAGE(r, f), f(e1), f(e2))
+      ASSUME FORALL (e : Element) (e IN s1.Space).
+        f(Apply(t, e)) = Apply(IMAGE(t, f), f(e))
+      ASSUME Bijective(f, s1.Space, s2.Space)
+      WITNESS f
+    }
+    
+    TACTIC SpaceDecomposition(s : Space, p : Element -> Bool) = {
+      LET s1 = SubSpace(s, p)
+      LET s2 = SubSpace(s, e -> NOT p(e))
+      ASSUME s = s1 ∪ s2
+      ASSUME FORALL (e : Element). e IN s1 -> NOT e IN s2
+      WITNESS (s1, s2)
+    }
+    
+    TACTIC StructureDecomposition(s : Structure, p : Element -> Bool) = {
+      LET (s1, s2) = SpaceDecomposition(s.Space, p)
+      LET r1 = RelationWitness(s, (e1, e2) -> e1 IN s1 AND e2 IN s1)
+      LET r2 = RelationWitness(s, (e1, e2) -> e1 IN s2 AND e2 IN s2)
+      LET t1 = TransformationWitness(s, e -> IF e IN s1 THEN e ELSE UNDEFINED)
+      LET t2 = TransformationWitness(s, e -> IF e IN s2 THEN e ELSE UNDEFINED)
+      LET str1 : Structure = (s1, {r1}, {t1})
+      LET str2 : Structure = (s2, {r2}, {t2})
+      WITNESS (str1, str2)
+    }
+
+    THEOREM Isomorphism {
+      FORALL (s1 : Structure) (s2 : Structure).
+        Isomorphic(s1, s2) <-> 
+          EXISTS (f : Element -> Element).
+            Bijective(f, s1.Space, s2.Space) AND
+            FORALL (r1 : Relation) (r1 IN s1.Relation) (e1 : Element) (e2 : Element).
+              Apply(r1, e1, e2) <-> Apply(IMAGE(r1, f), f(e1), f(e2)) AND
+            FORALL (t1 : Transformation) (t1 IN s1.Transformation) (e : Element).
+              f(Apply(t1, e)) = Apply(IMAGE(t1, f), f(e))
+    }
+    
+    THEOREM Homomorphism {
+      FORALL (s1 : Structure) (s2 : Structure).
+        Homomorphic(s1, s2) <->
+          EXISTS (f : Element -> Element).
+            Surjective(f, s1.Space, s2.Space) AND  
+            FORALL (r1 : Relation) (r1 IN s1.Relation) (e1 : Element) (e2 : Element).
+              Apply(r1, e1, e2) -> Apply(IMAGE(r1, f), f(e1), f(e2)) AND
+            FORALL (t1 : Transformation) (t1 IN s1.Transformation) (e : Element).
+              f(Apply(t1, e)) = Apply(IMAGE(t1, f), f(e))
+    }
+    
+    THEOREM Universal {
+      FORALL (s1 : Structure).
+        EXISTS (s2 : Structure). 
+          Homomorphic(s1, s2) AND
+          FORALL (s3 : Structure).
+            Homomorphic(s1, s3) ->
+              EXISTS (h : Structure -> Structure).
+                StructurePreserving(h) AND
+                h(s2) = s3
+          UNIQUE (s2 : Structure) (h : Structure -> Structure).
+            Homomorphic(s1, s2) AND 
+            StructurePreserving(h) AND
+            h(s2) = s3
+    }
+    
+    THEOREM ProductStructure {
+      FORALL (s1 : Structure) (s2 : Structure).
+        LET s = (
+          Product(s1.Space, s2.Space),
+          { (e1, e2) -> (p1, p2) | 
+            EXISTS (r1 : Relation) (r2 : Relation).
+              r1 IN s1.Relation AND r2 IN s2.Relation AND  
+              Apply(r1, e1, p1) AND Apply(r2, e2, p2)
+          },
+          { (e1, e2) -> (t1(e1), t2(e2)) |
+            t1 IN s1.Transformation, t2 IN s2.Transformation  
+          }
+        ) IN
+        FORALL (s3 : Structure).
+          Homomorphic(s, s3) <->
+            EXISTS (h1 : Structure -> Structure) (h2 : Structure -> Structure).
+              StructurePreserving(h1) AND StructurePreserving(h2) AND
+              h1(s1) = s3 AND h2(s2) = s3
+    }
+    
+    THEOREM CoproductStructure {
+      FORALL (s1 : Structure) (s2 : Structure).
+        LET s = (
+          Coproduct(s1.Space, s2.Space),
+          { (e1, e2) -> CASE (e1, e2) OF
+              | ((1, x), (1, y)) -> EXISTS (r : Relation) (r IN s1.Relation). Apply(r, x, y)
+              | ((2, x), (2, y)) -> EXISTS (r : Relation) (r IN s2.Relation). Apply(r, x, y)
+              | _ -> FALSE
+          },
+          { e -> CASE e OF
+              | (1, x) -> (1, t(x)) WHERE t IN s1.Transformation
+              | (2, x) -> (2, t(x)) WHERE t IN s2.Transformation  
+          }
+        ) IN
+        FORALL (s3 : Structure).  
+          Homomorphic(s1, s3) AND Homomorphic(s2, s3) <->
+            EXISTS (h : Structure -> Structure).
+              StructurePreserving(h) AND
+              h(s) = s3
+    }
+    
+    THEOREM ExponentialStructure {
+      FORALL (s1 : Structure) (s2 : Structure).
+        LET s = (
+          Exp(s1.Space, s2.Space),
+          { (f, g) -> (e -> g(e)) | 
+            FORALL (e : Element) (e IN s1.Space).
+              EXISTS (r : Relation) (r IN s2.Relation).
+                Apply(r, f(e), g(e))
+          },
+          { f -> (e -> t(f(e))) | t IN s2.Transformation }  
+        ) IN
+        FORALL (s3 : Structure).
+          Homomorphic(Product(s3, s1), s2) <->
+            Homomorphic(s3, s)
+    }
+  }
+}
+
+
+
+
+CONCEPT Adjoint : RootLanguage {
+  LANGUAGE {
+    TYPE Concept
+    TYPE Instance
+    TYPE Morphism = (Instance, Instance) -> Bool
+    
+    FUNC Hom(c1 : Concept, c2 : Concept) -> Concept
+    FUNC Compose(m1 : Morphism, m2 : Morphism) -> Morphism
+    FUNC Identity(c : Concept) -> Morphism
+    
+    PRED Functor(F : Concept -> Concept)
+    
+    AXIOM FunctorComposition {
+      FORALL (F : Concept -> Concept) (G : Concept -> Concept).
+        Functor(F) AND Functor(G) -> 
+          Functor(LAMBDA (c : Concept). F(G(c)))
+    }
+    
+    AXIOM FunctorIdentity {
+      Functor(LAMBDA (c : Concept). c)  
+    }
+  }
+  
+  STRUCTURE {
+    DEF Adjunction(L : Concept -> Concept, R : Concept -> Concept) -> PROP = {
+      (
+        FORALL (c1 : Concept) (c2 : Concept).
+          Hom(L(c1), c2) = Hom(c1, R(c2))
+      ) AND
+      (
+        EXISTS (Unit : FORALL (c : Concept). Morphism(c, R(L(c)))).
+          FORALL (c1 : Concept) (c2 : Concept) (f : Morphism(c1, R(c2))).
+            EXISTS (g : Morphism(L(c1), c2)). 
+              Compose(Unit(c1), R(g)) = f
+      ) AND  
+      (
+        EXISTS (Counit : FORALL (c : Concept). Morphism(L(R(c)), c)).
+          FORALL (c1 : Concept) (c2 : Concept) (g : Morphism(L(c1), c2)).
+            EXISTS (f : Morphism(c1, R(c2))).
+              Compose(L(f), Counit(c2)) = g
+      )
+    }
+  }
+  
+  PROOFS {
+    THEOREM AdjunctionSymmetry {
+      FORALL (L : Concept -> Concept) (R : Concept -> Concept).
+        Adjunction(L, R) -> Adjunction(R, L)
+          
+      PROOF {
+        LET L : Concept -> Concept, R : Concept -> Concept
+        ASSUME Adjunction(L, R)
+        
+        FORALL (c1 : Concept) (c2 : Concept).
+          Hom(R(c1), c2) = Hom(c1, L(c2)) BY {
+            Hom(R(c1), c2) = Hom(c2, L(R(c1))) BY ASSUMPTION
+                            = Hom(c1, L(c2))     BY ASSUMPTION
+          }
+          
+        EXISTS (Unit : FORALL (c : Concept). Morphism(R(L(c)), c)) = Counit(c) BY ASSUMPTION
+        
+        FORALL (c1 : Concept) (c2 : Concept) (f : Morphism(R(c1), c2)).
+          EXISTS (g : Morphism(c1, L(c2))). 
+            Compose(R(g), Unit(c2)) = f BY {
+              LET g = LAMBDA (i : Instance). f(Unit(c1)(i))
+              Compose(R(g), Unit(c2))(i) 
+                = Unit(c2)(R(g)(i))
+                = f(i) BY ASSUMPTION        
+            }
+            
+        EXISTS (Counit : FORALL (c : Concept). Morphism(c, L(R(c)))) = Unit(c) BY ASSUMPTION
+        
+        FORALL (c1 : Concept) (c2 : Concept) (g : Morphism(c1, L(c2))).
+          EXISTS (f : Morphism(R(c1), c2)).
+            Compose(Counit(c1), L(f)) = g BY {
+              LET f = LAMBDA (i : Instance). g(Counit(c1)(i))
+              Compose(Counit(c1), L(f))(i)
+                = L(f)(Counit(c1)(i))
+                = g(i) BY ASSUMPTION
+            }
+            
+        THEREFORE Adjunction(R, L)
+      }
+    }
+    
+    THEOREM AdjunctionComposition {
+      FORALL (F : Concept -> Concept) (G : Concept -> Concept) (H : Concept -> Concept).
+        Adjunction(F, G) AND Adjunction(G, H) -> Adjunction(F, H)
+        
+      PROOF {
+        (* Proof omitted for brevity *)
+      }
+    }
+    
+    THEOREM AdjunctionIdentity {
+      FORALL (F : Concept -> Concept).
+        Adjunction(F, LAMBDA (c : Concept). c) AND
+        Adjunction(LAMBDA (c : Concept). c, F)
+        
+      PROOF {
+        (* Proof omitted for brevity *)  
+      }
+    }
+    
+    THEOREM UniversalMorphism {
+      FORALL (L : Concept -> Concept) (R : Concept -> Concept) (Free : FORALL (c : Concept). Morphism(c, R(L(c)))).
+        (
+          FORALL (c1 : Concept) (c2 : Concept) (f : Morphism(c1, R(c2))).
+            EXISTS (g : Morphism(L(c1), c2)). 
+              Compose(Free(c1), R(g)) = f
+        ) ->
+        (
+          FORALL (c : Concept).
+            FORALL (h : Morphism(c, R(L(c)))).
+              Compose(Free(c), R(LAMBDA (i : Instance). i)) = h ->
+                h = Free(c) 
+        )
+        
+      PROOF {
+        (* Proof omitted for brevity *)
+      }
+    }
+  }
+}

@@ -1,0 +1,881 @@
+- Think through how pinch points/connections should really be formulated
+- Experiment with "dataflow blocks design", where some blocks have defined relationships between others: one computes/derives things which are then premises for some next block to reason from. Try setting it up so these blocks are parameterized/configurable, allowing the LLM to define its own schema before expressing: we just provide the primitives of pinch-points and the block/relational structure. If it doesn't pan out, design specific reusable schema.
+
+
+
+
+LatentScriptV5 {
+  VERSION 1.8
+  
+  <ComplexConcept> ::= <SingleConcept>
+                     | <ComplexConcept> (∧|∨|¬) <ComplexConcept>
+                     | ∀<Variable>[(<Constraint>)] <ComplexConcept>
+                     | ∃<Variable>[(<Constraint>)] <ComplexConcept>
+                     | (<ComplexConcept>)
+
+  <SingleConcept> ::= <ConceptName> | <ConceptName>(<Argument>, ...)
+  <Constraint> ::= <ComplexConcept> | <ComplexConcept> (=|≠|<|>|≤|≥) <ComplexConcept>
+
+  <Type> ::= <PrimitiveType> | <ComplexType>
+  <PrimitiveType> ::= Natural | Real | Boolean | String 
+  <ComplexType> ::= <Type> (×|+|→) <Type>
+                  | <Type> List
+                  | <Type> Set
+                  | <Type> Multiset 
+                  | {<Identifier> : <Type>, ...}
+                  | (<Type>)
+
+  <PinchPoint> ::= <PinchPoint[<Param1>, <Param2>]>
+  <Param1> ::= <ComplexConcept>
+  <Param2> ::= <LanguageElement>
+  <LanguageElement> ::= <BlockName> | <StatementName>
+  <BlockName> ::= GOAL_STATEMENT | RECENTLY_TRIED | PLAN | JUSTIFIED_NEXT_ACTION | CONTEXT | QUESTIONS |
+                  CONJECTURES | POTENTIAL_RED_HERRINGS_TO_AVOID | WHAT_IDEAL_SOLUTION_LOOKS_LIKE |
+                  COMPONENTS | COMPOSITION | ASSUMPTIONS_AND_LIMITATIONS | SATISFACTION_ANALYSIS |
+                  POSSIBLE_FLAW_ANALYSIS | OPTIMAL_NEXT_ACTION_ANALYSIS | NEXT_ACTION_DECISION
+  <StatementName> ::= Any named statement within a block
+  <ConnectionJustification> ::= <JustificationText> [<-> (<LanguageElement> (∧|∨|¬) <LanguageElement>)]
+  
+  CONSTRUCTION_PROJECT_CONTEXT {
+    GOAL_STATEMENT: <GoalStatement>
+    RECENTLY_TRIED:
+      <PreviouslyTriedIdea1>
+      <PreviouslyTriedIdea2>
+      ...
+    PLAN:
+      <PinchPoint1[PlanStep, GOAL_STATEMENT]> <-> <ConnectionJustification>
+      <PinchPoint2[PlanStep, GOAL_STATEMENT]> <-> <ConnectionJustification>
+      ...
+    JUSTIFIED_NEXT_ACTION: <PinchPoint[NextAction, PLAN]> <-> <ConnectionJustification>
+      
+    // The action expressed in JUSTIFIED_NEXT_ACTION should be carried out in the subsequent EXPLORE or MODEL block
+  }
+
+  EXPLORE <Topic> {
+    CONTEXT {
+      CONCEPTS:
+        <PinchPoint1[Concept, Topic]> <-> <ConnectionJustification>
+        <PinchPoint2[Concept, Topic]> <-> <ConnectionJustification>
+        ...
+      THEORIES:
+        <PinchPoint1[Theory, Topic]> <-> <ConnectionJustification>
+        <PinchPoint2[Theory, Topic]> <-> <ConnectionJustification>
+        ...
+      CUTTING_EDGE_RESEARCH:
+        <PinchPoint1[Research, Topic]> <-> <ConnectionJustification>
+        <PinchPoint2[Research, Topic]> <-> <ConnectionJustification>
+        ...
+      CROSS_DISCIPLINARY_CONNECTIONS:
+        <PinchPoint1[Connection, Topic]> <-> <ConnectionJustification>
+        <PinchPoint2[Connection, Topic]> <-> <ConnectionJustification>
+        ...
+      ANOMALIES_AND_OUTLIERS:
+        <PinchPoint1[Anomaly, Topic]> <-> <ConnectionJustification>
+        <PinchPoint2[Anomaly, Topic]> <-> <ConnectionJustification>
+        ...
+      HISTORICAL_CONTEXT:
+        <PinchPoint1[HistoricalEvent, Topic]> <-> <ConnectionJustification>
+        <PinchPoint2[HistoricalEvent, Topic]> <-> <ConnectionJustification>
+        ...
+      CUSTOM:
+        // The CUSTOM category is mandatory and should always be included (as with the other categories)
+        <PinchPoint1[CustomIdea, Topic]> <-> <ConnectionJustification>
+        <PinchPoint2[CustomIdea, Topic]> <-> <ConnectionJustification>
+        ...
+    }
+
+    QUESTIONS {
+      <PinchPoint1[Question, Topic]> <-> <ConnectionJustification>
+      <PinchPoint2[Question, Topic]> <-> <ConnectionJustification>
+      ...
+    }
+
+    CONJECTURES {
+      <PinchPoint1[Conjecture, Topic]> <-> <ConnectionJustification>
+      <PinchPoint2[Conjecture, Topic]> <-> <ConnectionJustification>
+      ...  
+    }
+
+    POTENTIAL_RED_HERRINGS_TO_AVOID {
+      <PinchPoint1[RedHerring, Topic]> <-> <ConnectionJustification>
+      <PinchPoint2[RedHerring, Topic]> <-> <ConnectionJustification>
+      ...
+    }
+  }
+
+  [AUXILIARY_MODEL <Name> | SOLUTION_MODEL <GoalStatementDerivedName>] {
+    META {
+      WHAT_IDEAL_SOLUTION_LOOKS_LIKE {
+        <PinchPoint1[IdealCharacteristic, GOAL_STATEMENT]> <-> <ConnectionJustification>
+        <PinchPoint2[IdealCharacteristic, GOAL_STATEMENT]> <-> <ConnectionJustification>
+        ...
+      }
+    }
+
+    COMPONENTS {
+      COMPONENT <Name>(<Parameter>: <Type>, ...) -> <OutputType> [EXTENDS <ParentComponent>] {
+        [SUBCOMPONENTS {
+          [COMPONENT <Name>(...) ...]
+          ...
+        }]
+        
+        [DEFS {
+          [DEF <Identifier> [: <Type>] [= <Expression>] ...]
+        }]
+      }
+      ...
+    }
+
+    COMPOSITION {
+      CONNECT <ComponentName> TO <ComponentName> {
+        (FORALL (<ParameterName>: <ParameterType>, ...)
+         [<MappingRule>]
+         ...)
+      }
+      ...
+    }
+
+    META {
+      ASSUMPTIONS_AND_LIMITATIONS {
+        <PinchPoint1[Assumption, MODEL]> <-> <ConnectionJustification>
+        <PinchPoint2[Assumption, MODEL]> <-> <ConnectionJustification>
+        ...
+      }
+      
+      SATISFACTION_ANALYSIS {
+        <PinchPoint1[SatisfactionCriterion, WHAT_IDEAL_SOLUTION_LOOKS_LIKE]> <-> <ConnectionJustification>
+        <PinchPoint2[SatisfactionCriterion, WHAT_IDEAL_SOLUTION_LOOKS_LIKE]> <-> <ConnectionJustification>
+        ...
+      }
+
+      POSSIBLE_FLAW_ANALYSIS {
+        <PinchPoint1[Flaw, MODEL]> <-> <ConnectionJustification>
+        <PinchPoint2[Flaw, MODEL]> <-> <ConnectionJustification>
+        ...
+      }
+    }
+  }
+  
+  NEXT {
+    OPTIMAL_NEXT_ACTION_ANALYSIS {
+      <PinchPoint1[NextActionJustification, (SATISFACTION_ANALYSIS ∧ POSSIBLE_FLAW_ANALYSIS ∧ ASSUMPTIONS_AND_LIMITATIONS)]> <-> <ConnectionJustification>
+      <PinchPoint2[NextActionJustification, (SATISFACTION_ANALYSIS ∧ POSSIBLE_FLAW_ANALYSIS ∧ ASSUMPTIONS_AND_LIMITATIONS)]> <-> <ConnectionJustification>
+      ...
+    }
+
+    NEXT_ACTION_DECISION {
+      JUSTIFICATION: <PinchPoint[NextActionJustification, (OPTIMAL_NEXT_ACTION_ANALYSIS ∧ GOAL_STATEMENT)]> <-> <ConnectionJustification>
+      [EXPLORE <ConceptToExplore> | MODEL <ConceptToModel>]
+    }
+  }
+}
+
+Usage guidelines:
+- In CONSTRUCTION_PROJECT_CONTEXT:
+  - State the GOAL_STATEMENT clearly and concisely
+  - List any RECENTLY_TRIED ideas that are relevant to the current project
+  - Outline the PLAN using pinch points to connect key strategies and considerations to the GOAL_STATEMENT
+  - Provide a JUSTIFIED_NEXT_ACTION as a pinch point connected to the PLAN
+  - Ensure that the action expressed in JUSTIFIED_NEXT_ACTION is carried out in the subsequent EXPLORE or MODEL block
+- Use <PinchPoint[Param1, Param2]> to explicitly define the two elements being connected
+  - Param1 is a <ComplexConcept> representing the first element
+  - Param2 is a <LanguageElement> representing the second element, which can be a block or statement name
+- In the EXPLORE block:
+  - Organize pinch points into relevant categories (CONCEPTS, THEORIES, etc.) to guide the exploration
+  - Use pinch points to highlight key ideas, relationships, and potential avenues for investigation, connecting them to the Topic
+- In the [AUXILIARY_MODEL | SOLUTION_MODEL] block:
+  - Define the WHAT_IDEAL_SOLUTION_LOOKS_LIKE using pinch points connecting ideal characteristics to the GOAL_STATEMENT
+  - In the META block, use pinch points to connect assumptions, satisfaction criteria, and potential flaws to relevant elements of the model
+- In the NEXT block:
+  - Use OPTIMAL_NEXT_ACTION_ANALYSIS to evaluate potential next steps based on the insights gained from the exploration and modeling phases
+  - Connect the pinch points in this block to the SATISFACTION_ANALYSIS, POSSIBLE_FLAW_ANALYSIS, and ASSUMPTIONS_AND_LIMITATIONS using logical connectives
+  - Provide a clear JUSTIFICATION for the NEXT_ACTION_DECISION by connecting it to the OPTIMAL_NEXT_ACTION_ANALYSIS and the GOAL_STATEMENT
+- Throughout the script:
+  - Use pinch points to make explicit connections between ideas, guiding the flow of reasoning and decision-making
+  - Leverage the logical connectives in <ConnectionJustification> to express complex relationships and dependencies between different language elements
+  - Aim for clarity, concision, and coherence in the structure and content of the script
+
+  LatentScriptV4 {
+  VERSION 1.8
+
+
+
+
+
+
+
+
+  CONSTRUCTION_PROJECT_CONTEXT {
+    GOAL_STATEMENT: Develop a solution to reduce the computational complexity of transformer models with respect to context length, while maintaining performance on downstream tasks.
+    
+    RECENTLY_TRIED:
+      AttentionWithLinearComplexity
+      SparseAttentionMechanisms
+      HierarchicalAttentionStructures
+    
+    PLAN:
+      <PinchPoint1[IdentifyKeyConstraintsAndBottlenecks, GOAL_STATEMENT]> <-> UnderstandingComputationalComplexityDriversIsEssential
+      <PinchPoint2[ExploreDomainSpecificOptimizations, GOAL_STATEMENT]> <-> LeveragingProblemStructureCanYieldEfficiencyGains
+      <PinchPoint3[ConsiderApproximateComputationTradeoffs, GOAL_STATEMENT]> <-> BalancingAccuracyAndEfficiencyIsKeyToScalability
+      <PinchPoint4[EvaluatePerformanceOnDownstreamTasks, GOAL_STATEMENT]> <-> EnsuringEffectivenessOnRealWorldApplicationsIsCritical
+    
+    JUSTIFIED_NEXT_ACTION: <PinchPoint[ExploreAttentionApproximationStrategies, PLAN]> <-> IdentifyingComputationalBottlenecksAndPerformanceTradeoffs
+    
+    EXPLORE AttentionApproximationStrategiesForReducingContextLengthComplexity
+  }
+  
+  EXPLORE AttentionApproximationStrategiesForReducingContextLengthComplexity {
+    CONTEXT {
+      CONCEPTS:
+        <PinchPoint1[ComputationalComplexityOfSelfAttention, AttentionApproximationStrategiesForReducingContextLengthComplexity]> <-> QuadraticComplexityInSequenceLengthLimitsScalability
+        <PinchPoint2[LimitedContextWindowSize, AttentionApproximationStrategiesForReducingContextLengthComplexity]> <-> ConstrainsModelCapacityToCaptureLongRangeDependencies
+        ...
+      THEORIES:
+        <PinchPoint1[AttentionAsimilarityBasedReweighting, AttentionApproximationStrategiesForReducingContextLengthComplexity]> <-> SoftAlignmentEnablesContextualAggregation
+        <PinchPoint2[InformationBottleneckInAttentionHeads, AttentionApproximationStrategiesForReducingContextLengthComplexity]> <-> CompressedRepresentationsYieldComputationalEfficiency
+        ...
+      CUTTING_EDGE_RESEARCH:
+        <PinchPoint1[LinearAttentionMechanisms, AttentionApproximationStrategiesForReducingContextLengthComplexity]> <-> KernelMethodsAndLowRankApproximationsReduceComplexity
+        <PinchPoint2[SparseAttentionPatterns, AttentionApproximationStrategiesForReducingContextLengthComplexity]> <-> AttendingToMostRelevantTokensBasedOnStructuralBiasesOrLearning
+        ...
+      CROSS_DISCIPLINARY_CONNECTIONS:
+        <PinchPoint1[RandomProjectionDimensionalityReduction, AttentionApproximationStrategiesForReducingContextLengthComplexity]> <-> JohnsonLindenstraussLemmaEnablesCompressingHighDimensionalVectors
+        <PinchPoint2[SamplingBasedApproximations, AttentionApproximationStrategiesForReducingContextLengthComplexity]> <-> MonteCarloProbabilisticInferenceAllowsEstimatingExpectations
+        ...
+      ANOMALIES_AND_OUTLIERS:
+        <PinchPoint1[IncreasedContextLengthDoesNotAlwaysImprovePerformance, AttentionApproximationStrategiesForReducingContextLengthComplexity]> <-> LongerSequencesCanIntroduceNoiseOrDiminishingReturns
+        <PinchPoint2[AttentionDilution, AttentionApproximationStrategiesForReducingContextLengthComplexity]> <-> UnboundedContextWindowsMayDiluteAttentionOverManyTokens
+        ...
+      HISTORICAL_CONTEXT:  
+        <PinchPoint1[ComputeBoundedAttention, AttentionApproximationStrategiesForReducingContextLengthComplexity]> <-> FixedContextWindowsInRNNsAndCNNsToControlComplexity
+        <PinchPoint2[VanillaTransformersComputationalComplexity, AttentionApproximationStrategiesForReducingContextLengthComplexity]> <-> OriginalTransformerArchitectureScalesQuadraticallyWithSequenceLength
+        ...
+      CUSTOM:
+        <PinchPoint1[TaskSpecificAttentionSparsityPatterns, AttentionApproximationStrategiesForReducingContextLengthComplexity]> <-> ExploitingStructuralRegularitiesInDomainSpecificInputs
+        <PinchPoint2[LearningToAttendViaReinforcementLearning, AttentionApproximationStrategiesForReducingContextLengthComplexity]> <-> AdaptivelyOptimizingAttentionPatternsForComputationalEfficiency
+        ...
+    }
+      
+    QUESTIONS {
+      <PinchPoint1[BoundsOnAttentionApproximationErrors, AttentionApproximationStrategiesForReducingContextLengthComplexity]> <-> 
+        ∃ApproximationScheme ∀ContextLength (Error(Approximate(SelfAttention(ContextLength))) < ε)
+      <PinchPoint2[SampleComplexityOfApproximateAttention, AttentionApproximationStrategiesForReducingContextLengthComplexity]> <->
+        ∃AttentionMechanism ∀TaskAccuracy (SampleSize(AttentionMechanism(TaskAccuracy)) < O(poly(log(TaskAccuracy))))
+      ...
+    }
+
+    CONJECTURES {  
+      <PinchPoint1[DomainKnowledgeCanInformSparseAttentionArchitectures, AttentionApproximationStrategiesForReducingContextLengthComplexity]> <->
+        TaskSpecificAttentionSparsityPatterns ∧ ExploitingStructuralRegularitiesInDomainSpecificInputs  
+      <PinchPoint2[LearningOptimalAttentionPatternsViaPolicyGradients, AttentionApproximationStrategiesForReducingContextLengthComplexity]> <->
+        LearningToAttendViaReinforcementLearning ∧ AdaptivelyOptimizingAttentionPatternsForComputationalEfficiency
+      ...
+    }
+      
+    POTENTIAL_RED_HERRINGS_TO_AVOID {
+      <PinchPoint1[UnboundedContextWindowsWithoutApproximations, AttentionApproximationStrategiesForReducingContextLengthComplexity]> <-> 
+        IncreasedContextLengthDoesNotAlwaysImprovePerformance ∧ AttentionDilution
+      <PinchPoint2[PurelyRandomDownsamplingOfContext, AttentionApproximationStrategiesForReducingContextLengthComplexity]> <->
+        ImportanceWeightedSamplingOrStructuredDownsamplingOftenOutperforms
+      ...
+    }    
+  }
+    
+  SOLUTION_MODEL TransformerXL {
+    META {
+      WHAT_IDEAL_SOLUTION_LOOKS_LIKE {
+        <PinchPoint1[LinearAttentionComplexityInContextLength, GOAL_STATEMENT]> <-> ScalableToLongSequencesWithoutQuadraticBlowup
+        <PinchPoint2[PreservesModelExpressivenessAndCapacity, GOAL_STATEMENT]> <-> CapturesLongRangeDependenciesAndRichRepresentations
+        <PinchPoint3[FastInferenceTimeOnModernHardware, GOAL_STATEMENT]> <-> SuitedToParallelExecutionOnGPUsAndTPUs
+        <PinchPoint4[HighAccuracyOnDownstreamLanguageTasks, GOAL_STATEMENT]> <-> EffectiveForPretrainingAndTransferLearning
+      }
+    }
+      
+    COMPONENTS {
+      COMPONENT AttentionWithRelativePositionalEmbeddings(SequenceLength: Int, 
+                                                          HiddenDim: Int, 
+                                                          NumHeads: Int, 
+                                                          RelativePosEmbeddingDim: Int) 
+                                                          -> AttentionWeightedValueVectors {
+        SUBCOMPONENTS {
+          COMPONENT MultiHeadSelfAttention(SequenceLength, HiddenDim, NumHeads)  
+          COMPONENT RelativePositionalEmbeddings(RelativePosEmbeddingDim)
+        }
+        
+        DEFS {
+          DEF RelativeAttentionScores := SoftMax(QKᵀ + RelativePositionalBiases)
+          DEF RelativePositionalBiases := Linear(RelativePositionalEmbeddings)  
+          DEF AttentionWeightedValueVectors := RelativeAttentionScores · V
+        }
+      }
+        
+      COMPONENT RecurrenceWithSegmentLevelRecurrence(PreviousSegmentState: Tensor,
+                                                     CurrentSegmentInput: Tensor, 
+                                                     SegmentLength: Int) 
+                                                     -> CurrentSegmentState {
+        SUBCOMPONENTS {
+          COMPONENT PositionwiseFeedForwardLayer(HiddenDim)
+          COMPONENT LayerNormalization(HiddenDim)
+        }
+          
+        DEFS {  
+          DEF CurrentSegmentRepresentation := Concat(PreviousSegmentState, CurrentSegmentInput)
+          DEF UpdatedSegmentState := LayerNormalization(PositionwiseFeedForwardLayer(CurrentSegmentRepresentation))  
+        }
+      }
+    }
+
+    COMPOSITION {  
+      CONNECT AttentionWithRelativePositionalEmbeddings TO RecurrenceWithSegmentLevelRecurrence {
+        FORALL (SequenceLength, HiddenDim, NumHeads, RelativePosEmbeddingDim)
+         AttentionWithRelativePositionalEmbeddings.AttentionWeightedValueVectors ->  
+           RecurrenceWithSegmentLevelRecurrence.CurrentSegmentInput
+      }
+    }
+      
+    META {
+      ASSUMPTIONS_AND_LIMITATIONS {
+        <PinchPoint1[PositionalEmbeddingsLearnedFromPretraining, TransformerXL]> <-> CapturingGeneralContextualAttentionPatterns
+        <PinchPoint2[MemoryBandwidthForCachingSegmentStates, TransformerXL]> <-> EffectiveCacheManagementNeededForManySegments
+        ...  
+      }
+        
+      SATISFACTION_ANALYSIS {
+        <PinchPoint1[RelativePositionalEmbeddingsEnableLinearAttentionComplexity, LinearAttentionComplexityInContextLength]> <->
+          ReusablePositionalEmbeddingsAvoidQuadraticBlowup
+        <PinchPoint2[SegmentLevelRecurrencePreservesLongRangeStateInfo, PreservesModelExpressivenessAndCapacity]> <->
+          PropagatingContextBetweenSegmentsEnablesEffectiveContextAccumulation
+        ...
+      }
+        
+      POSSIBLE_FLAW_ANALYSIS {
+        <PinchPoint1[LimitedExtrapolationToLongerSequences, TransformerXL]> <-> 
+          PositionalEmbeddingsConstrainedByPretrainingContextLength
+        <PinchPoint2[CostOfCachingManySegmentsForLongSequences, TransformerXL]> <->
+          MemoryOverheadMayLimitMaximumRetainedContext
+        ...
+      }
+    }  
+  }
+
+  NEXT {
+    OPTIMAL_NEXT_ACTION_ANALYSIS {
+      <PinchPoint1[AttentionWithLinearComplexity, (SATISFACTION_ANALYSIS ∧ LinearAttentionComplexityInContextLength)]> <->
+        DevelopingLinearAttentionApproximationsIsMostPromising
+        
+      <PinchPoint2[EvaluatingTradeoffsInApproximateAttention, (POSSIBLE_FLAW_ANALYSIS ∧ BoundsOnAttentionApproximationErrors)]> <->
+        UnderstandingTheoreticalAndEmpiricalErrorBoundsIsActionable
+        
+      <PinchPoint3[TuningSegmentLengthsAndCachingStrategies, (ASSUMPTIONS_AND_LIMITATIONS ∧ MemoryBandwidthForCachingSegmentStates)]> <->  
+        EngineeringSystemLevelOptimizationsForPracticality
+      ...
+    }
+      
+    NEXT_ACTION_DECISION {
+      JUSTIFICATION: <PinchPoint[EvaluateAttentionApproximationsForAccuracyAndEfficiencyTradeoffs, 
+                               (OPTIMAL_NEXT_ACTION_ANALYSIS ∧ GOAL_STATEMENT)]> <->
+                     ComparingTheoreticAndEmpircErrorBoundsWithPracticalPerformance
+      
+      MODEL VanillaTransformerWithLinearAttention
+      MODEL TransformerXLWithLearnedSparseAttention
+      MODEL MemoryCompressedAttentionTransformer
+    }
+  }
+}
+
+
+
+
+
+
+
+
+
+LatentScriptV4 {
+  VERSION 1.3
+  
+  <ComplexIdentifier> ::= <SingleConcept>
+                        | <ComplexIdentifier> (∧|∨|¬) <ComplexIdentifier>
+                        | ∀<Variable>[(<Constraint>)] <ComplexIdentifier>
+                        | ∃<Variable>[(<Constraint>)] <ComplexIdentifier>
+                        | (<ComplexIdentifier>)
+
+  <SingleConcept> ::= <ConceptName> | <ConceptName>(<Argument>, ...)
+  <Constraint> ::= <ComplexIdentifier> | <ComplexIdentifier> (=|≠|<|>|≤|≥) <ComplexIdentifier>
+
+  <Type> ::= <PrimitiveType> | <ComplexType>
+  <PrimitiveType> ::= Natural | Real | Boolean | String 
+  <ComplexType> ::= <Type> (×|+|→) <Type>
+                  | <Type> List
+                  | <Type> Set
+                  | <Type> Multiset 
+                  | {<Identifier> : <Type>, ...}
+                  | (<Type>)
+
+  <PinchPoint[Param]> ::= <ComplexIdentifier> <-> <ConnectionJustification[Param]>
+  <ConnectionJustification[Param]> ::= <JustificationText> [<-> <ComplexIdentifier>]
+  
+  EXPLORE <Topic> {
+    CONTEXT {
+      CONCEPTS:
+        <PinchPoint[Topic]_1>
+        <PinchPoint[Topic]_2>
+        ...
+      THEORIES:
+        <PinchPoint[Topic]_1>
+        <PinchPoint[Topic]_2>
+        ...
+      CUTTING_EDGE_RESEARCH:
+        <PinchPoint[Topic]_1>
+        <PinchPoint[Topic]_2>
+        ...
+      CROSS_DISCIPLINARY_CONNECTIONS:
+        <PinchPoint[Topic]_1>
+        <PinchPoint[Topic]_2>
+        ...
+      ANOMALIES_AND_OUTLIERS:
+        <PinchPoint[Topic]_1>
+        <PinchPoint[Topic]_2>
+        ...
+      HISTORICAL_CONTEXT:
+        <PinchPoint[Topic]_1>
+        <PinchPoint[Topic]_2>
+        ...
+      CUSTOM:
+        // The CUSTOM category is mandatory and should always be included (as with the other categories)
+        <PinchPoint[Topic]_1>
+        <PinchPoint[Topic]_2>
+        ...
+    }
+
+    QUESTIONS {
+      <PinchPoint[Topic]_1>
+      <PinchPoint[Topic]_2>
+      ...
+    }
+
+    CONJECTURES {
+      <PinchPoint[Topic]_1>
+      <PinchPoint[Topic]_2>
+      ...  
+    }
+
+    POTENTIAL_RED_HERRINGS_TO_AVOID {
+      <PinchPoint[Topic]_1>
+      <PinchPoint[Topic]_2>
+      ...
+    }
+  }
+
+  [AUXILIARY_MODEL <Name> | SOLUTION_MODEL <GoalStatementDerivedName>] {
+    META {
+      GOAL_STATEMENT: <VerbatimUserConstructDirective>
+
+      SUPPLEMENTARY_INFO {
+        [<AdditionalUserInfo1>]
+        [<AdditionalUserInfo2>]
+        [...]
+        [No additional information provided by the user.]
+      }
+
+      WHAT_IDEAL_SOLUTION_LOOKS_LIKE {
+        <PinchPoint[GoalStatement]_1>
+        <PinchPoint[GoalStatement]_2>
+        ...
+      }
+    }
+
+    COMPONENTS {
+      COMPONENT <Name>(<Parameter>: <Type>, ...) -> <OutputType> [EXTENDS <ParentComponent>] {
+        [SUBCOMPONENTS {
+          [COMPONENT <Name>(...) ...]
+          ...
+        }]
+        
+        [DEFS {
+          [DEF <Identifier> [: <Type>] [= <Expression>] ...]
+        }]
+      }
+      ...
+    }
+
+    COMPOSITION {
+      CONNECT <ComponentName> TO <ComponentName> {
+        (FORALL (<ParameterName>: <ParameterType>, ...)
+         [<MappingRule>]
+         ...)
+      }
+      ...
+    }
+
+    META {
+      ASSUMPTIONS_AND_LIMITATIONS {
+        <PinchPoint[Model]_1>
+        <PinchPoint[Model]_2>
+        ...
+      }
+      
+      SATISFACTION_ANALYSIS {
+        <PinchPoint[SatisfactionCriteria]_1>
+        <PinchPoint[SatisfactionCriteria]_2>
+        ...
+      }
+
+      POSSIBLE_FLAW_ANALYSIS {
+        <PinchPoint[PotentialFlaws]_1>
+        <PinchPoint[PotentialFlaws]_2>
+        ...
+      }
+    }
+  }
+  
+  NEXT {
+    OPTIMAL_NEXT_ACTION_ANALYSIS {
+      // Every item from SATISFACTION_ANALYSIS and POSSIBLE_FLAW_ANALYSIS must have a connection statement here
+      <PinchPoint[NextAction]_1>
+      <PinchPoint[NextAction]_2>
+      ...
+    }
+
+    NEXT_ACTION_DECISION {
+      [EXPLORE <ConceptToExplore> | MODEL <ConceptToModel>]
+    }
+  }
+}
+
+Usage instructions:
+- The user initiates the top-level process via the CONSTRUCT command, providing a high-level description of the desired artifact and optionally including additional context or requirements.
+- The LLM uses the EXPLORE block to investigate a topic from multiple angles
+  - In the CONTEXT block, list at least two pinch points for each predefined or custom category, connecting them to the topic using the <-> operator (the "pinch operator")
+    - The CUSTOM category is mandatory and should always be included (as with the other categories)
+  - Raise at least two QUESTIONS and CONJECTURES inspired by the pinch points, using the <-> operator to connect them
+  - Suggest at least two POTENTIAL_RED_HERRINGS_TO_AVOID based on the exploration, using the <-> operator to connect them to pinch points or conjectures
+- The user can issue the MODEL command to directly generate an AUXILIARY_MODEL for a given concept, to support the main artifact development
+- In the [AUXILIARY_MODEL | SOLUTION_MODEL] block, the LLM:
+  - Includes the verbatim user directive in GOAL_STATEMENT
+  - Characterizes the ideal solution in WHAT_IDEAL_SOLUTION_LOOKS_LIKE using pinch points connected to the GOAL_STATEMENT via the <-> operator
+  - Specifies COMPONENTS with parameters, types, and DEF declarations
+    - Type-theoretic formulations and math notations are allowed
+  - Defines the COMPOSITION by connecting components with parameter mappings
+  - Ends with a META block analyzing model fit, flaws, assumptions, and limitations using pinch points connected via the <-> operator
+- In the NEXT block, the LLM:
+  - In OPTIMAL_NEXT_ACTION_ANALYSIS, connects every item from SATISFACTION_ANALYSIS and POSSIBLE_FLAW_ANALYSIS to a next action justification using pinch points and the <-> operator
+  - Makes a NEXT_ACTION_DECISION to either EXPLORE or MODEL a concept, based on the analysis
+
+
+
+
+
+
+
+  LatentScriptV4 {
+  VERSION 1.3
+
+  EXPLORE CompressedSensingForBiometricsAndIoT {
+    CONTEXT {
+      CONCEPTS:
+        CompressedSensingInBiometric ∧ AuthenticationSystems <-> ReducingMeasurementAndStorageCostsWhilePreservingDiscriminability
+        SyntacticAndSemanticCompressibilityOfBiometricFeatures <-> LeveragingRedundancyAcrossMultimodalAndTemporalBiometricSignals
+      THEORIES:
+        SparseRandomProjectionsForBiometricTemplates <-> EnablingSecureAndMemoryEfficientBiometricMatching  
+        DomainAdaptedDictionariesForBiometricSignalCompression <-> ExploitingBiophysicalPriorsForHigherCompressionRatios
+      CUTTING_EDGE_RESEARCH:
+        CompressedDomainFeatureLearning <-> BypassingExplicitSignalReconstructionForAuthentication
+        FederatedBiometricTemplateMatching <-> ProtectingUserPrivacyViaSplitCompressedTemplates  
+      CROSS_DISCIPLINARY_CONNECTIONS:
+        CompressedSensingForIoTSensorNetworks <-> AnalogousResourceConstraintsAndScalabilityDemands
+        LowPowerNeuromorphicBiometricProcessors <-> ImplementingCompressedSensingViaSpikingComputationOnChip
+      ANOMALIES_AND_OUTLIERS:
+        CompressedBiometricsFromUncalibratedSensors <-> RobustAuthenticationUnderSensorVariabilityAndNonIdealities
+        SubNyquistRateEEGBasedBiometrics <-> ExploitingCompressibilityToReducePowerAndDataTransmission  
+      HISTORICAL_CONTEXT:
+        TransformDomainFeatureExtractionInBiometrics <-> PrecedenceOfUtilizingRedundancyForTemplateCompression
+        ShiftingAttentionFromReconstructionToTaskDrivenCompression <-> EmergingRecognitionOfEndToEndOptimizationPotential  
+      CUSTOM:
+        IncorporatingTemporalDynamicsInCompressedBiometrics <-> ModelingIdentitySpecificVariationsAcrossTime
+        CompetitivePrivacyPreservingBiometricMatching <-> QueryingCompressedTemplatesWithoutRevealingIdentities
+    }
+
+    QUESTIONS {
+      ∀BiometricSignalClass ∃CompressionRatio (AuthenticationAccuracy(CompressionRatio) ≈ AuthenticationAccuracy(Uncompressed)) 
+        <-> CompressedSensingInBiometric ∧ AuthenticationSystems
+      ∀Modality ∃SparseTransform (SparsityLevel(BiometricFeatures, SparseTransform) << 1) 
+        <-> SyntacticAndSemanticCompressibilityOfBiometricFeatures
+      ∀DomainShiftScenario ∃AdaptationStrategy (AuthenticationPerformanceDrop(CompressedTemplates, DomainShiftScenario, AdaptationStrategy) < 𝛿)
+        <-> DomainsAdaptedDictionariesForBiometricSignalCompression        
+    }
+
+    CONJECTURES {
+      ∀BiometricTemplate ∃LowDimEmbedding (LocalizationAbility(LowDimEmbedding) > GlobalReconstructionFidelity) 
+        <-> CompressedDomainFeatureLearning  
+      NoisyBiometricSignals ∧ DeepCompressedDomainTransfer <-> RobustTemplateMatchingAcrossUncalibratedSensors
+        <-> CompressedBiometricsFromUncalibratedSensors
+      BioPhysicallyInspiredDictionaries ∧ DataDrivenAdaptation <-> SuperiorCompressionAndMatchingPerformance
+        <-> DomainAdaptedDictionariesForBiometricSignalCompression
+    }
+
+    POTENTIAL_RED_HERRINGS_TO_AVOID {
+      ConventionalHighResolutionSensorArrays <-> ProhibitivelyCostlyForWidespreadIoTDeployment 
+        <-> CompressedSensingForIoTSensorNetworks
+      NaiveApplicationOfGenericCompressedSensingAlgorithms <-> SubOptimalPerformanceDueToNeglectingBiometricPriors
+        <-> ShiftingAttentionFromReconstructionToTaskDrivenCompression
+      IndependentFeatureLevelCompression <-> IgnoresCrossModalAndTemporalDependencies 
+        <-> IncorporatingTemporalDynamicsInCompressedBiometrics
+    }
+  }
+  
+  SOLUTION_MODEL CompressedMultimodalBiometricAuthenticator {
+    META {
+      GOAL_STATEMENT: CONSTRUCT a concrete/novel/practical/under-explored application of compressed sensing; additional info: 
+                      the final algorithm should be implementable in < 200 lines of python, and an ideal solution will be easily testable.
+
+      WHAT_IDEAL_SOLUTION_LOOKS_LIKE {
+        JointlyOptimizeMeasurementAndAnalysisForBiometrics <-> EndToEndAuthenticationPipelineInCompressedDomain  
+        FastAndLightweightTestTimeOperation <-> SuitabilityForResourceConstrainedIoTDeployment
+        ExplainabilityAndInterpretabilityOfMatchingProcess <-> SecureAndTransparentUserAuthenticationExperience 
+        EasyToImplementAndBenchmark <-> PromotingAccessibilityAndExtensibilityForDevelopers
+      }
+    }
+
+    COMPONENTS {
+      COMPONENT MultiModalSensorArray(BiometricSignals: List[TimeSeries], MeasurementMatrix: Matrix) -> CompressedMeasurements {
+        DEFS {
+          DEF Modalities := [Fingerprint, FacialImage, VoiceSample, ...]
+          DEF RawSignals := Concatenate(BiometricSignals(Modalities)) 
+          DEF CompressedMeasurements := MeasurementMatrix · RawSignals
+        }
+      }
+
+      COMPONENT BiometricReconstructionAutoEncoder(CompressedMeasurements, EncoderNet, DecoderNet) -> ReconstructedSignals {
+        SUBCOMPONENTS {
+          COMPONENT SparseTransformLayer(SparsityPenalty)
+          COMPONENT DomainAdaptationLayer(SourceDataDistribution, TargetDataDistribution)
+        }
+        
+        DEFS {  
+          DEF LatentRepresentation := EncoderNet(CompressedMeasurements)
+          DEF ReconstructedSignals := DecoderNet(SparseTransformLayer(LatentRepresentation))  
+        }
+      }
+
+      COMPONENT MultiTaskAuthenticator(Query, ReconstructedSignals, SimilarityMetric) -> AuthenticationResult {
+        SUBCOMPONENTS {
+          COMPONENT IdentityVerifier(IdentityThreshold, FalseAcceptanceRate)
+          COMPONENT LivenessDetector(LivenessThreshold, FalseDetectionRate)
+        }
+        
+        DEFS {
+          DEF QueryLatentRep := EncoderNet(Query)
+          DEF Similarity := SimilarityMetric(QueryLatentRep, LatentRepresentation) 
+          DEF AuthenticationResult := IdentityVerifier(Similarity) ∧ LivenessDetector(Query)
+        }
+      } 
+    }
+
+    COMPOSITION {
+      CONNECT MultiModalSensorArray TO BiometricReconstructionAutoEncoder {
+        FORALL (BiometricSignals, MeasurementMatrix)  
+         MultiModalSensorArray.CompressedMeasurements -> BiometricReconstructionAutoEncoder.CompressedMeasurements
+      }
+
+      CONNECT BiometricReconstructionAutoEncoder TO MultiTaskAuthenticator {
+        FORALL (CompressedMeasurements, EncoderNet, DecoderNet)
+         BiometricReconstructionAutoEncoder.ReconstructedSignals -> MultiTaskAuthenticator.ReconstructedSignals
+         BiometricReconstructionAutoEncoder.EncoderNet -> MultiTaskAuthenticator.EncoderNet
+      } 
+    }
+
+    META {
+      ASSUMPTIONS_AND_LIMITATIONS {
+        BiometricSignalsAreCompressibleInSomeLatentSpace <-> SparseTransformLayer
+        SufficientTrainingDataCapturesDomainsAndUsers <-> DomainAdaptationLayer
+        SimilarityMetricCanSeparateIdentitiesAndDetectAttacks <-> LivenessDetector ∧ IdentityVerifier 
+        NoiseLevelWithinToleranceForAccurateRecovery <-> RobustToSensorNoiseAndAcquisitionArtifacts
+      }  
+
+      SATISFACTION_ANALYSIS {
+        EndToEndOptimizationOfCompressionAndAuthentication <-> JointlyOptimizeMeasurementAndAnalysisForBiometrics
+        LowMemoryFootprintAndComputationalComplexity <-> FastAndLightweightTestTimeOperation
+        LatentFeatureAlignmentWithPhysicalTraitsAndAttackSignatures <-> ExplainabilityAndInterpretabilityOfMatchingProcess
+      }
+
+      POSSIBLE_FLAW_ANALYSIS {
+        TrainingDataMayNotFullyCoverAllDeploymentDomains <-> DomainAdaptationMayRequireOnlineUpdates 
+        HandcraftedSimilarityMetricCanMissSomeAttackVectors <-> PotentialVulnerabilityToAdversarialExploits
+        LargeModelSizeCanHinderDeploymentOnLightweightDevices <-> StreamliningNeededForScalablilityOnIoT
+      }
+    }
+  } 
+
+  NEXT {
+    OPTIMAL_NEXT_ACTION_ANALYSIS {
+      EndToEndOptimizationOfCompressionAndAuthentication <-> InvestigateCompressionRatioVsAccuracyTradeoffs
+        <-> JointlyOptimizeMeasurementAndAnalysisForBiometrics 
+      LowMemoryFootprintAndComputationalComplexity <-> BenchmarkOnboardExecutionOnLightweightMicrocontrollers
+        <-> FastAndLightweightTestTimeOperation
+      LatentFeatureAlignmentWithPhysicalTraitsAndAttackSignatures <-> VisualizeLearnedFeaturesAgainstDomainKnowledge  
+        <-> ExplainabilityAndInterpretabilityOfMatchingProcess
+      TrainingDataMayNotFullyCoverAllDeploymentDomains <-> SimulatePerformanceUnderDomainShiftAndNovelPresentationAttacks
+        <-> DomainAdaptationMayRequireOnlineUpdates
+      HandcraftedSimilarityMetricCanMissSomeAttackVectors <-> EvaluateOnStandardAdversarialAttackBenchmarks
+        <-> PotentialVulnerabilityToAdversarialExploits
+      LargeModelSizeCanHinderDeploymentOnLightweightDevices <-> ProfileAndOptimizeComputeVsMemoryTradeoffs
+        <-> StreamliningNeededForScalablilityOnIoT  
+    }
+
+    NEXT_ACTION_DECISION {
+      MODEL CrossDeviceFederatedBiometricTemplateAdaptation  
+    }
+  }
+}
+
+
+
+
+LatentScriptV4 {
+  VERSION 1.3
+  
+  EXPLORE CompressedSensingForEnvironmentalMonitoring {
+    CONTEXT {
+      CONCEPTS:
+        SpatiotemporalCompressibility <-> LowRankStructureInEnvironmentalFields
+        DistributedSensingNetworks <-> CostAndPowerConstrainedMonitoringInfrastructure
+      THEORIES:
+        SpatiallyBandlimitedEnvironmentalSignals <-> SmoothAndContinuousFieldsAmenable ToCompressedSensing
+        TemporallySparsifiableEnvironmentalSignals <-> CompactRepresentationInWaveletOrFrequencyDomain  
+      CUTTING_EDGE_RESEARCH:
+        UnmannedAerialVehicleSwarms <-> AdaptiveSamplingWithMobileAgents
+        WirelessUndergroundSensorNetworks <-> SubsurfaceMonitoringOfWaterSoilAndGeochemistry
+      CROSS_DISCIPLINARY_CONNECTIONS:
+        RemoteSensingImageCompression <-> CompressedSensingOfMultispectralSatelliteImagery  
+        RobustEnvironmentalTimeSeries <-> CompressedSensingReconstructionWithOutliers
+      ANOMALIES_AND_OUTLIERS:
+        CompressedDetectionOfEnvironmentalAnomalies <-> IdentifyingRareEventsWithMinimalMeasurements
+        SuddenChangeDetectionViaCompressedSensing <-> TriggeringAdaptiveMonitoringUponAnomalies  
+      HISTORICAL_CONTEXT:
+        EnvironmentalApplicationsOfNyquistShannon <-> BasicsOfSamplingTheoryLinkingBandwidthAndSampleRate
+        FieldEstimationFromSparseObservations <-> InterpolatingGeospatialDataFromIrregularMeasurements  
+      CUSTOM:
+        EmbeddedCompressedSensingHardware <-> IntegratedSparseRandomProjectionsOnLowPowerDevices
+        PrivacyPreservingEnvironmentalDataAnalysis <-> CompressedMeasurementsAsSecureDataSketches
+    }
+
+    QUESTIONS {
+      MinimumSamplesForReliableReconstruction <-> ∃SamplingScheme ∀EnvironmentField (Error(Reconstruct(SamplingScheme(EnvironmentField))) < ε)  
+      OptimalSensorPlacementStrategies <-> ∃DeploymentScheme ∀SpatialDomain (AchievesRequiredAccuracyAndGranularityWithMinimumSensors(DeploymentScheme))
+    }
+
+    CONJECTURES {
+      HybridSensingNetworksForMultiscaleMonitoring <-> StaticSensorsForBackgroundMonitoring ∧ MobileSensorsForDynamicLocalPhenomena  
+      DomainKnowledgePriorsBoostCompressibility <-> PhysicsBasedModelsOfEnvironmentalCorrelations ∧ HistoricalDataInformedBasisFunctions
+    }
+        
+    POTENTIAL_RED_HERRINGS_TO_AVOID {
+      FullRecoveryOfEnvironmentFromCompressedMeasurements <-> LosslessCaptureOfAllHighFrequencyVariationsIsImpractical  
+      SolvingIllPosedReconstructionWithoutRegularization <-> InsufficientMeasurementsLeadToArbitrarinessWithoutPriorKnowledge
+    }
+  }
+
+  SOLUTION_MODEL CompressedEnvironmentalMonitoringSystem {
+    META {
+      GOAL_STATEMENT: CONSTRUCT a concrete/novel/practical/under-explored application of compressed sensing; additional info: 
+                      the final algorithm should be implementable in < 200 lines of python, and an ideal solution will be easily testable.
+
+      WHAT_IDEAL_SOLUTION_LOOKS_LIKE {
+        UsesMinimalNumberOfSensors <-> CostEffectiveSamplingSchemeExploitingEnvironmentalCompressibility  
+        ScalesGracefullyToLargeMonitoringAreas <-> DistributedInNetworkProcessingAndAggregationOfCompressedData
+        EnablesMultiresolutionSpatiotemporalReconstruction <-> HierarchicalCompressedSensingAdaptingToLocalDynamics
+        IsModularAndCompatibleWithExistingSensors <-> IntegratesWithLegacyMonitoringInfrastructureTransparently
+      }
+    }
+
+    COMPONENTS {  
+      COMPONENT CompressedEnvironmentSensor(Location: Coordinate, SensingMatrix: Matrix, TransmissionPeriod: Int) -> SensorReading {
+        SUBCOMPONENTS {
+          COMPONENT EnvironmentSamplingUnit(Location)
+          COMPONENT RandomProjectionMatrix(SensingMatrix)  
+        }
+           
+        DEFS {
+          DEF RawReading := EnvironmentSamplingUnit.Sample()
+          DEF CompressedReading := RandomProjectionMatrix · RawReading
+        }
+      }
+
+      COMPONENT AdaptiveCompressedSensingController(ActiveSensors: List[CompressedEnvironmentSensor], Region: SpatialDomain) {
+        SUBCOMPONENTS {
+          COMPONENT ReconstructionQualityEstimator(ReconstructionAlgorithm, ErrorTolerance) 
+          COMPONENT SparseRecoveryAlgorithm(L1MinSolver, NoiseParameters) 
+        }
+           
+        DEFS {
+          DEF CompressedMeasurements := Aggregate(ActiveSensors.SensorReading)
+          DEF FieldReconstruction := SparseRecoveryAlgorithm(CompressedMeasurements)
+          DEF ReconstructionError := ReconstructionQualityEstimator(FieldReconstruction)
+          DEF UpdatedSensingMatrices := OptimizeProjections(ActiveSensors, Region, ReconstructionError)  
+        }
+      }
+
+      COMPONENT MonitoringResultsVisualizer(FieldSnapshot: SpatiotemporalSignal, UserQuery: Query) -> Visualization { 
+        DEFS {
+          DEF SaliencyMap := ExtractSalientFeatures(FieldSnapshot, UserQuery)
+          DEF Heatmap := RenderSpatialHeatmap(SaliencyMap)
+          DEF Trendline := FitTemporalTrendlines(FieldSnapshot, UserQuery)
+        }
+      }
+    }
+
+    COMPOSITION {
+      CONNECT CompressedEnvironmentSensor TO AdaptiveCompressedSensingController {
+        FORALL (Location, SensingMatrix, TransmissionPeriod)
+         CompressedEnvironmentSensor.SensorReading -> 
+           AdaptiveCompressedSensingController.Aggregate(ActiveSensors.SensorReading)
+      }
+      
+      CONNECT AdaptiveCompressedSensingController TO MonitoringResultsVisualizer {
+        FORALL (ActiveSensors, Region)
+         AdaptiveCompressedSensingController.FieldReconstruction -> MonitoringResultsVisualizer.FieldSnapshot  
+      }
+    }
+
+    META {
+      ASSUMPTIONS_AND_LIMITATIONS {
+        EnvironmentalFieldHasSmoothSpatialVariations <-> JustifiesSpatialCompressibilityAssumption
+        EnvironmentalFieldHasSparseTemporalChanges <-> JustifiesTemporalCompressibilityAssumption
+        ReconstructionQualityDependsOnMeasurementBudget <-> HigherSamplingRateAllowsHigherFidelityMonitoring
+        InNetworkComputationResourcesAreLimited <-> ConstrainsComplexityOfCompressionAndEstimation  
+      }
+
+      SATISFACTION_ANALYSIS {  
+        SpatiotemporalCompressibility ∧ DistributedSensorsWithRandomProjections <-> UsesMinimalNumberOfSensors  
+        HierarchicalSensingWithMultiresolutionQualityEstimation <-> EnablesMultiresolutionSpatiotemporalReconstruction
+        IntegratesWithStandardEnvironmentMonitoringInterfaces <-> IsModularAndCompatibleWithExistingSensors
+      }
+
+      POSSIBLE_FLAW_ANALYSIS {
+        ReconstructionAccuracyDegradesBeyondAssumedBandwidth <-> HighlyDynamicOrTurbulentEnvironmentsBreakAssumptions
+        PrivacyConcernsFromSensorSpecificDataExposure <-> CentralizedServerReceivingRawMeasurementsIsAVulnerability  
+      }
+    }
+  }
+    
+  NEXT {
+    OPTIMAL_NEXT_ACTION_ANALYSIS {
+      SpatiotemporalCompressibility ∧ PhysicsBasedModelsOfEnvironmentalCorrelations <->
+        DomainKnowledgePriorsBoostCompressibility
+        
+      MonitoringResultsVisualizer.Heatmap ∧ CompressedDetectionOfEnvironmentalAnomalies <->
+        CompressedMeasurementsCanRevealSalientFeaturesAndAnomalies
+
+      HierarchicalCompressedSensingAdaptingToLocalDynamics ∧ ReconstructionAccuracyDegradesBeyondAssumedBandwidth <->
+        AdaptiveSamplingNeededToRobustlyHandleDynamicEnvironments  
+
+      PrivacyPreservingEnvironmentalDataAnalysis ∧ PrivacyConcernsFromSensorSpecificDataExposure <-> 
+        SecureMultipartyComputationWithCompressedSensingForDecentralizedAnalysis
+    }
+
+    NEXT_ACTION_DECISION {
+      MODEL DomainKnowledgeInformedSpatiotemporalCompressibilityPriors  
+    }
+  }
+}

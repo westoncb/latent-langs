@@ -1,0 +1,114 @@
+CONCEPT DifferentialPrivacy {
+  LANGUAGE {
+    TYPE Database = List[Record]
+    TYPE Query = Database -> Real
+    TYPE Mechanism = Query -> Database -> Real  
+    TYPE Loss = Real
+    TYPE Metric = (Real, Real) -> Real
+
+    FUNC Sensitivity(Q : Query, d : Metric) : Real
+    FUNC AddNoise(Q : Query, ε : Real) : Mechanism
+    FUNC Compose(M1 : Mechanism, M2 : Mechanism) : Mechanism
+    FUNC GaussianMechanism(Q : Query, ε : Real) : Mechanism
+    FUNC LaplaceMechanism(Q : Query, ε : Real) : Mechanism  
+    FUNC ExpMechanism(Q : Query, u : Utility, ε : Real) : Mechanism
+    FUNC SparseVector(Q : List[Query], T : Real, N : Nat) : Mechanism
+
+    PRED ε-DP(M : Mechanism, ε : Real, d : Metric)
+    PRED (ε,δ)-DP(M : Mechanism, ε : Real, δ : Real, d : Metric)  
+
+    AXIOM Triangular {  
+      ∀ (d : Metric). 
+        d(x, z) ≤ d(x, y) + d(y, z)
+    }
+
+    AXIOM Symmetric {
+      ∀ (d : Metric).
+        d(x, y) = d(y, x)  
+    }
+
+    AXIOM Nonnegative {
+      ∀ (d : Metric).
+        d(x, y) ≥ 0 ∧ (d(x, y) = 0 ⇔ x = y)  
+    }
+
+    NOTATION "Δf" = Sensitivity
+    NOTATION "Pr[M(D) = x]" = Probability(EqualTo(Evaluate(M, D), x))
+    NOTATION "∀ D~D'. P(D)" = ∀ (D D' : Database). Adjacent(D, D') ⇒ P(D)
+  }
+
+  STRUCTURE AdjacentDatabases(D1 : Database, D2 : Database) {
+    REQUIRE |D1 - D2| + |D2 - D1| ≤ 1
+  }
+
+  STRUCTURE L1Sensitivity(Q : Query) {
+    DEF Sensitivity : Real = 
+      Max(d(Q(D1), Q(D2))) WHERE ∀ (D1 D2 : Database). AdjacentDatabases(D1, D2)
+        AND d = L1Distance
+  }
+
+  STRUCTURE LaplaceMechanism(Q : Query, ε : Real) : Mechanism {
+    RETURN λ (D : Database). Q(D) + Lap(Δf(Q) / ε)
+  }
+
+  STRUCTURE GaussianMechanism(Q : Query, ε : Real) : Mechanism {
+    LET δ = exp(-ε^2 / 2)
+    LET σ = Sqrt(2 * Log(1.25 / δ)) * Δf(Q) / ε
+    RETURN λ (D : Database). Q(D) + N(0, σ^2)
+  }
+
+  PROOFS {
+    TACTIC Unpack(M, x) = REWRITE M = M.Definition AND x = x.Definition
+    TACTIC Bound(e, b) = REWRITE e ≤ b
+    TACTIC BoundBelow(e, b) = REWRITE e ≥ b  
+    TACTIC Pr(e) = REWRITE Pr[e] = Probability(e)
+    TACTIC Ratio(e1, e2) = REWRITE e1 / e2 ≤ exp(ε)
+
+    THEOREM LaplaceMechanismDP {
+      STATEMENT:  
+        ∀ (Q : Query) (ε : Real).
+          ε-DP(LaplaceMechanism(Q, ε), ε, AbsoluteDistance)
+
+      PROOF:
+        LET Q : Query, ε : Real, M = LaplaceMechanism(Q, ε)
+        SHOW ε-DP(M, ε, AbsoluteDistance) BY {
+          LET D1 D2 : Database, x : Real
+          ASSUME AdjacentDatabases(D1, D2)
+          Pr[M(D1) = x] / Pr[M(D2) = x]  
+            = exp(-ε * |x - Q(D1)|) / exp(-ε * |x - Q(D2)|)   BY Unpack(M, x), Pr  
+            = exp(ε * (|x - Q(D2)| - |x - Q(D1)|))            BY ALGEBRA
+            ≤ exp(ε * |Q(D2) - Q(D1)|)                        BY TRIANGLE INEQUALITY  
+            ≤ exp(ε * Δf(Q))                                  BY DEFINITION Sensitivity
+            ≤ exp(ε)                                          BY DEFINITION LaplaceMechanism
+        }
+    }
+
+    THEOREM GaussianMechanismDP {
+      STATEMENT:
+        ∀ (Q : Query) (ε : Real) (δ : Real).
+          (ε,δ)-DP(GaussianMechanism(Q, ε), ε, δ, L2Distance)
+
+      PROOF:
+        LET Q : Query, ε : Real, δ : Real, M = GaussianMechanism(Q, ε)  
+        SHOW (ε,δ)-DP(M, ε, δ, L2Distance) BY {
+          LET D1 D2 : Database, S ⊆ Range(M)  
+          ASSUME AdjacentDatabases(D1, D2)
+          Pr[M(D1) ∈ S] 
+            ≤ exp(ε) * Pr[M(D2) ∈ S] + δ                      BY {
+              LET σ = Sqrt(2 * Log(1.25 / δ)) * Δf(Q) / ε
+              Pr[M(D1) ∈ S]
+                ≤ Pr[M(D2) ∈ S^σ] + δ/2                       BY TailBounds
+                ≤ exp(ε) * Pr[M(D2) ∈ S] + δ/2                BY {  
+                  Pr[M(D2) ∈ S^σ] 
+                    ≤ exp(ε) * Pr[M(D2) ∈ S]                   BY {
+                      LET x ∈ S^σ  
+                      Pr[M(D2) = x] / Pr[M(D1) = x]
+                        ≤ exp(ε * |Q(D2) - Q(D1)| / σ)          BY GaussianRatio
+                        ≤ exp(ε)                                BY DEFINITION σ
+                    }
+                }
+            }
+        }
+    }
+  }
+}

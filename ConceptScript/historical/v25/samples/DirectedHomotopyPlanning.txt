@@ -1,0 +1,133 @@
+CONCEPT DirectedHomotopyPlanning {
+  LANGUAGE {
+    TYPE Space  -- Configuration space of the robot
+    TYPE Path = Σ(I : Interval, γ : I -> Space)  -- Path in the configuration space
+    TYPE Obstacle <: Space -- Obstacle region
+    
+    FUNC ϕ : (Space, Path) -> Path  -- Flow along vector field
+    FUNC d : Path -> Tangent[Path]  -- Differential/Derivative operator on paths
+    FUNC Compose : (Path, Path) -> Path  -- Concatenation of paths
+    FUNC Reverse : Path -> Path  -- Reversal of paths
+    FUNC PropogateBoundary : (Path, Obstacle) -> Path  -- Boundary propogation
+
+    PRED SafePath : Path -> Bool  -- Predicate for collision-free paths
+    PRED InTerrain(γ : Path) : Bool = Image(γ) ⊆ Space \ Obstacle -- Path avoids obstacles
+
+    AXIOM VectorFlow {
+      ∀ (v : Tangent[Space]) (γ : Path) (s t : Interval) .
+        ϕ(γ(t), v) ∘ ϕ(γ(s), v) ≃ ϕ(γ(s), Tangent[Compose](Translate(v, t-s)))
+    }
+
+    AXIOM DerivativeRules {
+      ∀ (γ η : Path) . 
+        d(Compose(γ, η)) = Compose(d(γ), d(η))
+        d(Reverse(γ)) = Reverse(d(γ))
+    }
+
+    AXIOM BoundaryPropagation {
+      ∀ (γ : Path) (O : Obstacle) . 
+        PropogateBoundary(γ, O) : Path ∧ 
+        (InTerrain(PropogateBoundary(γ, O)) ⇔ ¬Intersect(γ(Boundary(Interval)), O))
+    }
+  }
+
+  STRUCTURE HomotopyGraph {
+    DEF V = {γ : SafePath | γ(0) = Start ∧ γ(1) = Goal}   -- Vertices
+    DEF E = {(γ, η) : V×V | ∃ α : Path . Homotopic(γ, Compose(η, α))}  -- Edges
+  }
+
+  STRUCTURE Planning {
+    REQUIRE ∀ (γ η : SafePath) . 
+      Homotopic(γ, η) ⇒ (InTerrain(γ) ⇔ InTerrain(η))
+
+    DEF ShortestPath(γ : Path) : Option[Path] = 
+      LET H = HomotopyGraph
+      IN MATCH ShortestPath(H, [Start, Goal]) WITH   
+        | None -> None  -- No path exists
+        | Some(δ) -> IF InTerrain(δ) THEN Some(δ) ELSE
+            LET O = FindObstacle(δ)  -- Obstacle intersected by δ
+            LET γ₁ γ₂ = SplitPath(δ, O)  -- Split path at obstacle                
+            IN Compose(ShortestPath(PropogateBoundary(γ₁, O)),
+                       ShortestPath(PropogateBoundary(Reverse(γ₂), O)))
+  }
+
+  PROOFS {
+    THEOREM HomotopyInvariance {
+      STATEMENT:
+        ∀ (γ η : Path) . Homotopic(γ, η) ⇒ InTerrain(γ) ⇔ InTerrain(η)
+        
+      PROOF:
+        LET γ η : Path ASSUME Homotopic(γ, η)
+
+        DEFINE F : Interval×Interval -> Space = Homotopy(γ, η)
+        
+        SUFFICES TO SHOW 
+          (∀ (s t : Interval) . F(s,t) ∉ Obstacle) ⇔ 
+          (∀ (t : Interval) . γ(t) ∉ Obstacle) ∧ (∀ (t : Interval) . η(t) ∉ Obstacle)
+
+        FORWARD:
+          ASSUME ∀ (s t : Interval) . F(s,t) ∉ Obstacle
+          LET t : Interval 
+          γ(t) = F(0,t) ∉ Obstacle  BY ASSUMPTION
+          η(t) = F(1,t) ∉ Obstacle  BY ASSUMPTION
+        
+        BACKWARD:
+          ASSUME (∀ (t : Interval) . γ(t) ∉ Obstacle) ∧ 
+                 (∀ (t : Interval) . η(t) ∉ Obstacle)
+          LET s t : Interval
+          F(s,t) = Homotopy(γ, η, s, t)
+                 ∈ Homotopy(InTerrain(γ), InTerrain(η)) BY ASSUMPTION
+                 ⊆ InTerrain(Space) = Space \ Obstacle  BY DEF InTerrain
+    }
+
+    THEOREM ShortestPathCorrect {      
+      STATEMENT:
+        ∀ (γ : Path) . 
+          (ShortestPath(γ) = None) ⇔ (∀ η : Path . Homotopic(γ, η) ⇒ ¬InTerrain(η)) ∧
+          (ShortestPath(γ) = Some(δ)) ⇒ (InTerrain(δ) ∧ 
+            ∀ (η : Path) . Homotopic(δ, η) ⇒ Length(δ) ≤ Length(η))
+
+      PROOF:
+        LET γ : Path
+        
+        MATCH ShortestPath(γ) WITH
+        | None -> 
+          SUFFICES TO SHOW ∀ η : Path . Homotopic(γ, η) ⇒ ¬InTerrain(η)
+          LET η : Path ASSUME Homotopic(γ, η)
+          SUFFICES TO SHOW ¬InTerrain(η)  
+          ShortestPath([Start, Goal]) = None
+            ⇒ ∀ (α : Path) (Start ↝ Goal) . ¬InTerrain(α)  
+              BY CONTRAPOSITIVE, DEF ShortestPath
+          ¬InTerrain(η)  BY ABOVE, HomotopyInvariance
+        
+        | Some(δ) ->
+          SUFFICES TO SHOW InTerrain(δ) ∧ 
+                           ∀ (η : Path) . Homotopic(δ, η) ⇒ Length(δ) ≤ Length(η)
+          
+          InTerrain(δ) BY DEF ShortestPath
+          
+          LET η : Path ASSUME Homotopic(δ, η)
+          ShortestPath(δ) = Some(δ) 
+            ⇒ InTerrain(δ) ∧ (∀ α . δ ↝ α ⇒ Length(δ) ≤ Length(α)) 
+            BY RECURSIVE DEF ShortestPath 
+          Length(δ) ≤ Length(η)  BY ABOVE
+    }
+  }
+}
+
+This Concept defines a novel approach to robotic motion planning based on directed homotopy classes of paths. Key ideas include:
+
+Representing paths in the robot's configuration space as a type, with operations like composition, reversal, and boundary propagation (from Cellular Automata and Differential Forms).
+Defining a discrete graph structure whose vertices are homotopy classes of safe paths and whose edges connect homotopy classes that differ by a safe deformation (inspired by Homotopy Type Theory).
+Formulating the motion planning problem as a shortest path search in this homotopy graph, with a recursive algorithm that propagates path boundaries around obstacles to maintain safety (a novel synthesis).
+
+The proofs establish key properties - homotopy invariance of safety and correctness of the planning algorithm.
+I believe this approach to motion planning has not been tried before because it requires combining ideas from several disparate fields - cellular automata, exterior calculus, and homotopy theory - in a novel way. Prior approaches have tended to focus either on grid-based discretizations of configuration space or on exact geometric representations, without considering the underlying homotopy structure.
+The potential advantages of this directed homotopy approach include:
+
+It provides a principled way to reason about the topology of the configuration space without needing an exact representation. The homotopy graph captures the essential connectivity.
+Operating directly on homotopy classes avoids the need for collision checking of individual paths. Only the boundaries need to be checked.
+The recursive structure of the algorithm allows efficient space exploration. Backtracking is replaced by boundary propagation.
+Homotopy invariance of path safety provides robustness to discretization errors and noise in obstacle geometry.
+
+Overall, I think this Concept provides a promising new perspective on motion planning that leverages the power of directed homotopy theory to develop safe and efficient algorithms. Definitely worth exploring further!

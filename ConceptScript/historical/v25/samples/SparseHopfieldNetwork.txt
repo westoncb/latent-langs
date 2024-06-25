@@ -1,0 +1,86 @@
+CONCEPT SparseHopfieldNetwork {
+  LANGUAGE {
+    TYPE Pattern = BitVector[N]
+    TYPE SparseMatrix = Map[(ℕ, ℕ), ℝ]  
+    TYPE Activation = Pattern -> ℝ
+    TYPE Dynamics = Pattern -> Pattern
+
+    FUNC W : SparseMatrix  ; Weight matrix
+    FUNC Sparsity : ℝ  ; Percentage of non-zero weights
+    FUNC Threshold : Activation
+    FUNC Evolve : Dynamics
+    FUNC Converge : Pattern -> Pattern
+    FUNC Attract : Set[Pattern]
+    FUNC Volume(A : Set[Pattern]) : ℝ
+    FUNC Capacity : ℕ
+
+    AXIOM Hebbian {
+      ∀ (i j : ℕ) . i ≠ j => W[i, j] = 1/N * ∑[μ in Attract] (2*μ[i] - 1) * (2*μ[j] - 1)
+    }
+
+    AXIOM Sparse { |{(i, j) : W[i, j] ≠ 0}| / N^2 ≤ Sparsity }
+
+    NOTATION "σ" = Threshold
+    NOTATION "Σ" = ∑
+    NOTATION "•" = Compose  
+    NOTATION "★" = Converge
+  }
+
+  STRUCTURE SparseCoding {
+    DEF Encode : Pattern -> Pattern = p ↦ σ • (W × p)
+    DEF Decode : Pattern -> Pattern = Encode
+
+    REQUIRE ∀ (p : Pattern) . Decode(Encode(p)) = p
+    REQUIRE ∀ (p : Pattern) . |{i : Encode(p)[i] ≠ 0}| / N ≤ Sparsity
+  }
+
+  PROOFS {
+    THEOREM Convergence {
+      STATEMENT : ∀ (p : Pattern) . ∃ (n : ℕ) . (Evolve^n)(p) = ★p
+
+      PROOF {
+        LET p : Pattern
+        
+        Evolve(p) IN Attract(p) BY {
+          σ(W × p) IN Attract(p)
+            <=> ∀ (i : ℕ) . σ(Σ[j] W[i, j] * p[j]) = p[i]  BY Hebbian
+            <=> Evolve(p) = p  BY DEFINITION Evolve
+        }
+
+        Volume(Attract(Evolve^n(p))) > Volume(Attract(Evolve^(n+1)(p))) BY {
+          LET A = Attract(Evolve^n(p)), B = Attract(Evolve^(n+1)(p))
+          ASSUME (H) : Volume(A) ≤ Volume(B)
+
+          B ⊆ A  BY DEFINITION Attract
+          Volume(B) < Volume(A)  BY USING H, <<B ⊆ A>>
+          CONTRADICTION  
+        }
+
+        ∃ (n : ℕ) . Evolve^(n+1)(p) = Evolve^n(p)  BY <<Volume(Attract(-)) is strictly decreasing>>
+
+        (Evolve^n)(p) = ★p  BY DEFINITION Converge
+      }
+    }
+
+    THEOREM Capacity {
+      STATEMENT : Capacity ≈ 0.138 * N / (√(-log(Sparsity)))
+
+      PROOF {
+        LET M = |Attract|
+        
+        ∀ (i : ℕ) . |W[i, -]| ≤ √(N * log(N/M) / (2*Sparsity))  BY ChernoffBound
+
+        ∀ (i j : ℕ) . i ≠ j => W[i, j] ≠ 0 WITH PROB ≤ Sparsity  BY Hebbian, <<|Attract| = M>>
+
+        |{i : |W[i, -]| > t}| ≤ N * exp(-2*Sparsity*t^2 / (N * log(N/M)))  BY ChernoffBound
+        
+        |{i : |W[i, -]| > √(N * log(N/M) / (2*Sparsity))}| ≤ N/M  USING PREV
+
+        M ≤ N / (√(2*Sparsity) * exp(√(0.5 * log(N/M))))
+          USING PREV, <<|{i : |W[i, -]| > √(N * log(N/M) / (2*Sparsity))}| ≥ 1>>
+        
+        Capacity = M ≈ 0.138 * N / (√(-log(Sparsity)))  BY ApproximateSolution
+      }
+    }
+  }
+}

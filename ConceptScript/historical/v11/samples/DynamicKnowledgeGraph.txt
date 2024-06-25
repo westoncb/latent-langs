@@ -1,0 +1,93 @@
+CONCEPT DynamicKnowledgeGraph {
+  STRUCTURE {
+    [KG := Knowledge Graph representing entities and their relationships]
+    [∀e ∈ KG, e ↦ Entity]
+    [∀r ∈ KG, r ↦ Relationship]
+    [∀e1, e2 ∈ KG, ∃r ∈ KG, r := (e1, e2, type)]
+    [Context ↦ Set of entities and relationships relevant to a query]
+    [∀q ∈ Query, ∃c ∈ Context, c := relevant_subgraph(q, KG)]
+    [Learning ↦ Process of updating KG based on new information]
+    [∀i ∈ Information, ∃f : KG → KG, KG := f(KG, i)]
+  }
+  
+  PROOFS {
+    tactic expand_context(q, c, e) :
+      c ∈ Context by hypothesis
+      e ∈ KG by hypothesis
+      ∃r ∈ KG, r := (e, e', type) ∧ e' ∈ c by hypothesis
+      c := c ∪ {e} by definition of context expansion
+    
+    theorem maximizes_practicality :
+      ∀q ∈ Query, ∃c ∈ Context, answer(q, c) = answer(q, KG)
+    {
+      let q ∈ Query by hypothesis
+      let c := relevant_subgraph(q, KG) by [∀q ∈ Query, ∃c ∈ Context, c := relevant_subgraph(q, KG)]
+      ∀e ∈ KG, e ∉ c ⇒ ¬relevant(e, q) by definition of relevant_subgraph
+      
+      case ¬∃a, answer(q, c) = a => {
+        ∃e ∈ KG, e ∉ c ∧ relevant(e, q) by hypothesis
+        c := expand_context(q, c, e) by expand_context
+        answer(q, c) = answer(q, KG) by induction on |KG - c|
+      }
+      
+      case ∃a, answer(q, c) = a => {
+        answer(q, c) = answer(q, KG) by definition of relevant_subgraph
+      }
+    }
+  }
+  
+  LANGUAGE {
+    type Entity
+    type Relationship
+    type Query
+    type Information
+    type Context
+    
+    func relevant_subgraph(q : Query, kg : KG) : Context =
+      { e : Entity | e ∈ kg ∧ relevant(e, q) } ∪ 
+      { r : Relationship | r ∈ kg ∧ (∃e1, e2 ∈ relevant_subgraph(q, kg), r := (e1, e2, type)) }
+    
+    func answer(q : Query, c : Context) : String =
+      match q {
+        WhoQuery(name) => 
+          match { e : Entity | e ∈ c ∧ e.name = name } {
+            {e} => e.description,
+            _ => "Unknown"
+          },
+        WhatQuery(subject, property) =>
+          match { r : Relationship | r ∈ c ∧ r := (subject, object, property) } {
+            {r} => r.object.name,
+            _ => "Unknown"  
+          }
+      }
+    
+    func update(kg : KG, i : Information) : KG =
+      match i {
+        AddEntity(e) => kg ∪ {e},
+        AddRelationship(r) => kg ∪ {r},
+        RemoveEntity(e) => kg - {e} - { r : Relationship | r := (e, _, _) ∨ r := (_, e, _) },
+        RemoveRelationship(r) => kg - {r}
+      }
+  }
+}
+
+
+This Concept represents a DynamicKnowledgeGraph that can be used to store and query information in a structured way. The key aspects are:
+
+The knowledge graph KG consists of entities and relationships.
+Queries are answered by extracting a relevant subgraph (context) from the full knowledge graph. This makes querying more efficient.
+The knowledge graph can be dynamically updated with new information using the update function.
+The maximizes_practicality theorem proves that for any query, the answer obtained from the relevant context subgraph is the same as the answer that would be obtained from the full knowledge graph. This is shown by inductively expanding the context with relevant entities until an answer is found.
+
+The LANGUAGE block defines the key types and functions needed to implement this Concept in practice:
+
+relevant_subgraph extracts the subgraph relevant to a given query
+answer provides the implementation for answering "who" and "what" queries
+update defines how the knowledge graph is updated with new information
+This Concept could be practically implemented as a library for building and querying knowledge graphs in a programming language like Python. The theorems ensure that the implementation is correct and maximizes efficiency through the use of relevant subgraphs.
+
+Some potential applications include:
+
+A conversational AI system that stores and retrieves information through natural language queries
+A recommendation engine that finds relevant items by traversing the knowledge graph
+A research assistant that helps find connections between concepts in a knowledge base

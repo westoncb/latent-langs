@@ -1,0 +1,191 @@
+CONCEPT TopologicalNeuralNetwork {
+  PARAMETERS {
+    d : Nat -- Ambient dimension
+    𝕜 : Field -- Coefficient field
+    h : Nat -- Number of attention heads
+  }
+
+  CONTEXT {
+    TYPES {
+      Shape := CS(ℝ^d)
+      DIR := 𝕊^(d-1)
+      PHT := D^b(Shv(DIR × ℝ))
+      
+      INDUCTIVE NNLayer {
+        CASE Input(Shape)
+        CASE Hidden(NNLayer, Nat) -- Previous layer and number of neurons
+        CASE Output(NNLayer, Nat) -- Previous layer and number of outputs
+      }
+      
+      INDUCTIVE NNType {
+        CASE Base
+        CASE Arrow(NNType, NNType)
+      }
+      
+      Weight := FUNC(ℝ^d, ℝ^d)
+      Bias := ℝ^d
+      
+      Neuron := STRUCTURE {
+        FIELD weight : Weight
+        FIELD bias : Bias
+        FIELD activation : FUNC(ℝ -> ℝ)
+      }
+      
+      Network := STRUCTURE {
+        FIELD layers : List(NNLayer)
+        FIELD neurons : FUNC(NNLayer, Neuron)
+      }
+    }
+    
+    STRUCTURES {
+      STRUCTURE TopologicalAttention IMPLEMENTS AttentionMechanism.Attention(PHT, PHT, PHT) {
+        IMPLEMENT Alignment(k : PHT, q : PHT) -> Real
+          WITH InterleaveDistance(k, q)
+        
+        IMPLEMENT FUNC(q : PHT, ks : Seq(PHT), vs : Seq(PHT)) -> PHT
+          WITH Σ_i α_i * vs[i]
+          WHERE α = SoftMax(Seq(InterleaveDistance(ks[i], q) for i in Fin(N)))
+        
+        AXIOM TopologicalInvariance {
+          ∀ k q : PHT, f : Homeo . 
+            Alignment(f_*(k), f_*(q)) = Alignment(k, q)
+        }
+      }
+      
+      STRUCTURE NeuralPHT {
+        FIELD pht : PHT
+        FIELD layer : NNLayer
+        FIELD type : NNType
+        
+        AXIOM LayerTyping {
+          CASE Input(_) => type = Base
+          CASE Hidden(prev, _) => ∃ T . prev.type = Arrow(T, type)
+          CASE Output(prev, _) => ∃ T . prev.type = Arrow(type, T)
+        }
+      }
+    }
+    
+    NOTATION {
+      "_|_A" := Restrict(_, A)
+      ≃ := WeakEquivalence
+      "_*" := PushForward
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE ForwardPass(net : Network, input : Shape) -> PHT {
+      LET pht = PHT(input)
+      FOR layer IN net.layers {
+        CASE Input(_) => pht
+        CASE Hidden(prev, n) => 
+          LET attention = TopologicalAttention(h)
+          IN attention(pht, Seq(net.neurons(layer)[i].weight_*(pht) for i in 1...n),
+                            Seq(net.neurons(layer)[i].activation(net.neurons(layer)[i].bias + pht) for i in 1...n))
+        CASE Output(prev, n) =>
+          LET attention = TopologicalAttention(h)
+          IN attention(pht, Seq(net.neurons(layer)[i].weight_*(pht) for i in 1...n),
+                            Seq(net.neurons(layer)[i].activation(net.neurons(layer)[i].bias + pht) for i in 1...n))
+      }
+    }
+    
+    SIMPLIFY BackProp(net : Network, input : Shape, target : PHT, loss : FUNC(PHT, PHT) -> Real) {
+      LET output = ForwardPass(net, input)
+      LET error = loss(output, target)
+      
+      FOR layer IN REVERSE(net.layers) {
+        CASE Output(prev, n) =>
+          UPDATE net.neurons(layer)[i].weight -= ∂error/∂(net.neurons(layer)[i].weight) ∀i
+          UPDATE net.neurons(layer)[i].bias -= ∂error/∂(net.neurons(layer)[i].bias) ∀i
+        CASE Hidden(prev, n) =>
+          UPDATE net.neurons(layer)[i].weight -= ∂error/∂(net.neurons(layer)[i].weight) ∀i
+          UPDATE net.neurons(layer)[i].bias -= ∂error/∂(net.neurons(layer)[i].bias) ∀i
+        CASE Input(_) => SKIP
+      }
+    }
+  }
+
+  PROOFS {
+    THEOREM TopologicalInvarianceOfNetwork {
+      ∀ net : Network, input : Shape, f : Homeo .
+        ForwardPass(net, f(input)) ≃ f_*(ForwardPass(net, input))
+    }
+    PROOF {
+      ASSUME net : Network, input : Shape, f : Homeo
+      
+      <1>. SHOW ∀ layer IN net.layers .
+             NeuralPHT(ForwardPass(net, f(input))_layer) ≃ f_*(NeuralPHT(ForwardPass(net, input)_layer))
+        <1>1. BASE CASE: layer = Input(_)
+          ForwardPass(net, f(input))_Input ≃ PHT(f(input)) ≃ f_*(PHT(input)) ≃ f_*(ForwardPass(net, input)_Input)
+        <1>2. INDUCTIVE STEP: layer = Hidden(prev, n) OR Output(prev, n)
+          ASSUME NeuralPHT(ForwardPass(net, f(input))_prev) ≃ f_*(NeuralPHT(ForwardPass(net, input)_prev))
+          TopologicalAttention(NeuralPHT(ForwardPass(net, f(input))_prev), _, _) 
+            ≃ f_*(TopologicalAttention(NeuralPHT(ForwardPass(net, input)_prev), _, _))
+              [BY TopologicalAttention.TopologicalInvariance]
+        <1>3. QED BY INDUCTION on layer
+      
+      <2>. CONCLUDE ForwardPass(net, f(input)) ≃ f_*(ForwardPass(net, input))
+        BY <1> applied to Output layer
+      QED
+    }
+    
+    THEOREM PreservationOfPHTStructure {
+      ∀ net : Network, input : Shape .
+        PHT(ForwardPass(net, input)) ≃ PHT(input)
+    }
+    PROOF {
+      ASSUME net : Network, input : Shape
+      
+      <1>. SHOW ∀ layer IN net.layers .
+             ∃ g : Homeo . NeuralPHT(ForwardPass(net, input)_layer) ≃ g_*(PHT(input))
+        <1>1. BASE CASE: layer = Input(_)
+          NeuralPHT(ForwardPass(net, input)_Input) ≃ PHT(input)
+        <1>2. INDUCTIVE STEP: layer = Hidden(prev, n) OR Output(prev, n)
+          ASSUME ∃ g : Homeo . NeuralPHT(ForwardPass(net, input)_prev) ≃ g_*(PHT(input))
+          TopologicalAttention preserves homotopy type
+          [BY TopologicalAttention.TopologicalInvariance]
+          ∴ ∃ g' : Homeo . NeuralPHT(ForwardPass(net, input)_layer) ≃ g'_*(PHT(input))
+        <1>3. QED BY INDUCTION on layer
+      
+      <2>. CONCLUDE PHT(ForwardPass(net, input)) ≃ PHT(input)
+        BY <1> applied to Output layer
+      QED
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE SimpleTopologicalNN {
+      LET input_shape = Sphere(2, 2)  -- S^2 embedded in ℝ^3
+      LET net = Network {
+        layers = [
+          Input(input_shape),
+          Hidden(Input(input_shape), 10),
+          Output(Hidden(Input(input_shape), 10), 1)
+        ],
+        neurons = λ layer . MATCH layer WITH
+          | Input(_) => []
+          | Hidden(_, n) => [Neuron { 
+              weight = RANDOM_INIT(), 
+              bias = RANDOM_INIT(), 
+              activation = ReLU 
+            } for _ in 1...n]
+          | Output(_, n) => [Neuron { 
+              weight = RANDOM_INIT(), 
+              bias = RANDOM_INIT(), 
+              activation = Sigmoid 
+            } for _ in 1...n]
+      }
+      
+      LET output = ForwardPass(net, input_shape)
+      
+      ASSERT PHT(output) ≃ PHT(input_shape)  -- The output preserves the topological structure of the input
+      
+      LET target = PHT(Torus())  -- We want to classify whether the input is more like a sphere or a torus
+      LET loss = InterleaveDistance
+      
+      BackProp(net, input_shape, target, loss)
+      
+      -- After training, the network should be able to distinguish between spheres and tori
+      -- while preserving the topological structure of the input
+    }
+  }
+}

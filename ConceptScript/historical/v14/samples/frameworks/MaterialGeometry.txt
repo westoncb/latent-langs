@@ -1,0 +1,94 @@
+CONCEPT MaterialGeometry {
+  LANGUAGE {
+    type Mat = Manifold(ℝ^n, Microstructure)
+    type Mic = Lattice | Grain | Defect | Texture | Inclusion
+    type Ten = Tensor(Mat, ℝ^k)
+    
+    notation "α + β" = Superposition(α: Ten, β: Ten) 
+    notation "α ⊗ β" = Composition(α: Ten, β: Ten)
+    notation "α • β" = InnerProduct(α: Ten, β: Ten)
+    notation "σ[α]" = StressResponse(σ: Ten, α: Ten)
+    notation "ε[α]" = StrainResponse(ε: Ten, α: Ten)
+    notation "∇[α]" = Gradient(α: Ten)
+    notation "Δ[α]" = Laplacian(α: Ten)
+    
+    func StressStrain(σ: Ten, ε: Ten): Ten
+    func Elasticity(C: Ten, ε: Ten): Ten
+    func DiffusionFlow(D: Ten, ∇c: Ten): Ten
+    pred Equilibrium(F: Ten -> Ten, α: Ten)
+    
+    axiom Constitutive(σ: Ten, ε: Ten):
+      σ[ε] ≈ StressStrain(σ, ε)
+      
+    axiom LinearElasticity(σ: Ten, ε: Ten):  
+      σ[ε] ≈ Elasticity(C, ε)
+      
+    axiom FicksLaw(J: Ten, ∇c: Ten):
+      J ≈ -DiffusionFlow(D, ∇c)
+  }
+  
+  STRUCTURE {
+    Microstructure: {
+      ∀ m: Mat. ∃ μ: Mic. m ⊃ μ  
+      ∀ m: Mat. ∃ l: ℝ_+. m has CharacteristicLength(l)
+      ∀ m: Mat. m has Symmetry(Sym) for some Sym: Group
+    }
+    
+    TensorCalculus: {
+      ∀ α, β, γ: Ten.
+        (α + β) • γ = (α • γ) + (β • γ)
+        α ⊗ (β + γ) = (α ⊗ β) + (α ⊗ γ)
+        (α ⊗ β) • γ = α • (β • γ)
+    }
+
+    FieldEquations: {
+      ∀ F: Ten -> Ten, α: Ten.
+        Equilibrium(F, α) ⟺ F[α] = 0
+
+      ∀ σ, ε: Ten. 
+        ∇ • σ[ε] + f = 0  ; balance of linear momentum
+
+      ∀ D, c: Ten.  
+        ∂c/∂t = ∇ • D[∇c]  ; mass conservation
+    }
+  }
+
+  PROOFS {
+    theorem EffectiveElasticity(C: Ten, ε: Ten):
+      (∀ x: Mat. Elasticity(C(x), ε(x)))
+        ⊢ Elasticity(⟨C⟩, ⟨ε⟩) 
+    {
+      defn ⟨α⟩ := (∫[α, Mat]) / Vol(Mat)  ; spatial average
+      have Elasticity(C, ε) = σ[ε]  ; By LinearElasticity
+      so ⟨σ[ε]⟩ = ⟨Elasticity(C, ε)⟩ 
+      = Elasticity(⟨C⟩, ⟨ε⟩)  ; Average stress theorem
+    }
+
+    theorem DiffusionHomogenization(D: Ten, c: Ten):
+      (∀ p: Mic. FicksLaw(J(p), ∇c(p))) 
+        ⊢ FicksLaw(⟨J⟩, ∇⟨c⟩)
+    {
+      defn Coarse(α: Ten) := α ∘ Smooth
+      have ∇⟨c⟩ = ⟨∇c⟩ + Δ⟨c⟩  ; Multiscale gradient decomposition
+      have FicksLaw(J, ∇c) ⟺ J + D[∇c] = 0  
+      so ⟨J⟩ + ⟨D[∇c]⟩ = 0
+      hence ⟨J⟩ = -⟨D⟩ • ∇⟨c⟩ - ⟨D'⟩ • Δ⟨c⟩  ; Homogenized Fick's law 
+      where D' := Coarse(Fluctuation(D))
+    }
+    
+    tactic TensorSymmetry(op: Ten -> Ten -> Ten):
+      (∀ α, β: Ten. op(α, β) = op(β, α)) ⊢ 
+        ... ⊢ op(α, β) = op(Sym[α], Sym[β])
+        
+    theorem CauchyStress(σ: Ten):
+      TensorSymmetry(•) ⊢ σ = σᵀ
+    {
+      have σ • ε = ε • σ  ; Work conjugacy
+      hence σ = σᵀ  ; By tensor symmetry of •
+    }
+  }
+}
+
+This Concept, called MaterialGeometry, defines a language for expressing the geometric and constitutive relations of materials at multiple scales. It introduces types for material manifolds (Mat), microstructural elements (Mic), and tensors (Ten). The language includes notation for common tensor operations as well as key physical fields like stress (σ) and strain (ε).
+The structure axioms formalize the essential features of material microstructure and tensor calculus. Field equations for mechanical equilibrium and mass transport are also stated.
+The proofs demonstrate how effective properties and homogenized equations can be derived from knowledge of the microstructure. A general tactic for exploiting tensor symmetries is also provided.

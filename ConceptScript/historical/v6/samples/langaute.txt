@@ -1,0 +1,71 @@
+// Primitives
+Symbol
+Rule
+Meaning
+
+// Language concept
+Language := (
+  Lexicon(Symbol+),
+  Grammar(Rule+),
+  Semantics,
+  Pragmatics,
+  Modality  
+)
+
+// Language components  
+Lexicon := Dictionary(Entry+)
+  Entry := (Form, Meaning)
+    [Form ⊆ (Phoneme+ | Grapheme+)]
+
+Grammar := (Morphology + Syntax)
+  Morphology := (Inflection + Derivation)
+    Inflection := (Affix + Rule + Meaning)
+    Derivation := (Affix + Rule + Meaning)
+  Syntax := (Constituency + Dependency) 
+    Constituency := (Phrase + Rule)
+      Phrase := (Word+ | Phrase+)
+    Dependency := (GovernorWord + DependentWord + Relation)  
+
+Semantics := (LiteralMeaning + Composition + Context ⟗ Meaning)
+
+Pragmatics := (
+  SpeechActs + 
+  Implicature + 
+  Presupposition +
+  Deixis +  
+  Conventions
+)
+
+// Modalities  
+Spoken := Language(Modality:Auditory)
+  [Lexicon.Entry.Form ⊆ Phoneme+]
+Signed := Language(Modality:Visual, Grammar:Spatialized) 
+Written := Language(Lexicon.Entry.Form ⊆ Grapheme+)
+
+// Language Use
+Utterance := (Speaker, Addressee, Context, Language) :: {
+  [Speaker.Intent -> Semantics $ Meaning]
+  [Pragmatics.SpeechAct ∈ (Locutionary, Illocutionary, Perlocutionary)]
+  [Meaning ⨝ Addressee.Understanding] 
+}
+
+Discourse := Utterance+ :: {
+  [Utterance.n.Context ⊇ Utterance.(n-1)]
+  [Utterance.Speaker ⋈ Utterance.Addressee]
+  [SuperStructure ∈ (Narrative | Procedure | Exposition | Argument | Description)]
+}
+
+// Language Phenomena
+Ambiguity := (
+  LexicalAmbiguity | 
+  StructuralAmbiguity |
+  ScopeAmbiguity   
+){[Meaning.n > 1]}  
+
+Metaphor := (Topic ⧗ Vehicle ⟗ Meaning)
+
+Humor := (
+  Incongruity + 
+  Resolution +
+  [SocialContext ⊇ SafeToLaugh]  
+)

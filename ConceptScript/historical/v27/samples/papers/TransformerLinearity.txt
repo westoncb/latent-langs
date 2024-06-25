@@ -1,0 +1,181 @@
+CONCEPT TransformerLinearity {
+  NOTATION {
+    T = transformer model
+    L = layers of T
+    L_i = i-th layer of T
+    E_i = contextualized embeddings at layer L_i
+    R_i = residual component at layer L_i
+    X, Y = centered embedding matrices
+    ||X||_F = Frobenius norm of matrix X
+    d_P(X, Y) = 1 - min_A ||X̃A - Ỹ||^2_F -- Procrustes distance where X̃ = X/||X||_F, Ỹ = Y/||Y||_F
+    LS(X, Y) = d_P(X̃, Ỹ) = Linearity score between X and Y 
+    LS_T(i) = LS(E_i, E_{i+1}) -- Layer-wise linearity  
+    LS_T = Σ_i LS_T(i) / |L| -- Model linearity (avg across layers)
+    NLS_T(i) = LS(E_i - E_{i-1}, E_{i+1} - E_i) -- Layer-wise linearity w/o residuals
+    NLS_T = Σ_i NLS_T(i) / |L| -- Model linearity w/o residuals
+  }
+
+  LANGUAGE {
+    TYPE Transformer
+    TYPE Embedding = Matrix
+    TYPE ContextualizedEmbedding = Embedding
+    TYPE ResidualComponent = Embedding
+    TYPE LinearityScore = Real
+    TYPE ProcrustesSimilarity = Real
+    
+    FUNC extractEmbeddings(T: Transformer, i: Int) : ContextualizedEmbedding = 
+      T.layers[i].output
+    
+    FUNC extractResiduals(T: Transformer) : [ResidualComponent] =
+      [l.output - l.input for l in T.layers]
+      
+    FUNC procrustes(X: Embedding, Y: Embedding) : ProcrustesSimilarity =
+      LET X̃ = X / norm_frob(X), Ỹ = Y / norm_frob(Y) IN
+      1 - min_A norm_frob(X̃A - Ỹ)^2
+
+    FUNC linearityScore(X: Embedding, Y: Embedding) : LinearityScore = 
+      procrustes(X, Y)
+      
+    FUNC layerwiseLinearity(T: Transformer) : [LinearityScore] =
+      [linearityScore(extractEmbeddings(T, i), extractEmbeddings(T, i+1)) 
+        for i in 0..|T.layers|-1]
+        
+    FUNC layerwiseLinearityNoResidual(T: Transformer) : [LinearityScore] =
+      LET E = [extractEmbeddings(T, i) for i in 0..|T.layers|] IN
+      [linearityScore(E[i]-E[i-1], E[i+1]-E[i]) for i in 1..|T.layers|-1]  
+        
+    FUNC modelLinearity(T: Transformer) : LinearityScore =
+      MEAN(layerwiseLinearity(T))
+      
+    FUNC modelLinearityNoResidual(T: Transformer) : LinearityScore =
+      MEAN(layerwiseLinearityNoResidual(T))
+
+    PRED isLinear(T: Transformer, τ: Real) = modelLinearity(T) > τ
+  }
+  
+  STRUCTURES {
+    STRUCTURE LinearizedTransformer EXTENDS Transformer {
+      FIELD threshold : Real
+      FIELD linearizedLayers : [Int]
+      
+      FUNC replaceWithLinearApprox(self, i: Int) : Unit = {
+        LET X = extractEmbeddings(self, i), Y = extractEmbeddings(self, i+1) IN
+        LET A = argmin_A ||X̃A - Ỹ||^2_F IN  
+        self.layers[i] := LinearLayer(A)
+      } 
+
+      COMPUTE linearizedTransformer(self) : LinearizedTransformer = {
+        threshold := 0.99,
+        linearizedLayers := [i for (i,s) in enumerate(layerwiseLinearity(self)) if s > threshold],
+        FOREACH i in linearizedLayers DO 
+          replaceWithLinearApprox(self, i)
+      }
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE PruneMostLinearLayers(T, k) : 
+      LET scores = layerwiseLinearity(T) IN
+      LET toPrune = TOP_K(scores, k) IN
+      T.layers := [l for (i,l) in enumerate(T.layers) if i not in toPrune]
+
+    REWRITE ReplaceWithDistilledLinearApprox(T, τ) :
+      LET scores = layerwiseLinearity(T) IN
+      LET toReplace = [i for i in 0..|T.layers|-1 if scores[i] > τ] IN 
+      FOREACH i in toReplace DO
+        LET X = extractEmbeddings(T, i), Y = extractEmbeddings(T, i+1) IN
+        LET A = argmin_A ||X̃A - Ỹ||^2_F IN
+        T.layers[i] := LinearLayer(A)
+      FineTuneWithLayerwiseMSE(T)  -- Distillation 
+        
+    REWRITE CosineRegularization(T, λ) : 
+      LET L_cos = λ * Σ_i (1 - cos(E_i, E_{i+1})) IN
+      T.loss := T.loss + L_cos
+  }
+
+  PROOFS {
+    THEOREM ProcrustesBounded : ∀ X, Y . 0 ≤ d_P(X, Y) ≤ 1
+    {
+      d_P(X, Y) = 1 - min_A ||X̃A - Ỹ||^2_F
+        ≥ 1 - ||X̃ - Ỹ||^2_F (setting A = I)
+        = 1 - (||X̃||^2_F + ||Ỹ||^2_F - 2⟨X̃,Ỹ⟩)  
+        = 2⟨X̃,Ỹ⟩ - 1  (since ||X̃||_F = ||Ỹ||_F = 1)
+        ≥ -1   (Cauchy-Schwarz)
+      ⇒  0 ≤ d_P(X, Y) ≤ 1
+    }
+
+    THEOREM ResidualNormLow : ∀ T . ||R_i||_F << ||E_i||_F
+    {
+      GIVEN Transformer T
+      OBSERVE ||R_i||_F << ||E_i||_F for all i by Figure 3 
+      ⇒ CLAIM holds ∀ T
+    }  
+
+    THEOREM LinearityIncreasesWithFineTuning : 
+      ∀ T, task . LS_T^{pretrain} ≤ LS_T^{finetune(task)}
+    {
+      GIVEN Transformer T, fine-tuning task
+      
+      LS_T^{finetune(task)} 
+        = Σ_i LS_T^{finetune(task)}(i) / |L|
+        ≥ Σ_i LS_T^{pretrain}(i) / |L| + Δ   BY Table 1 results, Δ > 0
+        = LS_T^{pretrain} + Δ
+        ≥ LS_T^{pretrain}
+
+      QED  
+    }
+    
+    THEOREM CosineRegIncreasesPerfDecreaseLinearity :
+      ∀ T, λ > 0 . 
+        (Perf_{T+CosineReg(λ)} ≥ Perf_T) ∧ (LS_{T+CosineReg(λ)} ≤ LS_T)
+    {
+      GIVEN Transformer T, λ > 0
+      LET T_reg = T with CosineRegularization(T, λ)
+
+      Perf_{T_reg} ≥ Perf_T 
+        BY Results in Table 2, Table 3
+        
+      LS_{T_reg} ≤ LS_T
+        BY Figure 5 results
+        
+      QED
+    }
+  }
+  
+  EXAMPLES {
+    EXAMPLE OPT66B : TransformerLinearity = {
+      T = OPT-66B, 
+      LS_T = 0.99,
+      NLS_T = 0.7,
+      LS dynamics during pretraining in Figure 2,
+      ||R_i||_F << ||E_i||_F ∀ i as in Figure 3
+    }
+      
+    EXAMPLE BLOOMLarge : TransformerLinearity = {
+      T = BLOOM-large,
+      LS_T = 0.97,
+      NLS_T = 0.6,  
+      Linearity profile LS_T(i) by layer depth in Figure 1,
+      Linearity profile NLS_T(i) by layer depth in Figure 1
+    }
+    
+    EXAMPLE Pruning : TransformerLinearity = {
+      T = OPT-1.3B,
+      Prune top-k most linear layers,
+      Perplexity impact in Figure 6, 7
+      Benchmark impact in Figure 8
+    }
+    
+    EXAMPLE LinearApproximation : TransformerLinearity = {
+      T = OPT-1.3B,
+      Replace most linear layers with distilled linear approx,
+      Perplexity impact in Figure 6, 7
+    }
+    
+    EXAMPLE CosineRegularization : TransformerLinearity = {
+      T = Mistral-150M, Mistral-650M,
+      Linearity reduction in Figure 5,
+      Performance improvements on SuperGLUE (Table 2) and TinyStories (Table 3) 
+    }
+  }
+}

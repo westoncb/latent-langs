@@ -1,0 +1,88 @@
+CONCEPT HyperLogLog {
+  LANGUAGE {
+    TYPE Bitstring
+    TYPE Hash = Bitstring -> Bitstring
+    TYPE Register = Array[ℕ]
+    TYPE Estimator = Register -> ℝ
+
+    FUNC ρ(b : Bitstring) : ℕ -- Position of rightmost 1-bit
+    FUNC α(m : ℕ) : ℝ -- Bias correction constant
+    FUNC RegisterUpdate(M : Register, h : Hash, x : Any) : Register
+    FUNC Merge(M₁ : Register, M₂ : Register) : Register  
+    FUNC Estimate(M : Register) : ℝ
+
+    AXIOM ρ_property {
+      ∀(b : Bitstring). 
+        ρ(b) = min{ k ≥ 1 | b[k] = 1 }
+    }
+
+    AXIOM α_property {
+      ∀(m : ℕ).
+        α(m) = (m * ∫[0,∞] (log₂(2 + u))^m du)^(-1)
+    }
+
+    NOTATION "ρ" = ρ  
+    NOTATION "α_m" = α
+    NOTATION "Z" = Estimate
+  }
+
+  STRUCTURE Sketch {
+    LET m : ℕ -- Number of registers
+    LET h : Hash -- Hash function
+    LET M : Register[m] -- Register array
+
+    FUNC Add(x : Any) : Sketch = {
+      M' := RegisterUpdate(M, h, x)
+      RETURN Sketch(m, h, M')
+    }
+
+    FUNC Merge(other : Sketch) : Sketch = {
+      REQUIRE this.m = other.m ∧ this.h = other.h
+      M' := Merge(this.M, other.M)
+      RETURN Sketch(m, h, M')
+    }
+
+    FUNC Count : ℝ = {
+      RETURN Estimate(M)  
+    }
+  }
+
+  PROOFS {
+    TACTIC Markov(X : RandomVar, t : ℝ) = {
+      P(X ≥ t) ≤ 𝔼(X) / t
+    }
+
+    TACTIC Chebyshev(X : RandomVar, t : ℝ) = {
+      P(|X - 𝔼(X)| ≥ t) ≤ Var(X) / t^2  
+    }
+    
+    THEOREM Accuracy {
+      STATEMENT:
+        ∀(S : Sketch[m,h], n : ℕ).
+          LET X = |S| -- True cardinality
+          IN P(|Z(S.M) - X| ≤ ε*X) ≥ 1 - δ
+          WHERE ε = 1.04 / √m, δ = 2^(-m/2)
+
+      PROOF:
+        LET S : Sketch[m,h], n : ℕ, X = |S|
+        LET Y = ∑[j=1..m] 2^(-M[j])
+        LET Z = α_m * m^2 * Y  
+        
+        REWRITE P(|Z - X| ≤ ε*X)
+          = P(|α_m * m^2 * Y - X| ≤ ε*X)  
+          ≥ P(|Y - 𝔼(Y)| ≤ ε/α_m * 𝔼(Y))   BY Chebyshev(Y, ε/α_m * 𝔼(Y))
+          ≥ 1 - Var(Y) / (ε/α_m * 𝔼(Y))^2   BY ALGEBRA
+        
+        HAVE 𝔼(Y) = X * ∫[0,∞] 2^(-⌊ρ(h(x))⌋) dx 
+                  ≈ X / m                    BY ρ_property, LINEARITY 𝔼
+        
+        HAVE Var(Y) = X * ∫[0,∞] 2^(-2⌊ρ(h(x))⌋) dx - (X/m)^2
+                    ≈ X / m^2                BY ρ_property, LINEARITY Var
+                    
+        REWRITE P(|Z - X| ≤ ε*X)  
+          ≥ 1 - (X/m^2) / (ε/α_m * X/m)^2  
+          = 1 - α_m^2 / (ε^2 * m)
+          ≥ 1 - 2^(-m/2)                    BY α_property, BOUND α_m
+    }
+  }
+}

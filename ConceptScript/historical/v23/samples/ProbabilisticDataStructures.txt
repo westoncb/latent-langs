@@ -1,0 +1,118 @@
+CONCEPT ProbabilisticDataStructures {
+
+  LANGUAGE {
+    TYPE Index = ℕ 
+    TYPE Hash[n : ℕ] = Index -> 𝔽₂ⁿ
+    TYPE BloomFilter[m n : ℕ] = Vector[m] 𝔹
+    TYPE CountMinSketch[d w : ℕ] = Matrix[d w] ℕ
+    TYPE HyperLogLog[m : ℕ] = Vector[m] ℕ
+
+    FUNC Insert[m n : ℕ] : BloomFilter[m n] -> 𝔽₂ⁿ -> BloomFilter[m n] 
+    FUNC Query[m n : ℕ] : BloomFilter[m n] -> 𝔽₂ⁿ -> 𝔹
+    FUNC Update[d w : ℕ] : CountMinSketch[d w] -> Index -> ℕ -> CountMinSketch[d w]
+    FUNC Estimate[d w : ℕ] : CountMinSketch[d w] -> Index -> ℕ  
+    FUNC Merge[m : ℕ] : HyperLogLog[m] -> HyperLogLog[m] -> HyperLogLog[m]
+    FUNC Cardinality[m : ℕ] : HyperLogLog[m] -> ℝ⁺
+
+    PRED MayContain[m n : ℕ] : BloomFilter[m n] -> 𝔽₂ⁿ -> 𝔹
+  }
+
+  STRUCTURE {
+    DEF Insert[m n : ℕ] (B : BloomFilter[m n], x : 𝔽₂ⁿ) -> BloomFilter[m n] = 
+      LET (h₁,...,hₖ) = HashFunctions(m, n) IN
+        B[h₁(x)] := 1, ..., B[hₖ(x)] := 1
+      RETURN B
+
+    DEF Query[m n : ℕ] (B : BloomFilter[m n], x : 𝔽₂ⁿ) -> 𝔹 =
+      LET (h₁,...,hₖ) = HashFunctions(m, n) IN
+        RETURN B[h₁(x)] ∧ ... ∧ B[hₖ(x)]
+
+    DEF Update[d w : ℕ] (C : CountMinSketch[d w], i : Index, c : ℕ) -> CountMinSketch[d w] =
+      LET (h₁,...,hₖ) = HashFunctions(d, log w) IN
+        C[1, h₁(i)] += c, ..., C[d, hₖ(i)] += c
+      RETURN C
+
+    DEF Estimate[d w : ℕ] (C : CountMinSketch[d w], i : Index) -> ℕ =
+      LET (h₁,...,hₖ) = HashFunctions(d, log w) IN
+        RETURN min(C[1, h₁(i)], ..., C[d, hₖ(i)])
+
+    DEF Merge[m : ℕ] (H₁ : HyperLogLog[m], H₂ : HyperLogLog[m]) -> HyperLogLog[m] =
+      RETURN (i : 𝔽_m) ↦ max(H₁[i], H₂[i])
+
+    DEF Cardinality[m : ℕ] (H : HyperLogLog[m]) -> ℝ⁺ =
+      LET α = (0.7213 / (1 + 1.079/m)) IN
+        α·m²· (∑ (i : 𝔽_m) 2^(-H[i]))^(-1)
+
+    DEF MayContain[m n : ℕ](B, x) <-> Query[m n](B, x) ∧ ¬∃ (y : 𝔽₂ⁿ) . (y ≠ x ∧ Query[m n](B, y))
+  }
+
+  PROOFS {
+    THEOREM BloomFilterNoFalseNegative[m n : ℕ] {
+      STATEMENT : ∀ (B : BloomFilter[m n]) (x : 𝔽₂ⁿ) . 
+        x ∈ ValuesInserted(B) -> Query[m n](B, x) 
+
+      PROOF {
+        ASSUME [B : BloomFilter[m n]] [x : 𝔽₂ⁿ] : x ∈ ValuesInserted(B)
+        
+        LET (h₁,...,hₖ) = HashFunctions(m, n)
+        
+        HAVE : B[h₁(x)] = 1 ∧ ... ∧ B[hₖ(x)] = 1  BY InsertSetsHashBits
+
+        SHOW Query[m n](B, x)  BY DefinitionOfQuery
+      }
+    }
+
+    THEOREM CountMinSketchOverEstimate[d w : ℕ] {
+      STATEMENT : ∀ (C : CountMinSketch[d w]) (i : Index) .
+        Estimate[d w](C, i) ≥ TrueCount(i)
+
+      PROOF {
+        ASSUME [C : CountMinSketch[d w]] [i : Index]
+
+        LET c = TrueCount(i), ĉ = Estimate[d w](C, i)
+        LET (h₁,...,hₖ) = HashFunctions(d, log w)
+
+        HAVE : ∀ (j : 1..d) . C[j, hⱼ(i)] ≥ c BY {
+          INDUCE ON Updates(i) {
+            CASE BaseCase: C = ZeroSketch
+              HAVE : C[j, hⱼ(i)] = 0 ≥ 0 = c
+            CASE InductiveCase: C := Update[d w](C', i, δ)  
+              ASSUME: C'[j, hⱼ(i)] ≥ TrueCount'(i)
+              HAVE: C[j, hⱼ(i)] = C'[j, hⱼ(i)] + δ 
+                               ≥ TrueCount'(i) + δ = TrueCount(i) = c
+          }
+        }
+
+        HENCE ĉ = min(C[1, h₁(i)], ..., C[d, hₖ(i)]) ≥ c 
+      }
+    }
+    
+    THEOREM HyperLogLogRelativeError[m : ℕ] {
+      STATEMENT : ∀ (H : HyperLogLog[m]) . 
+        |Cardinality[m](H) - TrueCardinality(H)| / TrueCardinality(H) ≤ 1.04/√m  
+        WITH PROBABILITY ≥ 65%
+
+      PROOF {
+        ASSUME [H : HyperLogLog[m]]
+        
+        LET n = TrueCardinality(H)
+        LET α = 0.7213 / (1 + 1.079/m)
+        LET Z = ∑ (i : 𝔽_m) 2^(-H[i])
+        LET ñ = α·m²·(1/Z)
+        
+        HAVE Bias : 𝔼[ñ] = n·(1 + δ₁(n)) 
+          WHERE |δ₁(n)| ≤ IF n ≤ 5/2·m THEN 5·10⁻⁵ ELSE 1/30·(log(m/n))⁴·√(n/m)
+        
+        HAVE Concentration : ℙ[|ñ/n - 1| ≥ 1.04/√m] ≤ 0.35 
+          BY {
+            ñ/n - 1 = α·m/n·(Z - 𝔼[Z])/𝔼[Z] + δ₁(n)
+            HENCE Var[ñ/n] ≤ 3/m·(α·m/n)² + O((log(n/m))⁸·n/m²) BY DeltaMethod
+            HENCE ℙ[|ñ/n - 1 - δ₁(n)| ≥ t] ≤ exp(-2t²·m/(3α²)) BY Chernoff
+            CHOOSE t = 1.04/√m - |δ₁(n)|
+          }
+
+        SHOW |ñ - n| / n ≤ 1.04/√m WITH PROBABILITY ≥ 65%
+      }
+    }
+  }
+}

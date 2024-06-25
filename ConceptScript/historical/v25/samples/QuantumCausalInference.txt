@@ -1,0 +1,77 @@
+CONCEPT QuantumCausalInference {
+  LANGUAGE {
+    TYPE Operator = Matrix[ℂ]
+    TYPE Density = Matrix[ℂ]  
+    TYPE Observable = Operator
+    TYPE Intervention = Operator -> Operator
+    TYPE CausalStructure = DAG[Random[Density]]
+
+    FUNC Trace(ρ : Density) : ℝ
+    FUNC Partial(ρ : Density, S : Set[𝕀]) : Density
+    FUNC Product(ρ : Density, σ : Density) : Density
+    FUNC Commutator(A B : Operator) : Operator  
+    FUNC DoCalculus(C : CausalStructure, X Y : Random[Density], S : Set[Random[Density]]) : Operator
+
+    AXIOM VonNeumann {
+      ∀ (ρ : Density) (U : Unitary) . U(ρ) = U * ρ * U†
+    }
+
+    AXIOM BornRule {
+      ∀ (ρ : Density) (M : Observable) . 𝔼[M] = Trace(M * ρ)
+    }
+
+    AXIOM PartialTrace {
+      ∀ (ρ : Density) (S T : Set[𝕀]) . S ∩ T = ∅ => Partial(ρ, S ∪ T) = Product(Partial(ρ, S), Partial(ρ, T))
+    }
+
+    NOTATION "tr" = Trace
+    NOTATION "tr[S]" = Partial(*, S)
+    NOTATION "⊗" = Product
+    NOTATION "[*, *]" = Commutator
+    NOTATION "do(X=x)" = Intervention((ρ : Density) ↦ Product(ρ, Density(X=x)))
+  }
+
+  STRUCTURE QuantumCausalModel(G : CausalStructure) {
+    DEF Compatible(ρ : Density) : 𝔹 = ∀ (X Y : G.Nodes) . X ∉ Ancestors(Y) => [ρ, Product(ρ, Density(X))] = 0
+
+    REQUIRE ∃ (ρ : Density) . Compatible(ρ)
+  }
+
+  PROOFS {
+    THEOREM QuantumDoCalculus {
+      STATEMENT : ∀ (M : QuantumCausalModel) (X Y : M.G.Nodes) (S : Set[M.G.Nodes]) .
+        do(X=x)(tr[S](M.ρ)) = tr[S ∪ {X}](Product(M.ρ, Density(X=x)))
+
+      PROOF {
+        LET (G, ρ) : QuantumCausalModel, X Y : G.Nodes, S : Set[G.Nodes]
+        
+        do(X=x)(tr[S](ρ))
+          = Intervention((σ : Density) ↦ Product(σ, Density(X=x)))(tr[S](ρ))  BY DEFINITION of do(X=x)
+          = Product(tr[S](ρ), Density(X=x))                                   BY DEFINITION of Intervention
+          = tr[S](Product(ρ, Density(X=x)))                                   BY PartialTrace, S ∩ {X} = ∅
+          = tr[S ∪ {X}](Product(ρ, Density(X=x)))                             BY DEFINITION of tr[S]
+      }
+    }
+
+    THEOREM QuantumBackdoorCriterion {
+      STATEMENT : ∀ (M : QuantumCausalModel) (X Y : M.G.Nodes) (S : Set[M.G.Nodes]) .
+        S satisfies BackdoorCriterion(M.G, X, Y) => 
+        [DoCalculus(M.G, X, Y, S), Product(M.ρ, Density(Y))] = 0
+
+      PROOF {
+        LET (G, ρ) : QuantumCausalModel, X Y : G.Nodes, S : Set[G.Nodes]
+        ASSUME (H) : S satisfies BackdoorCriterion(G, X, Y)
+
+        [DoCalculus(G, X, Y, S), Product(ρ, Density(Y))]
+          = [tr[S](do(X=x)(ρ)), Product(ρ, Density(Y))]                BY DEFINITION of DoCalculus
+          = [tr[S ∪ {X}](Product(ρ, Density(X=x))), Product(ρ, Density(Y))]  BY QuantumDoCalculus
+          = 0                                                          BY {
+              S ∪ {X} satisfies BackdoorCriterion(G, X, Y)             BY (H)
+              ∀ (W : G.Nodes) . W ∉ Ancestors(Y) => [ρ, Product(ρ, Density(W))] = 0  BY <<M : QuantumCausalModel>>
+              [Product(ρ, Density(X=x)), Product(ρ, Density(Y))] = 0    BY PREV
+              [tr[S ∪ {X}](Product(ρ, Density(X=x))), Product(ρ, Density(Y))] = 0  BY PREV, PartialTrace
+            }
+      }
+    }
+  }
+}

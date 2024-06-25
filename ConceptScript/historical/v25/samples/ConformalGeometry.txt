@@ -1,0 +1,89 @@
+CONCEPT ConformalGeometry {
+  LANGUAGE {
+    TYPE Manifold
+    TYPE Metric[M : Manifold] = Tensor[Symmetric[2], M, ℝ]
+    TYPE WeylTensor[M : Manifold] = Tensor[Symmetric[2] ⊗ Antisymmetric[2], M, ℝ]
+    TYPE Connection[M : Manifold] = Christoffel[M]
+    TYPE Density[w : ℤ, M : Manifold] = Γ(DensityBundle[w, M])
+
+    FUNC Christoffel(g : Metric[M]) : Connection[M]
+    FUNC Weyl(g : Metric[M]) : WeylTensor[M]
+    FUNC Schouten(g : Metric[M]) : Tensor[Symmetric[2], M, ℝ]
+    FUNC Cotton(g : Metric[M]) : Tensor[Symmetric[3], M, ℝ]
+    FUNC Bach(g : Metric[M]) : Tensor[Symmetric[2], M, ℝ]
+    FUNC Yamabe(g : Metric[M]) : Density[2-dim(M)/2, M] -> Metric[M]
+
+    AXIOM MetricRescaling {
+      ∀(M : Manifold, g : Metric[M], f : C^∞(M)).
+        Weyl(Exp(2*f) * g) = Weyl(g)
+    }
+
+    NOTATION "C" = Weyl
+    NOTATION "P" = Schouten  
+    NOTATION "B" = Bach
+    NOTATION "Y[g, σ]" = Yamabe(g)(σ)
+  }
+
+  STRUCTURE conformalManifold(M : Manifold, 𝒞 : Metric[M] -> Prop) {
+    REQUIRE ∀(g h : Metric[M]). 𝒞(g) ∧ (∃(f : C^∞(M)). h = Exp(2*f)*g) ⇒ 𝒞(h)
+  }
+
+  STRUCTURE einsteinManifold(M : Manifold, g : Metric[M]) {
+    REQUIRE Ric(g) = λ * g   -- Ric is the Ricci tensor
+      WHERE λ : C^∞(M)
+
+    REQUIRE WHEN dim(M) > 2 THEN Weyl(g) = 0
+  }
+
+  PROOFS {
+    TACTIC ConformalRescaling {
+      MATCH (g : Metric[M], h : Metric[M], 𝒞 : Metric[M] -> Prop) 
+        WHERE ∃(f : C^∞(M)). h = Exp(2*f) * g
+      ASSUME 𝒞(g)
+      SHOW 𝒞(h)
+    }
+
+    THEOREM WeylInvariance {
+      STATEMENT:
+        ∀(M : Manifold, g h : Metric[M]).
+          (∃(f : C^∞(M)). h = Exp(2*f) * g) ⇒ C(h) = C(g)
+
+      PROOF:
+        LET M : Manifold, g h : Metric[M], f : C^∞(M)
+        ASSUME h = Exp(2*f) * g
+        SHOW C(h) = C(g) BY MetricRescaling
+    }
+
+    THEOREM SchoutenTransformation {
+      STATEMENT:  
+        ∀(M : Manifold, g : Metric[M], f : C^∞(M)).
+          P(Exp(2*f)*g) = P(g) - Hess(f) + df⊗df - (1/2)|df|^2_g * g
+            WHERE Hess(f) = Covariant[Christoffel(g)](Covariant[Christoffel(g)](f))
+
+      PROOF:
+        LET M : Manifold, g : Metric[M], f : C^∞(M)
+        LET h = Exp(2*f) * g
+        REWRITE P(h) 
+          = (1/(dim(M)-2)) * (Ric(h) - (R(h)/(2*(dim(M)-1))) * h)   BY DEFINITION Schouten
+          = (1/(dim(M)-2)) * (Ric(g) - 2(dim(M)-1)*Hess(f) + Δ(f)*g 
+              - (R(g) - 2(dim(M)-1)*Δ(f) - (dim(M)-1)(dim(M)-2)|df|^2_g)/(2*(dim(M)-1)) * h)
+              BY ConformalChangeOfRicciCurvature
+          = P(g) - Hess(f) + df⊗df - (1/2)|df|^2_g * g              BY ALGEBRA
+    }
+
+    THEOREM YamabeEquation {
+      STATEMENT:
+        ∀(M : Manifold, g : Metric[M], σ : Density[2-dim(M)/2, M]).
+          R(Y[g, σ]) = σ^(4/(dim(M)-2)) * (R(g) * σ - 4((dim(M)-1)/(dim(M)-2)) * Δ_g(σ))
+            WHERE Δ_g = Laplacian[g]
+
+      PROOF:
+        LET M : Manifold, g : Metric[M], σ : Density[2-dim(M)/2, M]
+        DEF u = σ^(2/(dim(M)-2))  
+        DEF h = Y[g, σ] = u^(4/(dim(M)-2)) * g
+        REWRITE R(h)
+          = u^(-4/(dim(M)-2)) * (R(g) - 4((dim(M)-1)/(dim(M)-2)) * (Δ_g(u)/u))  BY ConformalChangeOfScalarCurvature
+          = σ^(-4/(dim(M)-2)) * (R(g) * σ - 4((dim(M)-1)/(dim(M)-2)) * Δ_g(σ))   BY ALGEBRA, SUBSTITUTION
+    }
+  }
+}

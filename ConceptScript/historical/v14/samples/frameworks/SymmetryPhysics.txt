@@ -1,0 +1,103 @@
+CONCEPT SymmetryPhysics {
+  LANGUAGE {
+    type Sym = Action(Grp, Manifold) | Representation(Grp, Hilb)
+    type Phys = ClassicalSystem(Sym, Manifold) | QuantumSystem(Sym, Hilb)
+    type Dyn = Hamiltonian(Sym) | Lagrangian(Sym)
+    type Obs = Observable(Sym, ℝ) | Operator(Sym, Hilb)
+    
+    notation "φ ⟼ S" = Equivariant(φ: Sym, S: Phys)
+    notation "A ⟼ λ" = Eigenstate(A: Obs, λ: ℝ)
+    notation "𝒜 ∘ S" = OrbitAction(𝒜: Grp, S: Sym)
+    notation "U(𝒜)" = Enveloping(𝒜: Lie) 
+    
+    L := L₀ | ∫[L]dt  ; Lagrangian 
+    H := H₀ | ∑ᵢ(pᵢq̇ᵢ - L)  ; Hamiltonian
+    
+    𝓛 := {v: Vect | ∃ φ: Sym. v = dφ[L]/dt}  ; Euler-Lagrange space
+    𝓗 := {(q, p) : Manifold × Manifold* | ∃ H. (q̇, ṗ) = (dH/dp, -dH/dq)}  ; Phase space
+    
+    pred Symmetric(S: Phys, φ: Sym) = φ ⟼ S
+    pred Conserved(A: Obs, S: Phys) = ∃ φ: Sym. Symmetric(S, φ) ∧ (A ∘ φ = A)
+    pred Quantizable(S: Phys) = ∃ Q: QuantumSystem. ℏ → 0 ⇒ Q → S
+  }
+  
+  STRUCTURE {
+    SymmetryActionProperties: {
+      φ₁, φ₂: Sym ⇒ φ₁ ∘ φ₂: Sym
+      φ: Sym ⇒ φ⁻¹: Sym
+      (φ₁ ∘ φ₂) ∘ φ₃ = φ₁ ∘ (φ₂ ∘ φ₃)
+      φ ∘ id = id ∘ φ = φ
+    }
+    
+    DynamicalSymmetries: {
+      L: Lagrangian, φ: Sym, Symmetric(L, φ) ⇒ φ ⟼ 𝓛 
+      H: Hamiltonian, φ: Sym, Symmetric(H, φ) ⇒ φ ⟼ 𝓗
+      L: Lagrangian, H: Hamiltonian, (φ ⟼ L) ⟺ (φ ⟼ H)
+    }
+    
+    QuantumSymmetries: {
+      ℋ: Hilb, 𝒜: Grp, π: 𝒜 → 𝑈(ℋ) ⇒ ∀ψ ∈ ℋ. (π(𝒜)ψ ⊆ ℋ)
+      S: Phys, Q: QuantumSystem, Quantizable(S), Symmetric(S, φ) ⇒ Symmetric(Q, π(φ))     
+    }
+    
+    ConservedQuantities: {
+      A: Obs, H: Hamiltonian, {A, H} = 0 ⟺ Conserved(A, H)  ; Classical
+      A: Operator, H: Operator, [A, H] = 0 ⟺ Conserved(A, H)  ; Quantum  
+    }
+  }
+  
+  PROOFS {
+    theorem NoetherTheorem(S: Phys, φ: Sym):
+      ∀ A: Obs. (Symmetric(S, φ) ⊢ Conserved(A, S))
+    {
+      assume Symmetric(S, φ)
+      let L: Lagrangian, 𝓛: EulerLagrange, A: Obs
+      suffices to show dA[φ]/dt = 0
+      have φ ⟼ 𝓛                        ; Dynamical symmetry
+      let v ∈ 𝓛 s.t. v = dφ[L]/dt       
+      have d(A ∘ φ)[L]/dt = dA[φ[L]]/dt  ; Chain rule
+      have dA[φ[L]]/dt = ⟨dA/dL, v⟩      ; L-gradient of A
+      have ⟨dA/dL, v⟩ = ⟨dA/dL, dφ[L]/dt⟩  ; Def. of v
+      have dA/dL : 𝓛 → ℝ                 ; A is a 1-form on 𝓛
+      have ⟨dA/dL, dφ[L]/dt⟩ = ⟨φ*dA/dL, dL/dt⟩  ; Pullback and pairing
+      have φ*dA/dL = dA/dL               ; A is φ-invariant
+      so ⟨dA/dL, dL/dt⟩ = ⟨dA/dL, v⟩ = dA[φ[L]]/dt = 0  ; Euler-Lagrange 
+    }
+    
+    theorem SymmetryBreaking(S: Phys, φ: Sym):
+      ¬Symmetric(S, φ) ⊢ ∃ Q: QuantumSystem. 
+        Quantizable(S) ∧ Symmetric(Q, π(φ)) ∧ lim(ℏ → 0) Q ≠ S
+    {
+      assume ¬Symmetric(S, φ)
+      have ∃ S': Phys. Symmetric(S', φ) ∧ S' ≠ S  ; Existence of symmetric vacuum   
+      let Q: QuantumSystem s.t. Quantizable(S') ∧ Symmetric(Q, π(φ))
+      suffices to show lim(ℏ → 0) Q ≠ S
+      {
+        assume lim(ℏ → 0) Q = S
+        have Symmetric(S, φ)  ; By continuity
+        contradiction  
+      }
+      hence lim(ℏ → 0) Q ≠ S
+    }
+    
+    theorem CasimirInvariants(𝒜: Lie, ℋ: Hilb, π: Representation(𝒜, ℋ)):
+      ∃ C ∈ center(U(𝒜)). ∀ X ∈ 𝒜. π(C) ∘ π(X) = π(X) ∘ π(C)   
+    {
+      let {Xᵢ} be a basis of 𝒜
+      let {Cⱼ} be a basis of Casimirs in U(𝒜) 
+      have ∀ i, j. [Cⱼ, Xᵢ] = 0  ; Casimirs commute with 𝒜
+      have π: 𝒜 → 𝑈(ℋ) induces π: U(𝒜) → 𝑈(ℋ)  ; Universality
+      so ∀ i, j. [π(Cⱼ), π(Xᵢ)] = π([Cⱼ, Xᵢ]) = 0
+      hence π(Cⱼ) ∈ center(π(U(𝒜)))      
+    }  
+  }
+}
+
+This Concept formalizes key ideas about symmetries in physics, including:
+
+Symmetry actions on classical phase spaces and quantum Hilbert spaces
+The relationship between continuous symmetries and conserved quantities (Noether's theorem)
+Spontaneous symmetry breaking in quantum systems as a non-commutative phenomenon
+The role of Casimir invariants in representation theory
+
+The proofs sketch how these structural properties can be formally derived within the language. Tactics like Universality are used to lift Lie algebra representations to enveloping algebra representations. The language also defines dynamics (Lagrangians and Hamiltonians) in terms of invariant subspaces of the cotangent bundle, and introduces quantization as a non-commutative deformation of classical mechanics.

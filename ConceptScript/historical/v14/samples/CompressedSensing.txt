@@ -1,0 +1,73 @@
+CONCEPT CompressedSensing {
+  LANGUAGE {
+    type Vector<n> = (ℝ,)*n
+    type Matrix<m, n> = Vector<m>*n
+    type SparseVector<n, k> = { v: Vector<n> | ∃ S: Set<ℕ>. |S| ≤ k ∧ ∀ i ∉ S. v[i] = 0 }
+    
+    func norm<n>(v: Vector<n>): ℝ = sqrt(sum(v[i]^2 for i in 1..n))
+    func isometry<m, n>(A: Matrix<m, n>, ε: ℝ, v1: Vector<n>, v2: Vector<n>): 𝔹 =
+      (1 - ε) * norm(v1 - v2)^2 ≤ norm(A(v1) - A(v2))^2 ≤ (1 + ε) * norm(v1 - v2)^2
+    
+    pred RIP<m, n, k>(A: Matrix<m, n>, ε: ℝ) = 
+      ∀ v1, v2: SparseVector<n, k>. isometry(A, ε, v1, v2)
+      
+    notation "∥⋅∥" = norm
+    notation "𝒮ₖ" = SparseVector
+  }
+  
+  STRUCTURE {
+    RIPImpliesRecovery: ∀ m, n, k: ℕ, A: Matrix<m, n>, ε: ℝ.
+      RIP<m, n, 2k>(A, ε) ⇒ ∀ x: 𝒮ₖ<n, k>. ∃! y: 𝒮ₖ<n, k>. A(y) = A(x)
+      
+    RIPScaling: ∀ m, n, k: ℕ, A: Matrix<m, n>, c: ℝ, ε: ℝ.
+      RIP<m, n, k>(A, ε) ⇒ RIP<m, n, k>(c * A, ε)
+      
+    TensorRIP: ∀ m1, n1, m2, n2, k1, k2: ℕ, A1: Matrix<m1, n1>, A2: Matrix<m2, n2>, ε1, ε2: ℝ. 
+      RIP<m1, n1, k1>(A1, ε1) ∧ RIP<m2, n2, k2>(A2, ε2) ⇒ 
+      RIP<m1*m2, n1*n2, k1*k2>(A1 ⊗ A2, max(ε1, ε2))
+  }
+  
+  PROOFS {
+    RIPScalingProof: ∀ m, n, k: ℕ, A: Matrix<m, n>, c: ℝ, ε: ℝ. 
+      RIP<m, n, k>(A, ε) ⇒ RIP<m, n, k>(c * A, ε)
+    {
+      assume RIP<m, n, k>(A, ε)
+      let v1, v2 : 𝒮ₖ<n, k>
+      have (1 - ε) * ∥v1 - v2∥² ≤ ∥A(v1) - A(v2)∥² ≤ (1 + ε) * ∥v1 - v2∥²  ; by RIP<m, n, k>(A, ε)
+      calc ∥(c * A)(v1) - (c * A)(v2)∥²
+           = ∥c * (A(v1) - A(v2))∥²  ; by linearity
+           = c² * ∥A(v1) - A(v2)∥²   ; by norm properties
+           ≤ c² * (1 + ε) * ∥v1 - v2∥²  ; by RIP upper bound
+           = (1 + ε) * ∥c * (v1 - v2)∥²  ; by norm properties
+           = (1 + ε) * ∥(c * v1) - (c * v2)∥²  ; by linearity
+      calc ∥(c * A)(v1) - (c * A)(v2)∥² 
+           ≥ c² * (1 - ε) * ∥v1 - v2∥²  ; by RIP lower bound
+           = (1 - ε) * ∥c * (v1 - v2)∥²  ; by norm properties
+           = (1 - ε) * ∥(c * v1) - (c * v2)∥²  ; by linearity
+      therefore (1 - ε) * ∥v1 - v2∥² ≤ ∥(c * A)(v1) - (c * A)(v2)∥² ≤ (1 + ε) * ∥v1 - v2∥²
+      hence RIP<m, n, k>(c * A, ε)  ; by definition of RIP
+    }
+    
+    TensorRIPProof: ∀ m1, n1, m2, n2, k1, k2: ℕ, A1: Matrix<m1, n1>, A2: Matrix<m2, n2>, ε1, ε2: ℝ.
+      RIP<m1, n1, k1>(A1, ε1) ∧ RIP<m2, n2, k2>(A2, ε2) ⇒ 
+      RIP<m1*m2, n1*n2, k1*k2>(A1 ⊗ A2, max(ε1, ε2))
+    {
+      assume RIP<m1, n1, k1>(A1, ε1), RIP<m2, n2, k2>(A2, ε2)
+      let v1, v2 : 𝒮ₖ<n1*n2, k1*k2>
+      let v1ᵢ = v1 reshaped to n1 × n2 matrix, v2ᵢ = v2 reshaped to n1 × n2 matrix
+      let S1 = support of v1ᵢ along rows, S2 = support of v1ᵢ along columns
+      have |S1| ≤ k1, |S2| ≤ k2  ; by sparsity of v1
+      have ∀ i ∈ S1. v1ᵢ[i,:] ∈ 𝒮ₖ<n2,k2> ∧ v2ᵢ[i,:] ∈ 𝒮ₖ<n2,k2>  ; by definition of 𝒮ₖ
+      have ∀ j ∈ S2. v1ᵢ[:,j] ∈ 𝒮ₖ<n1,k1> ∧ v2ᵢ[:,j] ∈ 𝒮ₖ<n1,k1>  ; by definition of 𝒮ₖ  
+      calc ∥(A1 ⊗ A2)(v1) - (A1 ⊗ A2)(v2)∥² 
+           = ∑ᵢⱼ ((A1 ⊗ A2)(v1 - v2))[i,j]^2
+           = ∑ᵢ ∑ⱼ (A1(v1ᵢ - v2ᵢ)[i,:])[j]^2 * (A2(v1ᵢ - v2ᵢ)[:,j])[i]^2  ; by tensor product
+           ≤ ∑ᵢ (1 + ε1) * ∥v1ᵢ[i,:] - v2ᵢ[i,:]∥^2 * ∑ⱼ (1 + ε2) * ∥v1ᵢ[:,j] - v2ᵢ[:,j]∥^2 
+             ; by RIP<_,_,k2>(A2, ε2) and RIP<_,_,k1>(A1, ε1)
+           ≤ (1 + max(ε1,ε2))^2 * ∑ᵢⱼ (v1ᵢ[i,j] - v2ᵢ[i,j])^2  
+           = (1 + max(ε1,ε2))^2 * ∥v1 - v2∥²
+      similarly, ∥(A1 ⊗ A2)(v1) - (A1 ⊗ A2)(v2)∥² ≥ (1 - max(ε1,ε2))^2 * ∥v1 - v2∥²
+      therefore RIP<m1*m2, n1*n2, k1*k2>(A1 ⊗ A2, max(ε1, ε2))  ; by definition of RIP
+    }
+  }
+}

@@ -1,0 +1,93 @@
+CONCEPT ProteinStructureAnalysis : ShapeSpace {
+  LANGUAGE {
+    TYPE ProteinStructure <: Shape
+    TYPE AminoAcid <: Substring[ProteinStructure]
+    TYPE StructuralMotif <: Substring[ProteinStructure]
+    
+    FUNC Sequence(P : ProteinStructure) : List[AminoAcid]
+    FUNC SecondaryStructure(P : ProteinStructure) : List[StructuralMotif]
+    
+    PRED HasMotif(P : ProteinStructure, M : StructuralMotif) : 𝔹 = 
+      M ∈ SecondaryStructure(P)
+      
+    FUNC MotifPHT(M : StructuralMotif) : D^b(Shv(Direction * Filtration)) =
+      PHTSheaf(M)
+      
+    FUNC ProteinPHT(P : ProteinStructure) : D^b(Shv(Direction * Filtration)) = 
+      ⊕_{M ∈ SecondaryStructure(P)} MotifPHT(M)
+      
+    AXIOM ProteinPHTDecomposition :
+      ∀ (P : ProteinStructure) . 
+        PHTSheaf(P) ≃ ProteinPHT(P)
+  }
+  
+  STRUCTURE ProteinComparison {
+    DEF ProteinDistance(P, Q : ProteinStructure) : R^≥0 =
+      InterleavingDist(ProteinPHT(P), ProteinPHT(Q))
+      
+    DEF MotifSimilarity(M, N : StructuralMotif) : R^≥0 =
+      InterleavingDist(MotifPHT(M), MotifPHT(N))
+  }
+  
+  STRUCTURE ProteinClassification {
+    TYPE ProteinFamily = List[ProteinStructure]
+    
+    FUNC FamilyConsensusStructure(F : ProteinFamily) : ProteinStructure =
+      CHOOSE P ∈ F SUCH THAT 
+        ∀ Q ∈ F . ProteinDistance(P, Q) = min_{R ∈ F} ProteinDistance(R, Q)
+        
+    FUNC FamilyMotifSignature(F : ProteinFamily) : List[StructuralMotif] =
+      LET P = FamilyConsensusStructure(F)
+      IN SecondaryStructure(P)
+        
+    PRED FamilyMembership(P : ProteinStructure, F : ProteinFamily) : 𝔹 = 
+      ∀ M ∈ FamilyMotifSignature(F) . HasMotif(P, M) 
+  }
+   
+  PROOFS {
+    THEOREM ProteinPHTDecompositionProof {
+      STATEMENT: 
+        ∀ (P : ProteinStructure) . 
+          PHTSheaf(P) ≃ ProteinPHT(P)
+          
+      PROOF:
+        LET S = SecondaryStructure(P)
+        
+        PHTSheaf(P)
+          ≃ PHTSheaf(⋃_{M ∈ S} M)   BY def. of SecondaryStructure
+          ≃ ⊕_{M ∈ S} PHTSheaf(M)   BY PHTGluing 
+          = ⊕_{M ∈ S} MotifPHT(M)   BY def. of MotifPHT
+          = ProteinPHT(P)            BY def. of ProteinPHT
+    }
+    
+    THEOREM StableProteinClassification {
+      STATEMENT:
+        ∀ (P : ProteinStructure) (F : ProteinFamily) (ε : R^>0) .
+          (∀ M ∈ FamilyMotifSignature(F) . ∃ M' ∈ SecondaryStructure(P) . 
+             MotifSimilarity(M, M') > 1-ε) ⇒ FamilyMembership(P, F)
+             
+      PROOF:
+        ASSUME (H) : ∀ M ∈ FamilyMotifSignature(F) . 
+          ∃ M' ∈ SecondaryStructure(P) . MotifSimilarity(M, M') > 1-ε
+        
+        LET M ∈ FamilyMotifSignature(F), M' ∈ SecondaryStructure(P) 
+          SUCH THAT MotifSimilarity(M, M') > 1-ε
+          
+        MotifSimilarity(M, M') > 1-ε
+          <=> InterleavingDist(MotifPHT(M), MotifPHT(M')) < ε  
+          <=> M ≃[ε] M'                       BY StabilityOfPHT
+        
+        HENCE HasMotif(P, M')                  BY def. HasMotif
+        THUS  HasMotif(P, M)                   BY H, M ≃[ε] M'
+        
+        CONCLUDE FamilyMembership(P, F)        BY def. FamilyMembership
+    }
+  }
+}
+
+In this Concept, we introduce types for protein structures, amino acids, and structural motifs. The key idea is to decompose a protein structure into its constituent secondary structural motifs (e.g., α-helices, β-sheets) and compute the PHT for each motif. The PHT of the entire protein is then the direct sum of the motif PHTs.
+We define a distance between proteins based on the interleaving distance of their PHTs. Similarly, we define a similarity measure between structural motifs. These allow us to compare proteins and identify conserved structural patterns.
+For protein classification, we introduce the notion of a protein family and define a consensus structure and motif signature for a family. A protein is classified into a family if it contains all the signature motifs of the family, up to a certain tolerance.
+The proofs section includes a theorem showing the stability of this classification scheme: if a protein has motifs that are sufficiently similar to a family's signature motifs, then it will be classified into that family.
+This Concept demonstrates how the ShapeSpace framework can be extended and applied to a specific domain. The PHT provides a robust way to encode and compare the shapes of proteins and their substructures, enabling various analyses and classifications.
+Of course, this is a simplified model and there are many more aspects of protein structure and function that could be incorporated. But it illustrates the potential of using topological and sheaf-theoretic tools in computational biology.

@@ -1,0 +1,55 @@
+CONCEPT ExplanatoryGap {
+  STRUCTURE {
+    [Explanatory(Gap) := Difficulty in explaining qualia purely in terms of physical processes]
+    [∀q ∈ Qualia, ¬∃p ∈ Physical(Explanation), p ⊢ q]
+    [Physical(Explanation) := Explanation in terms of physical processes and mechanisms]
+    [∀q ∈ Qualia, ∀p ∈ Physical(Processes), Correlates(q, p) ⊬ Explains(p, q)]
+    [Correlates(q, p) := Qualia q is correlated with physical process p]
+    [Explains(p, q) := Physical process p fully explains qualia q]
+    [Knowledge(Argument) := Mary doesn't learn new facts upon experiencing color qualia]
+    [Conceivability(Argument) := Zombies are conceivable, so physicalism is false]
+  }
+
+  PROOFS {
+    tactic assume_mary(m) :
+      m ∈ Mary by hypothesis
+      m ↦ Complete(Physical(Knowledge)) by hypothesis
+      m ↦ ¬Color(Qualia) by hypothesis
+    
+    theorem knowledge_argument :
+      ¬(∀q ∈ Qualia, ∃p ∈ Physical(Explanation), p ⊢ q)
+    {
+      let m ∈ Mary by assume_mary(m)
+      m ↦ Complete(Physical(Knowledge)) by hypothesis
+      m ↦ ¬Color(Qualia) by hypothesis
+      m experiences color qualia by hypothesis
+      m learns new fact by intuition
+      ∃q ∈ Color(Qualia), ¬∃p ∈ Physical(Explanation), p ⊢ q by logic
+      ¬(∀q ∈ Qualia, ∃p ∈ Physical(Explanation), p ⊢ q) by generalization
+    }
+
+    theorem conceivability_argument :
+      □(Zombies) ⇒ ¬□(Physicalism)
+    {
+      assume □(Zombies) by hypothesis
+      ∀x ∈ Conscious(Beings), ∃z ∈ Zombie(Counterparts),
+        Physicalism(x) = Physicalism(z) ∧ Phenomenology(x) ≠ Phenomenology(z) by definition of zombie
+      assume □(Physicalism) by contradiction
+      ∀x ∈ Conscious(Beings), ∀y ∈ Zombie(Counterparts),
+        Physicalism(x) = Physicalism(y) ⇒ Phenomenology(x) = Phenomenology(y) by logic
+      contradiction by definition of zombie
+      ¬□(Physicalism) by logic
+    }
+  }
+
+  LANGUAGE {
+    type Mary
+    type Color(Qualia)
+    type Complete(Physical(Knowledge))
+
+    pred has_complete_knowledge(m : Mary) = m ↦ Complete(Physical(Knowledge))
+    pred experiences_color_qualia(m : Mary) = m ↦ Color(Qualia)
+
+    func Zombie(c : Conscious(Being)) : Zombie(Counterpart)
+  }
+}

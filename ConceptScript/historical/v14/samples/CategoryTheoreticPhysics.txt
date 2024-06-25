@@ -1,0 +1,115 @@
+CONCEPT CategoryTheoreticPhysics {
+  LANGUAGE {
+    type Obj = Object(C: Category)
+    type Mor = Morphism(C: Category)
+    type Cat = Category(Obj, Mor) | Functor(Cat, Cat) | NaturalTransformation(Functor, Functor)
+    
+    notation "A ⟶ B" = Morphism(A: Obj, B: Obj)
+    notation "F: C ⟹ D" = Functor(F, C: Cat, D: Cat)  
+    notation "α: F ⟹ G" = NaturalTransformation(α, F: Functor, G: Functor)
+    notation "A ⊗ B" = TensorProduct(A: Obj, B: Obj)
+    notation "F ⊗ G" = TensorProduct(F: Functor, G: Functor)
+    notation "A ⊕ B" = DirectSum(A: Obj, B: Obj)
+    notation "F ⊕ G" = DirectSum(F: Functor, G: Functor)
+    
+    type Phys = Hilbert | Observable | State | Operator | Algebra
+    
+    pred Quantize(C: Category, H: Hilbert)
+    pred Interpret(P: Phys, X: Obj)
+  }
+
+  STRUCTURE {
+    CategoryAxioms: {
+      ∀ A, B, C: Obj.
+        (A ⟶ B) ∧ (B ⟶ C) ⇒ (A ⟶ C)  ; Composition
+      ∀ A: Obj. 
+        (A ⟶ A)  ; Identity morphisms
+      ∀ F: Functor.
+        F(A ⟶ B) = F(A) ⟶ F(B)  ; Functors preserve morphisms
+      ∀ α: F ⟹ G, A: Obj.
+        αᴀ: F(A) ⟶ G(A)  ; Components of natural transformations
+    }
+    
+    QuantumCategories: {
+      type Hilb = Category(Hilbert, Operator)
+      type Obs = Subcategory(Hilb) where (∀ A: Obj. A = A†)
+      type State = Subcategory(Hilb) where (∀ ρ: Mor. Tr(ρ) = 1)
+      
+      ∀ H: Hilbert. Quantize(Obs, H) ∧ Quantize(State, H)
+      
+      Interpret(Observable, A: Obj in Obs) 
+      Interpret(State, ρ: Mor in State)
+    }
+    
+    CategoricalSemantics: {
+      type nCob = Category(Manifold, Cobordism)
+      type Vect = Category(VectorSpace, LinearMap)
+      
+      notation "Z: nCob ⟹ Vect" = Functor(Z, nCob, Vect)
+      
+      ∀ M, N: Manifold.
+        Interpret(Z(M ⟶ N), Z(M) ⟶ Z(N))
+      
+      ∀ M, N: Manifold.  
+        Z(M ⊔ N) = Z(M) ⊗ Z(N)  ; Monoidal structure
+    }
+  }
+    
+  PROOFS {
+    tactic Functoriality(F: Functor, f: A ⟶ B, g: B ⟶ C): 
+      F(g ∘ f) = F(g) ∘ F(f)
+      
+    tactic Naturality(α: F ⟹ G, f: A ⟶ B):
+      G(f) ∘ αᴀ = αʙ ∘ F(f)  
+      
+    tactic BraKet(ψ: Mor in State, A: Obj in Obs):
+      ⟨A⟩ψ = Tr(A ∘ ψ)
+
+    theorem Causality(Z: nCob ⟹ Vect, f: M ⟶ N, g: N ⟶ P):
+      Z(g ∘ f) = Z(g) ∘ Z(f)
+    {
+      Functoriality(Z, f, g)
+    }
+      
+    theorem Locality(Z: nCob ⟹ Vect, M, N: Manifold):  
+      Z(M ⊔ N) = Z(M) ⊗ Z(N)
+    {
+      have Z(M ⊔ N) = Z(M) ⊗ Z(N)  ; Monoidal structure axiom
+    }
+      
+    theorem Unitarity(Z: nCob ⟹ Hilb, M: Manifold):
+      Z(M) = Z(M)†
+    {
+      have Z(M) in Obs  ; Observable category
+      have ∀ A in Obs. A = A†  ; Observables self-adjoint
+    }
+      
+    theorem ExpectationValues(ψ: Mor in State, A, B: Obj in Obs):
+      ⟨A ⊗ B⟩ψ = ⟨A⟩ψ * ⟨B⟩ψ
+    {  
+      BraKet(ψ, A ⊗ B)
+      have ⟨A ⊗ B⟩ψ = Tr((A ⊗ B) ∘ ψ)
+      = Tr((A ∘ ψ) ⊗ (B ∘ ψ))   ; Functoriality of ⊗
+      = Tr(A ∘ ψ) * Tr(B ∘ ψ)   ; Trace of tensor product
+      = ⟨A⟩ψ * ⟨B⟩ψ             ; BraKet(ψ, A), BraKet(ψ, B)
+    }
+      
+    theorem Decoherence(ρ: Mor in State, E: Mor in Obs):  
+      ρ ⟶ E ∘ ρ ∘ E†
+    {
+      assume ρ = Σᵢ pᵢ |ψᵢ⟩⟨ψᵢ|  ; Spectral decomposition
+      
+      have E = Σⱼ Pⱼ  ; Projector decomposition
+      
+      have E ∘ ρ ∘ E† = Σᵢⱼ pᵢ Pⱼ |ψᵢ⟩⟨ψᵢ| Pⱼ
+        = Σᵢⱼ pᵢ |Pⱼψᵢ⟩⟨Pⱼψᵢ|  ; Projector property 
+        
+      hence ρ ⟶ E ∘ ρ ∘ E†  ; Evolution under decoherence
+    }
+  }
+}
+
+This Concept explores the connections between category theory and physics, particularly quantum mechanics. It defines a language for expressing categorical structures and their physical interpretations.
+The structure section lays out the axioms of category theory, and then defines specific categories relevant to quantum mechanics, such as the category of Hilbert spaces (quantum state spaces) and the category of observables. It also introduces the idea of functorial quantum field theories, which assign vector spaces to manifolds and linear maps to cobordisms between manifolds.
+The proofs section demonstrates several key theorems that arise from the categorical perspective on physics. These include proofs of causality and locality based on the functorial structure, derivations of unitarity and the form of quantum observables, a proof of the tensor product rule for expectation values, and a theorem describing the process of decoherence in terms of projector-based evolution.
+The Concept aims to showcase the explanatory power and unifying nature of category theory when applied to fundamental physics. The language enables concise expression of complex physical and mathematical ideas, while the proofs illustrate the far-reaching consequences of the categorical axioms and structures.

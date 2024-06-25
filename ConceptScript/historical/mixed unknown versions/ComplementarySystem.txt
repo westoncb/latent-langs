@@ -1,0 +1,86 @@
+CONCEPT ComplementarySystem {
+  LANGUAGE {
+    type System = (Continuous, Discrete, Interface)
+    type Continuous = (State, Dynamics)
+    type Discrete = (Program, Memory)
+    type Interface = (Encode, Decode)
+    
+    type State = [Real]
+    type Dynamics = State -> State
+    type Program = Memory -> Memory
+    type Memory = [Bit]
+    type Encode = State -> Memory
+    type Decode = Memory -> State
+    
+    func Evolve(c: Continuous, t: Real) -> State
+    func Compute(d: Discrete) -> Memory
+    func Interact(s: System) -> State
+    
+    Evolve((s, f), t) = Integrate(f, s, t)
+    where
+      Integrate(f, s, t) is the solution of ds/dt = f(s) from initial state s for time t
+      
+    Compute((p, m)) = p(m)
+    
+    Interact((c, d, (e, d))) = 
+      let s = State(c), p = Program(d) in
+        Decode(Compute((p, Encode(Evolve(c, t)))))
+        
+    law ComplementaryRecursion(s: System, t: Real):  
+      Interact(s, t) = 
+        let (c, d, (e, d)) = s in
+          Decode(Compute((Program(d), Encode(Evolve(c, t)))))
+          >> ComplementaryRecursion((Continuous(_, Dynamics(c)), 
+                                     Discrete(Program(d), _),
+                                     (e, d)), t)
+  }
+  
+  PROOFS {
+    theorem Universality(s: System, t: Real, ε: Real):
+      Assumes:
+        The set of Dynamics is dense in the space of continuous functions
+        The set of Programs is Turing-complete
+        Encode and Decode are mutually inverse up to ε  
+      Proves:  
+        ∀ f: State -> State. ∃ (c, d). |Interact((c, d, _))^n - f| < ε on any bounded interval
+    {
+      assume f: State -> State
+      
+      ; By density, there exists a dynamic c' ∈ Dynamics such that
+      |Evolve((s, c'), t) - f(s)| < ε/2 for all s ∈ State, 0 ≤ t ≤ T
+      
+      ; By Turing completeness, there exists a program p' ∈ Program such that  
+      |Decode(Compute((p', Encode(s)))) - s| < ε/2 for all s ∈ State
+      
+      let c = (s, c'), d = (p', Encode(s)), i = (Encode, Decode)
+      
+      ; Then for any n and 0 ≤ t ≤ T, we have
+      |Interact((c, d, i))^n(s) - f(s)| = 
+        |Decode(Compute((p', Encode(Evolve(c, n * t)))))- f(s)| ≤
+        |Decode(Compute((p', Encode(Evolve(c, n * t))))) - Evolve(c, n * t)| +
+        |Evolve(c, n * t) - f(s)| <
+        ε/2 + ε/2 = ε
+    }
+  }
+}
+
+The core components of this ComplementarySystem Concept are:
+
+A System is composed of a Continuous and a Discrete subsystem, along with an Interface between them.
+The Continuous subsystem consists of a State space and Dynamics on that space.
+The Discrete subsystem consists of a Program which operates on a Memory.
+The Interface consists of Encode and Decode functions which map between the Continuous State and the Discrete Memory.
+The Evolve function defines the continuous evolution of the Continuous subsystem over a time interval.
+The Compute function defines the discrete computation performed by the Program on the Memory.
+The Interact function defines the overall behavior of the System by composing Evolution of the Continuous state, Encoding to Memory, Computation on the Memory, and Decoding back to State.
+The ComplementaryRecursion law expresses the mutual recursion between the Continuous and Discrete subsystems mediated by the Interface.
+The Universality theorem states that under suitable assumptions on the richness of the Continuous Dynamics and Discrete Programs, and the faithfulness of the Interface, the System can approximate any desired continuous transformation to arbitrary accuracy.
+
+The key insight here is that the power of the composite System arises from the complementary nature of the Continuous and Discrete subsystems. The Continuous subsystem provides the "analog" richness and flexibility, while the Discrete subsystem provides the "digital" precision and control.
+Their recursive interaction, regulated by the Interface, allows the System to generate complex behaviors and to approach universal computation and control.
+Some potential variations and extensions:
+
+Allowing stochastic as well as deterministic dynamics and programs
+Introducing a notion of hierachy, with Systems composed of subsystems
+Defining a measure of complexity or information flow through the Interface
+Studying the conditions for emergence of stable, coherent, or intelligent behaviors

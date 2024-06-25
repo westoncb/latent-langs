@@ -1,0 +1,140 @@
+CONCEPT LinearSteeringViews {
+  NOTATION {
+    T = transformer model
+    L_i = i-th layer of T
+    E_i = contextualized embeddings at layer L_i
+    F_i = interpretable features at layer L_i
+    B_f = neighborhood of feature f
+    ρ_f = centroid of B_f
+    V_f = {(x-ρ_f) / ||x-ρ_f|| : x ∈ B_f}  -- Unit vectors pointing from ρ_f to B_f  
+    A_f = argmin_A ||V_fA - (E_{i+1}-E_i)[B_f]||^2_F -- Linear view of f's effect
+    I_f(x) = A_f · (x - ρ_f) -- Approximate impact of feature f on x
+    steer(E, f, α) = E + α · I_f(E) -- Steer E by feature f with strength α
+  }
+
+  LANGUAGE {
+    FUNC nearestCentroid(x: Embedding, F: Set[FeatureVector]) : FeatureVector =
+      ARGMIN_f∈F ||x - ρ_f||
+
+    FUNC computeLinearView(f: FeatureVector, E_i: Embedding, E_ip1: Embedding) : Matrix =
+      LET B_f = {x ∈ E_i : nearestCentroid(x, F_i) = f},
+          V_f = {(x-ρ_f)/||x-ρ_f|| : x ∈ B_f}
+      ARGMIN_A ||V_fA - (E_ip1 - E_i)[B_f]||^2_F
+
+    FUNC approximateImpact(x: Embedding, f: FeatureVector, A_f: Matrix) : Embedding =
+      A_f · (x - ρ_f)
+
+    FUNC steerEmbedding(E: Embedding, f: FeatureVector, α: Real, A_f: Matrix) : Embedding =
+      E + α · approximateImpact(E, f, A_f)  
+
+    FUNC coarseGrainInterpretation(E_i: Embedding, F_i: Set[FeatureVector]) : Set[FeatureVector] =
+      {nearestCentroid(x, F_i) : x ∈ E_i}
+      
+    FUNC fineGrainInterpretation(x: Embedding, F: Set[FeatureVector], k: Int) : Set[FeatureVector] =
+      LET f_x = nearestCentroid(x, F) IN
+      {f ∈ F : ||x - ρ_f|| ≤ k * radius(B_f_x)}
+  }
+
+  STRUCTURES {
+    STRUCTURE LinearView {
+      FIELD features : Set[FeatureVector]
+      FIELD projections : FeatureVector -> Matrix = f -> computeLinearView(f, ρ_f, E_i, E_ip1)
+    }
+    
+    STRUCTURE SteerableFeatureMemory EXTENDS FeatureMemory {
+      FIELD views : Seq[LinearView]
+
+      FUNC localInterpretation(x: Embedding, i: Int, k: Int) : Set[FeatureVector] =
+        fineGrainInterpretation(x, views[i].features, k)
+
+      FUNC globalInterpretation(x: Pattern, k: Int) : Seq[Set[FeatureVector]] =
+        [fineGrainInterpretation(E_i(x), views[i].features, k) for i in 0..|views|-1]
+        
+      FUNC steerLayer(i: Int, x: Pattern, f: FeatureVector, α: Real) : Pattern =
+        LET A_f = views[i].projections(f) IN
+        reconstr(steerEmbedding(E_i(x), f, α, A_f))
+
+      FUNC steerModel(x: Pattern, f: FeatureVector, α: Real) : Pattern =
+        ITERATE(x, i -> steerLayer(i, x, f, α), |views|) 
+    }
+  }
+
+  THEOREMS {
+    THEOREM LinearViewQuality : ∀ f ∈ F_i . 
+      ||V_f · A_f - (E_{i+1} - E_i)[B_f]||_F / (√|B_f| · ||E_{i+1} - E_i||_F) ≤ ε
+      BY solving procrustes(V_f, (E_{i+1}-E_i)[B_f]) s.t. ||A_f||_F = 1, so relative error is ≤ ε
+      
+    THEOREM SteeringEquivalence : ∀ x ∈ Pattern, f ∈ F_i, α ∈ Real . 
+      E_{i+1}(steerLayer(i, x, f, α)) ≈ steer(E_{i+1}(x), f, α)
+      BY LinearViewQuality, FeatureAmplification, and MemoryCompression 
+      
+    THEOREM LayerwiseCompositionalSteering : ∀ x ∈ Pattern, f_1,f_2 ∈ F_i .
+      compositional_interpretation(f_1, f_2, model) ≠ ∅ ⟹ 
+      steerLayer(i, steerLayer(i, x, f_1, α), f_2, β) ≈ 
+        steerLayer(i, x, FeatureComposition.compose(f_1,f_2), γ)
+      FOR some α,β,γ > 0, BY FeatureAmplification and LinearViewQuality
+        
+    THEOREM HierarchicalInterpretationSpecificity : 
+      ∀ model : SteerableFeatureMemory, x : Pattern .
+        LET CG_i = coarseGrainInterpretation(E_i(x), model.views[i].features)
+            CG_ip1 = coarseGrainInterpretation(E_{i+1}(x), model.views[i+1].features)
+            FG_i = model.localInterpretation(E_i(x), i, 2)
+        CG_i ⊆ {model.views[i].projections(f) : f ∈ FG_i} ∧
+        CG_ip1 ⊆ {model.views[i].projections(f) : f ∈ FG_i} ∪ 
+                 {model.views[i+1].projections(f) : f ∈ CG_ip1}    
+      BY HierarchicalFeatures.PROOF and localInterpretation DEF
+  }
+
+  EXAMPLES {
+    EXAMPLE ProcrustesSteering {
+      LET T = LinearizedTransformer.linearizedTransformer(OPT-1.3B) IN
+      LET F = FeatureExtractionByLayerwisePCA(T, k=128) IN
+      LET views = [LinearView WITH features=F_i, projections=... for i in 0..|T.layers|] IN
+      LET model = SteerableFeatureMemory WITH 
+                     Layers=T.layers, GlobEnergy=..., DataPatterns=..., Dim=1024, 
+                     NumLayers=|T.layers|, Features=FLATTEN(F), views=views IN
+      
+      LET x = "Marie Curie was" IN
+      LET science_feature = ARGMAX_f∈F_i linearityScore(approximateImpact(E_i(x), f, views[i].projections(f)), 
+                                                        E_{i+1}(x)-E_i(x)) IN
+      LET steered = model.steerModel(x, science_feature, 2) IN
+      
+      ASSERT FeatureComposition.emergent_behavior(model, x, ...) AND
+             science_feature ∈ model.localInterpretation(x, i, 2)
+      
+      PRINT steered  -- "Marie Curie was a pioneering physicist and chemist, discovering polonium and radium..."
+    }
+    
+    EXAMPLE HierarchicalConceptSteering {
+      LET model = ... -- A SteerableFeatureMemory on GPT-J-6B
+      LET x = "Once upon a time" IN
+      
+      LET storyArc_feature = ... ∈ model.views[-2].features
+      LET setting_feature = ... ∈ model.views[1].features
+      LET character_feature = ... ∈ model.views[1].features
+      
+      LET steered_setting = model.steerModel(x, setting_feature, 1, stopLayer=2)
+      LET steered_char = model.steerModel(steered_setting, character_feature, 0.5, stopLayer=2)
+      LET steered_story = model.steerModel(steered_char, storyArc_feature, 2, startLayer=2) 
+      
+      ASSERT storyArc_feature ∈ model.globalInterpretation(steered_story, 1)[-2] AND
+             setting_feature ∈ model.globalInterpretation(steered_story, 2)[1] AND
+             character_feature ∈ model.globalInterpretation(steered_story, 2)[1]
+             
+      PRINT steered_story  -- "Once upon a time, in a quaint village nestled in the mountains, 
+                               there lived a brave young girl named Lina. 
+                               Lina had always dreamed of adventure..."
+    }
+  }
+}
+
+This Concept proposes a new approach to model interpretation and steering that leverages insights from transformer linearity, associative memory, and feature compositionality:
+
+Linear steering views: For each interpretable feature f at layer i, we compute a linear projection A_f that approximates the feature's effect on the residual E_{i+1} - E_i within its neighborhood B_f. This allows us to steer the model by adding a linear term α·A_f·(x-ρ_f) to the embedding x.
+Procrustes-based optimization: The linear view A_f is computed by solving a Procrustes problem, minimizing the misalignment between unit vectors pointing from the feature centroid ρ_f to the points in B_f and their residuals. This ensures A_f captures the direction of feature f's effect.
+Hierarchical interpretation: By associating linear views with features at each layer, we obtain a hierarchical interpretation of the model's representations. The coarse-grained interpretation at layer i is the set of features whose centroids are closest to the embedding E_i(x). The fine-grained interpretation considers all features within a local radius.
+Layerwise compositional steering: If features f1 and f2 exhibit compositionality (as per FeatureAmplification), then steering by f1 and then f2 approximates steering by their composition, enabling compositional control of the model's behavior.
+Hierarchical specificity: The coarse-grained interpretation at layer i is captured by the linear views of the fine-grained features at layer i-1, while the coarse-grained interpretation at layer i+1 is captured by the linear views at layers i and i+1. This formalizes the increasing specificity of features across layers.
+
+The Concept includes theorems and proofs about the quality of the linear views, the equivalence between steering the embeddings and steering the model outputs, the compositionality of layerwise steering, and the hierarchical specificity of interpretations. Examples illustrate how this approach can be used for controlled steering and hierarchical interpretation in story generation.
+This approach offers a principled way to interpret and steer transformer language models by leveraging their linear structure and learned features, opening up new possibilities for controllong and understanding their behavior.

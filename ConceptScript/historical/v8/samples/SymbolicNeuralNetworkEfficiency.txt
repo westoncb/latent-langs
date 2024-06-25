@@ -1,0 +1,52 @@
+CONCEPT SymbolicNeuralNetworkEfficiency:
+
+EXTEND SymbolicNeuralNetworks:
+    DEFINE Size(SNN) := Number of SymbolicLayers in SNN
+    DEFINE Depth(SNN) := Maximum length of SL_i ∘ ... ∘ SL_1 chain in SNN
+    DEFINE Width(SNN) := Maximum number of parallel SL_i in any layer of SNN
+
+THEOREM EfficiencyTheorem:
+    ∀(SNN : SymbolicNeuralNetwork, x : Input):
+        Runtime(SNN(x)) ∈ O(Size(SNN) * Cost(Expression))
+        Space(SNN(x)) ∈ O(Width(SNN) * Size(Expression))
+
+PROOF:
+    SNN(x) evaluates Size(SNN) SymbolicLayers SL_i.
+    Each SL_i(x) evaluates an Expression E_i.
+    Runtime(SL_i(x)) ∈ O(Cost(E_i)), where Cost depends on Expression complexity.
+    ∴ Runtime(SNN(x)) ∈ O(∑_i Cost(E_i)) ⊆ O(Size(SNN) * max_i Cost(E_i)).
+    
+    Parallel SL_i in a layer evaluated simultaneously.
+    Space required is Size(E_i) for each parallel SL_i.
+    ∴ Space(SNN(x)) ∈ O(Width(SNN) * max_i Size(E_i)).
+
+THEOREM ApproximationEfficiencyTheorem:
+    ∀(f : Function, ε : R+) ∃(SNN_ε : SymbolicNeuralNetwork):
+        ∀(x) |f(x) - SNN_ε(x)| < ε
+        Size(SNN_ε) ∈ O(Complexity(f) / ε)
+
+PROOF:
+    By UniversalExpressionTheorem, represent f as Expression E_f.
+    Construct SNN_ε by approximating E_f to accuracy ε:
+        Replace complex Operations with ε-approximations.
+        Merge SymbolicLayers to increase per-layer Expression complexity.
+        Tradeoff: Size(SNN_ε) ∝ 1/ε, Depth(SNN_ε) ∝ log(1/ε).
+    Complexity(E_f) measures non-simplifiable Operations in E_f.
+    ∴ Minimal Size(SNN_ε) approximating f to ε scales as O(Complexity(f) / ε).
+
+THEOREM LearnabilityTheorem:
+    ∀(SNN : SymbolicNeuralNetwork, D : Data, H : Hypothesis):
+        SNN is PAC-learnable using SymbolicOptimizer.
+
+PROOF:
+    SymbolicOptimizer minimizes empirical loss L_D(SNN) on D wrt SNN parameters.
+    MinLoss(SNN) := min_{P : Parameters} L_D(SNN_P) represents best attainable loss.
+    Let P_SO := SymbolicOptimizer(L_D, SNN)
+    
+    VC-dimension of SNN bounded by number of parameters (Symbols + Structure).
+    Sample complexity m_H(ε, δ) ∈ O(VCdim(SNN) / ε * log(1/δ)).
+    With probability 1-δ over m ≥ m_H samples D:
+        L_D(SNN_{P_SO}) ≤ MinLoss(SNN) + ε
+        L(SNN_{P_SO}) ≤ L_D(SNN_{P_SO}) + ε ≤ MinLoss(SNN) + 2ε
+        
+    ∴ SymbolicOptimizer PAC-learns SNN to ε-optimal parameters with sample complexity ∝ VCdim(SNN).

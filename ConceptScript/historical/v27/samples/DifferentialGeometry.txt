@@ -1,0 +1,109 @@
+CONCEPT DifferentialGeometry {
+  NOTATION {
+    ∇f = Grad(f)  
+    ⟨v, w⟩_p = Metric(v, w)(p)
+    X[f] = VectorFieldAction(X, f)
+    ω(v, w) = DifferentialForm(ω)(v, w)
+    ∇_X Y = Connection(X, Y)  
+    χ(M) = EulerCharacteristic(M)
+    [X,Y] = LieBracket(X, Y)
+  }
+  
+  LANGUAGE {
+    TYPE Manifold
+    TYPE Point = Manifold
+    TYPE TangentVector = (Point, Vector)
+    TYPE Vector = [Real]
+    TYPE VectorField = Point -> TangentVector
+    TYPE Metric = (TangentVector, TangentVector) -> (Point -> Real)
+    TYPE Connection = (VectorField, VectorField) -> VectorField
+    TYPE DifferentialForm = Int -> (TangentVector -> ... -> TangentVector -> Real)
+  
+    FUNC Grad(f: Point -> Real) : VectorField
+    FUNC Integrate(ω: DifferentialForm(k), C: Chain(k)) : Real  
+    FUNC LieBracket(X: VectorField, Y: VectorField) : VectorField
+    FUNC Pullback(ϕ: Manifold -> Manifold, ω: DifferentialForm) : DifferentialForm
+    FUNC Pushforward(ϕ: Manifold -> Manifold, X: VectorField) : VectorField
+
+    AXIOM MetricSymmetric : ∀ v w p . ⟨v, w⟩_p = ⟨w, v⟩_p
+    AXIOM MetricBilinear : ∀ u v w a b p . ⟨a*u + b*v, w⟩_p = a*⟨u,w⟩_p + b*⟨v,w⟩_p
+    AXIOM GradDef : ∀ f v p . ⟨∇f, v⟩_p = v[f](p)
+    AXIOM LieIdentity : ∀ X f . [X,X][f] = 0
+    AXIOM LieJacobi : ∀ X Y Z . [X,[Y,Z]] + [Y,[Z,X]] + [Z,[X,Y]] = 0  
+  }
+
+  STRUCTURES {  
+    STRUCTURE Curvature {
+      FIELD M : Manifold
+      FIELD g : Metric
+      FIELD ∇ : Connection
+
+      COMPUTE RiemannTensor(X : VectorField, Y : VectorField, Z : VectorField) : VectorField =
+        ∇_X(∇_Y Z) - ∇_Y(∇_X Z) - ∇_[X,Y] Z 
+
+      COMPUTE RicciTensor(X : VectorField, Y : VectorField) : Point -> Real =
+        λ p . Σ_{i=1}^n ⟨RiemannTensor(e_i, X, Y)(p), e_i⟩_p
+        WHERE {e_i} is an orthonormal frame at p
+
+      COMPUTE RicciScalar : Point -> Real = 
+        λ p . Σ_{i=1}^n RicciTensor(e_i, e_i)(p)
+        WHERE {e_i} is an orthonormal frame at p
+    }
+  }
+
+  PROOFS {
+    THEOREM GaussBonnet : ∀ (M : Manifold(2), g : Metric) . 
+      Integrate(RicciScalar * VolumeForm(g), M) = 2*π*χ(M)
+    {
+      LET K = RicciScalar / 2
+      LET dA = VolumeForm(g)
+
+      REWRITE Integrate(RicciScalar * dA, M)
+           = Integrate(2*K * dA, M)
+           = 2 * Integrate(K * dA, M)
+
+      CASE M = ⋃_i M_i IS Triangulable   
+        LET θ_i = ExteriorAngle(M_i) = Integrate(K * dA, M_i)   
+        BY GaussBonnetForTriangle
+
+        Integrate(K * dA, M) 
+          = Σ_i Integrate(K * dA, M_i) 
+          = Σ_i θ_i
+          = Σ_i (π - Σ_j α_ij)           WHERE α_ij = InteriorAngle(M_i, j)
+          = π*|{M_i}| - Σ_i Σ_j α_ij     BY Fubini
+          = 2*π - π*χ(M)                BY VertexAngleSum AND Euler
+          = π*χ(M)
+      
+      CASE M = M' - ⋃_k D_k WHERE M' IS Triangulable  
+        Integrate(K * dA, M)
+          = Integrate(K * dA, M') - Σ_k Integrate(K * dA, D_k)
+          = π*χ(M') - Σ_k π*χ(D_k)      BY GaussBonnetForTriangulation
+          = π*χ(M)                      BY Inclusion-Exclusion
+          
+      HENCE 2*Integrate(K * dA, M) = 2*π*χ(M)
+            Integrate(RicciScalar * dA, M) = 2*π*χ(M)        
+    }
+  }
+  
+  EXAMPLES {
+    EXAMPLE Sphere {
+      M = S^2 = {(x,y,z) ∈ R^3 | x^2+y^2+z^2=1}
+      g((v1,v2,v3),(w1,w2,w3)) = v1*w1 + v2*w2 + v3*w3
+      ∇_X Y = D/dt[ParallelTransport(Y, CurveInDirection(X))]|_{t=0}
+
+      FACT RicciScalar = 2
+      FACT χ(S^2) = 2
+      CONFIRM GaussBonnet  
+    }
+
+    EXAMPLE Torus {
+      M = T^2 = S^1 × S^1 = {(θ,φ) | θ,φ ∈ [0,2π)} / ~
+      g = dθ ⊗ dθ + dφ ⊗ dφ 
+      ∇ = LeviCivitaConnection(g)
+
+      FACT RicciScalar = 0  
+      FACT χ(T^2) = 0
+      CONFIRM GaussBonnet
+    }
+  }
+}

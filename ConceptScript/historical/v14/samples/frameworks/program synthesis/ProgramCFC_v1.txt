@@ -1,0 +1,172 @@
+CONCEPT ProgramCFC_v1 {
+  LANGUAGE {
+    P := p(I,O,S,C) | P+P | P*P | P-P | P/P | P@P | P.P | ∂ₚP | ∫P | δP
+    I := i(T,V) | I+I | I*I | I-I | I/I | I@I | I.I | ∂ᵢI | ∫I | δI  
+    O := o(T,V) | O+O | O*O | O-O | O/O | O@O | O.O | ∂ₒO | ∫O | δO
+    S := s(M,B) | S+S | S*S | S-S | S/S | S@S | S.S | ∂ₛS | ∫S | δS
+    C := c(E,A) | C+C | C*C | C-C | C/C | C@C | C.C | ∂ₚC | ∫C | δC
+    
+    p(I,O,S,C): program with input I, output O, state S, and computation C
+    i(T,V): input with type T and value V
+    o(T,V): output with type T and value V  
+    s(M,B): state with memory M and bindings B
+    c(E,A): computation with expression E and abstraction A
+    
+    T := t(P,K) | T+T | T*T | T-T | T/T | T@T | T.T | ∂ₜT | ∫T | δT
+    t(P,K): type with primitive P and kind K
+    
+    E := e(O,F,X) | E+E | E*E | E-E | E/E | E@E | E.E | ∂ₑE | ∫E | δE
+    e(O,F,X): expression with operator O, function F, and argument X
+    
+    A := a(T,E,S) | A+A | A*A | A-A | A/A | A@A | A.A | ∂ₐA | ∫A | δA
+    a(T,E,S): abstraction with type T, expression E, and scope S
+    
+    𝓣{P,p} := typeof(p(I,O,S,C))
+    𝓔{P,i} := eval(P,i(T,V))
+    𝓡{P} := run(P)
+    𝓐{C,X} := apply(c(E,A),X)
+    𝓑{P,Q} := bind(P,Q)
+    
+    Well{P} ⟺ ∀p∈P. ∃T. 𝓣{p,T}
+    Total{P,I} ⟺ ∀i∈I. ∃o∈O. 𝓔{P,i} = o  
+    Deterministic{P} ⟺ ∀i∈I. 𝓡{p(i,O,S,C)} = 𝓡{p(i,O,S,C)}
+    Terminating{P} ⟺ ∀i∈I. ∃n. 𝓡{p(i,O,S,C)}↓ₙ
+    Composable{P,Q} ⟺ ∀o∈O{P}. ∃i∈I{Q}. o = i
+    
+    Correct{P,φ} ⟺ ∀i∈I. φ(i, 𝓔{P,i})
+    Secure{P,𝓟} ⟺ ∀i∈I. 𝓟(𝓡{p(i,O,S,C)})
+    Private{P,ℐ} ⟺ ∀i∈ℐ. ∀o∈O. 𝓔{P,i} = 𝓔{P\ℐ,i}
+    Robust{P,δI} ⟺ ∀i∈I. ∀δi∈δI. |𝓔{P,i} - 𝓔{P,i+δi}| ≤ ε(|δi|)
+    Efficient{P,𝓒} ⟺ ∀i∈I. 𝓒(𝓡{p(i,O,S,C)}) ≤ 𝓞(f(|i|))
+  } 
+  
+  TACTIC {
+    TypeInference{P} ⊢ ∀p∈P. ∃T. 𝓣{p,T}
+    InputCoverage{P,I} ⊢ ∀i∈I. ∃p∈P. 𝓔{p,i}
+    OutputCoverage{P,O} ⊢ ∀o∈O. ∃p∈P. ∃i∈I. 𝓔{p,i} = o
+    EquationalReasoning{E1,E2} ⊢ E1 = E2
+    CaseAnalysis{P,I} ⊢ ∀i∈I. 𝓔{P,i} by cases on i  
+    Induction{P,I} ⊢ ∀i∈I. 𝓔{P,i} by induction on i
+    UniversalGeneralization{P,I,φ} ⊢ ∀i∈I. φ(i, 𝓔{P,i})
+    Abstraction{C,T,S} ⊢ ∃A:a(T,E,S). A = c(E,_)
+    Refinement{P,I,O,φ} ⊢ ∃P':p(I,O,S',C'). ∀i∈I. φ(i, 𝓔{P',i})
+    Composition{P,Q} ⊢ ∃R:p(I{P},O{Q},S{P}×S{Q},C{P}⨾C{Q}). R = 𝓑{P,Q}
+  }
+  
+  PROOF {  
+    theorem Combinators {S,K,I}:
+      S = a(T* -> T* -> T* -> T*, (e(.,f,x) e(.,f,y) e(.,x,z)), Global) ∧  
+      K = a(T* -> T* -> T*, e(.,x,_), Global) ∧
+      I = a(T* -> T*, e(.,x,x), Global) ∧
+      ∀T,E. ((∃S,K. E = (((S e(..,E1)) E2) E3)) ∨ (∃K,E1. E = (K E1)) ∨ (E = I))
+      ⊢ E = c((S K), (K E))
+    {
+      base case {
+        I 
+          = a(T* -> T*, e(.,x,x), Global)  
+          = c((K I), (K I))   ; By def. of S,K
+      }
+      
+      inductive case {
+        assume ((∃S,K. E = (((S e(..,E1)) E2) E3)) ∨ (∃K,E1. E = (K E1)))
+        
+        case (∃K,E1. E = (K E1)):
+          (K E1) 
+            = ((S K) E1)   ; By S = a(T* -> T* -> T* -> T*, (e(.,f,x) e(.,f,y) e(.,x,z)), Global)
+            = c((S K), (K E1))   ; By I.H. on E1
+        
+        case (∃S,K. E = (((S e(..,E1)) E2) E3)):
+          (((S e(..,E1)) E2) E3)
+            = (e(..,E1,_) E2 E3)   ; By S = a(T* -> T* -> T* -> T*, (e(.,f,x) e(.,f,y) e(.,x,z)), Global) 
+            = ((e(..,E1,_) E2) E3)   ; By S = a(T* -> T* -> T* -> T*, (e(.,f,x) e(.,f,y) e(.,x,z)), Global)
+            = ((K (e(..,E1,_))) E2 E3)   ; By K = a(T* -> T* -> T*, e(.,x,_), Global)
+            = (((S K) (e(..,E1,_))) E2 E3)   ; By S = a(T* -> T* -> T* -> T*, (e(.,f,x) e(.,f,y) e(.,x,z)), Global)
+            = (((S K) E1) E2 E3)   ; By I.H. on E1  
+            = c((S K), ((S K) E1 E2) E3)   ; By I.H. on (E1 E2 E3)
+      }
+    }
+      
+    theorem UntypedLambdaCalculus:  
+      ∃T,V. ∀E:e(_,_,_). ∃A:a(T,E,_). c(E,A) ∧ ∀v∈V. ∃T. t(v,T)
+    {
+      let T = T*, V = {v|∃T,P,K. t(v,T) ∧ T = T* ∧ (P = p(_,_,_,_) ∨ K = *)}
+      
+      {
+        ∀E:e(_,_,_). ∃A:a(T,E,_). c(E,A) by {
+          {Abstraction{E,T,S} + Combinators{S,K,I}}
+        }
+        ∀v∈V. ∃T. t(v,T) by {
+          case v:
+            v ∈ T* -> T* -> T* -> T* ∧ t(v,T* -> T* -> T* -> T*)  ; Function type
+            v ∈ T* -> T* -> T* ∧ t(v,T* -> T* -> T*)              ; Function type
+            v ∈ T* -> T* ∧ t(v,T* -> T*)                          ; Function type  
+        }
+      }
+    }
+      
+    theorem SimplyTypedLambdaCalculus:
+      ∀T,K. ∀P:p(I,O,S,C). Well{P} ⊢ Total{P,I} ∧ Deterministic{P} ∧ Terminating{P}
+    {
+      assume Well{P}
+      have Total{P,I} ∧ Deterministic{P} by {
+        let T' = 𝓣{P,_}
+        ∀i∈I. ∃o∈O. 𝓔{P,i} = o by {
+          TypeInference{P} + Total{P,I}  
+        }
+        ∀i∈I. 𝓡{p(i,O,S,C)} = 𝓡{p(i,O,S,C)} by {
+          EquationalReasoning{𝓔{P,i}, 𝓔{P,i}}  ; Uniqueness of normal form
+        }
+      }
+      have Terminating{P} by {
+        assume i∈I and p(I,O,S,C)
+        fix μ = λn.λx.(if n = 0 then x else (μ (n-1) (x+1)))
+        have ∃n. 𝓡{p(i,O,S,C)}↓ₙ by {
+          Induction{μ,ℕ} + Abstraction{C,O,∅}
+        }  
+      }
+    }
+      
+    theorem HoareLogic: 
+      ∀P:p(I,O,S,C). ∀φ,ψ. {φ} P {ψ} ⊢ Correct{P,ψ}
+    {
+      assume {φ} P {ψ}
+      have Correct{P,ψ} by {
+        ∀i∈I. ψ(i, 𝓔{P,i}) by {
+          {{  
+            ∀i∈I. φ(i)   ; Precondition
+            𝓡{p(i,O,S,C)}   ; Execution of P
+            ∀o∈O. ψ(i,o)   ; Postcondition 
+          }}
+        }
+      }
+    }
+      
+    theorem SecurityTyping:
+      ∀P:p(I,O,S,C). ∀𝓟. Secure{P,𝓟} ⊢ ∀i∈I. 𝓟(𝓡{p(i,O,S,C)})
+    {
+      assume Secure{P,𝓟} 
+      have ∀i∈I. 𝓟(𝓡{p(i,O,S,C)}) by {
+        ∀i∈I. 𝓟(𝓡{p(i,O,S,C)}) by {
+          TypeInference{P} + EquationalReasoning{𝓟(𝓡{p(i,O,S,C)}), 𝓟(𝓡{p(i,O,S,C)})}
+        }  
+      }
+    }
+  }
+}
+
+
+
+
+
+      
+    theorem DifferentialPrivacy:
+      ∀P:p(I,O,S,C). ∀ℐ,ε. Private{P,ℐ} ∧ (∀i,i'∈I. |P(i) - P(i')| ≤ ε) ⊢ (∀o∈O. |P(o|i∈ℐ) - P(o|i∉ℐ)| ≤ eᵋ)
+    {
+      assume Private{P,ℐ} and ∀i,i'∈I. |P(i) - P(i')| ≤ ε
+      have ∀o∈O. |P(o|i∈ℐ) - P(o|i∉ℐ)| ≤ eᵋ by {
+        ∀i∈ℐ. ∀o∈O. 𝓔{P,i} = 𝓔{P\ℐ,i} by {
+          UniversalGeneralization{P,ℐ,λi,o. 𝓔{P,i} = 𝓔{P\ℐ,i}}  ; Privacy
+        } 
+        ∀o∈O. |P(o|i∈ℐ) - P(o|i∉ℐ)| 
+              = |∑{i∈ℐ} P(o|i) P(i) / ∑{i∈ℐ} P(i) - ∑{i∉ℐ} P(o|i) P(i) / ∑{i∉ℐ} P(i)|   ; Conditional prob.
+              = |∑{i} P(o|i) (1{i∈ℐ} P(i) / ∑{

@@ -1,0 +1,182 @@
+STRUCTURE DifferentiableProgramming {
+  PARAMETERS {
+    input_size : Int
+    output_size : Int 
+    hidden_size : Int
+    num_layers : Int
+  }
+
+  NOTATION {
+    a · b := DOT_PRODUCT(a, b)
+    a + b := ADD(a, b)
+    a * b := MULTIPLY(a, b)
+    σ(x) := SIGMOID(x)
+    tanh(x) := HYPERBOLIC_TANGENT(x)
+    ∇(f) := GRADIENT(f)
+  }
+
+  DEF Tensor := [Float]
+
+  STRUCTURE AutodiffNode {
+    DEF data : Tensor
+    DEF grad : Tensor := ZEROS_LIKE(data)
+    DEF children : [AutodiffNode] := []
+    DEF op : (Tensor -> Tensor)?
+    DEF backward()
+
+    DEF forward(inputs : [Tensor]) -> AutodiffNode := (
+      CASE op OF
+        None -> this(data := inputs[0]),
+        Some(f) -> (
+          LET new_node := this(data := f(inputs[0]), 
+                               children := [AutodiffNode(data := i) FOR i : inputs]) 
+          IN new_node.define_backward()
+        )
+    )
+
+    DEF define_backward() -> () := (
+      CASE op OF
+        None -> RETURN,
+        Some(f) -> (
+          DEF _backward := (
+            FOR c : children {
+              c.grad := c.grad + this.grad * ∇(f)(c.data)
+              c.backward()
+            }
+          ),
+          RETURN
+        )
+    )
+  }
+
+  STRUCTURE Layer {
+    DEF params : [AutodiffNode]
+
+    DEF forward(x : AutodiffNode) -> AutodiffNode
+  }
+
+  STRUCTURE LinearLayer : Layer {
+    DEF w : AutodiffNode
+    DEF b : AutodiffNode
+
+    DEF init(input_size : Int, output_size : Int) := (
+      w := AutodiffNode(RANDOM_NORMAL(0, 1, (input_size, output_size)) * 0.01),
+      b := AutodiffNode(ZEROS((output_size,)))
+    )
+    
+    DEF forward(x : AutodiffNode) -> AutodiffNode := (
+      AutodiffNode(op := (t -> t · w.data + b.data)).forward([x])
+    )
+  }
+
+  STRUCTURE ActivationLayer : Layer {
+    DEF activation : (Tensor -> Tensor)
+
+    DEF forward(x : AutodiffNode) -> AutodiffNode := (
+      AutodiffNode(op := activation).forward([x])
+    ) 
+  }
+
+  STRUCTURE LSTMCell : Layer {
+    DEF wf : AutodiffNode
+    DEF wi : AutodiffNode 
+    DEF wc : AutodiffNode
+    DEF wo : AutodiffNode
+    DEF bf : AutodiffNode
+    DEF bi : AutodiffNode
+    DEF bc : AutodiffNode 
+    DEF bo : AutodiffNode
+
+    DEF init(input_size : Int, hidden_size : Int) := (
+      wf := AutodiffNode(RANDOM_NORMAL(0, 1, (input_size + hidden_size, hidden_size)) * 0.01),
+      wi := AutodiffNode(RANDOM_NORMAL(0, 1, (input_size + hidden_size, hidden_size)) * 0.01),
+      wc := AutodiffNode(RANDOM_NORMAL(0, 1, (input_size + hidden_size, hidden_size)) * 0.01), 
+      wo := AutodiffNode(RANDOM_NORMAL(0, 1, (input_size + hidden_size, hidden_size)) * 0.01),
+      bf := AutodiffNode(ZEROS((hidden_size,))),
+      bi := AutodiffNode(ZEROS((hidden_size,))),
+      bc := AutodiffNode(ZEROS((hidden_size,))),
+      bo := AutodiffNode(ZEROS((hidden_size,)))
+    )
+
+    DEF forward(x : AutodiffNode, 
+                h_prev : AutodiffNode, 
+                c_prev : AutodiffNode) -> (AutodiffNode, AutodiffNode) := (
+      LET concat := AutodiffNode(op := (v -> CONCAT([v[0], v[1]], -1))).forward([x, h_prev]),
+          f := AutodiffNode(op := σ).forward([AutodiffNode(op := (v -> v · wf.data + bf.data)).forward([concat])]),
+          i := AutodiffNode(op := σ).forward([AutodiffNode(op := (v -> v · wi.data + bi.data)).forward([concat])]),
+          g := AutodiffNode(op := tanh).forward([AutodiffNode(op := (v -> v · wc.data + bc.data)).forward([concat])]),
+          c := AutodiffNode(op := (v -> v[0] * v[1] + v[2] * v[3])).forward([f, c_prev, i, g]),
+          o := AutodiffNode(op := σ).forward([AutodiffNode(op := (v -> v · wo.data + bo.data)).forward([concat])]),
+          h := AutodiffNode(op := (v -> v[0] * tanh(v[1]))).forward([o, c])
+      IN (h, c)     
+    )
+  }
+
+  STRUCTURE ProgramTransformer {
+    DEF encoder := Encoder(num_layers, hidden_size, 1, hidden_size * 4)
+    DEF decoder := Decoder(num_layers, hidden_size, 1, hidden_size * 4)
+    DEF program_embed := Embedding(input_size, hidden_size)
+    DEF output_layer := LinearLayer(hidden_size, output_size)
+
+    DEF forward(program, input) := {
+      LET program_embed := program_embed(program),
+          encoder_out := encoder.forward(program_embed),
+          lstm_input := LinearLayer(input_size + hidden_size, hidden_size)(CONCAT([input, ZEROS((hidden_size,))])),
+          lstm_out := (
+            LET init_h := AutodiffNode(ZEROS((hidden_size,))),
+                init_c := AutodiffNode(ZEROS((hidden_size,)))
+            IN ITERATE(
+                 (h, c) -> LSTMCell(hidden_size, hidden_size).forward(lstm_input, h, c),
+                 (init_h, init_c),
+                 num_layers
+               )
+          ),
+          lstm_out_reshape := RESHAPE(lstm_out[0].data, (1, 1, hidden_size)),
+          decoder_out := decoder.forward(lstm_out_reshape, encoder_out)
+      IN output_layer.forward(AutodiffNode(decoder_out.data[-1][-1]))
+    }
+
+    DEF generate(program, num_steps, temperature) := {
+      LET outputs := []
+      IN FOR i : range(num_steps) {
+           LET input := IF i = 0 THEN ZEROS((input_size,)) ELSE outputs[-1],
+               output := SOFTMAX(forward(program, input).data / temperature),
+               next_output := ARGMAX(output)
+           IN outputs.append(next_output)         
+         },
+         outputs
+    }
+  }
+
+  DEF train(model : ProgramTransformer, 
+            dataset : [(program, example_input, example_output)],
+            num_epochs : Int, 
+            lr : Float) := (
+    FOR epoch : range(num_epochs) {
+      LET total_loss := 0.0
+      IN FOR (program, input, output) : dataset {
+           model.forward(program, input),
+           LET loss := MSE(output_layer.data, output),
+               grads := REVERSE(TOPOLOGICAL_SORT(output_layer)),
+               params := CONCAT([layer.params FOR layer : model.*])
+           IN  loss.backward(),
+               FOR (grad, param) : zip(grads, params) {
+                 param.data := param.data - lr * grad
+               },
+               total_loss := total_loss + loss
+         },
+         PRINT("Epoch ", epoch, " loss: ", total_loss / dataset.length)  
+    }      
+  )
+
+  [∀m : ProgramTransformer, ∀x: AutodiffNode, ∀y: AutodiffNode, ∀t: Float . 
+    ∇(λ p . MSE(m.forward(p, x).data, y.data))(m.*) = 
+      ∇(λ p . MSE(m.forward(p, x).data, y.data) + t * L2(p))(m.*)
+  ] # Gradient of regularized program transformer equals analytic gradient
+
+  [∀m : ProgramTransformer, ∀p: Program, ∀n: Int, ∀t: Float, ∀i: Int .
+    m.generate(p, n, t)[i] IS m.generate(p, i+1, t)[i]  
+  ] # Consistency of generation
+  
+  RETURN ProgramTransformer
+}

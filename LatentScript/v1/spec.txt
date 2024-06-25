@@ -1,0 +1,210 @@
+LatentScript Language Specification
+
+1. EXPAND block
+EXPAND Domain {
+  THEORY TheoreticalFramework {
+    DEFINE Concept1 := Definition1
+    DEFINE Concept2 := Definition2
+    ...
+    AXIOM Axiom1 := Statement1
+    AXIOM Axiom2 := Statement2
+    ...
+    QUESTION Question1
+    QUESTION Question2
+    ...
+  }
+  
+  EXPLORE Concept1, Concept2, ...
+  CONSIDER Aspect1, Aspect2, ...
+  RELATE Concept1 -> Concept2, Concept3 -> Concept4, ...
+  ANALOGY Concept1 ~ Concept2 : Mapping1, Mapping2, ...
+  ...  
+}
+
+2. PINCH_POINTS block
+PINCH_POINTS {
+  Concept1, Concept2, ..., Concept_n
+  ...  
+  Concept_i -> Concept_j -> Concept_k
+  ...
+  (Concept_x, Concept_y, Concept_z) -> Concept_w
+  ...
+}
+
+3. CONTRACT block  
+CONTRACT DomainTheory {
+  PARAMETERS {
+    (α₁ : T₁, α₂ : T₂, ..., α_n : T_n)
+  }
+
+  STRUCTURES {
+    S₁ {
+      (f₁₁ : F₁₁, f₁₂ : F₁₂, ..., f₁ₙ : F₁ₙ)
+      [e₁₁, e₁₂, ..., e₁ₙ]
+    }
+    ...
+    S_m { ... }  
+  }
+ 
+  DEFINITIONS {
+    x₁ := e₁
+    x₂ := e₂ 
+    ...
+    x_n := e_n
+  }
+  
+  IDENTITIES {
+    e₁ = e₂
+    e₃ = e₄
+    ...
+    [c₁] ⇒ e₁ 
+    [c₂] ⇒ e₂
+    ...
+  }
+
+  THEOREMS {
+    THEOREM T₁ {
+      ASSUME a₁, a₂, ..., a_n
+      PROVE c  
+      PROOF {
+        p₁ [Ref₁]
+        p₂ [Ref₂]
+        ...
+        p_n ∎
+      }
+    }
+    ...
+    THEOREM T_m { ... } 
+  }
+   
+  EXAMPLES {
+    EXAMPLE E₁ {  
+      LET x₁ := v₁
+      LET x₂ := v₂ 
+      ...
+      ASSUME a₁, a₂, ..., a_n
+      SHOW e₁, e₂, ..., e_m
+    }
+    ...
+    EXAMPLE E_p {
+      e₁ ≅ e₂  
+      e₃ ≣ e₄
+      ...
+      e_n ↔ e_{n+1} WHERE c
+    }
+  }
+}
+
+EXPAND AgingMechanisms {
+  THEORY CellularSenescenceTheory {
+    DEFINE CellularSenescence := PersistentCellCycleArrest
+    DEFINE SASP := Senescence-AssociatedSecretoryPhenotype
+    AXIOM SenescenceCauses := CellularSenescence -> Degeneration
+    QUESTION WhatAreKeyMediatorsOfSenescenceEffects
+  }
+  
+  THEORY MitochondrialTheoryOfAging {
+    DEFINE MitochondrialDysfunction := DeclineInMitochondrialFunctionWithAge
+    DEFINE mtDNAMutation := MutationInMitochondrialDNA
+    AXIOM MitochondrialDysfunctionCauses := MitochondrialDysfunction -> CellularAging
+    QUESTION HowDoMitochondrialMutationsCauseAging
+  }
+
+  EXPLORE ProteinAggregation, EpigeneticChanges, StemCellExhaustion 
+  CONSIDER Inflammation, MetabolicDysregulation
+  RELATE Senescence -> SASP -> InflammationAndDysfunction
+  RELATE mtDNAMutation -> MitochondrialDysfunction -> MetabolicDecline
+  ANALOGY CellularSenescence ~ ZombieCell : NonDividing, ResistantToApoptosis, InflammationInducing
+}
+
+PINCH_POINTS {  
+  p53, p16INK4a, pRB, Telomeres, Sirtuins
+  (Mitochondria, FreeRadicals, OxidativeDamage) -> mtDNAMutations
+  Lipofuscin, ProteinCrosslinks, AdvancedGlycationEndProducts
+  Autophagy, mTORSignaling, AMPK, NAD+
+  ImmuneSenescence, Inflammaging
+}
+
+CONTRACT SenescenceTheoryOfAging {
+  STRUCTURES {
+    Cell {
+      (dnaRepair : Efficiency, 
+       telomeres : Length,
+       mitoFitness : FunctionLevel,
+       secretoryProfile : InflammatoryLevel)
+      [IF dnaRepair < δ_damage OR telomeres < δ_short OR 
+          mitoFitness < δ_function ⇒ SASP ↑]
+    }
+    
+    Tissue {  
+      (cells : Population{Cell},
+       ECM : IntegrityLevel,
+       vascularization : Adequacy)
+      [Mean(cells.SASP) ↑ ⇒ ECM ↓ AND vascularization ↓]   
+    }
+  }
+
+  DEFINITIONS {
+    SenescenceBurden := Fraction(cells, c => c.telomeres < δ_short)
+    InflammationLoad := Mean(cells.SASP)  
+    FrailtyIndex := 1 - Min(ECM, vascularization)
+  }
+  
+  IDENTITIES {
+    SenescenceBurden ↑ = InflammationLoad ↑
+    FrailtyIndex ∝ SenescenceBurden
+    [Age ↑] ⇒ SenescenceBurden ↑
+    [SenescenceBurden > δ_crit] ⇒ PathologyRisk ↑
+  }
+
+  THEOREMS {
+    THEOREM CellAutonomousSenescenceDrivers {
+      ASSUME Cell.dnaRepair ↓, Cell.telomeres ↓, Cell.mitoFitness ↓
+      PROVE Cell.SASP ↑
+      PROOF {
+        Cell.(dnaRepair ↓ OR telomeres ↓ OR mitoFitness ↓) [Assumption]
+        ⇒ Cell.(dnaRepair < δ_damage OR telomeres < δ_short OR 
+                mitoFitness < δ_function) [Thresholds]
+        ⇒ Cell.SASP ↑ [SenescenceCriterion] ∎
+      }
+    }
+
+    THEOREM SenescenceInducedTissueDecline {
+      ASSUME SenescenceBurden ↑  
+      PROVE FrailtyIndex ↑
+      PROOF {
+        SenescenceBurden ↑ [Assumption]  
+        ⇒ InflammationLoad ↑ [SenescenceInflammationLink]
+        ⇒ Mean(cells.SASP) ↑ [InflammationLoadDefinition]
+        ⇒ ECM ↓ AND vascularization ↓ [InflammationEffects]  
+        ⇒ Min(ECM, vascularization) ↓ [MinProperty] 
+        ⇒ 1 - Min(ECM, vascularization) ↑ [FrailtyIndexDefinition]
+        ⇒ FrailtyIndex ↑ [Conclusion] ∎ 
+      }
+    }    
+  }
+
+  EXAMPLES {
+    EXAMPLE ProgeroidSyndrome {
+      LET HutchinsonGilfordCells := Population{Cell | dnaRepair ≪ δ_damage}
+      ASSUME ∀(c : HutchinsonGilfordCells), c.telomeres ≪ δ_short  
+      SHOW SenescenceBurden(HutchinsonGilfordCells) ≫ SenescenceBurden(HealthyCells),
+           FrailtyIndex(HutchinsonGilfordCells) ≫ FrailtyIndex(HealthyCells) 
+    }
+
+    EXAMPLE SenolyticTreatment {
+      SenolyticsTarget ≣ Cell | (telomeres < δ_short OR SASP > δ_inflammatory)  
+      Senolysis ≔ Remove(cells, SenolyticsTarget)
+      Rejuvenation ↔ SenescenceBurden ↓ WHERE Senolysis
+    }
+  }
+}
+
+In this example, we use LatentScript to explore and formalize theories about the role of cellular senescence in aging and age-related pathology.
+In the EXPAND block, we introduce two key theories: the CellularSenescenceTheory, which posits that senescent cells accumulate with age and drive degenerative processes through inflammatory secretions (SASP), and the MitochondrialTheoryOfAging, which posits that mutations in mitochondrial DNA lead to mitochondrial dysfunction and cellular aging. We also explore some related concepts like protein aggregation, epigenetic changes, and stem cell exhaustion, and propose some potential relationships and analogies.
+In the PINCH_POINTS block, we bring in some key molecular players and mechanisms that are known to be involved in senescence and aging, like p53, telomeres, sirtuins, mitochondrial mutations, protein aggregates, and immune factors. These help focus and constrain the scope of the theory.
+In the CONTRACT block, we formalize the core tenets of the senescence theory in a precise, mathematical way. We define key structures like Cell and Tissue, with properties like DNA repair efficiency, telomere length, SASP level, ECM integrity, etc. We define key measures like SenescenceBurden, InflammationLoad, and FrailtyIndex, and state some key identities relating them.
+We then prove two key theorems: one showing how cell-autonomous factors like DNA damage, telomere shortening, and mitochondrial dysfunction can drive senescence, and another showing how the accumulation of senescent cells can lead to tissue-level decline and frailty.
+Finally, we illustrate the theory with two examples: one showing how progeroid syndromes (like Hutchinson-Gilford) can be understood as extreme cases of accelerated senescence, and another showing how senolytic treatments that selectively remove senescent cells could potentially reverse aging-related pathology.
+This example demonstrates how LatentScript can be used to guide a process of theory construction and formalization, starting from an expansive exploration of the conceptual space, then focusing and structuring the key ideas using pinch points and mathematical definitions, and finally crystallizing the core arguments and predictions in a set of precise theorems and illustrative examples.
+Of course, this is just a toy example, and a real application of LatentScript to aging research would require a much more detailed and extensive treatment, drawing on the vast literature and data in the field. But hopefully it gives a sense of how the language could be used to help structure and compress scientific knowledge and reasoning in a flexible and expressive way.

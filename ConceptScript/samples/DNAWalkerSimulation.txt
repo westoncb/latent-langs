@@ -1,0 +1,188 @@
+CONCEPT DNAWalkerSimulation {
+  PARAMETERS {
+    kB : ℝ  -- Boltzmann constant
+    NA : ℝ  -- Avogadro's number
+    T : ℝ  -- Temperature
+    η : ℝ  -- Viscosity
+    lp : ℝ  -- Persistence length
+    a : ℝ  -- Base pair length
+    C_salt : ℝ  -- Salt concentration
+  }
+
+  CONTEXT {
+    TYPES {
+      Nuc := ENUM { A, T, C, G }
+      Pos := ℝ³
+      Seq := LIST(Nuc)
+      ℕ := NaturalNumbers
+      𝔹 := Booleans
+      
+      NNParams := MAP((Nuc, Nuc), (ℝ, ℝ))  -- (ΔH, ΔS) for each pair
+    }
+
+    STRUCTURES {
+      STRUCTURE Domain {
+        FIELD seq : Seq
+        FIELD type : ENUM { Toehold, Branch, Spacer }
+        
+        FUNC ΔG(T : ℝ, nn : NNParams) : ℝ :=
+          ∑ᵢⁿ⁻¹ nn(seq[i], seq[i+1]).1 - T * (∑ᵢⁿ⁻¹ nn(seq[i], seq[i+1]).2 + 
+          0.368n ln(C_salt/1000)) + InitΔG(seq[0], seq[-1], T)
+        
+        FUNC k_on(C : ℝ) : ℝ := IF type = Toehold THEN 3.5e5 * C^0.9 ELSE 0
+        
+        FUNC k_off(T : ℝ, nn : NNParams) : ℝ := k_on(1) * exp(ΔG(T, nn) / (kB * T))
+        
+        FUNC BranchRate() : ℝ := IF type = Branch THEN 1200 * exp(-1.5|seq|) ELSE 0
+        
+        FUNC Flex() : ℝ := IF type = Spacer THEN 0.6lp ELSE lp
+      }
+      
+      STRUCTURE WalkerLeg {
+        FIELD domains : LIST(Domain)
+        FIELD pos : Pos
+        FIELD s : ℝ
+        
+        FUNC L() : ℝ := ∑ₖ |dₖ.seq| * a * (1 + 0.6δ(dₖ.type, Spacer))
+        
+        FUNC F(track : Track) : Pos := 
+          WLC(‖pos - track(s)‖ / L(), HMean([d.Flex() FOR d IN domains])) * 
+          (pos - track(s)) / ‖pos - track(s)‖
+        
+        FUNC ΔG(s' : ℝ, track : Track, nn : NNParams) : ℝ := 
+          ∑ₖ dₖ.ΔG(T, nn) + 0.5κ(L()⁻¹ + Lp_eff()⁻¹)(‖pos - track(s)‖² - ‖pos - track(s')‖²)
+        
+        FUNC P(s' : ℝ, track : Track, nn : NNParams) : ℝ := 
+          exp(-ΔG(s', track, nn) / (kB * T))
+        
+        FUNC D() : ℝ := kB * T / (6πη√(L() * HMean([d.Flex() FOR d IN domains])))
+        
+        FUNC k(s' : ℝ, track : Track, nn : NNParams) : ℝ := 
+          ToeholdDomain(domains).k_on(1) * 
+          exp(-BranchDomain(domains).BranchRate() * |BranchDomain(domains).seq|) *
+          P(s', track, nn)
+      }
+      
+      STRUCTURE Track {
+        FIELD f : FUNC(ℝ, Pos)
+        FIELD bindingSites : LIST(ℝ)
+        
+        FUNC NearestSite(s : ℝ) : ℝ := argminᵢ |s - bindingSites[i]|
+      }
+      
+      STRUCTURE Simulator {
+        FIELD dt : ℝ
+        FIELD leg : WalkerLeg
+        FIELD track : Track
+        FIELD nn : NNParams
+        
+        FUNC Step() : (Pos, ℝ, 𝔹) {
+          LET force = leg.F(track)
+          LET drift = force * dt / (6πη * leg.L())
+          LET diff = √(2 * leg.D() * dt) * RandNormal³()
+          
+          leg.pos += drift + diff
+          
+          IF ‖leg.pos - track(leg.s)‖ > THRESHOLD THEN
+            LET p_unbind = leg.domains[0].k_off(T, nn) * dt
+            IF RandUniform() < p_unbind THEN
+              RETURN (leg.pos, leg.s, False)
+          ELSE
+            LET s_near = track.NearestSite(leg.s)
+            LET p_bind = leg.k(s_near, track, nn) * dt
+            IF RandUniform() < p_bind THEN
+              leg.s = s_near
+              RETURN (leg.pos, leg.s, True)
+          
+          RETURN (leg.pos, leg.s, leg.s ≠ -1)
+        }
+        
+        FUNC Simulate(steps : ℕ) : LIST((Pos, ℝ, 𝔹)) {
+          RETURN [Step() FOR _ IN 1..steps]
+        }
+      }
+    }
+
+    NOTATION {
+      |x| := Length(x)
+      ‖x‖ := EuclideanNorm(x)
+      x · y := DotProduct(x, y)
+      ∑ᵢⁿ := Sum(i=1 TO n)
+      ∏ᵢⁿ := Product(i=1 TO n)
+      δ(x, y) := KroneckerDelta(x, y)
+      HMean := HarmonicMean
+    }
+    
+    ASSERTIONS {
+      AXIOM DetailedBalance { 
+        ∀ s₁ s₂ . leg.k(s₁, track, nn) * leg.P(s₁, track, nn) = 
+                  leg.k(s₂, track, nn) * leg.P(s₂, track, nn) 
+      }
+      AXIOM WLCLimit { lim(x→1) WLC(x, lp) = ∞ }
+    }
+  }
+
+  TRANSFORMERS {
+    SIMPLIFY WLCApprox(x) {
+      WLC(x, lp) ≈ 3kBT/(2lp) * (x + x/(1-x)²)  FOR 0 < x < 0.9
+    }
+    
+    REWRITE SaltEffect(C_salt) {
+      Domain.ΔG(T, nn) → Domain.ΔG(T, nn) - 0.114 * |seq| * ln(C_salt)  FOR C_salt > 0.05
+    }
+  }
+
+  PROOFS {
+    THEOREM Ergodicity {
+      ∀ s₁ s₂ ∈ track.bindingSites . ∃ n ∈ ℕ . 
+        ℙ(leg.s(t+n*dt) = s₂ | leg.s(t) = s₁) > 0
+    }
+    PROOF {
+      LET p_min = min(leg.k(s, track, nn) * dt FOR s IN track.bindingSites)
+      HAVE p_min > 0 BY Domain.k_on > 0, exp(-x) > 0
+      HENCE ∀ s₁ s₂ . ℙ(leg.s(t+dt) = s₂ | leg.s(t) = s₁) ≥ p_min > 0
+      THUS ℙ(leg.s(t+n*dt) = s₂ | leg.s(t) = s₁) ≥ p_min^n > 0 ∀ n
+      QED
+    }
+
+    THEOREM MeanFirstPassageTime(s₁, s₂) {
+      𝔼[τ(s₁ → s₂)] = ∫ₛ₁ˢ² dx / (D * P(x))
+        WHERE τ(s₁ → s₂) := inf{t > 0 : s(t) = s₂ | s(0) = s₁}
+              P(x) := exp(-U(x) / (kB * T))
+              U(x) := leg.ΔG(x, track, nn)
+    }
+    PROOF {
+      -- Derive from Fokker-Planck equation for 1D diffusion in potential U(x)
+      ...
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE BasicSimulation {
+      DEFINE nn = LoadNearestNeighborParams()  -- Load from empirical data
+      
+      DEFINE leg = WalkerLeg(
+        domains: [
+          Domain(seq: [A,T,C,G,A,T], type: Toehold),
+          Domain(seq: [G,C,A,T,G,C,A,T,G,C], type: Branch),
+          Domain(seq: [T,T,T,T], type: Spacer)
+        ],
+        pos: (0, 0, 5),
+        s: 0
+      )
+      
+      DEFINE track = Track(
+        f: (s) => (10s, 0, 0),
+        bindingSites: [0, 1, 2, 3, 4]
+      )
+      
+      DEFINE sim = Simulator(dt: 1e-9, leg: leg, track: track, nn: nn)
+      
+      LET trajectory = sim.Simulate(1000000)
+      
+      THEN 
+        MEAN([p.2 FOR p IN trajectory]) > 0 AND  -- Net forward movement
+        COUNT([p FOR p IN trajectory WHERE p.3]) / |trajectory| > 0.9  -- High processivity
+    }
+  }
+}

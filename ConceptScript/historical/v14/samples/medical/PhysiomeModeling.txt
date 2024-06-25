@@ -1,0 +1,154 @@
+CONCEPT PhysiomeModeling {
+  IMPORT PhysiologicalNotation
+  
+  LANGUAGE {
+    type Model = Graph(Node, Edge)
+    type Node = (State, Dynamics)
+    type Edge = (Coupling, Delay)
+    type State = ℝ^n
+    type Dynamics = State -> State
+    type Coupling = (State, State) -> ℝ
+    type Delay = ℝ₊
+    
+    type Method = (Model, ℝ₊) -> Model  ; Simulation method
+    
+    func euler(m: Model, dt: ℝ₊): Model  ; Euler's method
+      := (v, t) ↦ v + dt * m.Dynamics(v)
+    
+    func rk4(m: Model, dt: ℝ₊): Model  ; 4th-order Runge-Kutta
+      := (v, t) ↦ v + (k₁ + 2k₂ + 2k₃ + k₄) / 6
+         where k₁ = dt * m.Dynamics(v)
+               k₂ = dt * m.Dynamics(v + k₁/2)
+               k₃ = dt * m.Dynamics(v + k₂/2)
+               k₄ = dt * m.Dynamics(v + k₃)
+               
+    func backwardEuler(m: Model, dt: ℝ₊): Model ; Backward Euler
+      := (v, t) ↦ 𝓈 such that 𝓈 = v + dt * m.Dynamics(𝓈)
+      
+    func symplecticEuler(m: Model, dt: ℝ₊): Model  ; Symplectic Euler
+      := (q, p, t) ↦ (q + dt * ∂H/∂p, p - dt * ∂H/∂q) 
+         where (q, p) is the state and H is the Hamiltonian
+         
+    func masterEq(m: Model): Model  ; Master equation for Markov model
+      := ∂ₜP(t) = K·P(t) where K is the transition matrix
+      
+    func gillespie(m: Model): ℝ × Model  ; Gillespie's stochastic simulation algorithm 
+      := (τ, x + vᵢ) where i ~ P(i) = aᵢ(x) / a₀(x)
+                       and τ ~ Exp(a₀(x))
+                       
+    func forwardKolmogorov(m: Model): Model  ; Forward Kolmogorov PDE for Markov model 
+      := ∂ₜP(x,t) = ∑ᵢⱼ [Kᵢⱼ · P(xᵢ,t) - Kⱼᵢ · P(x,t)]
+      
+    func finiteDifference(m: Model, dx: ℝ₊): Model  ; Finite difference discretization in space
+      := (u, t, x) ↦ [u(t,x+dx) - 2u(t,x) + u(t,x-dx)] / dx²
+      
+    func finiteElement(m: Model, Ω: Mesh): Model ; Finite element discretization on mesh
+      := ∫_Ω (∇u · ∇v + uv) dx = ∫_Ω fv dx ∀ v ∈ V_h
+         where V_h is the finite element space on Ω
+         
+    func imex(m: Model, dt: ℝ₊): Model  ; Implicit-Explicit method
+      := (v, t) ↦ v + dt * [Explicit(v) + Implicit(v, t+dt)]
+         where Explicit and Implicit are splitting terms
+  }
+  
+  STRUCTURE {
+    [ReactionDiffusion(U: B, V: B, f: B -> B, g: B -> B, D_u: ℝ₊, D_v: ℝ₊): Model
+      ↦ ∂ₜU = D_u·ΔU + f(U,V), ∂ₜV = D_v·ΔV + g(U,V)]
+      
+    [FitzHughNagumo(v: ℝ, w: ℝ, I: ℝ, a: ℝ, b: ℝ, c: ℝ): Model  
+      ↦ ∂ₜv = c·(v - v³/3 + w + I), ∂ₜw = -(v - a + b·w) / c]
+    
+    [HodgkinHuxley(V: ℝ, m: ℝ, h: ℝ, n: ℝ, g_Na: ℝ₊, g_K: ℝ₊, g_L: ℝ₊, E_Na: ℝ, E_K: ℝ, E_L: ℝ, C: ℝ₊, I: ℝ): Model
+      ↦ C·∂ₜV = g_Na·m³·h·(E_Na - V) + g_K·n⁴·(E_K - V) + g_L·(E_L - V) + I,  
+        ∂ₜm = α_m·(1 - m) - β_m·m, ∂ₜh = α_h·(1 - h) - β_h·h, ∂ₜn = α_n·(1 - n) - β_n·n]  
+        
+    [CardiacElectrophysiology(V: ℝ, y: ℝ^n, I_ion: ℝ^k): Model
+      ↦ ∂ₜV = ∇·(D·∇V) - I_ion·V / C_m, ∂ₜy = f(V, y)]
+      
+    [BloodFlowModel(v: C(t) -> ℝ³, p: C(t) -> ℝ, ρ: ℝ₊, μ: ℝ₊): Model  
+      ↦ ρ·(∂ₜv + v·∇v) = -∇p + μ·Δv, ∇·v = 0]
+      
+    [CirculatorySystem(H: Model, A: Model, V: Model, C: Model, R: ℝ₊, C: ℝ₊): Model
+      ↦ Q = H.Output = C·dP/dt, P_a - P_v = R·Q
+        where H, A, V, C are heart, arterial, venous, and capillary models]
+        
+    [RespiratoryMechanics(P: ℝ, V: ℝ, Q: ℝ, C: ℝ₊, R: ℝ₊, P_0: ℝ, V_0: ℝ): Model
+      ↦ P - P_0 = 1/C·(V - V_0) + R·Q, Q = dV/dt]
+      
+    [GasSolubility(c: B, p: ℝ, k: ℝ₊): Model  ; Henry's law
+      ↦ p = k·c]
+      
+    [GasExchange(V_A: ℝ, V_D: ℝ, Q: ℝ, c_i: ℝ, c_o: ℝ): Model  ; Ventilation-perfusion model
+      ↦ V_A·dc_i/dt = Q·(c_o - c_i), V_D·dc_o/dt = Q·(c_i - c_o)]
+      
+    [RenalTransport(C_i: ℝ, C_o: ℝ, J_s: ℝ, J_r: ℝ, T_m: ℝ₊, K_m: ℝ₊): Model  ; Michaelis-Menten kinetics 
+      ↦ J_s = T_m·C_i / (K_m + C_i), J_r = T_m·C_o / (K_m + C_o)]  
+      
+    [GlucoseInsulinModel(G: ℝ, I: ℝ, G_b: ℝ₊, I_b: ℝ₊): Model  ; Minimal model
+      ↦ dG/dt = -p₁·(G - G_b) - X·G + D, dI/dt = -n·(I - I_b) + γ·(G - h)⁺,
+        dX/dt = -p₂·X + p₃·(I - I_b)]
+        
+    [ImmunologyModel(V: ℝ, T: ℝ, I: ℝ, β: ℝ₊, γ: ℝ₊, k: ℝ₊, λ: ℝ₊, μ_T: ℝ₊, μ_I: ℝ₊): Model  ; HIV model
+      ↦ dT/dt = λ - μ_T·T - β·V·T, dI/dt = β·V·T - μ_I·I, dV/dt = k·I - γ·V]
+      
+    [TumorGrowthModel(N: ℝ, K: ℝ₊, r: ℝ₊): Model  ; Logistic growth
+      ↦ dN/dt = r·N·(1 - N/K)]
+  }
+  
+  PROOFS {
+    theorem FiniteDifferenceConvergence(u: Model, u_k: Model, k: ℕ, h_k: ℝ₊):
+      (∀ k. u_k = finiteDifference(u, h_k)) ∧ (h_k ≤ C·h_{k-1}²) ∧ (u ∈ C⁴) 
+      ⇒ ∃ C₁. ∀ k. ∥u_k - u∥ ≤ C₁·h_k²
+    {
+      assume (∀ k. u_k = finiteDifference(u, h_k)), (h_k ≤ C·h_{k-1}²), (u ∈ C⁴)
+      
+      let e_k := u_k - u, τ_j := jh_k for j = 1,...,k
+      have e_k(0) = 0, e_k(1) = 0  ; boundary conditions
+      
+      let L := ∇²  ; Laplacian operator
+      have (I - h_k²·L)e_k = -h_k²·τ_k + O(h_k⁴)  ; by finite difference approximation
+        where τ_k := (Lu(τ₁),...,Lu(τ_k)), ∥τ_k∥ ≤ ∥u∥_C⁴  ; by Taylor's theorem
+        
+      let G_k := (I - h_k²·L)⁻¹  ; discrete Green's operator
+      have ∥G_k∥ ≤ ∥(I - h_k²·L)⁻¹∥ ≤ C₂  ; uniform bound on Green's function
+      
+      have e_k = -h_k²·G_k·τ_k + G_k·O(h_k⁴)
+           ⇒ ∥e_k∥ ≤ Ch_k²∥τ_k∥ + Ch_k⁴ ≤ C₁h_k²  ; by uniform bounds on G_k and τ_k
+    }
+    
+    theorem StabilityOfSymplecticEuler(H: Model, x_k: State, k: ℕ, dt: ℝ₊):
+      (∀ k. x_{k+1} = symplecticEuler(H, x_k, dt)) ∧ (H is Lipschitz)
+      ⇒ ∃ C₁, C₂, h₀. (∀ h < h₀. ∀ n < ℯ^{C₁/h}. ∥x_n - x(n·h)∥ ≤ C₂·h)
+    {
+      assume (∀ k. x_{k+1} = symplecticEuler(H, x_k, dt)), (H is Lipschitz)
+      
+      let L := ∇H  ; Hamiltonian vector field 
+      have ∥L∥ ≤ C  ; by Lipschitz condition on H
+      
+      let ϕ_t := exp(tL)  ; exact flow of L
+      have ϕ_h = I + hL + h²L²/2 + O(h³)  ; by Taylor expansion
+      
+      let Ψ_h := symplecticEuler(H, ·, h) = (I + hJ⁻¹L)(I + hJL)⁻¹
+        where J := [0 -I; I 0] is the symplectic matrix
+      have (Ψ_h - ϕ_h)x = O(h³)∥x∥  ; by matching Taylor expansions
+      
+      let n := t/h, x_h(t) := (Ψ_h)ⁿ·x₀  ; numerical solution
+      have x_h(t) - x(t) = ∑ⱼ (Ψ_h - ϕ_h)·(ϕ_h)ʲ⁻¹·x(jh)
+         ⇒ ∥x_h(t) - x(t)∥ ≤ nC₃h³∥x₀∥  ; by telescoping sum and bounds on Ψ_h, ϕ_h
+         ⇒ ∥x_h(t) - x(t)∥ ≤ C₂·h  ; for n ≤ ℯ^{C₁/h} and h₀ sufficiently small
+    }
+    
+    theorem ErrorAnalysisOfImex(u: Model, u_k: Model, k: ℕ, dt: ℝ₊):  
+      (∀ k. u_{k+1} = imex(u_k, dt)) ∧ (Explicit, Implicit are Lipschitz) ∧ (u ∈ C³)
+      ⇒ ∃ C. ∀ k. ∥u_k - u(k·dt)∥ ≤ C·dt²
+    {
+      assume (∀ k. u_{k+1} = imex(u_k, dt)), (Explicit, Implicit are Lipschitz), (u ∈ C³)
+      
+      let F := Explicit, G := Implicit
+      have ∥F∥, ∥G∥ ≤ C  ; by
+
+
+
+
+
+// this one got cut short—ran out of tokens I think

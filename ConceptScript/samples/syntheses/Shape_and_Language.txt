@@ -1,0 +1,1649 @@
+CONCEPT Shape {
+  CONTEXT {
+    TYPES {
+      Vector(F : Field, n : Nat) {
+        SCALAR_FIELD Components : F^n
+        VECTOR_SPACE_OVER F
+      }
+      
+      Manifold(n : Nat) {
+        SCALAR_FIELD Atlas : Set(FUNC(OpenSet, OpenSubset(ℝ^n))) 
+        SCALAR_FIELD TransitionMaps : FUNC(Atlas × Atlas, Diffeomorphism)
+        AXIOM ConsistentTransitions {
+          FORALL (U V W) . TransitionMaps(U, V) ∘ TransitionMaps(V, W) = TransitionMaps(U, W) 
+        }
+      }
+
+      Embedding(M N : Manifold) := FUNC(M, N) SATISFYING IsInjective AND IsImmersion
+
+      Submanifold(M : Manifold, k : Nat) := { N : Manifold(k) | ∃ (f : Embedding(N, M)) }
+
+      TangentSpace(M : Manifold, p : M) := Vector(ℝ, M.Dimension)
+
+      Riemannian(M : Manifold) {
+        SCALAR_FIELD Metric : FUNC(M, TangentSpace(M) × TangentSpace(M) -> ℝ)
+        AXIOM PositiveDefinite(p : M, X : TangentSpace(M, p)) {
+          Metric(p)(X, X) ≥ 0 AND (Metric(p)(X, X) = 0 IFF X = 0)
+        } 
+      }
+
+      Connection(M : Manifold) {
+        SCALAR_FIELD Christoffel : FUNC(M × TangentSpace(M)^3, ℝ)
+        AXIOM SymmetricInLowerIndices(p : M, X Y Z : TangentSpace(M, p)) {
+          Christoffel(p, X, Y, Z) = Christoffel(p, X, Z, Y)
+        }
+      }
+
+      Curve(M : Manifold) := FUNC(Interval, M)
+
+      Geodesic(M : Riemannian, ∇ : Connection(M)) {
+        SCALAR_FIELD Path : Curve(M)
+        AXIOM ParallelTransport(t) {
+          ∇_{Path'(t)}(Path'(t)) = 0
+        }
+      }
+    }
+
+    NOTATION {
+      ⟨X, Y⟩ := InnerProduct(X, Y)
+      |X| := SQRT(⟨X, X⟩)
+      γ'(t) := d/dt γ(t)  
+    }
+
+    STRUCTURES {
+      STRUCTURE EuclideanSpace EXTENDS Manifold(n), Riemannian {
+        IMPLEMENT Metric WITH (p, X, Y) ↦ ⟨X, Y⟩  
+      }
+
+      STRUCTURE Sphere(n : Nat) EXTENDS Submanifold(EuclideanSpace(n+1), n) {
+        AXIOM UnitDistance(p : Sphere) {
+          |p| = 1
+        }
+      }
+
+      STRUCTURE Knot EXTENDS Embedding(Circle, EuclideanSpace(3)) {
+        AXIOM Tame {
+          ∃ (p : Polygon) . Im(Knot) ⊆ p.Edges  
+        }
+      }
+
+      STRUCTURE SmoothStructure EXTENDS Manifold {
+        SCALAR_FIELD Tangent : FUNC(Curve(This), Vector)
+        SCALAR_FIELD Cotangent : FUNC(FUNC(Curve(This), ℝ), Vector)
+        AXIOM LocalEuclideanProperty(p : This) {
+          ∃ (U ⊆ This open) . p ∈ U AND U ≅ ℝ^(This.Dimension)
+        }
+      }
+    }
+  }
+  
+  PROOFS {
+    THEOREM EulerCharacteristic(M : Manifold | M compact and ∂M = ∅) {
+      χ(M) = Σ_{i=0}^n (-1)^i dim H^i(M; ℝ)
+    }
+    PROOF {
+      M being compact, ∂M = ∅ 
+      ⇒ M triangulable as finite simplicial complex K
+        BY Triangulation Theorem
+      
+      χ(M) = χ(K) = V - E + F   [FOR K = (V, E, F)]
+            = Σ_{i=0}^n (-1)^i f_i   [f_i = number of i-simplices]
+            = Σ_{i=0}^n (-1)^i rank C_i(K) [BY Euler-Poincare Lemma, C_*(K) = simplicial chain complex] 
+            = Σ_{i=0}^n (-1)^i rank H_i(K) [BY rank-nullity, H_*(K) = homology of C_*(K)]
+            = Σ_{i=0}^n (-1)^i dim H^i(M) [BY De Rham Theorem, H^*(M) ≅ H_*(K)]           
+    }
+
+    THEOREM GaussBonnet(M : Riemannian(2) | M oriented, compact) {
+      ∫_M K dA + ∫_∂M k ds = 2 π χ(M)
+      WHERE K = Gaussian curvature, k = geodesic curvature
+    }
+    PROOF {
+      ASSUME ∂M = ∅ [else split integral via Stokes' Thm]
+      
+      ∫_M K dA 
+         = ∫_M Ω   [Ω = curvature 2-form, Ω(X, Y) = ⟨R(X, Y)e_1, e_2⟩]
+         = ⟨e(TM), [M]⟩ [BY Gauss-Bonnet Theorem (n=2 case)]
+         = ⟨2 π e(M), [M]⟩ [BY Poincare-Hopf, e(M) = χ(M) as M has no boundary]
+         = 2 π χ(M) [BY Fundamental Class, ⟨[M], [M]⟩ = 1]
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE Sphere {
+      S² := Sphere(2) WITH {
+        Atlas := { 
+          stereographic_north : (S² - {(0,0,1)}) -> ℝ², 
+          stereographic_south : (S² - {(0,0,-1)}) -> ℝ²
+        }
+        TransitionMaps := {
+          (stereographic_north, stereographic_south) ↦ inv : ℝ² - {0} -> ℝ² - {0}
+        }
+      }
+
+      THEN S² satisfies Manifold(2) with Atlas and TransitionMaps    
+    }
+
+    EXAMPLE Torus {
+      T² := Sphere(1) × Sphere(1) WITH {
+        Metric((θ, ϕ))((dθ_1, dϕ_1), (dθ_2, dϕ_2)) := 
+          R^2 cos²(ϕ) dθ_1 dθ_2 + r^2 dϕ_1 dϕ_2
+        
+        GeodesicEquations(γ(t) = (θ(t), ϕ(t))) {
+          θ''(t) = -2 cot(ϕ(t)) θ'(t) ϕ'(t)
+          ϕ''(t) = sin(ϕ(t)) cos(ϕ(t)) θ'(t)^2  
+        }
+      }
+
+      THEN T² satisfies Riemannian(2) with explicit Metric and Geodesics
+    }
+
+    EXAMPLE MobiusStrip {
+      M := [0, 1] × ℝ / ((0, y) ~ (1, -y))
+
+      THEN M non-orientable Submanifold(ℝ³, 2) 
+    }
+  }
+}
+
+CONCEPT Language {
+  CONTEXT {
+    TYPES {
+      Alphabet := Set(Symbol)
+      
+      Word(Σ : Alphabet) := List(Σ)
+
+      Language(Σ : Alphabet) := Subset(Word(Σ))
+
+      Grammar {
+        SCALAR_FIELD Variables   : Set(Symbol)
+        SCALAR_FIELD Terminals   : Set(Symbol) 
+        SCALAR_FIELD Productions : Set(Rule)
+        SCALAR_FIELD StartSymbol : Symbol
+        INDUCTIVE Rule {
+          CASE Terminal(x : Symbol)  
+          CASE Variable(A : Symbol)
+          CASE Sequence(α β : Rule)
+          CASE Choice(α β : Rule)  
+        }
+        AXIOM NontrivialProductions {
+          FORALL (A : Variables) . ∃ (α : Rule) . (A -> α) ∈ Productions  
+        }
+      }
+
+      RegularExpression(Σ) {
+        SCALAR_FIELD Atoms : Set(Symbol) = Σ 
+        INDUCTIVE Regex {
+          CASE Atom(a : Atoms)
+          CASE Epsilon
+          CASE Empty  
+          CASE Concat(R S : Regex)
+          CASE Union(R S : Regex)
+          CASE Star(R : Regex)
+        }
+      }
+
+      Automata(Σ : Alphabet, Q : Set(State)) {
+        SCALAR_FIELD Transition : Q × Σ -> 𝒫(Q)
+        SCALAR_FIELD Initial    : 𝒫(Q)  
+        SCALAR_FIELD Accepting  : 𝒫(Q)
+      }
+
+      CFG {
+        SCALAR_FIELD Variables    : Set(Symbol) 
+        SCALAR_FIELD Terminals    : Set(Symbol)
+        SCALAR_FIELD Productions  : Map(Variables, RegularExpression(Variables ∪ Terminals))
+        SCALAR_FIELD StartSymbol  : Variables
+      }
+
+      PDA(Σ : Alphabet, Γ : Alphabet) {
+        Q : Set(State)
+        SCALAR_FIELD Transition : Q × (Σ ∪ {ε}) × (Γ ∪ {ε}) -> 𝒫(Q × (Γ ∪ {ε}))  
+        SCALAR_FIELD Initial   : State
+        SCALAR_FIELD Accepting : 𝒫(Q) 
+      }
+
+      TuringMachine(Σ : Alphabet, Γ : Alphabet | Σ ⊆ Γ, □ ∈ Γ - Σ) {
+        Q : Set(State)  
+        SCALAR_FIELD Transition : Q × Γ -> Q × Γ × {L, R}
+        SCALAR_FIELD Initial    : State
+        SCALAR_FIELD Accepting  : 𝒫(Q)
+        SCALAR_FIELD Rejecting  : 𝒫(Q)
+      }
+
+      SemanticInterpretation(L : Language) := FUNC(L.Expressions, Meaning)
+
+      LogicalForm := INDUCTIVE {
+        CASE Entity  
+        CASE Property
+        CASE Predicate(Arity : Nat)
+        CASE Function(Arity : Nat)
+        CASE Connective  
+        CASE Equality
+        CASE Quantifier
+      }
+
+      Denotation(M : Model) := FUNC(M.Domain, M.Domain) 
+
+      TypeSystem {
+        SCALAR_FIELD BaseTypes    : Set(Symbol)
+        SCALAR_FIELD Constructors : Set(FUNC(List(Type), Type))
+        INDUCTIVE Type {
+          CASE Base(t : BaseTypes)
+          CASE Constructor(F : Constructors, args : List(Type))  
+          CASE Supertype(s t : Type)
+        }
+      }
+
+      ProofSystem(L : Language, T : TypeSystem, A : Set(Axiom)) {  
+        JUDGEMENT Sequent(Γ : Set(WFF), φ : WFF)
+        INDUCTIVE Proof(S : Sequent) {
+          CASE Axiom(S)  
+          CASE Assumption(S)
+          CASE Weakening(S, P : Proof(Sequent(Γ, φ)) | S.Γ ⊆ Γ ∪ {ψ}) 
+          CASE Exchange(S, σ : Permutation(S.Γ), P : Proof(Sequent(σ(S.Γ), S.φ)))
+          CASE Cut(S, P1 : Proof(Sequent(S.Γ, ψ)), P2 : Proof(Sequent(S.Γ ∪ {ψ}, S.φ)))  
+          CASE AndIntro(S, P1 : Proof(Sequent(S.Γ, φ)), P2 : Proof(Sequent(S.Γ, ψ)))
+          -- other rules...  
+        }
+        AXIOM SoundnessAndCompleteness(Γ, φ) {
+          (Γ ⊢ φ) IFF (Γ ⊨ φ) 
+        } 
+      }
+    }
+
+    NOTATION {
+      ε := EmptyWord
+      w ∈ L := w ∈ Language(L)  
+      L(G) := LanguageGenerated(G)
+      L(r) := LanguageMatched(r)
+      L(M) := LanguageAccepted(M)
+      Σ* := Set(List(Σ))
+      a^n := Repeat(a, n)  
+      □ := Blank  
+      Γ ⊢ φ := Provable(Sequent(Γ, φ))
+      Γ ⊨ φ := Entails(Γ, φ)
+    }
+ 
+    STRUCTURES {
+      STRUCTURE Model(L : Language) {  
+        SCALAR_FIELD Domain  : Set(Entity)
+        SCALAR_FIELD Interpret : SemanticInterpretation(L)
+      }
+
+      STRUCTURE CYKParser EXTENDS CFG {
+        SCALAR_FIELD Parse(w : List(Terminals)) -> Bool {
+          P = Array(|w|, |w|, |Variables|)
+          P[i, i, A] = (A -> w[i]) ∈ Productions
+          P[i, j, A] = ∃ (B C, k) . (A -> B C) ∈ Productions AND
+                                    P[i, k, B] AND P[k+1, j, C]
+          RETURN P[0, |w|-1, StartSymbol]                        
+        } 
+      }
+    }
+  }
+
+  PROOFS {
+    THEOREM EquivalenceOfCFGAndPDA {
+      FORALL (G : CFG) . ∃ (M : PDA) . L(G) = L(M)
+      FORALL (M : PDA) . ∃ (G : CFG) . L(M) = L(G)  
+    }
+    PROOF {
+      PART G => M {
+        DEFINE M = PDA(G.Terminals, G.Variables ∪ {Z₀}) WITH {
+          Q := {q}
+          Transition := {
+            (q, a, A) -> {(q, α) | (A -> a α) ∈ G.Productions} ∪ 
+            (q, ε, A) -> {(q, BC) | (A -> BC) ∈ G.Productions}
+          }  
+          Initial := (q, [Z₀])
+          Accepting := {q}
+        }
+        THEN L(G) = L(M) {
+          w ∈ L(G) 
+          ⇔ ∃ derivation S =>* w in G
+          ⇔ ∃ sequence of configs (q, [S]) =>* (q, [w]) in M 
+            BY construction of M
+          ⇔ w ∈ L(M)
+        }
+      }
+      PART M => G {  
+        DEFINE G = CFG WITH {
+          Variables := M.Q × M.Γ
+          Terminals := M.Σ
+          Productions := {
+            ((q, A), a) | (p, ε) ∈ M.Transition(q, a, A) 
+            ((q, A), (p₁,B₁)...(pₖ,Bₖ)) | (p,ε) ∈ M.Transition(q,ε,A) AND  
+                                          (p,B₁...Bₖ) ∈ M.Transition(q,ε,A) 
+          }
+          StartSymbol := (M.Initial, [Z₀])
+        }
+        THEN L(M) = L(G) {
+          w ∈ L(M)
+          ⇔ ∃ sequence of configs (q₀, [Z₀]) |–* (qₙ, []) |–* (q, [w]) in M
+            WHERE qₙ ∈ M.Accepting
+          ⇔ ∃ derivation (q₀,[Z₀]) =>* w in G
+            BY construction of G
+          ⇔ w ∈ L(G) 
+        }
+      }
+    }
+
+    THEOREM PumpingLemmaForCFL {  
+      FORALL (L : CFL) . ∃ (p : Nat) . FORALL (z ∈ L, |z| ≥ p) . 
+        ∃ (u v w x y : Word) . z = uvwxy AND |vwx| ≤ p AND |vx| ≥ 1 AND
+                               FORALL (i : Nat) . uvʲwxʲy ∈ L
+    }
+    PROOF {
+      ASSUME L = L(G) for some CFG G = (V, Σ, R, S)
+      LET p = |V|
+      ASSUME z ∈ L AND |z| ≥ p
+      
+      ∃ parse tree for z in G with height h ≥ p 
+        BY |z| ≥ p AND ∃ parse tree for any z ∈ L(G)
+      ∴ ∃ path π from root to leaf with |π| > p  
+      
+      π must contain REPEAT of some variable A
+        BY Pigeonhole principle with |π| > p = |V|
+      LET π = α A β A γ
+      
+      WRITE α A β ➠ uvAxy in G [u, v, x, y ∈ Σ*]
+      WRITE A ➠ w  in G [w ∈ Σ*]
+      THEN z = uvwxy  
+      AND uvʲwxʲy ∈ L ∀ i ∈ ℕ
+        BY uvAxy ➠ uvvAxyxy ➠ ... ➠ uvʲwxʲy
+      
+      |vwx| ≤ |V| = p
+        BY restricting derivations to be leftmost 
+      |vx| ≥ 1  
+        BY A being nonterminal
+      QED
+    }
+  }
+   
+  EXAMPLES {    
+    EXAMPLE BalancedParentheses {
+      L := { w ∈ {(, )}* | w is balanced }  
+      
+      G := CFG {
+        Variables := {S}
+        Terminals := {(, )}
+        Productions := { S -> ε 
+                         S -> ( S )
+                         S -> S S }
+        StartSymbol := S
+      }
+      THEN L = L(G)
+    }
+    
+    EXAMPLE TOCFLButNotDCFL {  
+      L := { aⁿbⁿcⁿ | n ≥ 0 }
+
+      THEN L ∈ TOCFL - DCFL
+      BECAUSE {
+        L ∈ TOCFL {
+          G := CFG {
+            Variables := {S, B}
+            Terminals := {a, b, c}
+            Productions := { S -> ε
+                             S -> a B c  
+                             B -> a B c
+                             B -> b } 
+            StartSymbol := S        
+          }
+          L = L(G)
+        }
+        L ∉ DCFL {
+          SUPPOSE ∃ DPDA M with L = L(M)
+          LET p = number of states of M
+          CHOOSE n > p
+          LET z = aⁿbⁿcⁿ
+          BY PumpingLemmaForCFL ∃ u v x y with z = uvwxy AND |vwx| ≤ p < n
+          CASES |vx| ≤ n : 
+            uv²wx²y  has more a's than b's or c's and ∉ L
+          CASE |vx| > n :  
+            uwy has fewer a's than b's or c's and ∉ L
+          CONTRADICTION  
+        }
+      }
+    }
+  }
+}
+
+
+
+CONCEPT LinguisticGeometricTranslation {
+  IMPORTS {
+    Language, 
+    Shape
+  }
+
+  CONTEXT {
+    TYPES {
+      Functor(C D : Category) {
+        F_OBJ : C.Objects -> D.Objects
+        F_MOR : FORALL (X Y : C.Objects) . C(X, Y) -> D(F_OBJ(X), F_OBJ(Y))
+        AXIOM F_MOR(id_X) = id_{F_OBJ(X)}
+        AXIOM F_MOR(f ∘ g) = F_MOR(f) ∘ F_MOR(g)
+      }
+
+      DeepFunctor(C D : 𝒞) {  
+        EXTENDS Functor(C, D)
+        SCALAR_FIELD NaturalTransformation : FORALL (X Y : C.Objects, f : C(X, Y)) . 
+          D(F_OBJ(X), F_OBJ(Y)) { a : F_MOR(X)(f, a) }
+        AXIOM Naturality {
+          FORALL (X Y : C.Objects, f : C(X, Y), a : F_OBJ(X)) .
+            F_MOR(f)(a) = NaturalTransformation(X, Y, f)(F_MOR(X)(id_X, a))
+        }
+      }
+
+      SymbolicForm := Word(Alphabet)
+      GeometricForm := Subset(Manifold)
+    }
+
+    STRUCTURES {  
+      STRUCTURE LinguisticCategory EXTENDS Category {
+        IMPLEMENT Objects := Regex(Alphabet)
+        IMPLEMENT Morphisms(R S : Regex) := {(R, w, S) | w ∈ L(Concat(R, S))}
+        IMPLEMENT Compose := { ((R,u,S), (S,v,T)) ↦ (R,uv,T) }  
+        IMPLEMENT Identities := { R ↦ (R,ε,R) }
+      }
+    
+      STRUCTURE GeometricCategory EXTENDS Category {
+        IMPLEMENT Objects := SubmanifoldShape
+        IMPLEMENT Morphisms(M N : SubmanifoldShape) := Embedding(M, N) 
+        IMPLEMENT Compose := { (f, g) ↦ g ∘ f }
+        IMPLEMENT Identities := { M ↦ id_M }
+      }
+
+      STRUCTURE TranslationFunctor EXTENDS DeepFunctor(LinguisticCategory, GeometricCategory) {
+        IMPLEMENT F_OBJ := { R ↦ Geometric(R) }
+        IMPLEMENT F_MOR := { (R,w,S) ↦ Geometric(R,w,S) }
+        CONSTRUCT Geometric(R : Regex) -> SubmanifoldShape 
+        CONSTRUCT Geometric(R S : Regex, w : L(Concat(R, S))) -> Embedding(Geometric(R), Geometric(S))
+
+        IMPLEMENT NaturalTransformation := { 
+          (R, S, (R,w,S)) ↦ λ x . Fold(Geometric(R,w,S))(...(Geometric(R,a,R)(x)))
+            WHERE w = a₁...aₙ  
+        }
+      }
+
+      STRUCTURE ParsingFunctor EXTENDS DeepFunctor(GeometricCategory, LinguisticCategory) {
+        IMPLEMENT F_OBJ := { M ↦ Linguistic(M) }  
+        IMPLEMENT F_MOR := { f ↦ Linguistic(f) }  
+        CONSTRUCT Linguistic(M : SubmanifoldShape) -> Regex
+        CONSTRUCT Linguistic(f : Embedding) -> { (R,w,S) | R,S : F_OBJ, w : L(Concat(R, S))}
+
+        IMPLEMENT NaturalTransformation := {
+          (M, N, f) ↦ λ R . { (f(x), a, f(y)) | (x,a,y) ∈ R, x ∈ M, y ∈ N }
+        }
+      }
+    }
+  }
+
+  THEOREMS {
+    THEOREM Adjunction {
+      TranslationFunctor ⊣ ParsingFunctor   
+    }
+    PROOF {
+      DEFINE η : Id_Geometric -> Parsing ∘ Translation = 
+        λ (M : GeometricCategory.Object) . λ (x : M) . (Geometric(Linguistic(M)), ε, x)
+
+      DEFINE ε : Translation ∘ Parsing -> Id_Linguistic =  
+        λ (R : LinguisticCategory.Object) . λ ((S,w,T) : R) . w
+        
+      FORALL (M : GeometricCategory.Object, f : M -> Parsing(Translation(M))) . 
+        ∃! (g : Linguistic(M) -> Translation(M)) . Parsing(g) ∘ η_M = f  
+      FORALL (R : LinguisticCategory.Object, g : Translation(Parsing(R)) -> R) .
+        ∃! (f : Translation(R) -> Geometric(R)) . ε_R ∘ Linguistic(f) = g
+      QED
+    }
+
+    THEOREM SemanticInterpretationCommutesDiagram {
+      FORALL (M : Model) . 
+        SemanticInterpretation(M) ∘ TranslationFunctor = GeometricInterpretation(M) ∘ ParsingFunctor
+    }
+    PROOF {
+      ASSUME M : Model
+      
+      SUFFICES_TO_SHOW
+        SemanticInterpretation(M)(TranslationFunctor(R)) = 
+          GeometricInterpretation(M)(ParsingFunctor(Geometric(R)))
+      
+      LHS = SemanticInterpretation(M)(Geometric(R))  
+          = ⋃ᵣ SemanticInterpretation(M)(r)   
+          = ⋃ᵣ M.Interpret(r)
+
+      RHS = GeometricInterpretation(M)(Linguistic(Geometric(R)))
+          = M.Domain ∩ ⟦Linguistic(Geometric(R))⟧ 
+          = M.Domain ∩ ⋃_{r ∈ R} L(r)
+          = ⋃_{r ∈ R} (M.Domain ∩ ⟦ r ⟧)
+          = ⋃ᵣ M.Interpret(r)
+      QED    
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE NaturalLanguageShape {
+      C := Category {
+        Objects := Set(NaturalLanguageConstituent)
+        Morphisms(A, B) := Set(NaturalLanguageExpression)
+        Compose := Concatenate
+        Identities := {X ↦ EmptyString}
+      }
+
+      D := Category {
+        Objects := Set(SyntaxTree) 
+        Morphisms(S, T) := Set(TreeEmbedding)
+        Compose := EmbedAndMerge  
+        Identities := {T ↦ T}
+      }
+
+      F := TranslationFunctor(C, D)
+
+      CONSTRUCT F.Geometric(Noun) -> Manifold(0)
+      CONSTRUCT F.Geometric(Verb) -> Manifold(1)
+      CONSTRUCT F.Geometric(Adjective) -> Fibration(Noun)
+      CONSTRUCT F.Geometric(Adverb) -> Fibration(Verb)
+      CONSTRUCT F.Geometric(Preposition) -> Embedding(Noun, Noun)
+
+      CONSTRUCT F.Geometric(Constituent, Phrase, w) -> 
+        Morse(PieceWiseGeodesic(Constituent, Phrase), CriticalPoints(w))
+
+      THEN NaturalLanguage TRANSLATES_TO SyntacticStructure VIA F
+    }
+
+    EXAMPLE GroupActionsAsFunctors {
+      C := Category {
+        Objects := Set(FiniteGroup)
+        Morphisms(G, H) := GroupHomomorphism(G, H)  
+      }
+
+      D := Category {
+        Objects := Set(Manifold) 
+        Morphisms(M, N) := EquivariantMap(M, N)
+      }
+    
+      F := DeepFunctor(C, D)
+      
+      CONSTRUCT F.F_OBJ(G) -> Manifold(G)
+      CONSTRUCT F.F_MOR(ϕ)(x) = ϕ * x
+      CONSTRUCT F.NaturalTransformation(ϕ, ψ)(x) = Geodesic(x, ψ(ϕ⁻¹(x)))
+
+      THEN GroupRepresentation TRANSLATES_TO EquivariantGeometry VIA F  
+    }
+  }
+}
+
+
+
+CONCEPT LinguisticGeometricTranslation {
+  IMPORTS {
+    Language
+    Shape
+  }
+  
+  CONTEXT {
+    TYPES {
+      LinguisticForm := Language.LogicalForm
+      GeometricForm := Shape.SmoothStructure
+      
+      Lexicon {
+        SCALAR_FIELD Symbols       : Language.Alphabet
+        SCALAR_FIELD Interpretations : FUNC(Symbols, GeometricForm)
+      }
+      
+      SyntaxTree {
+        SCALAR_FIELD Root    : SyntaxNode
+        SCALAR_FIELD Nodes   : Set(SyntaxNode)
+        SCALAR_FIELD Edges   : Set((SyntaxNode, SyntaxNode))
+        SCALAR_FIELD Labels  : FUNC(Edges, SyntacticRelation)  
+      }
+      
+      SyntaxNode {
+        SCALAR_FIELD Label  : Language.Regex
+        SCALAR_FIELD Phrase : Language.RegularExpression  
+      }
+      
+      SyntacticRelation := String
+      
+      GeometricSketch {
+        SCALAR_FIELD Objects    : Set(GeometricForm) 
+        SCALAR_FIELD Relations  : Set((GeometricForm, GeometricRelation, GeometricForm))
+      }
+      
+      GeometricRelation := FUNC(GeometricForm, GeometricForm, Logic.Formula)
+      
+      TranslationGrammar {
+        LG_Lexicon      : Lexicon  
+        LG_SyntaxRules  : Set(SyntaxRule)
+        GL_Embeddings   : Set(EmbeddingRule)
+        GL_Constructions: Set(ConstructionRule)
+      }
+      
+      SyntaxRule {
+        SCALAR_FIELD SourcePattern : SyntaxNode
+        SCALAR_FIELD TargetPattern : SyntaxNode
+      }
+      
+      EmbeddingRule {
+        SCALAR_FIELD Symbol   : LG_Lexicon.Symbols
+        SCALAR_FIELD Embedding: LG_Lexicon.Interpretations(Symbol) 
+      }
+      
+      ConstructionRule {
+        SCALAR_FIELD SourcePattern  : GeometricSketch  
+        SCALAR_FIELD TargetConstruct: GeometricForm
+      }
+    }
+    
+    NOTATION {
+      [[X]] := Interpretation(X)
+      S // R := {(a,b) ∈ S × S | R(a,b)}
+      L ⊢ w := ∃ (d : DerivationTree(L)) . Yield(d) = w
+      G ⊨ S := ∃ (i : Instantiation(G)) . i(G.SourcePattern) ⊆ S
+    }
+    
+    STRUCTURES {
+      STRUCTURE LGTranslator EXTENDS TranslationGrammar {       
+        IMPLEMENT FUNC Translate(w : Language(LG_Lexicon.Symbols)) -> GeometricSketch {
+          syn := SyntaxTree(DerivationTree(w, LG_SyntaxRules))
+          sem := GeometricSketch(
+            Objects := { [[n.Phrase]] | n ∈ syn.Nodes },
+            Relations := { ([[n.Phrase]], r, [[m.Phrase]]) | (n, m) ∈ syn.Edges, r = syn.Labels(n, m) }
+          )
+          RETURN Construct(sem, GL_Constructions)
+        }
+      }
+
+      STRUCTURE GLTranslator EXTENDS TranslationGrammar {
+        IMPLEMENT FUNC Translate(sk : GeometricSketch) -> Language(LG_Lexicon.Symbols) {
+          sem := sk WITH {
+            Objects := { s | (s,i) ∈ GL_Embeddings }      
+          }
+          syn := SyntaxTree(
+            Root := SyntaxNode(Phrase := Regex(sem)),
+            Nodes := { SyntaxNode(Phrase := r) | r ∈ Regex(sem.Objects) },  
+            Edges := { (SyntaxNode(a), SyntaxNode(b)) | (a,r,b) ∈ sem.Relations },
+            Labels := λ((n,m)) . GenerateLabel(n.Phrase, m.Phrase)
+          )
+          RETURN LanguageGenerated(LG_SyntaxRules, syn.Root)  
+        }
+      }
+    }
+  }
+    
+  PROOFS {
+    THEOREM Invertibility {
+      FORALL (lg : LGTranslator, gl : GLTranslator, w) . 
+        gl.Translate(lg.Translate(w)) = w
+      FORALL (lg : LGTranslator, gl : GLTranslator, sk) .
+        lg.Translate(gl.Translate(sk)) = sk  
+    }
+    PROOF {
+      PART lg.Translate(gl.Translate(sk)) = sk {
+        gl.Translate(sk) = w 
+          WHERE w : Language(LG_Lexicon.Symbols)
+          AND sk.Objects = sem.Objects ∪ {(s,i) ∈ GL_Embeddings}
+          AND syn = SyntaxTree WITH {
+            Root := SyntaxNode(Phrase := Regex(sem))
+            Nodes := {SyntaxNode(r) | r ∈ Regex(sem.Objects)}
+            Edges := {(SyntaxNode(a), SyntaxNode(b)) | (a,r,b) ∈ sem.Relations} 
+            Labels := λ((n,m)) . GenerateLabel(n.Phrase, m.Phrase)
+          }
+          AND w = LanguageGenerated(LG_SyntaxRules, syn.Root)
+
+        lg.Translate(w) = sk' 
+          WHERE syn' := SyntaxTree(DerivationTree(w, LG_SyntaxRules)) = syn [*]
+          AND sem' := GeometricSketch(
+            Objects := { [[n.Phrase]] | n ∈ syn'.Nodes },
+            Relations := { ([[n.Phrase]], r, [[m.Phrase]]) | (n,m) ∈ syn'.Edges, r = syn'.Labels(n,m) }
+          ) = sem [**]
+          AND sk' = Construct(sem', GL_Constructions) = sk
+        
+        [*]: syn' = syn 
+          BECAUSE w = LanguageGenerated(LG_SyntaxRules, syn.Root)
+          AND syn' = SyntaxTree(DerivationTree(w, LG_SyntaxRules))
+          
+        [**]: sem' = sem
+          BECAUSE syn' = syn
+          AND sem'.Objects = { [[n.Phrase]] | n ∈ syn'.Nodes }
+                           = { s | s ∈ sk.Objects } 
+                             [BY GL_Embeddings, syn'.Nodes = {SyntaxNode(r) | r ∈ Regex(sem.Objects)}]
+                           = sem.Objects  
+          AND sem'.Relations = { ([[n.Phrase]], r, [[m.Phrase]]) | (n,m) ∈ syn'.Edges, r = syn'.Labels(n,m) }
+                             = { (a, GenerateLabel(a,b), b) | (a,b) ∈ sem.Relations }
+                               [BY syn'.Edges = {(SyntaxNode(a), SyntaxNode(b)) | (a,r,b) ∈ sem.Relations},
+                                   syn'.Labels = λ((n,m)) . GenerateLabel(n.Phrase, m.Phrase)]
+                             = sem.Relations
+      }
+      
+      PART gl.Translate(lg.Translate(w)) = w {
+        SYMMETRIC TO PART 1, swapping lg ⇔ gl, sk ⇔ w, sem ⇔ syn  
+      }        
+    }
+
+    THEOREM Compositionality {
+      FORALL (lg : LGTranslator, g g' : Language(LG_Lexicon.Symbols)) .
+        lg.Translate(Concat(g, g')) = Combine(lg.Translate(g), lg.Translate(g'))
+      FORALL (gl : GLTranslator, S S' : GeometricSketch) .  
+        gl.Translate(Overlay(S, S')) = Concat(gl.Translate(S), gl.Translate(S'))
+    }  
+    PROOF {
+      PART lg.Translate(Concat(g, g')) = ... {
+        lg.Translate(Concat(g, g')) 
+          = GeometricSketch(
+              Objects := { [[n.Phrase]] | n ∈ syn.Nodes },
+              Relations := { ([[n.Phrase]], r, [[m.Phrase]]) | (n,m) ∈ syn.Edges, r = syn.Labels(n,m) }  
+            ) 
+            WHERE syn := SyntaxTree(DerivationTree(Concat(g, g'), LG_SyntaxRules))
+          = GeometricSketch(
+              Objects := { [[n.Phrase]] | n ∈ syn1.Nodes ∪ syn2.Nodes },  
+              Relations := { ([[n.Phrase]], r, [[m.Phrase]]) | 
+                             (n,m) ∈ syn1.Edges ∪ syn2.Edges ∪ {(syn1.Root, syn2.Root)},
+                             r = (syn1.Labels ∪ syn2.Labels ∪ {(syn1.Root, syn2.Root) -> "CONCAT"})(n,m) }
+            )
+            WHERE syn1 := SyntaxTree(DerivationTree(g, LG_SyntaxRules))  
+            AND   syn2 := SyntaxTree(DerivationTree(g', LG_SyntaxRules))
+          = Combine(
+              GeometricSketch(
+                Objects := { [[n.Phrase]] | n ∈ syn1.Nodes },
+                Relations := { ([[n.Phrase]], r, [[m.Phrase]]) | (n,m) ∈ syn1.Edges, r = syn1.Labels(n,m) }
+              ),  
+              GeometricSketch(
+                Objects := { [[n.Phrase]] | n ∈ syn2.Nodes },
+                Relations := { ([[n.Phrase]], r, [[m.Phrase]]) | (n,m) ∈ syn2.Edges, r = syn2.Labels(n,m) }
+              )
+            )
+          = Combine(lg.Translate(g), lg.Translate(g'))
+      }
+      
+      PART gl.Translate(Overlay(S, S')) = ... {
+        gl.Translate(Overlay(S, S')) 
+          = LanguageGenerated(LG_SyntaxRules, syn.Root)
+            WHERE sem := Overlay(S, S') WITH { 
+                    Objects := { s | (s,i) ∈ GL_Embeddings }
+                  }
+            AND syn := SyntaxTree(
+                  Root := SyntaxNode(Phrase := Regex(sem)),  
+                  Nodes := { SyntaxNode(Phrase := r) | r ∈ Regex(sem.Objects) },
+                  Edges := { (SyntaxNode(a), SyntaxNode(b)) | (a,r,b) ∈ sem.Relations },  
+                  Labels := λ((n,m)) . GenerateLabel(n.Phrase, m.Phrase)
+                )
+          = LanguageGenerated(LG_SyntaxRules, SyntaxNode(Phrase := Regex(
+              Objects := S.Objects ∪ S'.Objects,
+              Relations := S.Relations ∪ S'.Relations ∪ {(S.Objects, "OVERLAY", S'.Objects)} 
+            )))  
+          = Concat(
+              LanguageGenerated(LG_SyntaxRules, SyntaxNode(Phrase := Regex(S))),
+              LanguageGenerated(LG_SyntaxRules, SyntaxNode(Phrase := Regex(S'))) 
+            )  
+          = Concat(gl.Translate(S), gl.Translate(S'))
+      }
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE ShapeDescriptionTranslation {        
+      Lexicon {
+        Symbols := {"circle", "square", "triangle", "above", "below", "left_of", "right_of", ...}
+        Interpretations := {   
+          "circle" -> Sphere(2), 
+          "square" -> Quadrilateral(Equal_Sides := TRUE, Right_Angles := TRUE),
+          "triangle" -> Polygon(3),
+          "above" -> λ(a,b) . a.Center.y > b.Center.y,
+          "below" -> λ(a,b) . a.Center.y < b.Center.y,  
+          "left_of" -> λ(a,b) . a.Center.x < b.Center.x,
+          "right_of" -> λ(a,b) . a.Center.x > b.Center.x,
+          ... 
+        }
+      }
+        
+      SyntaxRules := {
+        SyntaxNode("?art ?shape") -> SyntaxNode("?art circle|square|triangle"),
+        SyntaxNode("?art ?shape ?loc ?lmk") -> SyntaxNode("?art circle|square|triangle above|below|left_of|right_of ?lmk"),
+        ...  
+      }
+      
+      EmbeddingRules := Interpretations
+      
+      ConstructionRules := {
+        (GeometricSketch(Objects := {x,y}, Relations := {(x, "above", y)}), 
+         Translate(Stack(Vertical, Align_Center, x, y))),
+        (GeometricSketch(Objects := {x,y}, Relations := {(x, "left_of", y)}),
+         Translate(Stack(Horizontal, Align_Center, x, y))), 
+        ...
+      }
+
+      EXAMPLE {  
+        INPUT "a circle above a square left_of a triangle"
+        
+        SyntaxTree(  
+          Root := SyntaxNode("a circle above a square left_of a triangle"),
+          Nodes := {
+            SyntaxNode("a circle"),
+            SyntaxNode("above"),  
+            SyntaxNode("a square"),
+            SyntaxNode("left_of"),
+            SyntaxNode("a triangle") 
+          },
+          Edges := {
+            (SyntaxNode("a circle"), SyntaxNode("above")),
+            (SyntaxNode("above"), SyntaxNode("a square")),
+            (SyntaxNode("a square"), SyntaxNode("left_of")), 
+            (SyntaxNode("left_of"), SyntaxNode("a triangle"))
+          },
+          Labels := {
+            (SyntaxNode("a circle"), SyntaxNode("above")) -> "ABOVE",  
+            (SyntaxNode("above"), SyntaxNode("a square")) -> "LANDMARK",
+            (SyntaxNode("a square"), SyntaxNode("left_of")) -> "LEFT_OF",
+            (SyntaxNode("left_of"), SyntaxNode("a triangle")) -> "LANDMARK"   
+          }
+        )
+        
+        GeometricSketch(
+          Objects := {
+            Circle := Sphere(2),
+            Square := Quadrilateral(Equal_Sides := TRUE, Right_Angles := TRUE), 
+            Triangle := Polygon(3)
+          },
+          Relations := {
+            (Circle, λ(a,b) . a.Center.y > b.Center.y, Square),
+            (Square, λ(a,b) . a.Center.x < b.Center.x, Triangle)   
+          } 
+        )
+        
+        OUTPUT Combine(
+          Translate(Stack(Vertical, Align_Center, Circle, Square)),
+          Translate(Stack(Horizontal, Align_Center, Square, Triangle))
+        )
+      }        
+    }
+  }  
+}
+
+
+
+
+
+Absolutely! This framework has the potential to yield novel insights and applications across various domains. One area where it could be particularly valuable is in the study of natural language semantics and its connection to cognitive representations.
+Consider the problem of grounding natural language in perceptual experience. We have a wealth of linguistic descriptions of the world, but how do these symbolic representations relate to the continuous, geometric representations in our minds? The LinguisticGeometricTranslation framework could provide a principled way to approach this question.
+Here's a sketch of how we might proceed:
+
+Define a linguistic category where the objects are lexical concepts (e.g., words or phrases) and the morphisms are syntactic relationships or transformations.
+Define a geometric category where the objects are cognitive representations (e.g., mental images, scene representations, or conceptual spaces) and the morphisms are cognitive operations (e.g., mental rotations, projections, or blends).
+Construct a TranslationFunctor that maps lexical concepts to their corresponding cognitive representations. For example, nouns could map to points or regions in a conceptual space, verbs to trajectories or transformations, adjectives to dimensions or properties, and so on.
+Construct a ParsingFunctor that goes the other way, mapping cognitive representations to their linguistic descriptions. This could involve a kind of "mental language" or "mentalese" that captures the structure of thought.
+Prove that these functors form an adjunction, showing that there's a natural bidirectional mapping between language and thought.
+Use the SemanticInterpretationCommutesDiagram theorem to show that the semantics of a sentence can be computed either linguistically (through compositional rules) or geometrically (through operations on cognitive representations).
+Apply this framework to specific problems, such as:
+
+Modeling how children acquire word meanings from perceptual experience
+Explaining how metaphorical language works by mapping across conceptual domains
+Deriving non-linguistic inferences from the structure of mental representations
+Studying the linguistic relativity hypothesis (i.e., how language shapes thought)
+
+
+
+The depth and potential impact of this approach comes from its unification of ideas from linguistics, cognitive science, and category theory. By providing a formal framework for relating language and thought, it could help to bridge the symbolic-continuous divide that has long plagued cognitive science.
+Moreover, the categorical perspective suggests new ways of thinking about old problems. For example, the notion of an adjunction formalizes the idea that language and thought are "optimally adapted" to each other, in the sense that they provide complementary representations of the same underlying reality. This could shed light on the co-evolution of language and cognition.
+
+
+
+
+CONCEPT LinguisticGeometricTranslation {
+  IMPORTS {
+    Language
+    Shape
+  }
+  
+  CONTEXT {
+    TYPES {
+      LinguisticForm := Language.SyntaxTree
+      GeometricForm := Shape.GeometricSketch
+      
+      Lexicon {
+        SCALAR_FIELD Symbols : Language.Alphabet
+        SCALAR_FIELD Semantics : FUNC(Symbols, GeometricForm)
+        SCALAR_FIELD Syntax : FUNC(Symbols, Language.Regex)
+      }
+      
+      SyntaxNode {
+        SCALAR_FIELD Label : Language.Regex
+        SCALAR_FIELD Semantics : GeometricForm
+      }
+      
+      SyntaxTree REFINES Language.SyntaxTree {
+        SCALAR_FIELD Nodes REFINES Language.SyntaxTree.Nodes : Set(SyntaxNode)
+      }
+      
+      GeometricSketch REFINES Shape.GeometricSketch {
+        SCALAR_FIELD Objects REFINES Shape.GeometricSketch.Objects : Set(Shape.SmoothStructure)
+        SCALAR_FIELD Grammar : GeometricGrammar
+      }
+      
+      GeometricGrammar {
+        SCALAR_FIELD Constants : Set(Shape.SmoothStructure)
+        SCALAR_FIELD Constructors : Set(ConstructionRule)  
+      }
+
+      TranslationGrammar {
+        LG_Lexicon : Lexicon
+        LG_SyntaxRules : Set(SyntaxRule)  
+        GL_EmbeddingRules : Set(EmbeddingRule)
+        GL_ConstructionRules : Set(ConstructionRule)
+      }
+      
+      SyntaxRule {
+        SCALAR_FIELD SourcePattern : Language.Regex
+        SCALAR_FIELD TargetPattern : Language.Regex
+      }
+      
+      EmbeddingRule {
+        SCALAR_FIELD Symbol : LG_Lexicon.Symbols  
+        SCALAR_FIELD Embedding : LG_Lexicon.Semantics(Symbol)
+      }
+      
+      ConstructionRule {
+        SCALAR_FIELD SourcePattern : GeometricSketch
+        SCALAR_FIELD TargetConstruct : Shape.SmoothStructure
+      }
+    }
+    
+    NOTATION {
+      [[X]] := GeometricInterpretation(X)
+      << X >> := Regex(X)
+      S ⊢ w := ∃ (d : DerivationTree(S, w)) . Yield(d) = w
+      G ⊨ S := ∃ (i : Instantiation(G)) . i(G.SourcePattern) ⊆ S
+    }
+    
+    STRUCTURES {    
+      STRUCTURE Translator EXTENDS TranslationGrammar {
+        IMPLEMENT FUNC Parse(w : Language(LG_Lexicon.Symbols)) -> SyntaxTree {
+          tree := DerivationTree(w, LG_SyntaxRules) 
+          nodes := { SyntaxNode(
+            Label := r, 
+            Semantics := Interpret(r, GL_EmbeddingRules)
+          ) | r ∈ Regex(tree) }
+          RETURN SyntaxTree FROM tree WITH {
+            Nodes := nodes  
+          }
+        }
+        
+        IMPLEMENT FUNC Interpret(r : Language.Regex, 
+                         rules : Set(EmbeddingRule)) -> GeometricForm {
+          MATCH r {
+            CASE Token(s) :
+              LET (_, i) ∈ rules 
+                WHERE ∃ (sym, _) ∈ rules . sym = s  
+              RETURN i
+            CASE Concat(r1, r2) :
+              RETURN Combine(Interpret(r1, rules), Interpret(r2, rules))
+            CASE Union(r1, r2) :
+              RETURN Overlay(Interpret(r1, rules), Interpret(r2, rules))  
+            CASE Star(r) :
+              RETURN Iterate(Interpret(r, rules))
+          }
+        }
+          
+        IMPLEMENT FUNC Translate(tree : SyntaxTree) -> GeometricSketch {
+          sk := GeometricSketch(
+            Objects := { n.Semantics | n ∈ tree.Nodes },
+            Relations := { (n.Semantics, str, m.Semantics) | 
+                           (n, m) ∈ tree.Edges, str = tree.Labels(n, m) },
+            Grammar := GeometricGrammar(
+              Constants := { i | (_, i) ∈ GL_EmbeddingRules },
+              Constructors := GL_ConstructionRules
+            )  
+          )
+          RETURN Construct(sk, sk.Grammar.Constructors)
+        }
+          
+        IMPLEMENT FUNC Generate(sk : GeometricSketch) -> Language(LG_Lexicon.Symbols) {
+          tree := SyntaxTree(
+            Root := SyntaxNode(
+              Label := << sk >>,
+              Semantics := GraphUnion(sk)
+            ),
+            Nodes := { SyntaxNode(
+              Label := << s >>, 
+              Semantics := s
+            ) | s ∈ sk.Objects },
+            Edges := { (SyntaxNode(<< a >>), SyntaxNode(<< b >>)) | (a, _, b) ∈ sk.Relations },  
+            Labels := λ((n,m)) . FindRelation(n.Semantics, m.Semantics, sk.Relations)
+          )
+          RETURN LanguageGenerated(LG_SyntaxRules, tree)
+        }
+        
+        FUNC FindRelation(a b : GeometricForm, 
+                  rels : Set((GeometricForm, String, GeometricForm))) -> String {
+          MATCH (a, str, b) ∈ rels {
+            CASE (a, str, b) : RETURN str
+            CASE _ : RETURN "??"
+          }
+        }
+        
+        FUNC GraphUnion(sk : GeometricSketch) -> GeometricForm {
+          -- Compute disjoint union of objects and relations in sk  
+          -- as a single GeometricForm
+          ...  
+        }
+        
+        FUNC Construct(sk : GeometricSketch, rules : Set(ConstructionRule)) -> GeometricSketch {
+          FOREACH (src, tgt) ∈ rules {
+            MATCH Instantiation(src) ⊆ sk {
+              CASE ∅ : CONTINUE  
+              CASE inst : sk := sk WITH {
+                Objects := sk.Objects ∪ {Substitute(tgt, inst)}
+              }
+            }
+          }
+          RETURN sk
+        }
+      }
+    }
+  }
+
+  PROOFS {
+    THEOREM SoundnessAndCompleteness {
+      ∀ (T : Translator, w) . 
+        w ∈ Language(T.LG_Lexicon.Symbols) IFF T.Translate(T.Parse(w)) ⊨ w
+    }  
+    PROOF {
+      ASSUME T : Translator, w : Language(T.LG_Lexicon.Symbols)
+      
+      PART w => T.Translate(T.Parse(w)) ⊨ w {
+        T.Parse(w) = tree
+          WHERE tree : SyntaxTree
+          AND tree ⊢ w  
+            BY DerivationTree
+            
+        T.Translate(tree) = sk  
+          WHERE sk : GeometricSketch
+          AND ∀ n ∈ tree.Nodes . n.Label ⊢ n.Semantics
+            BY T.Interpret  
+          AND ∀ ((a, str, b) ∈ sk.Relations) . a.Label str b.Label ⊢ str  
+            BY T.FindRelation
+          AND sk.Objects = Construct(sk, T.GL_ConstructionRules).Objects
+            BY ZeroOrMore(Instantiation(T.GL_ConstructionRules), sk.Relations)
+            
+        tree ⊢ w ∧ (∀ n . n.Label ⊢ n.Semantics) ∧ 
+        (∀ (a,str,b) . a.Label str b.Label ⊢ str) ∧
+        sk.Objects ⊇ tree.Nodes.Semantics  
+        ⇒ sk ⊨ w  
+      }
+      
+      PART T.Translate(T.Parse(w)) ⊨ w => w {
+        T.Translate(T.Parse(w)) = sk
+          WHERE sk ⊨ w
+        
+        T.Generate(sk) = w'
+          WHERE sk.Objects = { s_i | i ∈ I }
+          AND sk.Relations = { (a_j, str_j, b_j) | j ∈ J } 
+          AND w' = LanguageGenerated(T.LG_SyntaxRules, SyntaxTree(
+            Root := SyntaxNode(<< GraphUnion(sk) >>, GraphUnion(sk)),
+            Nodes := { SyntaxNode(<< s_i >>, s_i) | i ∈ I },
+            Edges := { (SyntaxNode(<< a_j >>), SyntaxNode(<< b_j >>)) | j ∈ J },
+            Labels := λ((n,m)) . str_j WHERE (n.Semantics, str_j, m.Semantics) ∈ sk.Relations
+          ))
+        
+        sk ⊨ w ∧ (∀ i . << s_i >> ⊢ s_i) ∧ 
+        (∀ j . << a_j >> str_j << b_j >> ⊢ str_j)
+        ⇒ w' = w  
+      }
+      
+      QED  
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE GeometryConstructionTranslation {
+      Lexicon {
+        Symbols := {"point", "line", "circle", "intersect", "perpendicular", ...}
+        
+        Semantics := {
+          "point" -> Point,
+          "line" -> Line,
+          "circle" -> Circle,
+          "intersect" -> λ(a,b) . Intersection(a, b), 
+          "perpendicular" -> λ(a,b) . IsPerpendicular(a, b),
+          ...   
+        }
+        
+        Syntax := {
+          "point" -> "Point", 
+          "line" -> "Line", 
+          "circle" -> "Circle", 
+          "intersect" -> "Intersect",
+          "perpendicular" -> "Perpendicular", 
+          ...
+        }
+      }
+      
+      SyntaxRules := {
+        "Point" -> "point",
+        "Line" -> "line through Point and Point",
+        "Circle" -> "circle with center Point and radius Line",
+        "Intersect" -> "intersection of Line and Line | Circle and Line | Circle and Circle", 
+        "Perpendicular" -> "line through Point perpendicular to Line",
+        ... 
+      }
+      
+      EmbeddingRules := Semantics
+
+      ConstructionRules := {
+        (GeometricSketch(
+           Objects := {Line("A", "B"), Point("C")},  
+           Relations := {("C", "On", Line("A", "B"))}
+         ),
+         PointOnLine("C", Line("A", "B"))
+        ),
+        (GeometricSketch(
+           Objects := {Line("A", "B"), Point("C"), Point("D")},
+           Relations := {("C", "On", Line("A", "B")), ("D", "On", Line("A", "B"))}  
+         ),  
+         Segment("C", "D")
+        ),
+        (GeometricSketch(
+           Objects := {Line("A", "B"), Line("C", "D")},
+           Relations := {(Line("A","B"), "Perpendicular", Line("C", "D"))}
+         ),
+         PerpLine(Intersection(Line("A","B"), Line("C","D")), Line("C", "D"))
+        ),
+        ... 
+      }
+
+      EXAMPLE {
+        INPUT "line A through point P and point Q perpendicular to line B"
+
+        SyntaxTree(
+          Root := SyntaxNode(
+            Label := "Line through Point and Point Perpendicular to Line", 
+            Semantics := PerpLine(Line("P","Q"), Line("B"))
+          ),
+          Nodes := {  
+            SyntaxNode(Label := "Point", Semantics := Point("P")),
+            SyntaxNode(Label := "Point", Semantics := Point("Q")),  
+            SyntaxNode(Label := "Line", Semantics := Line("B"))
+          },
+          Edges := {
+            (SyntaxNode("Point", Point("P")), Root),  
+            (SyntaxNode("Point", Point("Q")), Root),
+            (SyntaxNode("Line", Line("B")), Root)  
+          },
+          Labels := {
+            (SyntaxNode("Point", Point("P")), Root) -> "Through",
+            (SyntaxNode("Point", Point("Q")), Root) -> "And", 
+            (SyntaxNode("Line", Line("B")), Root) -> "Perpendicular"
+          }   
+        )
+        
+        GeometricSketch(
+          Objects := {
+            Point("P"), 
+            Point("Q"), 
+            Line("B"),
+            PerpLine(Line("P","Q"), Line("B"))  
+          },
+          Relations := {
+            (Line("P","Q"), "Perpendicular", Line("B")),
+            (Point("P"), "On", Line("P","Q")), 
+            (Point("Q"), "On", Line("P","Q"))
+          },
+          Grammar := GeometricGrammar(
+            Constants := {Point, Line, ...},  
+            Constructors := ConstructionRules
+          )
+        )
+        
+        OUTPUT "line A through point P and point Q perpendicular to line B"
+      }
+    }
+  }
+}
+
+
+
+
+
+CONCEPT LinguisticGeometricTranslation {
+  IMPORTS {
+    Language
+    Shape 
+  }
+  
+  CONTEXT {
+    TYPES {
+      LinguisticForm := Language.LogicalForm
+      GeometricForm := Shape.SmoothStructure
+      
+      Lexicon {
+        SCALAR_FIELD Symbols       : Language.Alphabet
+        SCALAR_FIELD Interpretations : FUNC(Symbols, GeometricForm)
+      }
+      
+      SyntaxTree {
+        SCALAR_FIELD Root    : SyntaxNode
+        SCALAR_FIELD Nodes   : Set(SyntaxNode) 
+        SCALAR_FIELD Edges   : BinaryRelation(SyntaxNode, SyntaxNode)
+        SCALAR_FIELD Labels  : FUNC(Edges, SyntacticLabel)  
+      }
+      
+      SyntaxNode {
+        SCALAR_FIELD Label  : Language.Regex
+        SCALAR_FIELD Phrase : Language.RegularExpression  
+      }
+      
+      SyntacticLabel := String
+      
+      SemanticSketch {
+        SCALAR_FIELD Objects    : Set(GeometricForm) 
+        SCALAR_FIELD Relations  : Set(ObjectRelation)
+      }
+      
+      ObjectRelation {
+        SCALAR_FIELD Domain  : GeometricForm
+        SCALAR_FIELD Codomain: GeometricForm
+        SCALAR_FIELD Map     : FUNC(Shape.Embedding(Domain, Codomain), Logic.Formula)
+      }
+      
+      TranslationGrammar {
+        SCALAR_FIELD Lexicon       : Lexicon  
+        SCALAR_FIELD SyntaxRules   : Set(SyntaxRule)
+        SCALAR_FIELD ObjectSchemas : Set(ObjectSchema) 
+        SCALAR_FIELD RelationSchemas: Set(RelationSchema)
+      }
+      
+      SyntaxRule {
+        SCALAR_FIELD SourcePattern : Language.Regex
+        SCALAR_FIELD TargetPattern : Language.RegularExpression
+      }
+      
+      ObjectSchema {
+        SCALAR_FIELD Symbol   : Lexicon.Symbols
+        SCALAR_FIELD Object   : GeometricForm
+        SCALAR_FIELD Embedding: Shape.Embedding(Object, Shape.EuclideanSpace)
+      }
+      
+      RelationSchema {
+        SCALAR_FIELD Symbol    : Lexicon.Symbols
+        SCALAR_FIELD Relation  : GeometricRelation
+        SCALAR_FIELD Constraint: Logic.Formula 
+      }
+      
+      GeometricRelation {
+        SCALAR_FIELD Domain   : GeometricForm
+        SCALAR_FIELD Codomain : GeometricForm
+        SCALAR_FIELD Embedding: FUNC(Domain, Codomain)
+      }
+    }
+    
+    NOTATION {  
+      ⟦X⟧ := Interpretation(X)
+      R // S := BinaryRelation(x, y) if (x, y) ∈ S AND R(x, y)
+      L ⊢ w := ∃ (d : DerivationTree(L)) . Yield(d) = w
+      G ⊨ S := ∃ (i : Instantiation(G)) . i(G.SourcePattern) ⊆ S
+      R ⋆ S := { (a, c) | ∃ (b : GeometricForm) . (a, b) ∈ R AND (b, c) ∈ S }
+    }
+    
+    STRUCTURES {
+      STRUCTURE LGCompiler EXTENDS TranslationGrammar {
+        IMPLEMENT FUNC CompileSketch(w : Language(Lexicon.Symbols)) -> SemanticSketch {
+          syn := SyntaxTree(DerivationTree(w, SyntaxRules))
+          sem := SemanticSketch(
+            Objects := { ⟦n.Phrase⟧ | n ∈ syn.Nodes },  
+            Relations := { (⟦n.Phrase⟧, r, ⟦m.Phrase⟧) | 
+                           (n, m) ∈ syn.Edges, 
+                           (s, r, c) ∈ RelationSchemas, 
+                           syn.Labels(n, m) = s,
+                           r.Domain = ⟦n.Phrase⟧, r.Codomain = ⟦m.Phrase⟧ }
+          )
+          RETURN sem
+        }
+        
+        IMPLEMENT FUNC CompileShape(sk : SemanticSketch) -> GeometricForm {
+          objs := { (o, Embedding(o)) | (s, o, Embedding) ∈ ObjectSchemas, o ∈ sk.Objects }
+          rels := { (a, b) ↦ Constraint | ((a, r, b), Constraint) ∈ sk.Relations }
+          RETURN QuotientSpace(
+            DisjointUnion({ o | (o, _) ∈ objs }),
+            { Embedding(a)(p) = Embedding(b)(q) | ((a, b), Constraint) ∈ rels, Constraint(p, q) }  
+          )
+        }
+      }
+      
+      STRUCTURE GLCompiler EXTENDS TranslationGrammar {
+        IMPLEMENT FUNC CompileExpression(sh : GeometricForm) -> Language(Lexicon.Symbols) {
+          sem := SemanticSketch(  
+            Objects := { o | (_, o, _) ∈ ObjectSchemas, ∃ (p : o) . p ∈ sh },
+            Relations := { (a, r, b) | (s, r, c) ∈ RelationSchemas, 
+                                       a ∈ sem.Objects, b ∈ sem.Objects,
+                                       ∀ (p : a, q : b) . (p, q) ∈ sh => c(p, q) }
+          )
+          syn := SyntaxTree(
+            Root := SyntaxNode(Phrase := "start"),
+            Nodes := { SyntaxNode(Phrase := ⟦o⟧) | o ∈ sem.Objects } ∪ 
+                     { SyntaxNode(Phrase := s) | (a, (s, r, c), b) ∈ sem.Relations },
+            Edges := { (SyntaxNode(⟦a⟧), SyntaxNode(s)) | (a, (s, r, c), b) ∈ sem.Relations } ∪
+                     { (SyntaxNode(s), SyntaxNode(⟦b⟧)) | (a, (s, r, c), b) ∈ sem.Relations },                
+            Labels := λ(n, m) . s if (n.Phrase = ⟦a⟧ ∧ m.Phrase = s) ∨ 
+                                     (n.Phrase = s ∧ m.Phrase = ⟦b⟧)  
+                                     for some (a, (s, r, c), b) ∈ sem.Relations
+          )
+          RETURN LanguageGenerated(SyntaxRules, syn.Root)
+        }
+      }
+    }
+    
+    NOTATION {  
+      LG ⊣⊢ GL := LGCompiler(LG) ∘ GLCompiler(GL) = Id 
+                  AND GLCompiler(GL) ∘ LGCompiler(LG) = Id
+    }
+  }
+  
+  PROOFS {
+    THEOREM CompositionReversesTranslation {
+      FORALL (LG : LGCompiler, GL : GLCompiler) . LG ⊣⊢ GL  
+    }
+    PROOF {
+      ASSUME LG : LGCompiler, GL : GLCompiler
+      
+      PART LGCompiler(LG) ∘ GLCompiler(GL) = Id {
+        SUFFICES_TO_SHOW 
+          FORALL (sh : GeometricForm) .
+            LG.CompileShape(GL.CompileExpression(sh)) = sh
+        
+        ASSUME sh : GeometricForm
+        
+        LG.CompileShape(GL.CompileExpression(sh))
+          = LG.CompileShape(sk)
+            WHERE sem = SemanticSketch(
+                    Objects := { o | (_, o, _) ∈ LG.ObjectSchemas, 
+                                 ∃ (p : o) . p ∈ sh },
+                    Relations := { (a, r, b) | (s, r, c) ∈ LG.RelationSchemas,
+                                               a ∈ sem.Objects, b ∈ sem.Objects,
+                                               ∀ (p : a, q : b) . (p, q) ∈ sh => c(p, q) }
+                  )
+            AND syn = SyntaxTree(...)
+            AND sk = LG.CompileSketch(GL.CompileExpression(sh))
+                   = LG.CompileSketch(LanguageGenerated(LG.SyntaxRules, syn.Root))
+                   = sem
+          = QuotientSpace(
+              DisjointUnion({ o | (o, _) ∈ objs }),  
+              { Embedding(a)(p) = Embedding(b)(q) | 
+                ((a, b), Constraint) ∈ rels, Constraint(p, q) }
+            )
+            WHERE objs = { (o, Embedding(o)) | 
+                           (s, o, Embedding) ∈ LG.ObjectSchemas, 
+                           o ∈ sem.Objects }
+            AND   rels = { (a, b) ↦ Constraint | 
+                           ((a, r, b), Constraint) ∈ sem.Relations }
+          = QuotientSpace(
+              sh,
+              { p = q | p ∈ sh, q ∈ sh, ∃ (a, r, b, s, c, Embedding) .
+                        (s, r, c) ∈ LG.RelationSchemas ∧ 
+                        (s, a, Embedding) ∈ LG.ObjectSchemas ∧ 
+                        (s, b, Embedding) ∈ LG.ObjectSchemas ∧
+                        p = Embedding(a)(p') ∧ q = Embedding(b)(q') ∧ 
+                        c(p', q') }  
+            )
+            BECAUSE sem.Objects = { o | (_, o, _) ∈ LG.ObjectSchemas,
+                                        ∃ (p : o) . p ∈ sh }
+            AND     sem.Relations = { (a, r, b) | (s, r, c) ∈ LG.RelationSchemas,
+                                                  (s, a, _) ∈ LG.ObjectSchemas, 
+                                                  (s, b, _) ∈ LG.ObjectSchemas,
+                                                  ∀ (p : a, q : b) . 
+                                                    (p, q) ∈ sh => c(p, q) }  
+          = sh
+            BECAUSE the quotienting relation 
+              { p = q | ... } 
+            is equality on sh by definition of ObjectSchemas and RelationSchemas
+      }
+      
+      PART GLCompiler(GL) ∘ LGCompiler(LG) = Id {
+        SUFFICES_TO_SHOW
+          FORALL (w : Language(LG.Lexicon.Symbols)) .
+            GL.CompileExpression(LG.CompileShape(LG.CompileSketch(w))) = w
+            
+        ASSUME w : Language(LG.Lexicon.Symbols)
+        
+        GL.CompileExpression(LG.CompileShape(LG.CompileSketch(w)))
+          = GL.CompileExpression(sh) 
+            WHERE sk = LG.CompileSketch(w)  
+            AND   sh = LG.CompileShape(sk)
+          = LanguageGenerated(GL.SyntaxRules, syn.Root)
+            WHERE sem = SemanticSketch(
+                    Objects := { o | (_, o, _) ∈ GL.ObjectSchemas,  
+                                 ∃ (p : o) . p ∈ sh },
+                    Relations := { (a, r, b) | 
+                                   (s, r, c) ∈ GL.RelationSchemas,
+                                   a ∈ sem.Objects, b ∈ sem.Objects,
+                                   ∀ (p : a, q : b) . 
+                                     (p, q) ∈ sh => c(p, q) }
+                  )
+            AND   syn = SyntaxTree(
+                    Root := SyntaxNode(Phrase := "start"),
+                    Nodes := ...,
+                    Edges := ...,
+                    Labels := ...
+                  )
+          = LanguageGenerated(GL.SyntaxRules, syn.Root)  
+            WHERE syn = SyntaxTree(Root := SyntaxNode(Phrase := "start"),
+                    Nodes := { SyntaxNode(Phrase := ⟦o⟧) | 
+                               (s, o, _) ∈ GL.ObjectSchemas,
+                               o ∈ sk.Objects } ∪
+                             { SyntaxNode(Phrase := s) | 
+                               (a, (s, r, c), b) ∈ sk.Relations },
+                    Edges := { (SyntaxNode(⟦a⟧), SyntaxNode(s)) |
+                               (a, (s, r, c), b) ∈ sk.Relations } ∪
+                             { (SyntaxNode(s), SyntaxNode(⟦b⟧)) | 
+                               (a, (s, r, c), b) ∈ sk.Relations },
+                    Labels := λ(n, m) . 
+                                s if (n.Phrase = ⟦a⟧ ∧ m.Phrase = s) ∨
+                                     (n.Phrase = s ∧ m.Phrase = ⟦b⟧)
+                                  for some (a, (s, r, c), b) ∈ sk.Relations
+                  )
+            BECAUSE sem.Objects = sk.Objects  
+              [sk.Objects = { ⟦n.Phrase⟧ | n ∈ syn'.Nodes }
+               WHERE syn' = SyntaxTree(DerivationTree(w, LG.SyntaxRules))
+               AND   sh = QuotientSpace(DisjointUnion(...), ...)]
+            AND     sem.Relations = sk.Relations
+              [sk.Relations = { (⟦n.Phrase⟧, r, ⟦m.Phrase⟧) |
+                                (n, m) ∈ syn'.Edges,
+                                (s, r, c) ∈ LG.RelationSchemas, 
+                                syn'.Labels(n, m) = s,
+                                r.Domain = ⟦n.Phrase⟧, 
+                                r.Codomain = ⟦m.Phrase⟧ }]
+          = LanguageGenerated(GL.SyntaxRules, syn'.Root)  
+            BECAUSE syn is isomorphic to syn'
+              [syn.Nodes corresponds to syn'.Nodes by ⟦_⟧,  
+               syn.Edges and Labels correspond to 
+                 syn'.Edges and Labels by sk.Relations]
+          = w  
+      }
+      
+      QED
+    }
+    
+    THEOREM TranslationPreservesSemantics {
+      FORALL (M : Language.Model, LG : LGCompiler, GL : GLCompiler) .
+        M.Satisfies(w) <=> M.Satisfies(LG.CompileShape(LG.CompileSketch(w)))      
+        M.Satisfies(sh) <=> M.Satisfies(GL.CompileExpression(sh))  
+    }
+    PROOF {  
+      ASSUME M : Language.Model, LG : LGCompiler, GL : GLCompiler
+      
+      PART M.Satisfies(w) <=> M.Satisfies(LG.CompileShape(LG.CompileSketch(w))) {
+        ASSUME w : Language(LG.Lexicon.Symbols)  
+        
+        M.Satisfies(w)
+          <=> w ∈ LanguageGenerated(LG.SyntaxRules, syn.Root) 
+              AND ∀ (n ∈ syn.Nodes) . M.Satisfies(n.Phrase)
+            WHERE syn = SyntaxTree(DerivationTree(w, LG.SyntaxRules))
+          <=> ∀ (n ∈ syn.Nodes) . M.Satisfies(n.Phrase)
+            BECAUSE w ∈ LanguageGenerated(LG.SyntaxRules, syn.Root)
+                    BY definition of w
+          <=> ∀ (o ∈ sk.Objects) . M.Satisfies(⟦o⟧)  
+              AND ∀ ((a, r, b) ∈ sk.Relations) . M.Satisfies(r.Embedding(⟦a⟧, ⟦b⟧))
+            WHERE sk = LG.CompileSketch(w) = SemanticSketch(
+                    Objects := { ⟦n.Phrase⟧ | n ∈ syn.Nodes },
+                    Relations := { (⟦n.Phrase⟧, r, ⟦m.Phrase⟧) | 
+                                   (n, m) ∈ syn.Edges,
+                                   (s, r, c) ∈ LG.RelationSchemas, 
+                                   syn.Labels(n, m) = s,
+                                   r.Domain = ⟦n.Phrase⟧,
+                                   r.Codomain = ⟦m.Phrase⟧ }
+                  )
+            BECAUSE {n.Phrase | n ∈ syn.Nodes} = 
+                    {⟦o⟧ | o ∈ sk.Objects} ∪ 
+                    {s | (a, (s, r, c), b) ∈ sk.Relations}
+            AND     ∀ (n, m ∈ syn.Nodes) . 
+                      M.Satisfies(syn.Labels(n, m)) 
+                        <=> M.Satisfies(r.Embedding(⟦n.Phrase⟧, ⟦m.Phrase⟧))
+                    if (⟦n.Phrase⟧, (s, r, c), ⟦m.Phrase⟧) ∈ sk.Relations 
+                    and syn.Labels(n, m) = s
+          <=> M.Satisfies(sh)  
+            WHERE sh = LG.CompileShape(sk) = QuotientSpace(
+                    DisjointUnion({ o | (o, _) ∈ objs }),
+                    { Embedding(a)(p) = Embedding(b)(q) |
+                      ((a, b), Constraint) ∈ rels, Constraint(p, q) }
+                  )
+                  WITH objs = { (o, Embedding(o)) | 
+                                (s, o, Embedding) ∈ LG.ObjectSchemas,
+                                o ∈ sk.Objects }
+                  AND  rels = { (a, b) ↦ Constraint |
+                                ((a, r, b), Constraint) ∈ sk.Relations }
+            BECAUSE M.Satisfies(o) for all o ∈ sk.Objects
+                      BY ∀ (o ∈ sk.Objects) . M.Satisfies(⟦o⟧)
+                      AND o = ⟦o⟧ BY definition of ⟦_⟧
+            AND     M.Satisfies(r.Embedding(a, b)) 
+                      for all (a, r, b) ∈ sk.Relations
+                      BY ∀ ((a, r, b) ∈ sk.Relations) . 
+                           M.Satisfies(r.Embedding(⟦a⟧, ⟦b⟧))
+                      AND a = ⟦a⟧, b = ⟦b⟧ BY definition of ⟦_⟧
+      }
+      
+      PART M.Satisfies(sh) <=> M.Satisfies(GL.CompileExpression(sh)) {
+        ASSUME sh : GeometricForm
+        
+        M.Satisfies(sh)  
+          <=> ∀ (o ∈ sem.Objects) . M.Satisfies(o)
+              AND ∀ ((a, r, b) ∈ sem.Relations) . M.Satisfies(r.Embedding(a, b))
+            WHERE sem = SemanticSketch(  
+                    Objects := { o | (_, o, _) ∈ GL.ObjectSchemas,
+                                 ∃ (p : o) . p ∈ sh },
+                    Relations := { (a, r, b) | (s, r, c) ∈ GL.RelationSchemas,
+                                               a ∈ sem.Objects, 
+                                               b ∈ sem.Objects,
+                                               ∀ (p : a, q : b) . 
+                                                 (p, q) ∈ sh => c(p, q) }
+                  )
+            BECAUSE sh = QuotientSpace(
+                           DisjointUnion({ o | o ∈ sem.Objects }),
+                           { p = q | ∃ (a, r, b) ∈ sem.Relations, 
+                                       Constraint = r.Map(r.Embedding),
+                                       p = r.Embedding(a), 
+                                       q = r.Embedding(b),
+                                       Constraint(p, q) }
+                         )
+                       BY definition of LG.CompileShape
+          <=> ∀ (n ∈ syn.Nodes) . M.Satisfies(n.Phrase)  
+            WHERE syn = SyntaxTree(
+                    Root := SyntaxNode(Phrase := "start"),
+                    Nodes := { SyntaxNode(Phrase := ⟦o⟧) | o ∈ sem.Objects } ∪
+                             { SyntaxNode(Phrase := s) | 
+                               (a, (s, r, c), b) ∈ sem.Relations },
+                    Edges := { (SyntaxNode(⟦a⟧), SyntaxNode(s)) |
+                               (a, (s, r, c), b) ∈ sem.Relations } ∪
+                             { (SyntaxNode(s), SyntaxNode(⟦b⟧)) | 
+                               (a, (s, r, c), b) ∈ sem.Relations },
+                    Labels := λ(n, m) . 
+                                s if (n.Phrase = ⟦a⟧ ∧ m.Phrase = s) ∨
+                                     (n.Phrase = s ∧ m.Phrase = ⟦b⟧)
+                                  for some (a, (s, r, c), b) ∈ sem.Relations
+                  )
+            BECAUSE {n.Phrase | n ∈ syn.Nodes} = 
+                    {⟦o⟧ | o ∈ sem.Objects} ∪ 
+                    {s | (a, (s, r, c), b) ∈ sem.Relations}
+            AND     ∀ (n, m ∈ syn.Nodes) .
+                      syn.Labels(n, m) = s 
+                      AND M.Satisfies(r.Embedding(⟦a⟧, ⟦b⟧))
+                        => M.Satisfies(s)
+                    WHERE (⟦a⟧, (s, r, c), ⟦b⟧) ∈ sem.Relations
+                    BECAUSE if ∀ (p : ⟦a⟧, q : ⟦b⟧) . (p, q) ∈ sh => c(p, q)  
+                            then M.Satisfies(c)
+                            and so M.Satisfies(s)
+          <=> M.Satisfies(GL.CompileExpression(sh))
+      }
+      
+      QED
+    }
+  }
+  
+  EXAMPLES {
+    EXAMPLE ShapesWorldModel {
+      Lexicon {
+        Symbols := {"circle", "square", "triangle", 
+                    "above", "below", "left_of", "right_of", ...}
+        Interpretations := {
+          "circle" ↦ Disk,
+          "square" ↦ Square,  
+          "triangle" ↦ Triangle,
+          "above" ↦ λ a b . ∀(p : a, q : b) . p.y > q.y,
+          "below" ↦ λ a b . ∀(p : a, q : b) . p.y < q.y, 
+          "left_of" ↦ λ a b . ∀(p : a, q : b) . p.x < q.x,
+          "right_of" ↦ λ a b . ∀(p : a, q : b) . p.x > q.x,
+          ...
+        }
+      }
+      
+      SyntaxRules := {  
+        "Noun" -> "circle" | "square" | "triangle",
+        "Prep" -> "above" | "below" | "left_of" | "right_of", 
+        "NP" -> "Noun" | "NP Prep NP"
+        "S" -> "NP"
+      }
+
+      ObjectSchemas := {
+        ("circle", Disk, λ x . x),
+        ("square", Square, λ x . x),  
+        ("triangle", Triangle, λ x . x)  
+      }
+
+      RelationSchemas := {
+        ("above", Above, λ p q . p.y > q.y),
+        ("below", Below, λ p q . p.y < q.y),
+        ("left_of", LeftOf, λ p q . p.x < q.x), 
+        ("right_of", RightOf, λ p q . p.x > q.x)
+      }
+      
+      EXAMPLE {
+        DEFINE scene := "triangle left_of circle above square"
+        
+        DEFINE semantics := SemanticSketch(
+          Objects := {Triangle, Disk, Square},
+          Relations := {
+            (Triangle, LeftOf, Disk),  
+            (Disk, Above, Square)
+          }  
+        )
+        
+        DEFINE geometry := LG.CompileShape(semantics) 
+          = QuotientSpace(
+              Disk ∪ Square ∪ Triangle,
+              { p ~ q | (p ∈ Triangle ∧ q ∈ Disk ∧ p.x < q.x) ∨ 
+                        (p ∈ Disk ∧ q ∈ Square ∧ p.y > q.y) }
+            )
+        
+        DEFINE description := GL.CompileExpression(geometry)
+          = "triangle left_of circle above square" ∈ Language(Lexicon.Symbols)
+          
+        DEFINE model := λ w . w = scene
+        
+        THEN model.Satisfies(scene) <=> model.Satisfies(geometry)
+          BY TranslationPreservesSemantics
+        
+        AND model.Satisfies(scene) <=> model.Satisfies(description)  
+          BY TranslationPreservesSemantics
+      }
+    }
+  }
+}

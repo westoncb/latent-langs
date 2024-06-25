@@ -1,0 +1,76 @@
+CONCEPT FundamentalForces {
+  STRUCTURE {
+    [System := Physical or abstract system]
+    [Process := Dynamical evolution of a system]
+    [Entropy(s) := Measure of disorder in system s]
+    [Negentropy(s) := Measure of order in system s]
+    [Synergy(s) := Measure of structure in system s]
+    [Action(p) := ∫ (Kinetic(p) - Potential(p)) dt]
+
+    [EntropicForce := (Disorder, Randomness, Equilibrium)]
+    [∀s ∈ System: Disorder(s) ⊩ Entropy(s)]
+    [∀(s1, s2) ∈ System × System: Randomness(s1, s2) ⊩ (Entropy(s1 + s2) ≥ Entropy(s1) + Entropy(s2))]
+    [∀s ∈ System: Equilibrium(s) ⊩ (dEntropy(s)/dt = 0)]
+
+    [SyntropicForce := (Order, Structure, Complexity)]
+    [∀s ∈ System: Order(s) ⊩ Negentropy(s)]
+    [∀s ∈ System: Structure(s) ⊩ Synergy(s)]
+    [∀s ∈ System: Complexity(s) ⊩ (Entropy(s) × Negentropy(s))]
+
+    [ActuativeForce := (Efficiency, Optimization, Stability)]
+    [∀p ∈ Process: Efficiency(p) ⊩ (Action(p) = ∫ (Kinetic(p) - Potential(p)) dt)]
+    [∀p ∈ Process: Optimization(p) ⊩ (δAction(p) = 0)]
+    [∀s ∈ System: Stability(s) ⊩ (∀p ∈ Process(s): Optimization(p))]
+
+    [∀s ∈ System: s ⊩ (EntropicForce(s) ⊕ SyntropicForce(s) ⊕ ActuativeForce(s))]
+  }
+
+  PROOFS {
+    tactic apply_entropic_force(s) :
+      assume s ∈ System
+      have Disorder(s) ⊩ Entropy(s) by EntropicForce_Disorder
+      have ∀(s1, s2) ∈ System × System: Randomness(s1, s2) ⊩ (Entropy(s1 + s2) ≥ Entropy(s1) + Entropy(s2)) by EntropicForce_Randomness
+      have Equilibrium(s) ⊩ (dEntropy(s)/dt = 0) by EntropicForce_Equilibrium
+    
+    tactic apply_syntropic_force(s) :
+      assume s ∈ System
+      have Order(s) ⊩ Negentropy(s) by SyntropicForce_Order
+      have Structure(s) ⊩ Synergy(s) by SyntropicForce_Structure
+      have Complexity(s) ⊩ (Entropy(s) × Negentropy(s)) by SyntropicForce_Complexity
+    
+    tactic apply_actuative_force(s) :
+      assume s ∈ System
+      let p ∈ Process(s)
+      have Efficiency(p) ⊩ (Action(p) = ∫ (Kinetic(p) - Potential(p)) dt) by ActuativeForce_Efficiency
+      have Optimization(p) ⊩ (δAction(p) = 0) by ActuativeForce_Optimization
+      have Stability(s) ⊩ (∀p ∈ Process(s): Optimization(p)) by ActuativeForce_Stability
+    
+    theorem fundamental_forces_balance :
+      ∀s ∈ System: s ⊩ (EntropicForce(s) ⊕ SyntropicForce(s) ⊕ ActuativeForce(s))
+    {
+      assume s ∈ System
+      apply_entropic_force(s);
+      apply_syntropic_force(s);
+      apply_actuative_force(s);
+      conclude s ⊩ (EntropicForce(s) ⊕ SyntropicForce(s) ⊕ ActuativeForce(s)) by FundamentalForces_Balance
+    }
+  }
+
+  LANGUAGE {
+    type System
+    type Process
+    type Entropy(s : System)
+    type Negentropy(s : System)
+    type Synergy(s : System)
+    type Action(p : Process)
+    type Kinetic(p : Process)
+    type Potential(p : Process)
+
+    func "d" _ "/" "dt" (f : Function) : Derivative // Time derivative
+    func "∫" _ "dt" (f : Function) : Integral // Time integral
+    func "δ" (f : Function) : Variation // Variation of a functional
+
+    pred "⊩" (A : Proposition, B : Proposition) // A entails B
+    pred "⊕" (A : Proposition, B : Proposition) // Exclusive or
+  }
+}

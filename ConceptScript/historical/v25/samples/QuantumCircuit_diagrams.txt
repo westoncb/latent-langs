@@ -1,0 +1,393 @@
+CONCEPT QuantumCircuit {
+  LANGUAGE {
+    TYPE Qubit
+    TYPE Gate
+    TYPE Measurement
+    TYPE Circuit = List[List[Gate | Measurement]]
+
+    FUNC Apply(gate : Gate, qubits : List[Qubit]) -> List[Qubit]
+    FUNC Measure(qubit : Qubit) -> Bit
+    FUNC Run(circuit : Circuit, input : List[Qubit]) -> List[Bit]
+
+    NOTATION "│" = Qubit
+    NOTATION "─" = Wire
+    NOTATION "↦" = Measurement
+    NOTATION "⊕" = XORGate
+    NOTATION "•" = ControlledGate
+    NOTATION "H" = HadamardGate
+    NOTATION "X" = PauliXGate
+    NOTATION "Z" = PauliZGate
+    NOTATION "⊗" = TensorProduct
+
+    NOTATION "╭─" g "─╮" = [g]  -- Single gate on one wire
+    NOTATION "│" g_1 "│" "\n" ... "\n" "│" g_n "│" = [g_1, ..., g_n]  -- Vertical gate composition
+    NOTATION c_1 "⊗" ... "⊗" c_n = [c_1, ..., c_n]  -- Horizontal circuit composition
+  }
+
+  STRUCTURE QuantumCircuit(n : ℕ) {
+    AXIOM NumQubits { |input| = n }
+
+    DEF Append(c : Circuit, g : Gate) : Circuit = c + [g]
+    DEF Compose(c1 c2 : Circuit) : Circuit = c1 + c2
+    DEF Tensor(c1 c2 : Circuit) : Circuit = ZIP(c1, c2, (g1, g2) => g1 ++ g2)
+
+    DEF CNOT : Circuit = 
+      ╭─•─╮
+      │ ⊕ │
+    
+    DEF BellState : Circuit =
+      ╭─H─╮
+      ╭─•─╮
+      │ ⊕ │
+
+    DEF Teleportation : Circuit =
+      ╭─•─╮─────╭─H─╮─╭─↦─╮
+      │ ⊕ │─────│ ⊕ │─│ ↦ │
+      ╭─H─╮─╭─•─╮─────╭─X─╮─╭─Z─╮
+  }
+
+  PROOFS {
+    THEOREM CNOTInverseItself {
+      STATEMENT:
+        ∀ (qs : List[Qubit]). Apply(CNOT, Apply(CNOT, qs)) = qs
+
+      PROOF:
+        -- Proof that applying CNOT twice is equivalent to the identity
+        -- Can be shown using the matrix representation of the CNOT gate
+    }
+
+    THEOREM BellStateEntangled {
+      STATEMENT:
+        ∀ (q1 q2 : Qubit). 
+          LET qs = Apply(BellState, [q1, q2])
+          IN ¬(Measure(qs[0]) ⊥ Measure(qs[1]))
+
+      PROOF:
+        -- Proof that the qubits in a Bell state are maximally entangled
+        -- Measuring one qubit instantly affects the state of the other
+    }
+  }
+}
+
+
+
+
+CONCEPT ShorCode EXTENDS QuantumCircuit {
+  LANGUAGE {
+    TYPE LogicalQubit
+    TYPE PhysicalQubit
+    TYPE Encoding = LogicalQubit -> List[PhysicalQubit]
+    TYPE Decoding = List[PhysicalQubit] -> LogicalQubit
+    TYPE Syndrome = List[Bit]
+    TYPE ErrorCorrection = (List[PhysicalQubit], Syndrome) -> List[PhysicalQubit]
+
+    FUNC Encode(qubit : LogicalQubit) -> List[PhysicalQubit]
+    FUNC Decode(qubits : List[PhysicalQubit]) -> LogicalQubit
+    FUNC MeasureSyndrome(qubits : List[PhysicalQubit]) -> Syndrome
+    FUNC CorrectError(qubits : List[PhysicalQubit], syndrome : Syndrome) -> List[PhysicalQubit]
+
+    NOTATION "|L⟩" = LogicalQubit
+    NOTATION "|0⟩" "⊗" ... "⊗" "|0⟩" = List[PhysicalQubit]  -- n-qubit zero state
+    NOTATION "𝑋" = BitFlipError
+    NOTATION "𝑍" = PhaseFlipError
+    NOTATION "⦻" = ControlledNOT
+    NOTATION "∿" = ControlledControlledZ
+  }
+
+  STRUCTURE ShorCode {
+    DEFINE Encoding : Encoding = {
+      |0⟩ -> (|000⟩ + |111⟩)(|000⟩ + |111⟩)(|000⟩ + |111⟩) / 2√2
+      |1⟩ -> (|000⟩ - |111⟩)(|000⟩ - |111⟩)(|000⟩ - |111⟩) / 2√2
+    }
+
+    DEFINE Decoding : Decoding = {
+      (|000⟩ + |111⟩)(|000⟩ + |111⟩)(|000⟩ + |111⟩) / 2√2 -> |0⟩
+      (|000⟩ - |111⟩)(|000⟩ - |111⟩)(|000⟩ - |111⟩) / 2√2 -> |1⟩
+    }
+
+    DEFINE SyndromeTable : Map[Syndrome, ErrorCorrection] = {
+      000000 -> I ⊗ I ⊗ I,  100000 -> X ⊗ I ⊗ I,  010000 -> I ⊗ X ⊗ I,  001000 -> I ⊗ I ⊗ X,
+      000100 -> Z ⊗ I ⊗ I,  000010 -> I ⊗ Z ⊗ I,  000001 -> I ⊗ I ⊗ Z,  111000 -> X ⊗ X ⊗ X,
+      110100 -> X ⊗ X ⊗ Z,  101100 -> X ⊗ Z ⊗ X,  011100 -> Z ⊗ X ⊗ X,  110010 -> X ⊗ Z ⊗ Z,
+      101010 -> Z ⊗ X ⊗ Z,  011001 -> Z ⊗ Z ⊗ X,  111111 -> Z ⊗ Z ⊗ Z
+    }
+    
+    DEF Encode(|ψ⟩ : LogicalQubit) : List[PhysicalQubit] =
+      MATCH |ψ⟩ WITH
+      | α|0⟩ + β|1⟩ -> α · Encoding(|0⟩) + β · Encoding(|1⟩)
+        
+    DEF Decode(qubits : List[PhysicalQubit]) : LogicalQubit =
+      MEASURE qubits IN BASIS {Encoding(|0⟩), Encoding(|1⟩)}
+        
+    DEF MeasureSyndrome(qubits : List[PhysicalQubit]) : Syndrome =
+      ╭───╮┌───┐╭───╮   ╭───╮┌───┐╭───╮   ╭───╮┌───┐╭───╮
+      │ ⦻ ├┤ ↦ ├┤ ⦻ │   │ ∿ ├┤ ↦ ├┤ ∿ │   │ ⦻ ├┤ ↦ ├┤ ⦻ │
+      ├───┤│   │├───┤   ├───┤│   │├───┤   ├───┤│   │├───┤
+      │ ⦻ ││ ↦ ││ ⦻ │   │ ⦻ ││ ↦ ││ ⦻ │   │ ∿ ││ ↦ ││ ∿ │
+      ╰───╯└───┘╰───╯   ╰───╯└───┘╰───╯   ╰───╯└───┘╰───╯
+      
+    DEF CorrectError(qubits : List[PhysicalQubit], syndrome : Syndrome) : List[PhysicalQubit] =
+      LET correction = SyndromeTable[syndrome]
+      APPLY correction TO qubits
+  }
+
+  PROOFS {
+    THEOREM ShorCodeCorrectsSingleErrors {
+      STATEMENT:
+        ∀ (|ψ⟩ : LogicalQubit) (E : PhysicalQubit -> PhysicalQubit).
+          SingleQubitError(E) => 
+            Decode(CorrectError(APPLY(E, Encode(|ψ⟩)), MeasureSyndrome(APPLY(E, Encode(|ψ⟩))))) = |ψ⟩
+
+      PROOF:
+        -- Proof sketch:
+        -- 1. Show that the encoding circuit produces the correct logical states
+        -- 2. Show that the syndrome measurement circuit identifies the error location and type
+        -- 3. Show that the error correction lookup table contains the correct corrections
+        -- 4. Combine 1-3 to show that any single-qubit error is corrected by the full protocol
+
+        -- Detailed proof steps omitted for brevity
+    }
+
+    THEOREM ShorCodeDetectsTwoErrors {
+      STATEMENT:
+        ∀ (|ψ⟩ : LogicalQubit) (E1 E2 : PhysicalQubit -> PhysicalQubit).
+          distinct(E1, E2) => MeasureSyndrome(APPLY(E2, APPLY(E1, Encode(|ψ⟩)))) ≠ 000000
+
+      PROOF:
+        -- Proof sketch:
+        -- 1. Show that any two single-qubit errors produce a non-zero syndrome
+        -- 2. Conclude that the Shor code can detect (but not necessarily correct) any two-qubit error
+
+        -- Detailed proof steps omitted for brevity
+    }
+  }
+}
+
+
+
+
+
+CONCEPT QuantumTeleportation EXTENDS QuantumCircuit {
+  EXAMPLES {
+    EXAMPLE TeleportationScenario {
+      -- Alice wants to send a quantum state |ψ⟩ = α|0⟩ + β|1⟩ to Bob
+      -- They share a Bell pair |β00⟩ = (|00⟩ + |11⟩) / √2
+      -- Alice performs a Bell measurement on |ψ⟩ and her half of the Bell pair
+      -- She sends the 2-bit measurement result to Bob classically
+      -- Bob applies X and/or Z gates to his qubit, depending on Alice's message
+      -- Bob's qubit is now in the state |ψ⟩, completing the teleportation
+
+      GIVEN |ψ⟩ : Qubit
+      GIVEN |β00⟩ : List[Qubit]
+      PROVE Teleport(|ψ⟩, |β00⟩) = |ψ⟩
+
+      PROOF:
+        -- Initial state: |ψ⟩ ⊗ |β00⟩
+        ╭─────╮      
+        │  ψ  │───────────────╮
+        ╭─────╮─╭─H─╮─╭─•─╮   │
+        │  0  │─│ H │─│ • │─╮─┴─╮
+        ╭─────╮─╭───╮─│ ⊕ │─┴─╮─┴─╮
+        │  0  │─│ H │─╭─•─╮───┴───┴───╮
+                      │ ⊕ │─────────╮─┴─╮
+                                    ↓   ↓
+        -- Alice's measurement    ╭─M0─╮ ╭─M1─╮
+                                ──│ 0  │─│ 0  │── (00) ──╮
+                                ──│ 0  │─│ 1  │── (01) ──│─ Classical bits
+                                ──│ 1  │─│ 0  │── (10) ──│
+                                ──│ 1  │─│ 1  │── (11) ──╯
+                                ────┬───────┬────
+                                    │       │
+        -- Bob's corrections    (00) │   (01)│   (10)    (11)
+                                ──╭─╮│──╭─╮──┴──╭─X─╮──╭─X─╮─╮
+                                  │I││  │Z│     │ X │  │ Z │ │
+                                ──╰─╯│──╰─╯──┬──╰───╯──╰───╯─╯
+                                    │       │
+        -- Final state               │       ↓
+                                    │   ╭─────╮
+                                    ╰───│  ψ  │
+                                        ╭─────╮
+
+        LET |ψ⟩ = α|0⟩ + β|1⟩
+        LET |β00⟩ = (|00⟩ + |11⟩) / √2
+
+        -- Step 1: Apply CNOT and H gates 
+        LET |ψ⟩|β00⟩ = (α|000⟩ + α|011⟩ + β|100⟩ + β|111⟩) / √2
+        APPLY CNOT_12 TO |ψ⟩|β00⟩
+        APPLY H_1 TO |ψ⟩|β00⟩
+        
+        -- Step 2: Express in Bell basis
+        |ψ⟩|β00⟩ = (α|β00⟩|0⟩ + α|β01⟩|1⟩ + β|β10⟩|0⟩ + β|β11⟩|1⟩) / √2
+                 = |β00⟩(α|0⟩ + β|1⟩) / √2 + |β01⟩(α|1⟩ + β|0⟩) / √2
+                   + |β10⟩(α|0⟩ - β|1⟩) / √2 + |β11⟩(α|1⟩ - β|0⟩) / √2
+        
+        -- Step 3: Alice measures qubits 1 and 2
+        MEASURE |ψ⟩|β00⟩ IN BELL BASIS
+        CASES:
+          (00) : |ψ⟩|β00⟩ = |β00⟩(α|0⟩ + β|1⟩) / √2 = |β00⟩|ψ⟩ / √2
+          (01) : |ψ⟩|β00⟩ = |β01⟩(α|1⟩ + β|0⟩) / √2 = |β01⟩X|ψ⟩ / √2
+          (10) : |ψ⟩|β00⟩ = |β10⟩(α|0⟩ - β|1⟩) / √2 = |β10⟩Z|ψ⟩ / √2
+          (11) : |ψ⟩|β00⟩ = |β11⟩(α|1⟩ - β|0⟩) / √2 = |β11⟩ZX|ψ⟩ / √2
+
+        -- Step 4: Bob applies corrections based on Alice's measurement
+        CASES:
+          (00) : APPLY I TO Bob's qubit
+          (01) : APPLY X TO Bob's qubit
+          (10) : APPLY Z TO Bob's qubit  
+          (11) : APPLY Z THEN X TO Bob's qubit
+
+        -- In all cases, Bob's qubit is now in the state |ψ⟩
+        HENCE Teleport(|ψ⟩, |β00⟩) = |ψ⟩
+    }
+  }
+
+  DEF Teleport(|ψ⟩ : Qubit, |β⟩ : List[Qubit]) : Qubit = 
+    LET |ψ⟩|β⟩ = Tensor([|ψ⟩], |β⟩)
+    LET |ψ⟩|β⟩_corr = Compose(CORRECT, Compose(MEASURE_BELL, BELL_BASIS_CHANGE))(|ψ⟩|β⟩)
+    RETURN |ψ⟩|β⟩_corr[2]
+}
+
+
+
+
+
+CONCEPT GottesmanKnillTheorem EXTENDS QuantumCircuit {
+  LANGUAGE {
+    TYPE StabilizerState = List[PhysicalQubit]
+    TYPE StabilizerCircuit = List[StabilizerGate]
+    TYPE StabilizerGate <: Gate
+    
+    FUNC IsPauli(op : Gate) -> Bool
+    FUNC IsCliffod(op : Gate) -> Bool
+    FUNC Measure(state : StabilizerState, basis : Gate) -> Bit
+    FUNC Evolve(state : StabilizerState, circuit : StabilizerCircuit) -> StabilizerState
+    FUNC Simulate(input : StabilizerState, circuit : StabilizerCircuit) -> Distribution[Bit]
+
+    AXIOM PauliGroupGenerators {
+      IsPauli(I) ∧ IsPauli(X) ∧ IsPauli(Y) ∧ IsPauli(Z)
+    }
+
+    AXIOM CliffordGroupGenerators {
+      IsCliffod(H) ∧ IsCliffod(S) ∧ IsCliffod(CNOT)
+    }
+    
+    AXIOM PauliCliffordRelation {
+      ∀ (P : Gate) (C : Gate). 
+        IsPauli(P) ∧ IsCliffod(C) => IsPauli(C ∘ P ∘ C⁻¹)
+    }
+    
+    NOTATION "⟨" S "⟩" = StabilizerGroup(S)  -- Group generated by stabilizers S
+    NOTATION "𝓟ₙ" = PauliGroup(n)  -- Pauli group on n qubits
+    NOTATION "𝓒ℓₙ" = CliffordGroup(n)  -- Clifford group on n qubits
+  }
+
+  PROOFS {
+    THEOREM GottesmanKnill {
+      STATEMENT:
+        ∀ (n : ℕ) (|ψ⟩ : StabilizerState[n]) (C : StabilizerCircuit[n]).
+          Simulate(|ψ⟩, C) is classically efficient
+
+      PROOF:
+        -- Represent the initial state using stabilizers
+        LET |ψ⟩ = |0⟩^⊗n
+        LET S = {Z₁, Z₂, ..., Zₙ}
+        HENCE |ψ⟩ = unique |φ⟩ such that ∀ s ∈ S. s |φ⟩ = |φ⟩
+        
+        -- Each stabilizer generator is a Pauli string
+        FORALL (s : S) {
+          REWRITE s = ⊗ᵢ Pᵢ  WHERE Pᵢ ∈ {I, X, Y, Z} 
+          HENCE IsPauli(s) BY PauliGroupGenerators
+        }
+        
+        -- The stabilizer group is a subgroup of the Pauli group
+        REWRITE ⟨S⟩ = {s₁ · s₂ · ... · sₖ | sᵢ ∈ S}
+        HENCE ⟨S⟩ ⊆ 𝓟ₙ
+
+        -- Applying a Clifford gate transforms the stabilizer group
+        LET C = [C₁, C₂, ..., Cₘ]
+        LET Sᵢ = ⟨S⟩ after applying [C₁, ..., Cᵢ]
+        FORALL (i : 1..m) {
+          LET s ∈ Sᵢ₋₁
+          REWRITE Cᵢ ∘ s ∘ Cᵢ⁻¹ = s' ∈ 𝓟ₙ  BY PauliCliffordRelation
+          HENCE Sᵢ = ⟨{Cᵢ ∘ s ∘ Cᵢ⁻¹ | s ∈ Sᵢ₋₁}⟩ ⊆ 𝓟ₙ
+        }
+
+        -- The final state is stabilized by Sₘ
+        LET |ψ'⟩ = Evolve(|ψ⟩, C)
+        HENCE ∀ s ∈ Sₘ. s |ψ'⟩ = |ψ'⟩
+        
+        -- Measuring in the computational basis is equivalent to
+        -- measuring the final stabilizer generators
+        LET P(x) = Simulate(|ψ⟩, C)(x) = ⟨ψ'| (|x₁⟩⟨x₁| ⊗ ... ⊗ |xₙ⟩⟨xₙ|) |ψ'⟩
+        REWRITE P(x) = 𝟙[∀ i. Measure(|ψ'⟩, Zᵢ) = xᵢ] · 2⁻ⁿ
+
+        -- The stabilizer update rules are classically efficient, so
+        -- the final probability distribution can be sampled efficiently
+        QED
+    }
+  }
+}
+
+
+
+CONCEPT QuantumTeleportationProof EXTENDS QuantumTeleportation {
+  PROOFS {
+    THEOREM QuantumTeleportationCorrectness {
+      STATEMENT:
+        ∀ (|ψ⟩ : Qubit) (|β00⟩ : Bell).
+          Teleport(|ψ⟩, |β00⟩) = |ψ⟩
+
+      PROOF:
+        LET |ψ⟩ : Qubit, |β00⟩ : Bell
+        
+        -- Express the initial state using visual notation
+        ╭─────╮      
+        │  ψ  │───────────────╮
+        ╭─────╮─╭─H─╮─╭─•─╮   │
+        │  0  │─│ H │─│ • │─╮─┴─╮
+        ╭─────╮─╭───╮─│ ⊕ │─┴─╮─┴─╮
+        │  0  │─│ H │─╭─•─╮───┴───┴───╮
+                      │ ⊕ │─────────╮─┴─╮
+                                    ↓   ↓
+        -- Apply CNOT and H gates
+        ╭─────╮─────────────────╮      
+        │  ψ  │─╭─•─╮─╭─H─╮     │
+        ╭─────╮─│ • │─│ H │─╮   │
+        │  0  │─│ ⊕ │─╭───╮─┴─╮─┴─╮
+        ╭─────╮─╭─•─╮─│   │───┴───┴───╮
+        │  0  │─│ ⊕ │─│   │─────────╮─┴─╮
+                ─────┴───┴─────────┬─┴─╮
+                                    ↓   ↓        
+        -- Express in the Bell basis
+        ╭─β00─╮─╭─ψ─╮───╮
+        ╭─β01─╮─│ X │─╮ │  
+        ╭─β10─╮─│ Z │─┤ ├────────╮
+        ╭─β11─╮─│ ZX│─╯ │        │
+                ─────┬──┴────────┴───╮
+                    ↓                ↓
+        -- Measure in the Bell basis
+        ╭─M0─╮  ╭─M1─╮        ╭─ψ─╮ 
+        │ 0  │──│ 0  │── (00) ─│   │
+        │ 0  │──│ 1  │── (01) ─│ X │
+        │ 1  │──│ 0  │── (10) ─│ Z │
+        │ 1  │──│ 1  │── (11) ─│ ZX│
+        ──┬─────┬─────────────┴───╯
+          │     │
+        (00)  (01) (10) (11)
+          │     │    │    │
+        ──╰─╮───╰─╮──╰─╮──╰─╮
+            │     │    │    │
+        ──╭─────╮─────────────╮
+          │  I  │─╭─Z─╮─╭─X─╮─│─╭─X─╮─╭─Z─╮
+        ──╰─────╯─╰───╯─╰───╯─╰─╰───╯─╰───╯
+                ────┬────────────────────╮
+                    │                    │
+        -- Final state                    │
+                                    ╭─ψ─╮ │
+                                    ╰─────╯
+
+        -- In all cases, the final state of Bob's qubit is |ψ⟩
+        HENCE Teleport(|ψ⟩, |β00⟩) = |ψ⟩
+    }
+  }
+}

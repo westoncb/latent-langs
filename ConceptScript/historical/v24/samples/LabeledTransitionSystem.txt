@@ -1,0 +1,136 @@
+CONCEPT LabeledTransitionSystem {
+  LANGUAGE {
+    TYPE State
+    TYPE Label
+    
+    PRED Trans : State -> Label -> State -> Bool
+    
+    FUNC Succ(s : State, a : Label) -> Set(State)
+    Succ(s, a) = { t : State | Trans(s, a, t) } 
+    
+    PRED Bisimulation(R : State -> State -> Bool)
+    Bisimulation(R) = 
+      (FORALL (p q : State) (a : Label).
+        R(p, q) ->
+          (FORALL (p' : State). Trans(p, a, p') ->
+            (EXISTS (q' : State). Trans(q, a, q') /\ R(p', q'))) /\
+          (FORALL (q' : State). Trans(q, a, q') -> 
+            (EXISTS (p' : State). Trans(p, a, p') /\ R(p', q')))) /\
+      (FORALL (p q : State). R(p, q) -> R(q, p))
+      
+    PRED Bisimilar(p q : State)  
+    Bisimilar(p, q) = EXISTS (R : State -> State -> Bool). Bisimulation(R) /\ R(p, q)
+  }
+  
+  STRUCTURE {
+    DEF Image(R : State -> State -> Bool, s : Set(State)) -> Set(State)
+    Image(R, s) = { q : State | EXISTS (p : State). p IN s /\ R(p, q) }
+  }
+  
+  PROOFS {
+    TACTIC SymmetricCases(R) = ASSUME R(p, q); CASES p' WITH q'
+    
+    TACTIC TransitivityCases(R, p, q, r) = 
+      ASSUME R(p, q), R(q, r); CASES (p', q') WITH (q', r')
+
+    THEOREM Bisimilarity {
+      STATEMENT: 
+        FORALL (p q : State). Bisimilar(p, q) <-> Bisimilar(q, p)
+      PROOF:
+        LET p q : State;
+        
+        ASSUME Bisimilar(p, q);
+        
+        EXISTS (R : State -> State -> Bool). Bisimulation(R) /\ R(p, q) BY ASSUMPTION;
+        
+        LET R : State -> State -> Bool;
+        ASSUME Bisimulation(R), R(p, q);
+        
+        LET S(p, q) = R(q, p);
+        
+        Bisimulation(S) BY {
+          SymmetricCases(R);
+          
+          LET a : Label;
+          
+          CASE (q', p') {
+            ASSUME Trans(q, a, q');
+            EXISTS (p' : State). Trans(p, a, p') /\ R(q', p') BY ASSUMPTION;
+            S(q', p') BY Definition(S)
+          }
+
+          CASE (p', q') {
+            ASSUME Trans(p, a, p');  
+            EXISTS (q' : State). Trans(q, a, q') /\ R(p', q') BY ASSUMPTION;
+            S(p', q') BY Definition(S)
+          }
+          
+          LET p q : State;
+          S(p, q) -> S(q, p) BY Definition(S)
+        }
+        
+        S(q, p) BY Definition(S);
+        Bisimilar(q, p) BY Definition(Bisimilar)
+    }
+            
+    THEOREM BisimulationEquivalence { 
+      STATEMENT:
+        Bisimilar(_, _) is Equivalence
+      PROOF:
+        LET p q r : State;
+        
+        Reflexivity {
+          LET I(p, q) = (p = q);
+          Bisimulation(I) BY {
+            LET p q : State, a : Label;
+            ASSUME p = q, Trans(p, a, p');
+            q' = p' BY ASSUMPTION;
+            Trans(q, a, q'), I(p', q') BY ASSUMPTION, Definition(I)
+          }
+        }
+        
+        Symmetry BY Bisimilarity;
+        
+        Transitivity {
+          ASSUME Bisimilar(p, q), Bisimilar(q, r);
+          
+          EXISTS (R : State -> State -> Bool). Bisimulation(R) /\ R(p, q) BY ASSUMPTION;
+          EXISTS (S : State -> State -> Bool). Bisimulation(S) /\ S(q, r) BY ASSUMPTION;
+           
+          LET R S : State -> State -> Bool;  
+          ASSUME Bisimulation(R), R(p, q), Bisimulation(S), S(q, r);
+          
+          LET T(p, r) = EXISTS (q : State). R(p, q) /\ S(q, r);
+          
+          Bisimulation(T) BY {
+            TransitivityCases(R, S, p, q, r);
+            
+            LET a : Label;
+            
+            CASE (p', q') {
+              ASSUME Trans(p, a, p');
+              EXISTS (q' : State). Trans(q, a, q') /\ R(p', q') BY ASSUMPTION;
+              EXISTS (r' : State). Trans(r, a, r') /\ S(q', r') BY ASSUMPTION;
+              T(p', r') BY Definition(T)   
+            }
+            
+            CASE (q', r') {
+              ASSUME Trans(r, a, r');
+              EXISTS (q' : State). Trans(q, a, q') /\ S(q', r') BY ASSUMPTION;
+              EXISTS (p' : State). Trans(p, a, p') /\ R(p', q') BY ASSUMPTION;
+              T(p', r') BY Definition(T)
+            }
+            
+            LET p r : State;
+            ASSUME T(p, r);
+            EXISTS (q : State). R(p, q) /\ S(q, r) BY ASSUMPTION;
+            EXISTS (q : State). R(q, p) /\ S(r, q) BY Bisimilarity;
+            T(r, p) BY Definition(T)
+          }
+          
+          T(p, r) BY Definition(T);
+          Bisimilar(p, r) BY Definition(Bisimilar)  
+        }  
+    }
+  }
+}

@@ -1,0 +1,95 @@
+CONCEPT AnatomicalVariation {
+  IMPORTS {
+    ShapeSpace
+  }
+
+  LANGUAGE {
+    TYPE AnatomicalStructure <: Shape
+    TYPE Subject
+    TYPE Population = List[Subject]
+    TYPE Pathology
+
+    FUNC Anatomy(s : Subject) : AnatomicalStructure
+    FUNC HasPathology(s : Subject) : 𝔹
+    FUNC PathologyType(s : Subject) : Pathology
+
+    PRED NormalAnatomy(A : AnatomicalStructure) : 𝔹
+    PRED PathologicalAnatomy(A : AnatomicalStructure, P : Pathology) : 𝔹
+
+    AXIOM AnatomicalVariability :
+      ∀ (P : Population) .
+        ∃ (ε : R^>0) .
+          ∀ (s t : Subject) . s,t ∈ P ∧ ¬HasPathology(s) ∧ ¬HasPathology(t)
+            ⇒ Anatomy(s) ≃[ε] Anatomy(t)
+
+    AXIOM PathologicalDeviation :
+      ∀ (P : Pathology) (ε : R^>0) .
+        ∃ (δ : R^>0) .
+          ∀ (s t : Subject) .
+            HasPathology(s) ∧ PathologyType(s) = P ∧ ¬HasPathology(t)
+              ⇒ ¬(Anatomy(s) ≃[ε] Anatomy(t)) ∧ Anatomy(s) ≃[ε+δ] Anatomy(t)
+  }
+
+  STRUCTURE NormalVariation {
+    DEF NormalShapeSpace(P : Population) : SubSpace(ShapeSpace) =
+      {Anatomy(s) | s ∈ P ∧ ¬HasPathology(s)}
+  }
+
+  STRUCTURE PathologicalVariation {
+    DEF PathologicalShapeSpace(P : Population, Q : Pathology) : SubSpace(ShapeSpace) =
+      {Anatomy(s) | s ∈ P ∧ HasPathology(s) ∧ PathologyType(s) = Q}
+
+    REQUIRE ∀ (P : Population) (Q : Pathology) .
+      Separable(NormalShapeSpace(P), PathologicalShapeSpace(P, Q))
+  }
+
+  PROOFS {
+    THEOREM NormalVariationBounded {
+      STATEMENT:
+        ∀ (P : Population) .
+          ∃ (ε : R^>0) .
+            ∀ (A B : AnatomicalStructure) . A,B ∈ NormalShapeSpace(P)
+              ⇒ A ≃[ε] B
+
+      PROOF:
+        BY AnatomicalVariability
+    }
+
+    THEOREM PathologicalDeviationDetectable {
+      STATEMENT:
+        ∀ (P : Population) (Q : Pathology) (ε : R^>0) .
+          ∃ (δ : R^>0) .
+            ∀ (A : AnatomicalStructure) (B : AnatomicalStructure) .
+              A ∈ NormalShapeSpace(P) ∧ B ∈ PathologicalShapeSpace(P, Q)
+                ⇒ ¬(A ≃[ε] B) ∧ A ≃[ε+δ] B
+
+      PROOF:
+        BY PathologicalDeviation
+    }
+
+    THEOREM PathologyClassification {
+      STATEMENT:
+        ∀ (P : Population) (Q : Pathology) (A : AnatomicalStructure) .
+          A ∈ PathologicalShapeSpace(P, Q)
+            ⇔ PathologicalAnatomy(A, Q)
+
+      PROOF:
+        (⇒) BY definition of PathologicalShapeSpace
+        (⇐) ASSUME PathologicalAnatomy(A, Q)
+            LET s : Subject SUCH THAT Anatomy(s) = A
+            ARGUE HasPathology(s) ∧ PathologyType(s) = Q
+              USING PathologicalAnatomy(A, Q)
+            HENCE A ∈ PathologicalShapeSpace(P, Q)
+    }
+  }
+}
+
+In this Concept, we're applying the ShapeSpace framework to study anatomical variation within a population. The key ideas are:
+
+We introduce types for AnatomicalStructure (a subtype of Shape), Subject, Population, and Pathology.
+The Anatomy function maps a Subject to their AnatomicalStructure. The HasPathology and PathologyType functions provide information about a Subject's pathological status.
+The NormalAnatomy and PathologicalAnatomy predicates characterize normal and pathological anatomical structures.
+The AnatomicalVariability axiom states that within a healthy population, anatomical structures are ε-homotopic for some ε.
+The PathologicalDeviation axiom states that pathological structures are distinguishable from normal ones, but still (ε+δ)-homotopic for some δ.
+We define NormalShapeSpace and PathologicalShapeSpace as subspaces of ShapeSpace corresponding to normal and pathological anatomies.
+The NormalVariationBounded theorem says normal variation is bounded. The PathologicalDeviationDetectable theorem says pathologies are detectable by the ShapeSpace metric. The PathologyClassification theorem relates the PathologicalAnatomy predicate to membership in PathologicalShapeSpace.

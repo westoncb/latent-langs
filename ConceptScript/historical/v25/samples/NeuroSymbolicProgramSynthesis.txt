@@ -1,0 +1,208 @@
+CONCEPT NeuroSymbolicProgramSynthesis {
+  LANGUAGE {
+    TYPE Program
+    TYPE ProgramSpace <: Set[Program]
+    TYPE Specification  
+    TYPE Behavior = Program -> Specification -> Bool
+    TYPE Feature
+    TYPE FeatureVector = List[Feature]
+    TYPE FeatureExtractor = Program -> FeatureVector
+    TYPE RewardFunction = FeatureVector -> Float
+
+    TYPE Policy = FeatureVector -> Distribution[Program]
+    TYPE ValueFunction = FeatureVector -> Float
+    TYPE Dataset = List[(Specification, Program)]
+
+    TYPE NeuralEncoder = Specification -> FeatureVector
+    TYPE ProgramDecoder = FeatureVector -> Distribution[Program]
+    TYPE RewardPredictor = FeatureVector -> Float
+    TYPE SpecificationGenerator <: Distribution[Specification]
+
+    FUNC Embed(spec : Specification) : FeatureVector
+    FUNC Decode(features : FeatureVector) : Distribution[Program]    
+    FUNC Reward(prog : Program, spec : Specification) : Float
+    FUNC GenerateSpecification() : Distribution[Specification]
+    
+    FUNC ExtractFeatures(prog : Program) : FeatureVector
+    FUNC RunProgram(prog : Program, spec : Specification) : Behavior
+    FUNC SampleProgram(policy : Policy, spec : Specification) : Program
+    FUNC UpdatePolicy(policy : Policy, valueFn : ValueFunction, dataset : Dataset) : Policy
+
+    PRED Satisfies(prog : Program, spec : Specification) = RunProgram(prog, spec)
+    PRED Entails(features : FeatureVector, spec : Specification) = 
+      ∀ (prog : Program). Decode(features)[prog] > 0 => Satisfies(prog, spec)
+
+    AXIOM SpecificationCoverage {
+      ∀ (spec : Specification). ∃ (prog : Program). Satisfies(prog, spec) 
+    }
+
+    AXIOM SpecificationConsistency {
+      ∀ (spec : Specification) (prog1 prog2 : Program).
+        Satisfies(prog1, spec) ∧ Satisfies(prog2, spec) => Equivalent(prog1, prog2)
+    }
+
+    AXIOM DecoderCorrectness {
+      ∀ (features : FeatureVector).
+        Entails(features, Specification) <=>  
+        ∀ (prog : Program). Decode(features)[prog] > 0 => Satisfies(prog, Specification)
+    }
+
+    AXIOM EncoderInvertibility {
+      ∀ (spec : Specification) (prog : Program). 
+        Satisfies(prog, spec) => Decode(Embed(spec))[prog] > 0
+    }
+  }
+
+  PROOFS {
+    THEOREM SoundProgram {
+      STATEMENT:  
+        ∀ (policy : Policy) (spec : Specification).
+          LET prog = SampleProgram(policy, spec)
+          IN Satisfies(prog, spec)
+
+      PROOF:
+        LET policy : Policy, spec : Specification
+        LET prog = SampleProgram(policy, spec)
+        LET features = Embed(spec)
+        
+        policy(features)[prog] > 0 BY SamplingDefinition  
+          => Decode(features)[prog] > 0 BY PolicyFactorization
+          => Satisfies(prog, spec) BY DecoderCorrectness
+    }
+
+    THEOREM ExistsSatisfyingProgram {
+      STATEMENT:
+        ∀ (spec : Specification).
+          ∃ (policy : Policy). 
+            ∀ (prog : Program).
+              SampleProgram(policy, spec) = prog => Satisfies(prog, spec)
+              
+      PROOF:
+        LET spec : Specification
+        
+        EXISTS prog_sat : Program. Satisfies(prog_sat, spec) BY SpecificationCoverage
+        LET features_sat = Embed(spec)
+        LET policy_sat(features) = IF features = features_sat THEN Dirac(prog_sat) ELSE Uniform(ProgramSpace)
+        
+        FORALL prog : Program.
+          SampleProgram(policy_sat, spec) = prog
+            => policy_sat(Embed(spec))[prog] > 0 BY SamplingDefinition
+            => prog = prog_sat BY ConstructionOfPolicy
+            => Satisfies(prog_sat, spec)
+            => Satisfies(prog, spec)
+    }
+
+    THEOREM OptimalPolicy {
+      STATEMENT:
+        ∃ (policy : Policy) (valueFn : ValueFunction).
+          ∀ (spec : Specification) (prog : Program).
+            Satisfies(prog, spec) =>
+            ∀ (policy' : Policy). 
+              ExpectedReward(policy, valueFn, spec) ≥ ExpectedReward(policy', valueFn, spec)
+              WHERE
+                ExpectedReward(policy, valueFn, spec) = 𝔼 [Reward(SampleProgram(policy, spec), spec)]
+                
+      PROOF:
+        LET valueFn(features) = SupReward(specs) WHERE
+          SupReward(specs) = Sup { Reward(prog, spec) | (spec, prog) ∈ Dataset ∧ spec ∈ specs }
+        
+        LET policy(features) = Decode(ArgMax(specs, valueFn(Embed(spec))))
+        
+        LET spec : Specification, prog : Program 
+        ASSUME Satisfies(prog, spec)
+        LET features = Embed(spec)
+
+        policy(features)
+          = Decode(ArgMax(specs, valueFn(Embed(spec))))  BY DefinitionOfPolicy
+          = Decode(ArgMax(specs, SupReward(Embed(spec)))) BY DefinitionOfValueFn
+          = Decode(ArgMax(specs, Sup { Reward(prog', spec') | (spec', prog') ∈ Dataset ∧ spec' ∈ specs }))
+          = Decode(features_opt) WHERE
+              (spec_opt, prog_opt) = ArgMax { Reward(prog', spec') | (spec', prog') ∈ Dataset ∧ Satisfies(prog', spec') }
+              features_opt = Embed(spec_opt)
+              BY SpecificationConsistency, DecoderCorrectness
+          
+        Reward(prog_opt, spec_opt) ≥ Reward(SampleProgram(policy', spec), spec) BY ConstructionOfDataset
+        
+        HENCE
+          ExpectedReward(policy, valueFn, spec) 
+            = 𝔼 [Reward(SampleProgram(policy, spec), spec)]
+            = Reward(prog_opt, spec_opt)
+            ≥ 𝔼 [Reward(SampleProgram(policy', spec), spec)]  
+            = ExpectedReward(policy', valueFn, spec)
+    }
+  }
+
+  STRUCTURE ProgramSynthesizer(progSpace : ProgramSpace, dataset : Dataset, specGen : SpecificationGenerator) {
+    DEFINE Neural : (NeuralEncoder, ProgramDecoder, RewardPredictor) = TrainNeuralModules(dataset)
+
+    FUNC TrainNeuralModules(dataset : Dataset) : (NeuralEncoder, ProgramDecoder, RewardPredictor) = {
+      LET encoder = LearnedFeatureExtractor(dataset)
+      LET decoder = LearnedProgramGenerator(encoder, dataset)  
+      LET rewardPredictor = LearnedRewardPredictor(encoder, dataset)
+      
+      RETURN (encoder, decoder, rewardPredictor)
+    }
+    
+    FUNC SynthesizeProgram(spec : Specification) : Program = {
+      LET Embed = Neural.NeuralEncoder
+      LET Decode = Neural.ProgramDecoder
+      LET Reward = Neural.RewardPredictor
+
+      LET policy(features) = Decode(features) 
+      LET valueFn(features) = Reward(features)
+      
+      LET prog = SampleProgram(policy, spec)
+      ENSURE Satisfies(prog, spec)
+
+      RETURN prog
+    }
+
+    FUNC Augment(dataset : Dataset) : Dataset = {
+      LET (spec, prog) = SampleSpecificationProgramPair(dataset, specGen)
+      LET dataset' = dataset + [(spec, prog)]
+
+      RETURN dataset'
+    }
+
+    FUNC SampleSpecificationProgramPair(dataset : Dataset, specGen : SpecificationGenerator) : (Specification, Program) = {
+      LET spec = specGen.Sample()
+      LET prog = SynthesizeProgram(spec)
+      ENSURE (spec, prog) ∉ dataset
+      ENSURE Satisfies(prog, spec)
+      
+      RETURN (spec, prog) 
+    }
+  }
+}
+
+This Concept describes a framework for synthesizing programs from specifications by combining neural and symbolic techniques. The key ideas are:
+
+Neural modules (encoder, decoder, reward predictor) are trained on a dataset of specification-program pairs to learn a feature representation that captures program semantics and enables efficient search over the program space.
+The learned neural modules are used to define a policy that generates programs from specifications, and a value function that estimates the expected reward (i.e. probability of satisfying the specification) of a generated program.
+The policy is iteratively updated using the value function to maximize the expected reward of the generated programs. This is done by sampling specification-program pairs from a learned specification generator.
+The synthesizer provides strong formal guarantees:
+
+Soundness: every generated program satisfies its specification
+Completeness: for every specification, there exists a policy that generates a satisfying program
+Optimality: the synthesized program maximizes the expected reward over all programs
+
+
+The framework is adaptable to different domains by choosing a suitable program space, specification language, and reward function. The neural modules enable efficient learning and inference in large, combinatorial search spaces.
+
+I believe this framework is novel because it combines the expressiveness and generalization power of neural representations with the strong guarantees and interpretability of symbolic reasoning in a principled way. By training neural modules to capture program semantics and guide the search over the program space, it can efficiently synthesize programs that provably satisfy complex specifications.
+Potential practical applications include:
+
+Synthesizing code snippets from natural language descriptions
+Optimizing programs for performance or resource usage
+Automatically repairing bugs or vulnerabilities in code
+Interactively synthesizing scripts or macros from examples
+Synthesizing network configurations that satisfy security/performance constraints
+
+Some key benefits over traditional program synthesis techniques include:
+
+Scalability to large, combinatorial search spaces by using neural guidance
+Transfer learning across different specifications by reusing learned features
+Adaptability to different domains by training on domain-specific datasets
+Strong formal guarantees on the synthesized programs
+
+Realizing this potential will require further research into the specification languages, neural architectures, and learning algorithms best suited for different domains. But I believe the overall framework of neurally-guided, specification-driven program synthesis is a promising direction for bringing the power of modern ML to the task of automated programming.

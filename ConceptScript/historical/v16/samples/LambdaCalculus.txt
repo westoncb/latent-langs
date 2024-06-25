@@ -1,0 +1,66 @@
+CONCEPT LambdaCalculus {
+  LANGUAGE {
+    type Term
+    type Variable <: Term
+    type Abstraction <: Term
+    type Application <: Term
+
+    func Var: Variable -> Term
+    func Abs: Variable × Term -> Abstraction  
+    func App: Term × Term -> Application
+
+    (λ_._): Variable × Term -> Abstraction
+    (_⦅_⦆): Term × Term -> Application
+    FV(_): Term -> ℘(Variable)
+
+    Substitution: Term × Variable × Term -> Term
+    t[x := s] = Substitution(t, x, s)
+
+    (λx.t1)[y := t2] ~> λx.(t1[y := t2])    ; if x ≠ y and x ∉ FV(t2)
+    (λx.t1)[x := t2] ~> λy.(t1[x := y][y := t2])  ; y fresh
+    (t1 t2)[x := t3] ~> (t1[x := t3]) (t2[x := t3])
+
+    (λx.t1) t2 ~> t1[x := t2]    ; β-reduction
+    λx.(t x) ~> t                ; η-reduction, if x ∉ FV(t)
+  }
+
+  STRUCTURE {
+    ∀t: Term, x: Variable. x ∉ FV(t) <-> t = t[x := t']  ; for any t': Term
+    ∀t1, t2: Term, x, y: Variable. y ∉ FV(t2) -> (λx.t1)[y := t2] = λx.(t1[y := t2])
+    ∀t1, t2, t1', t2': Term. t1 ~> t1' ∧ t2 ~> t2' -> (t1 t2) ~> (t1' t2')
+    ∀t1, t2: Term, x: Variable. (λx.t1) t2 ~> t1[x := t2]
+  }
+
+  PROOFS {
+    theorem ChurchRosser: ∀t, t1, t2: Term. t ~>* t1 ∧ t ~>* t2 ->
+                           ∃t3: Term. t1 ~>* t3 ∧ t2 ~>* t3 {
+      assume t, t1, t2: Term
+      assume t ~>* t1 and t ~>* t2
+
+      obtain t3 by Tiling with t1 ~>* t3 and t2 ~>* t3 
+      ; omitted: inductive proof on reduction sequence
+    }
+    
+    theorem NormalFormTheorem: ∀t: Term. (∃t'. t ~> t') ∨ (t in NormalForm) {
+      by Induction on t
+      case Var(x): 
+        have Var(x) in NormalForm ; no reduction applies
+      case Abs(x, t1):
+        by IH obtain t1 ~> t1' or t1 in NormalForm
+        case t1 ~> t1':
+          have Abs(x, t1) ~> Abs(x, t1')
+        case t1 in NormalForm:
+          have Abs(x, t1) in NormalForm ; no reduction applies
+      case App(t1, t2):
+        by IH obtain t1 ~> t1' or t1 in NormalForm, and t2 ~> t2' or t2 in NormalForm
+        case t1 ~> t1': 
+          have App(t1, t2) ~> App(t1', t2)
+        case t2 ~> t2':
+          have App(t1, t2) ~> App(t1, t2') 
+        case t1 = Abs(x, t11) and t2 in NormalForm:
+          have App(t1, t2) ~> t11[x := t2] ; by β-reduction
+        case t1 = Var(x) and t2 in NormalForm:
+          have App(t1, t2) in NormalForm ; no reduction applies
+    }
+  }
+}

@@ -1,0 +1,508 @@
+CONCEPT InteractionCombinatorMachines {
+  LANGUAGE {
+    TYPE Symbol
+    TYPE Cell = (Symbol, List[Port])
+    TYPE Port = (Cell, ℕ)
+    TYPE Net = (Set[Cell], Set[Port], Set[(Port, Port)])
+    TYPE Tape = List[Symbol]
+    TYPE State
+    TYPE Direction = {Left, Right, Stay}
+    TYPE MachineConfig = (State, Tape, ℕ)
+    TYPE TransitionFunc = State -> Symbol -> (State, Symbol, Direction)
+    TYPE Machine = (State, Symbol, TransitionFunc, State, State)
+    
+    FUNC Arity : Symbol -> ℕ
+    FUNC Interaction : (Symbol, Symbol) -> Maybe[Net]
+    PRED Reduced : Net -> 𝔹
+    FUNC Blank : Symbol
+    FUNC Encode : Net -> Tape
+    FUNC Decode : Tape -> Net
+    FUNC InitialConfig(M : Machine, input : Tape) : MachineConfig
+    FUNC Step(M : Machine, c : MachineConfig) : MachineConfig
+    FUNC Run(M : Machine, input : Tape) : Tape
+    PRED Halts(M : Machine, input : Tape) = 
+      ∃ (n : ℕ) (c : MachineConfig) . Step^n(M, InitialConfig(M, input)) = c ∧ c.State = M.HaltState
+    
+    AXIOM PortCountIC {
+      ∀ (s : Symbol) (c : Cell) (ps : List[Port]) . 
+        (c = (s, ps)) => Length(ps) = Arity(s) + 1
+    }
+    
+    AXIOM PortDistinctIC {
+      ∀ (c : Cell) (ps : List[Port]) (i j : ℕ) . 
+        ((c, ps) ∈ Net ∧ (c, i) ∈ ps ∧ (c, j) ∈ ps ∧ i ≠ j) => (c, i) ≠ (c, j)
+    }
+    
+    AXIOM NetEncoding {
+      ∀ (α : Net) . Decode(Encode(α)) = α
+    }
+  }
+  
+  NOTATION {
+    "+ --M-> &" = "MachineConfig + transitions to MachineConfig & in Machine M"
+    "+ --*M--> &" = "MachineConfig + transitions to MachineConfig & in Machine M in zero or more steps"
+    "M ⊨ t" = "Machine M halts on input Tape t"
+    "M ⊭ t" = "Machine M does not halt on input Tape t"
+  }
+  
+  TRANSFORMERS {
+    TACTIC NetToMachine(α : Net) -> Machine = {
+      LET start : State, halt : State, q_i : State[α.Cells.Length]
+      LET f(q)(s) = {
+        MATCH (q, s) WITH
+        | (start, Blank) -> (q_i[0], Blank, Right)
+        | (q_i[i], s_i) -> IF ∃ (c_j) . Interaction(s_i, c_j.Symbol) = Some(α_ij)
+                           THEN (q_i[j], Encode(α_ij)[0], Stay)
+                           ELSE (halt, Blank, Stay)
+        | (halt, _) -> (halt, Blank, Stay)
+      }
+      (start, Blank, f, start, halt)
+    }
+    
+    TACTIC MachineToNet(M : Machine) -> Net = {
+      LET init <- Decode(Run(M, [])) 
+      LET explore(α) = {
+        LET nexts = {α' | ∃ (c : α.Cells) (c' : Cell) . 
+                            Interaction(c.Symbol, c'.Symbol) = Some(α') ∧ 
+                            Encode(α') ∈ Run(M, Encode(α))}
+        α ∪ ⋃ (Map(explore, nexts))
+      }
+      explore(init)
+    }
+  }
+  
+  STRUCTURE ICMachine {
+    M : Machine
+    α_init : Net
+    
+    REQUIRE Decode(Run(M, [])) = α_init
+    REQUIRE ∀ (α α' : Net) . 
+      (α ⊆ MachineToNet(M) ∧ α --IC--> α') => α' ⊆ MachineToNet(M)
+  }
+  
+  PROOFS {
+    THEOREM ICMachineEmulation {
+      STATEMENT:
+        ∀ (α : Net) . ∃ (M : ICMachine) . 
+          (α --*IC--> α' => M.α_init --*IC--> α') ∧
+          (M.α_init --*IC--> α' => ∃ (n : ℕ) . α --IC-->^n α')
+      
+      PROOF:
+        LET α : Net
+        LET M : ICMachine = (NetToMachine(α), α)
+        
+        SHOW α --*IC--> α' => M.α_init --*IC--> α' {
+          ASSUME (H) : α --*IC--> α'
+          REWRITE α' ⊆ MachineToNet(M) BY H, M.REQUIRE[1]
+          HENCE M.α_init --*IC--> α'
+        }
+        
+        SHOW M.α_init --*IC--> α' => ∃ (n : ℕ) . α --IC-->^n α' {
+          ASSUME (H) : M.α_init --*IC--> α'
+          
+          LET P(α) = ∃ (n : ℕ) . α_init --IC-->^n α
+          
+          SHOW P(α') BY Induction on H {
+            CASE α' = α_init:
+              TAKE n = 0
+            CASE α' = α_k --IC--> α_{k+1}:
+              ASSUME (IH) : P(α_k)
+              REWRITE IH 
+                = ∃ (n : ℕ) . α_init --IC-->^n α_k
+              HENCE ∃ (n+1 : ℕ) . α_init --IC-->^(n+1) α_{k+1}
+          }
+          
+          HENCE ∃ (n : ℕ) . α --IC-->^n α'
+        }
+        
+        QED
+    }
+    
+    THEOREM ICMachineHalting {
+      STATEMENT:
+        ∀ (M : ICMachine) . M.M ⊨ Encode(M.α_init) <=> Reduced(M.α_init)
+        
+      PROOF:
+        LET M : ICMachine
+        
+        SHOW M.M ⊨ Encode(M.α_init) => Reduced(M.α_init) {
+          ASSUME (H) : M.M ⊨ Encode(M.α_init)
+          
+          REWRITE H
+            = ∃ (n : ℕ) (c : MachineConfig) . 
+                Step^n(M.M, InitialConfig(M.M, Encode(M.α_init))) = c ∧ 
+                c.State = M.M.HaltState
+          
+          LET c = Step^n(M.M, InitialConfig(M.M, Encode(M.α_init)))
+          LET α_n = Decode(c.Tape)
+          
+          HAVE InitialConfig(M.M, Encode(M.α_init)).Tape = Encode(M.α_init)
+          HENCE Step^n(M.M, InitialConfig(M.M, Encode(M.α_init))).Tape = Encode(α_n)
+            BY NetEncoding
+          HENCE α_n ⊆ MachineToNet(M.M)
+          
+          ASSUME (H1) : α_n --IC--> α' 
+          REWRITE H1
+            = ∃ (c' : Cell) . Interaction(c.Symbol, c'.Symbol) = Some(α')
+          HENCE Encode(α') ∈ Run(M.M, Encode(α_n))
+          HENCE Step^m(M.M, c) = c_m ∧ c_m.Tape = Encode(α') for some m
+          HENCE c_m.State ≠ M.M.HaltState
+          HENCE Contradiction
+          
+          THEREFORE α_n --IC-/-> 
+          HENCE Reduced(α_n)
+          HENCE Reduced(M.α_init) BY ICMachineEmulation
+        }
+        
+        SHOW Reduced(M.α_init) => M.M ⊨ Encode(M.α_init) {
+          ASSUME (H) : Reduced(M.α_init)
+          
+          LET P(α) = Reduced(α) => (∃ (n : ℕ) . 
+            Step^n(M.M, InitialConfig(M.M, Encode(α))).State = M.M.HaltState)
+            
+          SHOW P(M.α_init) BY Induction on α {
+            CASE α = M.α_init:
+              REWRITE H 
+                = ∀ (c : Cell) . ¬∃ (α' : Net) . 
+                    Interaction(M.α_init.Cells[0].Symbol, c.Symbol) = Some(α')
+              LET c_0 = InitialConfig(M.M, Encode(M.α_init))
+              REWRITE Step(M.M, c_0) 
+                = (M.M.HaltState, Blank, Stay) BY H
+              HENCE ∃ (1 : ℕ) . Step^1(M.M, c_0).State = M.M.HaltState
+            CASE α = α_k --IC--> α_{k+1}:
+              ASSUME (IH) : P(α_k)
+              ASSUME (H2) : Reduced(α_{k+1})
+              LET c_k = Step^n(M.M, InitialConfig(M.M, Encode(α_k))) 
+                where n is from IH
+              REWRITE Step(M.M, c_k)
+                = (q_i[j], Encode(α_{k+1})[0], Stay) 
+                  where α_k.Cells[i] --IC--> α_{k+1}.Cells[j]
+                BY H2
+              HENCE ∃ (n+1 : ℕ) . 
+                Step^(n+1)(M.M, InitialConfig(M.M, Encode(α_{k+1}))).State = M.M.HaltState
+                BY IH
+          }
+          
+          HENCE P(M.α_init)
+          HENCE M.M ⊨ Encode(M.α_init)
+        }
+        
+        QED
+    }
+  }
+}
+
+This Concept, called InteractionCombinatorMachines, combines ideas from the InteractionCombinators and UniversalTuringMachine Concepts. The key idea is to define a notion of Machines that can simulate Interaction Nets, and conversely to map Interaction Nets to equivalent Machines.
+
+The LANGUAGE block includes types and functions from both InteractionCombinators (Symbols, Cells, Ports, Nets, Interaction rules) and UniversalTuringMachine (Tapes, States, Machines, configurations, running Machines). It also defines predicates about Nets being reduced and Machines halting.
+
+The TRANSFORMERS provide ways to convert between Interaction Nets and Machines. NetToMachine takes an Interaction Net and constructs a Machine that simulates its reductions. MachineToNet takes a Machine and produces the Interaction Net that is the union of all the Nets encoded on the tape when running the Machine.
+
+The ICMachine STRUCTURE represents a Machine together with an initial Interaction Net, and requires that running the machine simulates reduction on that Net.
+
+The PROOFS show two key theorems:
+1) ICMachineEmulation states that for any Net, we can construct an ICMachine whose initial Net reduces in the same way. 
+2) ICMachineHalting shows that the constructed Machine halts iff the initial Net is reduced.
+
+Together, these theorems establish a tight correspondence between Interaction Nets and Machines, showing that Interaction Nets can be simulated by Machines, and that Machines can be mapped to equivalent Interaction Nets.
+
+
+
+
+
+
+CONCEPT InteractionCombinatorMachines {
+  LANGUAGE {
+    TYPE Symbol
+    TYPE Cell = (Symbol, List[Port])
+    TYPE Port = (Cell, ℕ)
+    TYPE Net = (Set[Cell], Set[Port], Set[(Port, Port)])
+    
+    TYPE State
+    TYPE Direction = {Left, Right, Stay}
+    TYPE Tape = List[Symbol]
+    TYPE Head = ℕ
+    TYPE Configuration = (State, Tape, Head)
+    TYPE TransitionFunction = State -> Symbol -> (State, Symbol, Direction)
+    TYPE ICMachine = (State, Symbol, TransitionFunction, State, State, Net)
+    
+    FUNC Blank : Symbol
+    FUNC StartState[M : ICMachine] : State 
+    FUNC HaltState[M : ICMachine] : State
+    FUNC Transition[M : ICMachine] : TransitionFunction
+    FUNC InteractionNet[M : ICMachine] : Net
+    FUNC InitialConfig[M : ICMachine](input : Tape) : Configuration
+    FUNC Step[M : ICMachine](c : Configuration) : Configuration
+    FUNC Run[M : ICMachine](input : Tape) : Tape
+    FUNC Halt[M : ICMachine](c : Configuration) : 𝔹
+    FUNC Accepts[M : ICMachine](input : Tape) : 𝔹
+
+    AXIOM UniqueHalt {
+      ∀ (M : ICMachine) (c c' : Configuration) .
+        (Halt[M](c) ∧ Halt[M](c') ∧ Step[M](c) = c') => c = c'
+    }
+  }
+
+  NOTATION {
+    "(q, s) -> (p, t, d)" = Transition[M](q)(s) = (p, t, d)
+    "M ⊢ c1 -> c2" = Step[M](c1) = c2
+    "M ⊢* c1 ->! c2" = Halt[M](c2) ∧ (∃ (n : ℕ) . (M ⊢)^n (c1) = c2)
+    "α --M--> β" = InteractionNet[M] reduces from α to β in machine M
+    "α --*M--> β" = InteractionNet[M] reduces from α to β in zero or more steps in machine M
+  }
+
+  TRANSFORMERS {
+    FUNC NextConfig[M : ICMachine](c : Configuration) -> Configuration = {
+      LET (q, tape, pos) = c
+      LET (q', s', d) = Transition[M](q)(tape[pos])
+      LET tape' = tape with [pos := s']
+      LET pos' = match d with {
+        Left => pos - 1,
+        Right => pos + 1, 
+        Stay => pos
+      }
+      (q', tape', pos')
+    }
+    
+    PROC RunICM[M : ICMachine](input : Tape) -> Tape = {
+      LET c = InitialConfig[M](input)
+      LET α = InteractionNet[M]
+      WHILE not Halt[M](c):
+        c := Step[M](c)
+        α := SOME β . (α --M--> β) 
+      RETURN c.Tape
+    }
+
+    TACTIC Simulation(M : ICMachine, input : Tape) = {
+      LET c = InitialConfig[M](input)
+      LET α = InteractionNet[M]
+      SHOW ∀ (n : ℕ) . (M ⊢)^n (c) = Simulate[M, α, n] BY {
+        INDUCTION on n
+        CASE 0: 
+          REWRITE (M ⊢)^0 (c) = c
+          REWRITE Simulate[M, α, 0] = c
+        CASE n+1:
+          ASSUME (H) : (M ⊢)^n (c) = Simulate[M, α, n]
+          REWRITE (M ⊢)^(n+1) (c) = M ⊢ ((M ⊢)^n (c))
+                                   = M ⊢ Simulate[M, α, n] BY H
+                                   = Simulate[M, α, n+1] BY InteractionReduction
+      }
+      HENCE Run[M](input) = FinalState(Simulate[M, α, ∞])
+    }
+  }
+
+  STRUCTURE Translation {
+    DEF Encode[M : TuringMachine] : ICMachine = {
+      LET initial = some initial net wiring the TM configuration
+      (M.States, M.Symbols, EncodeTransition[M.Transition], 
+       M.StartState, M.HaltState, initial)
+    }
+    
+    DEF EncodeTransition(t : TransitionFunction) = 
+      λ (q : State) (s : Symbol) . 
+        LET (q', s', d) = t(q)(s)
+        LET c' = (q', [s'], [Port(Left), Port(Right)])
+        (q', s', match d with {
+                   Left => Connect(0, c'), 
+                   Right => Connect(1, c'),
+                   Stay => Connect(0, c') ∧ Connect (1, c')
+                 })
+        
+    DEF Decode[M : ICMachine] : TuringMachine = (
+      M.States, M.Symbols, DecodeTransition[M.Transition],
+      M.StartState, M.HaltState  
+    )
+      
+    DEF DecodeTransition(t : TransitionFunction) =
+      λ (q : State) (s : Symbol) .
+        LET (q', s', p) = t(q)(s)
+        (q', s', match (p[0].Cell, p[1].Cell) with {
+                   (Left, _) => Left,
+                   (_, Right) => Right,
+                   _ => Stay
+                 })
+  }
+  
+  PROOFS {
+    THEOREM SimulationTheorem {
+      STATEMENT:
+        ∀ (M : TuringMachine) (input : Tape) .
+          Run[M](input) = Run[Encode[M]](input)
+            
+      PROOF:
+        LET M : TuringMachine, input : Tape
+        LET T = Encode[M]
+        
+        SHOW Run[M](input) = Run[T](input) BY Simulation(T, input)
+        
+        QED
+    }
+      
+    THEOREM TranslationCorrectness {
+      STATEMENT:
+        ∀ (M : ICMachine) . Encode[Decode[M]] = M
+          
+      PROOF:
+        LET M : ICMachine
+        
+        SUFFICES_TO_SHOW Decode[Encode[Decode[M]]] = Decode[M]
+        
+        LET M' = Decode[M]
+        REWRITE Decode[Encode[M']]
+          = (M'.States, M'.Symbols, DecodeTransition[EncodeTransition[M'.Transition]], 
+             M'.StartState, M'.HaltState)
+             
+        SHOW DecodeTransition[EncodeTransition[M'.Transition]] = M'.Transition BY {
+          LET t = M'.Transition
+          LET q : State, s : Symbol
+          
+          REWRITE DecodeTransition[EncodeTransition[t]](q)(s)
+            = LET (q', s', p) = EncodeTransition[t](q)(s)
+              (q', s', match (p[0].Cell, p[1].Cell) with {
+                         (Left, _) => Left,
+                         (_, Right) => Right, 
+                         _ => Stay
+                       })
+            = LET (q', s', d) = t(q)(s)  
+              LET c' = (q', [s'], [Port(Left), Port(Right)])
+              LET p = match d with {
+                        Left => Connect(0, c'),
+                        Right => Connect(1, c'),
+                        Stay => Connect(0, c') ∧ Connect (1, c') 
+                      }
+              (q', s', match (p[0].Cell, p[1].Cell) with {
+                         (Left, _) => Left,
+                         (_, Right) => Right,
+                         _ => Stay  
+                       })
+            = (q', s', d)
+            = t(q)(s)
+        }
+          
+        HENCE Decode[Encode[Decode[M]]] = Decode[M]
+        
+        QED
+    }
+  }
+}
+
+
+
+
+
+CONCEPT InteractionCombinatorMachines {
+  LANGUAGE {
+    TYPE Symbol
+    TYPE Cell = (Symbol, List[Port])
+    TYPE Port = (Cell, ℕ)
+    TYPE Net = (Set[Cell], Set[Port], Set[(Port, Port)])
+    TYPE State
+    TYPE Transition = (State, Symbol, State)
+    TYPE ICMachine = (State, Symbol, Set[Transition], State, State)
+    
+    FUNC Arity : Symbol -> ℕ
+    FUNC Interaction : (Symbol, Symbol) -> Maybe[Net]
+    FUNC Blank : Symbol
+    FUNC StartState[M : ICMachine] : State
+    FUNC HaltState[M : ICMachine] : State
+    FUNC Transitions[M : ICMachine] : Set[Transition]
+    FUNC InitialNet[M : ICMachine](input : List[Symbol]) : Net
+    FUNC Reduce[M : ICMachine](n : Net) : Net
+    FUNC Run[M : ICMachine](input : List[Symbol]) : Net
+    FUNC Halt[M : ICMachine](n : Net) : 𝔹
+    
+    AXIOM UniqueLabels {
+      ∀ (M : ICMachine) (q p : State) (a b : Symbol) .
+        ((q, a, p) ∈ Transitions[M] ∧ (q, b, p) ∈ Transitions[M]) => a = b
+    }
+  }
+  
+  NOTATION {
+    "M ⊢ n1 ~> n2" = Reduce[M](n1) = n2
+    "M ⊢* n1 ~>! n2" = Halt[M](n2) ∧ (∃ (k : ℕ) . (M ⊢)^k (n1) = n2)
+  }
+  
+  TRANSFORMERS {
+    FUNC NextNet[M : ICMachine](n : Net) -> Net = {
+      LET (cs, ps, ws) = n
+      LET qs = {q | ∃ (c : Cell) . c ∈ cs ∧ c.Symbol = q}
+      LET ts = {(q, a, p) | (q, a, p) ∈ Transitions[M] ∧ q ∈ qs ∧ a ∈ Alphabet(cs)}
+      LET rs = {Interaction(a, b) | ((q1, a, _), (q2, b, _)) ∈ ts × ts ∧ Interaction(a, b) ≠ ∅}
+      LET n' = FoldL(rs, n, λ n' r . Substitution(n', r.Cells, r))
+      IF ∃ (c : Cell) . c ∈ n'.Cells ∧ c.Symbol = HaltState[M] THEN n' ELSE NextNet[M](n')
+    }
+    
+    PROC RunICM[M : ICMachine](input : List[Symbol]) -> Net = {
+      LET n = InitialNet[M](input)
+      WHILE not Halt[M](n):
+        n := Reduce[M](n)
+      RETURN n
+    }
+  }
+  
+  STRUCTURE ICMachine {
+    states : Set[State]
+    alphabet : Set[Symbol]
+    transitions : Set[Transition]
+    startState : State
+    haltState : State
+    
+    REQUIRE startState ∈ states
+    REQUIRE haltState ∈ states
+    REQUIRE ∀ ((q, a, p) : Transition) ∈ transitions . q ∈ states ∧ p ∈ states ∧ a ∈ alphabet
+  }
+  
+  PROOFS {
+    THEOREM ICMTuringEquivalence {
+      STATEMENT:
+              ∀ (f : List[Symbol] -> List[Symbol]) . Computable(f) <=>
+        ∃ (M : ICMachine) . ∀ (input : List[Symbol]) . 
+          Serialize(Run[M](input)) = f(input)
+          
+      PROOF:
+        ASSUME (H1) : Computable(f)
+        
+        LET M : TuringMachine = WitnessFor(H1)
+        LET I : ICMachine = ConstructICM(M)
+        
+        SHOW ∀ (input : List[Symbol]) . Serialize(Run[I](input)) = f(input) BY {
+          LET input : List[Symbol]
+          LET tapes_M = Run[M](input)
+          LET net_I = Run[I](input)
+          
+          REWRITE Serialize(net_I)
+            = Serialize(InitialNet[I](input) ~>! HaltNet[I]) 
+            = input BY SimulationLemma[M, I]
+            = tapes_M BY WitnessProperty(H1)
+            = f(input)
+        }
+        
+        HENCE ∃ (M : ICMachine) . ∀ (input : List[Symbol]) . 
+                Serialize(Run[M](input)) = f(input)
+        
+        CONVERSELY, ASSUME (H2) : ∃ (M : ICMachine) . ∀ (input : List[Symbol]) . 
+                                    Serialize(Run[M](input)) = f(input)
+        
+        LET I : ICMachine = WitnessFor(H2)
+        LET M : TuringMachine = ConstructTM(I)
+        
+        SHOW Computable(f) BY {
+          SUFFICES_TO_SHOW ∀ (input : List[Symbol]) . Run[M](input) = f(input)
+          
+          LET input : List[Symbol]
+          LET net_I = Run[I](input)
+          LET tapes_M = Run[M](input)
+          
+          REWRITE tapes_M
+            = Serialize(InitialNet[I](input) ~>! HaltNet[I]) BY SimulationLemma[I, M]  
+            = Serialize(net_I) BY WitnessProperty(H2)
+            = f(input)
+        }
+        
+        THEREFORE Computable(f) <=> ∃ (M : ICMachine) . ∀ (input : List[Symbol]) . 
+                                       Serialize(Run[M](input)) = f(input)
+        
+        QED
+    }
+  }
+}

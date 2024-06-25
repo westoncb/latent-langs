@@ -1,0 +1,193 @@
+CONCEPT DiscreteSpacetimeDynamics {
+  STRUCTURE {
+    [SpacetimeLattice := Regular lattice structure underlying spacetime]
+    [LatticeSite := Point in the spacetime lattice]
+    [LatticeField(x) := Field value at lattice site x]
+    [LatticeAction[Φ] := Action functional on the lattice field configuration Φ]
+    
+    [EntropicForce := (Disorder, Randomness, Equilibrium)]
+    [∀s ∈ SpacetimeLattice: Disorder(s) ⊩ Entropy(s)]
+    [∀(s1, s2) ∈ SpacetimeLattice × SpacetimeLattice: Randomness(s1, s2) ⊩ (Entropy(s1 + s2) ≥ Entropy(s1) + Entropy(s2))]
+    [∀s ∈ SpacetimeLattice: Equilibrium(s) ⊩ (dEntropy(s)/dt = 0)]
+
+    [SyntropicForce := (Order, Structure, Complexity)]
+    [∀s ∈ SpacetimeLattice: Order(s) ⊩ Negentropy(s)]
+    [∀s ∈ SpacetimeLattice: Structure(s) ⊩ Synergy(s)]
+    [∀s ∈ SpacetimeLattice: Complexity(s) ⊩ (Entropy(s) × Negentropy(s))]
+
+    [ActuativeForce := (Efficiency, Optimization, Stability)]
+    [∀Φ ∈ LatticeField: Efficiency(Φ) ⊩ (LatticeAction[Φ] = ∑_x (Kinetic(Φ(x)) - Potential(Φ(x))))]
+    [∀Φ ∈ LatticeField: Optimization(Φ) ⊩ (δLatticeAction[Φ] = 0)]
+    [∀s ∈ SpacetimeLattice: Stability(s) ⊩ (∀Φ ∈ LatticeField(s): Optimization(Φ))]
+
+    [∀s ∈ SpacetimeLattice: s ⊩ (EntropicForce(s) ⊕ SyntropicForce(s) ⊕ ActuativeForce(s))]
+  }
+
+  PROOFS {
+    tactic apply_entropic_force(s) :
+      assume s ∈ SpacetimeLattice
+      have Disorder(s) ⊩ Entropy(s) by EntropicForce_Disorder
+      have ∀(s1, s2) ∈ SpacetimeLattice × SpacetimeLattice: Randomness(s1, s2) ⊩ (Entropy(s1 + s2) ≥ Entropy(s1) + Entropy(s2)) by EntropicForce_Randomness
+      have Equilibrium(s) ⊩ (dEntropy(s)/dt = 0) by EntropicForce_Equilibrium
+    
+    tactic apply_syntropic_force(s) :
+      assume s ∈ SpacetimeLattice
+      have Order(s) ⊩ Negentropy(s) by SyntropicForce_Order
+      have Structure(s) ⊩ Synergy(s) by SyntropicForce_Structure
+      have Complexity(s) ⊩ (Entropy(s) × Negentropy(s)) by SyntropicForce_Complexity
+    
+    tactic apply_actuative_force(s) :
+      assume s ∈ SpacetimeLattice
+      let Φ ∈ LatticeField(s)
+      have Efficiency(Φ) ⊩ (LatticeAction[Φ] = ∑_x (Kinetic(Φ(x)) - Potential(Φ(x)))) by ActuativeForce_Efficiency
+      have Optimization(Φ) ⊩ (δLatticeAction[Φ] = 0) by ActuativeForce_Optimization
+      have Stability(s) ⊩ (∀Φ ∈ LatticeField(s): Optimization(Φ)) by ActuativeForce_Stability
+    
+    theorem discrete_spacetime_dynamics :
+      ∀s ∈ SpacetimeLattice: s ⊩ (EntropicForce(s) ⊕ SyntropicForce(s) ⊕ ActuativeForce(s))
+    {
+      assume s ∈ SpacetimeLattice
+      apply_entropic_force(s);
+      apply_syntropic_force(s);
+      apply_actuative_force(s);
+      conclude s ⊩ (EntropicForce(s) ⊕ SyntropicForce(s) ⊕ ActuativeForce(s)) by DiscreteSpacetimeDynamics_Balance
+    }
+  }
+
+  LANGUAGE {
+    type SpacetimeLattice
+    type LatticeSite
+    type LatticeField(x : LatticeSite)
+    type LatticeAction[Φ : LatticeField]
+    type Entropy(s : SpacetimeLattice)
+    type Negentropy(s : SpacetimeLattice)
+    type Synergy(s : SpacetimeLattice)
+    type Kinetic(x : LatticeSite)
+    type Potential(x : LatticeSite)
+
+    func "d" _ "/" "dt" (f : Function) : Derivative // Time derivative
+    func "∑_" (i : Indexer) : Sum // Lattice sum
+    func "δ" (f : Function) : Variation // Variation of a functional
+
+    pred "⊩" (A : Proposition, B : Proposition) // A entails B
+    pred "⊕" (A : Proposition, B : Proposition) // Exclusive or
+  }
+}
+
+
+
+
+CONCEPT EinsteinFieldEquations {
+  STRUCTURE {
+    [SpacetimeLattice := Regular lattice structure underlying spacetime]
+    [LatticeSite := Point in the spacetime lattice]
+    [LatticeField(x) := Field value at lattice site x]
+    [LatticeAction[Φ] := Action functional on the lattice field configuration Φ]
+    
+    [Curvature(x) := Measure of spacetime curvature at lattice site x]
+    [StressEnergy(x) := Measure of matter and energy content at lattice site x]
+    
+    [∀x ∈ LatticeSite: Curvature(x) ⊩ (Ricci(x) - ½ R(x) Metric(x))]
+    [∀x ∈ LatticeSite: StressEnergy(x) ⊩ (Pressure(x) + Density(x))]
+    
+    [∀Φ ∈ LatticeField: LatticeAction[Φ] = ∑_x (Curvature(x) - κ StressEnergy(x))]
+    [κ := 8πG/c^4] // Einstein gravitational constant
+  }
+
+  PROOFS {
+    tactic vary_action(Φ) :
+      let δΦ ∈ LatticeField
+      have δLatticeAction[Φ] = ∑_x (δCurvature(x) - κ δStressEnergy(x)) by definition of LatticeAction
+      have δLatticeAction[Φ] = ∑_x (δRicci(x) - ½ δR(x) Metric(x) - κ δStressEnergy(x)) by Curvature_Definition
+      have δLatticeAction[Φ] = ∑_x (δRicci(x) - ½ Metric(x) δR(x) - κ δStressEnergy(x)) by metric_variation_zero
+      have δLatticeAction[Φ] = 0 by ActuativeForce_Optimization
+
+    theorem einstein_field_equations :
+      ∀x ∈ LatticeSite: Ricci(x) - ½ R(x) Metric(x) = κ StressEnergy(x)
+    {
+      assume Φ ∈ LatticeField
+      vary_action(Φ);
+      have ∑_x (δRicci(x) - ½ Metric(x) δR(x) - κ δStressEnergy(x)) = 0 by variation_principle
+      have ∀x ∈ LatticeSite: δRicci(x) - ½ Metric(x) δR(x) - κ δStressEnergy(x) = 0 by fundamental_lemma_of_calculus_of_variations
+      conclude ∀x ∈ LatticeSite: Ricci(x) - ½ R(x) Metric(x) = κ StressEnergy(x) by stress_energy_conservation
+    }
+  }
+
+  LANGUAGE {
+    type SpacetimeLattice
+    type LatticeSite
+    type LatticeField(x : LatticeSite)
+    type LatticeAction[Φ : LatticeField]
+    type Curvature(x : LatticeSite)
+    type StressEnergy(x : LatticeSite)
+    type Ricci(x : LatticeSite)
+    type Metric(x : LatticeSite)
+    type Pressure(x : LatticeSite)
+    type Density(x : LatticeSite)
+
+    func "∑_" (i : Indexer) : Sum // Lattice sum
+    func "δ" (f : Function) : Variation // Variation of a functional
+    func R (x : LatticeSite) : Scalar // Ricci scalar curvature
+
+    pred "⊩" (A : Proposition, B : Proposition) // A entails B
+  }
+}
+
+
+
+
+CONCEPT SchrodingerEquation {
+  STRUCTURE {
+    [SpacetimeLattice := Regular lattice structure underlying spacetime]
+    [LatticeSite := Point in the spacetime lattice]
+    [LatticeField(x) := Field value at lattice site x]
+    [LatticeAction[Φ] := Action functional on the lattice field configuration Φ]
+    
+    [WaveFunction(x, t) := Quantum state at lattice site x and time t]
+    [Hamiltonian(x, t) := Energy operator at lattice site x and time t]
+    
+    [∀(x, t) ∈ LatticeSite × Time: WaveFunction(x, t) ⊩ ⟨x|Ψ(t)⟩]
+    [∀(x, t) ∈ LatticeSite × Time: Hamiltonian(x, t) ⊩ ⟨x|H(t)|x⟩]
+    
+    [∀Φ ∈ LatticeField: LatticeAction[Φ] = ∑_(x,t) (⟨Ψ(x, t)|i ℏ ∂/∂t|Ψ(x, t)⟩ - ⟨Ψ(x, t)|H(x, t)|Ψ(x, t)⟩)]
+    [ℏ := h/2π] // Reduced Planck constant
+    [i := √(-1)] // Imaginary unit
+  }
+
+  PROOFS {
+    tactic vary_action(Φ) :
+      let δΦ ∈ LatticeField
+      have δLatticeAction[Φ] = ∑_(x,t) (⟨δΨ(x, t)|i ℏ ∂/∂t|Ψ(x, t)⟩ + ⟨Ψ(x, t)|i ℏ ∂/∂t|δΨ(x, t)⟩ - ⟨δΨ(x, t)|H(x, t)|Ψ(x, t)⟩ - ⟨Ψ(x, t)|H(x, t)|δΨ(x, t)⟩) by definition of LatticeAction
+      have δLatticeAction[Φ] = ∑_(x,t) (⟨δΨ(x, t)|i ℏ ∂/∂t - H(x, t)|Ψ(x, t)⟩ + ⟨Ψ(x, t)|i ℏ ∂/∂t - H(x, t)|δΨ(x, t)⟩) by linearity of inner product
+      have δLatticeAction[Φ] = 0 by ActuativeForce_Optimization
+
+    theorem schrodinger_equation :
+      ∀(x, t) ∈ LatticeSite × Time: i ℏ ∂/∂t |Ψ(x, t)⟩ = H(x, t) |Ψ(x, t)⟩
+    {
+      assume Φ ∈ LatticeField
+      vary_action(Φ);
+      have ∑_(x,t) (⟨δΨ(x, t)|i ℏ ∂/∂t - H(x, t)|Ψ(x, t)⟩ + ⟨Ψ(x, t)|i ℏ ∂/∂t - H(x, t)|δΨ(x, t)⟩) = 0 by variation_principle
+      have ∀(x, t) ∈ LatticeSite × Time: ⟨δΨ(x, t)|i ℏ ∂/∂t - H(x, t)|Ψ(x, t)⟩ + ⟨Ψ(x, t)|i ℏ ∂/∂t - H(x, t)|δΨ(x, t)⟩ = 0 by fundamental_lemma_of_calculus_of_variations
+      have ∀(x, t) ∈ LatticeSite × Time: ⟨δΨ(x, t)|i ℏ ∂/∂t - H(x, t)|Ψ(x, t)⟩ = 0 by conjugate_symmetry_of_hamiltonian
+      conclude ∀(x, t) ∈ LatticeSite × Time: i ℏ ∂/∂t |Ψ(x, t)⟩ = H(x, t) |Ψ(x, t)⟩ by fundamental_lemma_of_calculus_of_variations
+    }
+  }
+
+  LANGUAGE {
+    type SpacetimeLattice
+    type LatticeSite
+    type LatticeField(x : LatticeSite)
+    type LatticeAction[Φ : LatticeField]
+    type WaveFunction(x : LatticeSite, t : Time)
+    type Hamiltonian(x : LatticeSite, t : Time)
+    type Time
+
+    func "∑_" (i : Indexer) : Sum // Lattice sum
+    func "δ" (f : Function) : Variation // Variation of a functional
+    func "⟨" _ "|" (ψ : WaveFunction) : Bra // Bra vector
+    func "|" _ "⟩" (ψ : WaveFunction) : Ket // Ket vector
+    func "∂" "/" "∂" _ (f : Function, x : Variable) : PartialDerivative // Partial derivative
+
+    pred "⊩" (A : Proposition, B : Proposition) // A entails B
+  }
+}

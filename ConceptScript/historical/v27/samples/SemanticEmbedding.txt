@@ -1,0 +1,79 @@
+CONCEPT SemanticEmbedding {
+  NOTATION {
+    v_E = embed(v)
+    sim(u, v) = cosine(u_E, v_E)
+    compose(u, v) = u_E + v_E
+    project(v, C) = argmax_{u ∈ C} sim(u, v) 
+  }
+
+  LANGUAGE {
+    TYPE Vector = Tensor[N]
+    TYPE Embedding = Tensor[D]
+    TYPE Vocab = Set<Vector>
+    TYPE Corpus = [Vocab]
+    
+    FUNC embed[N, D] : Vector[N] -> Embedding[D] = v => W · v + b
+      WHERE W : Tensor[D, N], b : Tensor[D]
+
+    FUNC cosine[D] : (Embedding[D], Embedding[D]) -> Real = (u, v) => (u · v) / (|u| * |v|)
+    
+    FUNC nearestNeighbor[D] : (Embedding[D], Corpus) -> Vector =  
+      (v, C) => argmax_{u ∈ C} cosine[D](embed[N, D](u), v)
+  }
+
+  STRUCTURES {
+    STRUCTURE SemanticSpace[N, D] EXTENDS MetricSpace[D] {
+      FIELD vocab : Vocab[N]
+      FIELD w : Tensor[D, N]
+      FIELD b : Tensor[D]
+
+      COMPUTE distance(u: Vector, v: Vector) : Real = 1 - cosine[D](embed[N, D](u), embed[N, D](v))
+      COMPUTE analogy(u: Vector, v: Vector, w: Vector) : Vector =
+        nearestNeighbor[D](compose(compose(u_E, -v_E), w_E), vocab)  
+    }
+  }
+
+  TRANSFORMERS {
+    SIMPLIFY EmbeddingLinearity[N, D] : α · u_E + β · v_E -> (α · u + β · v)_E
+    REWRITE CosineSimilarity : cosine[D](u_E, v_E) ->  (u · v) / (SQRT(u · u) * SQRT(v · v))
+  }
+
+  PROOFS {
+    PROOF AnalogicalReasoning[N, D] : ∀ S : SemanticSpace[N, D], u, v, w, x : Vector . 
+      (S.distance(u, v) = S.distance(w, x) ∧ 
+       S.distance(u, w) = S.distance(v, x)) => S.analogy(u, v, w) = x {
+         
+      GIVEN S : SemanticSpace[N, D]; u, v, w, x : Vector
+      ASSUME S.distance(u, v) = S.distance(w, x),
+             S.distance(u, w) = S.distance(v, x)
+      
+      compose(compose(u_E, -v_E), w_E)
+        == (u - v + w)_E                       BY DEF of compose, EmbeddingLinearity
+        == (u - v)_E + w_E                     BY VectorDistributivity
+        == ((u_E - v_E) · (w_E - x_E) = 0 ∧
+            (u_E - w_E) · (v_E - x_E) = 0)     BY ASSUMPTION, DEF of distance, CosineSimilarity     
+        == x_E                                 BY properties of vector projection
+             
+      S.analogy(u, v, w) 
+        == nearestNeighbor[D](compose(compose(u_E, -v_E), w_E), S.vocab)   BY DEF of analogy
+        == nearestNeighbor[D](x_E, S.vocab)                                BY above
+        == x                                                               BY DEF of nearestNeighbor
+      
+      QED   
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE WordVectors IS SemanticSpace[100000, 300] {
+      FIELD vocab = Set<"cat", "dog", "house", ..., "stock_market">
+      FIELD w = RANDOM_NORMAL[300, 100000]
+      FIELD b = ZERO[300]
+
+      EXAMPLE AnalogicalReasoning = 
+        LET u = vocab["king"], 
+            v = vocab["man"],
+            w = vocab["woman"] IN
+        analogy(u, v, w) = vocab["queen"]
+    }
+  }
+}

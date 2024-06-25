@@ -1,0 +1,99 @@
+CONCEPT ComputationalPhysicalCorrespondence {
+  LANGUAGE {
+    type Comp = Program | Circuit | AutomataType(𝓝: ℕ) | TuringMachine | Lambda(𝓣: Type)
+    type Phys = System | Process | Dynamics | Field(𝓜: Manifold, 𝓥: VectorSpace)
+    type Corr = Realize(Comp, Phys) | Implement(Comp, Phys)
+
+    notation "C ⇒ P" = Realize(C: Comp, P: Phys)
+    notation "C ⊨ P" = Implement(C: Comp, P: Phys)
+    notation "⟦C⟧" = Semantics(C: Comp)
+    notation "𝓔(P)" = Evolution(P: Phys)
+    notation "Init(P)" = InitialState(P: Phys)
+    notation "𝓒(P)" = Observables(P: Phys)
+  }
+
+  STRUCTURE {
+    ComputationalComplexity(C: Comp): {
+      Time(C): ℕ,
+      Space(C): ℕ
+    }
+
+    PhysicalComplexity(P: Phys): {
+      Dimension(P): ℕ,
+      Interactions(P): ℕ  
+    }
+    
+    ComputationalInference(C: Comp, A: Type, B: Type): {
+      C ⊢ A -> B   
+    }
+
+    PhysicalDeduction(P: Phys, A: 𝓒(P), B: 𝓒(P)): {
+      P ⊨ A ~> B  
+    }
+  }
+
+  THEOREMS {
+    theorem Simulation:
+      ∀C: Comp, P: Phys. (C ⇒ P) ->
+        ∀t: Time. ⟦C⟧(t) = 𝓔(P)(Init(P), t)  
+      
+    theorem Inference:
+      ∀C: Comp, P: Phys. (C ⊨ P) ->  
+        ∀A, B: Type. (C ⊢ A -> B) ->
+          ∃Â, B̂: 𝓒(P). (P ⊨ Â ~> B̂) ∧ (Â = Encode(A)) ∧ (B̂ = Encode(B))
+
+    theorem Complexity: 
+      ∀C: Comp, P: Phys. (C ⇒ P) -> 
+        TimeComplexity(C) = Θ(Dimension(P)) ∧ 
+        SpaceComplexity(C) = O(Interactions(P))
+  }
+}
+
+
+
+CONCEPT SyntacticSemanticCorrespondence {
+  LANGUAGE {
+    type Syntactic
+    type Semantic
+    type Interpretation(Syntactic, Semantic)
+    type SyntacticTransformation(Syntactic, Syntactic)
+    type SemanticTransformation(Semantic, Semantic)
+
+    notation "S ⊨ T" = Interpretation(S: Syntactic, T: Semantic)
+    notation "S1 ⊢ S2" = SyntacticTransformation(S1: Syntactic, S2: Syntactic)
+    notation "T1 ⟹ T2" = SemanticTransformation(T1: Semantic, T2: Semantic)
+
+    axiom Satisfaction(S: Syntactic, T: Semantic): (S ⊨ T) ⇒ Truth(T)
+    axiom Preservation(S1: Syntactic, S2: Syntactic, T: Semantic):
+      (S1 ⊢ S2) ∧ (S1 ⊨ T) ⇒ (S2 ⊨ T)
+  }
+
+  STRUCTURE {
+    SyntacticConsistency(S: Syntactic): ¬(S ⊢ Contradiction)
+    SemanticEntailment(T1: Semantic, T2: Semantic): (T1 ⟹ T2) ⇔ ∀S. (S ⊨ T1) ⇒ (S ⊨ T2)
+    SoundnessCompleteness(L: Syntactic, M: Semantic): 
+      ∀S: L. ∀T: M. (S ⊢ T) ⇔ (S ⊨ T)
+  }
+
+  PROOFS {
+    theorem Satisfaction_Preservation:
+      ∀S1, S2: Syntactic, T: Semantic. (S1 ⊢ S2) ∧ (S1 ⊨ T) ⇒ (S2 ⊨ T)
+    {
+      assume S1, S2: Syntactic, T: Semantic, (S1 ⊢ S2), (S1 ⊨ T)
+      (S2 ⊨ T) by Preservation(S1, S2, T)
+    }
+
+    theorem SoundnessCompleteness_Consistency:
+      ∀L: Syntactic, M: Semantic. SoundnessCompleteness(L, M) ⇒ SyntacticConsistency(L)
+    {
+      assume L: Syntactic, M: Semantic, SoundnessCompleteness(L, M)
+      suppose ¬SyntacticConsistency(L)
+      let S: L such that (S ⊢ Contradiction)
+      (S ⊨ Contradiction) by SoundnessCompleteness(L, M)
+      SemanticEntailment(Contradiction, T) for any T
+      (S ⊨ T) for any T
+      SoundnessCompleteness(L, M) fails
+      contradiction
+    }
+  }
+}

@@ -1,0 +1,86 @@
+CONCEPT DifferentialCohomology {
+  LANGUAGE {
+    type Space = Top | Smooth | Complex | Kahler
+    type Bundle = Principal(G: Grp, M: Space) | Associated(P: Principal, F: Space) 
+    type Conn = Connection(P: Principal)
+    type Curv = Curvature(A: Conn)
+
+    notation "Ω^k(M, F)" = DifferentialForms(M: Space, F: Space, k: ℕ)
+    notation "A(P)" = SpaceOfConnections(P: Principal)
+    notation "dₐ" = ExteriorCovariantDerivative(A: Conn)
+    notation "Fₐ" = Curvature(A: Conn)
+    notation "I(A)" = Holonomy(A: Conn)
+    notation "Bun(M, G)" = PrincipalBundles(M: Space, G: Grp)
+    notation "C(M, G)" = SmoothMaps(M: Space, G: Grp)
+    notation "Z^k(M, S¹)" = DiffCocycles(M: Space, k: ℕ) = {f ∈ C(M, S¹) | f* = 0 ∈ H^{k+1}(M, ℤ)}
+    notation "B^k(M, S¹)" = DiffCoboundaries(M: Space, k: ℕ) = {f ∈ C(M, S¹) | ∃g ∈ C(M, ℝ). f = exp(2πig)}
+    notation "Ĥ^k(M, S¹)" = DiffCohomology(M: Space, k: ℕ) = Z^k(M, S¹) / B^k(M, S¹)
+
+    axiom CharacteristicClass(P: Principal, G: Grp):
+      ∀f: P -> G. f* = F_A for some A ∈ A(P)
+  }
+
+  STRUCTURE {
+    ChernWeilHom(P: Principal, G: Grp):
+      cw: Sym(g)^G -> H*(M, ℝ)
+      cw(I(F_A)) = [F_A]
+
+    DiffExtension(M: Space, G: Grp):
+      0 -> Ω^{k-1}(M) / Ω^{k-1}_ℤ(M) ->a→ Ĥ^k(M) ->r→ H^k(M, G) ->d→ Ω^k(M) / Ω^k_ℤ(M) -> 0
+      r(a(ω)) = [ω], d(c) = F_A
+
+    HolonomyMap(P: Principal, G: Grp):
+      hol: A(P) -> Hom(π₁(M), G)
+      ∀γ: [S¹, M]. exp∫_{[0,1]} γ*A = hol(A)(γ)
+  }
+  
+  PROOFS {
+    tactic Classify(P: Principal, G: Grp): 
+    {
+      have ∃!f: P -> G. df = F_A  ; Characteristic class
+      let Bun(M, G) ≅ H¹(M, G) ; Classification of bundles
+      let Ĥ¹(M) ↣ H¹(M, G) ; Differential extension
+      hence Ĥ¹(M) classifies (P, A)  
+    }
+    
+    theorem ChernWeil(P: Principal, G: Grp): 
+      ∀I ∈ Sym(g)^G. dI(F_A) = 0
+    {
+      assume I ∈ Sym(g)^G
+      have L_X(I(F)) = I(L_X(F)) ; Naturality of I
+      have L_X(F) = D_AF(X)  ; Bianchi identity
+      have D_A(I(F)) = 0  ; I is closed
+      hence dI(F_A) = 0
+    }
+
+    theorem DiffExtensionFunctor(M: Space, G: Grp):  
+      Ĥ: Space -> AbGrp
+    {  
+      @Classify P G
+      have Ĥ^k(f: X -> Y) = (pullback f along r)  ; Functorial on maps
+      have Ĥ^k(pt) = G ; Coefficient group
+      have Ĥ^k(X ⊔ Y) = Ĥ^k(X) × Ĥ^k(Y)  ; Additivity
+      have Ĥ^k(X × Y) = ⊕ᵢ₊ⱼ₌ₖ Ĥ^i(X) ⊗ Ĥ^j(Y)  ; Künneth formula
+      hence Ĥ: Space -> AbGrp
+    }
+
+    theorem GaugeAction(M: Space, G: Grp, P: Principal, A: Conn):
+      C(M, G) ↷ A(P)
+    {
+      let g ∈ C(M, G), A ∈ A(P)  
+      define action: g.A = g*A*g⁻¹ + g*dg⁻¹  ; Gauge transform
+      have F_{g.A} = g*F_A*g⁻¹  ; Equivariance of curvature
+      have hol(g.A)(γ) = g(γ(0))⁻¹ * hol(A)(γ) * g(γ(1))  ; Equivariance of holonomy
+    }
+
+    theorem AnomalyFormula(M: Space, G: Grp, A: Conn, g: C(M, G)):
+      a(g.A) - a(A) = g*[F_A] - CS(A, g) mod ℤ
+    {
+      define CS(A, g) = ∫_M ⟨A ∧ g*dg⁻¹⟩  ; Chern-Simons form
+      assume a(A) ∈ Ω^{k-1}(M) with [F_A] = r(a(A))
+      have a(g.A) - a(A) = b for some b ∈ B^k(M)
+      have [F_{g.A}] - [F_A] = g*[F_A] - [F_A]
+      have b = CS(A, g) mod ℤ ; Anomaly inflow
+    }
+  }  
+}

@@ -1,0 +1,97 @@
+CONCEPT SemanticBoltzmannMachine {
+  LANGUAGE {
+    TYPE SemanticUnit
+    TYPE SemanticFeature
+    TYPE SemanticState = [0..1]^Units  -- Binary vector over Units
+    TYPE SemanticEnergy = Real
+
+    FUNC Energy(s : SemanticState, θ : Parameters) : SemanticEnergy = 
+      - SUM(θ.a[u] * s[u], u : SemanticUnit) 
+      - SUM(θ.w[u,v] * s[u] * s[v], (u,v) : SemanticUnit × SemanticUnit)
+      - SUM(θ.h[f] * FeatureActivation(f, s), f : SemanticFeature)
+    
+    FUNC Probability(s : SemanticState, θ : Parameters) : Real = 
+      Exp(-Energy(s, θ)) / PartitionFunction(θ)
+    
+    FUNC PartitionFunction(θ : Parameters) : Real = 
+      SUM(Exp(-Energy(s, θ)), s : SemanticState)
+
+    FUNC FeatureActivation(f : SemanticFeature, s : SemanticState) : [0..1] = 
+      σ(SUM(θ.v[f,u] * s[u], u : SemanticUnit) - θ.b[f]) 
+      WHERE σ(x) = 1 / (1 + Exp(-x))
+  }
+
+  STRUCTURE Parameters {
+    LET a : SemanticUnit -> Real             -- Unit biases
+    LET w : SemanticUnit × SemanticUnit -> Real   -- Pairwise weights
+    LET h : SemanticFeature -> Real          -- Feature biases  
+    LET v : SemanticFeature × SemanticUnit -> Real  -- Feature-Unit weights
+    LET b : SemanticFeature -> Real          -- Feature thresholds
+  }
+
+  STRUCTURE SemanticSpace {
+    LET Units : SET(SemanticUnit)
+    LET Features : SET(SemanticFeature)
+    LET θ : Parameters
+  }
+
+  STRUCTURE Dynamics {
+    FUNC GibbsSample(s : SemanticState, θ : Parameters) : SemanticState = {
+      FOR EACH u : SemanticUnit DO
+        LET p = σ(SUM(θ.w[u,v] * s[v], v : SemanticUnit) + θ.a[u])
+        s[u] := Bernoulli(p)
+      RETURN s
+    }
+
+    FUNC FeatureInfluence(s : SemanticState, f : SemanticFeature, θ : Parameters) : SemanticState = {
+      LET p[u] = σ(SUM(θ.w[u,v] * s[v], v : SemanticUnit) + θ.a[u] + θ.v[f,u] * θ.h[f])
+      FOR EACH u : SemanticUnit DO
+        s[u] := Bernoulli(p[u])
+      RETURN s
+    }
+
+    FUNC Sample(θ : Parameters, t : Nat) : SemanticState = {
+      LET s = (u ↦ Bernoulli(0.5) | u : SemanticUnit)  -- Random initialization
+      REPEAT t TIMES
+        s := GibbsSample(s, θ)
+      RETURN s
+    }
+  }
+
+  STRUCTURE Learning {
+    FUNC LearnParameters(D : SET(SemanticState), η : Real, T : Nat) : Parameters = {
+      LET θ = RandomParameters()
+      REPEAT UNTIL Converged DO
+        LET s_pos = CHOOSE(s : SemanticState FROM D)
+        LET s_neg = Sample(θ, T)
+        FOR EACH u : SemanticUnit DO
+          θ.a[u] += η * (s_pos[u] - s_neg[u])
+        FOR EACH (u,v) : SemanticUnit × SemanticUnit DO  
+          θ.w[u,v] += η * (s_pos[u] * s_pos[v] - s_neg[u] * s_neg[v])
+        FOR EACH f : SemanticFeature DO
+          LET Δ = FeatureActivation(f, s_pos) - FeatureActivation(f, s_neg)
+          θ.h[f] += η * Δ
+          θ.b[f] -= η * Δ
+          FOR EACH u : SemanticUnit DO
+            θ.v[f,u] += η * (s_pos[u] * FeatureActivation(f, s_pos) - s_neg[u] * FeatureActivation(f, s_neg))
+      RETURN θ
+    }
+  }
+
+  STRUCTURE Inference {
+    FUNC InferUnits(s_partial : SemanticState, θ : Parameters, t : Nat) : SemanticState = {
+      LET s = s_partial
+      FOR EACH u : SemanticUnit WHERE s[u] = Unknown DO
+        s[u] := Bernoulli(0.5)  -- Random initialization for unknown units
+      REPEAT t TIMES
+        s := GibbsSample(s, θ)
+        FOR EACH u : SemanticUnit WHERE s_partial[u] ≠ Unknown DO
+          s[u] := s_partial[u]  -- Clamp known units
+      RETURN s
+    }
+
+    FUNC InferFeatures(s : SemanticState, θ : Parameters) : SET(SemanticFeature) = {
+      RETURN {f : SemanticFeature | FeatureActivation(f, s) > 0.5}
+    }
+  }
+}

@@ -1,0 +1,102 @@
+CONCEPT MultidisciplinaryThinking {
+  LANGUAGE {
+    TYPE Discipline
+    TYPE Idea
+    TYPE Model
+    TYPE Bucket = (Universe | Biology | HumanHistory)
+    
+    FUNC Derive(idea: Idea, disciplines: List[Discipline]) -> Model
+    FUNC Validate(model: Model, buckets: List[Bucket]) -> Bool
+    
+    PRED Simple(model: Model) = 
+      ∀ p. Person(p) => Understand(p, model)
+    PRED Powerful(model: Model) =
+      ∀ b. Bucket(b) => Predicts(model, b)
+  }
+  
+  STRUCTURE MirroredReciprocity EXTENDS Model {
+    AXIOM InorganicUniverse {
+      ∀ a b. Action(a) ∧ Body(b) => Reaction(b, a) = -a 
+    }
+    AXIOM Biology {
+      ∀ x y. Organism(x) ∧ Organism(y) => Behavior(x, y) = Behavior(y, x)
+    }
+    AXIOM HumanInteraction {
+      ∀ p q. Person(p) ∧ Person(q) => Attitude(p, q) = Attitude(q, p)
+    }
+  }
+  
+  STRUCTURE CompoundInterest EXTENDS Model {
+    AXIOM InorganicUniverse {
+      ∀ p n. Process(p) ∧ Time(n) => 
+        Outcome(p, n) = Exponential(Incremental(p), n)
+    }
+    AXIOM Biology {
+      ∀ s n. Species(s) ∧ Time(n) => 
+        Population(s, n) = Exponential(Reproduction(s), n)
+    }
+    AXIOM HumanProgress {
+      ∀ p n. Person(p) ∧ Time(n) => 
+        Ability(p, n) = Exponential(Practice(p), n)
+    }
+  }
+  
+  STRUCTURE TrustBuilding EXTENDS Model {
+    AXIOM Attention  { ∀ p. Person(p) => Need(p, PaidAttentionTo) }
+    AXIOM Listening  { ∀ p. Person(p) => Need(p, ListenedTo) } 
+    AXIOM Respect    { ∀ p. Person(p) => Need(p, Respected) }
+    AXIOM Meaning    { ∀ p. Person(p) => Need(p, Meaning) }
+    AXIOM Love       { ∀ p. Person(p) => Need(p, LovedFor(Flaws(p))) }
+    
+    THEOREM Manipulation {
+      ∀ x y. Being(x) ∧ Being(y) => 
+        Provides(x, Needs(y)) <=> Manipulates(x, y)
+    }
+    
+    THEOREM Leadership {
+      ∀ x y. Person(x) ∧ Person(y) => 
+        Provides(x, Needs(y)) => Follows(y, x) ∧ TrustsIn(y, x)  
+    }
+  }
+  
+  STRUCTURE WinWinFramework EXTENDS Model {
+    AXIOM Customers   { ∀ b c. Business(b) ∧ Customer(c, b) => Satisfy(b, Needs(c)) }
+    AXIOM Employees   { ∀ b e. Business(b) ∧ Employee(e, b) => Engage(b, e) ∧ Motivate(b, e) }  
+    AXIOM Suppliers   { ∀ b s. Business(b) ∧ Supplier(s, b) => FairTerms(b, s) ∧ PayOnTime(b, s) }
+    AXIOM Owners      { ∀ b o. Business(b) ∧ Owner(o, b) => Communicate(b, o) ∧ ReturnCapital(b, o) }
+    AXIOM Regulators  { ∀ b r. Business(b) ∧ Regulator(r, b) => Transparent(b, r) ∧ Comply(b, r) }
+    AXIOM Communities { ∀ b c. Business(b) ∧ Community(c, b) => Support(b, c) ∧ Contribute(b, c) }
+      
+    THEOREM Optimization {
+      ∀ b. Business(b) => 
+        WinWin(b, Stakeholders(b)) <=> Optimal(Outcomes(b))
+    }
+    
+    THEOREM Longevity {
+      ∀ b. Business(b) =>
+        WinWin(b, Stakeholders(b)) => Sustainable(b) ∧ LongTerm(Success(b))
+    }
+  }
+  
+  PROOFS {
+    THEOREM MultidisciplinaryPower {
+      ASSUME ∀ i d. Idea(i) ∧ Discipline(d) => Derive(i, List(d)) = Model(i, d)
+      ASSUME ∀ m b. Model(m) ∧ Bucket(b) => Validate(m, List(b)) <=> Powerful(m)
+      
+      PROVE ∀ i d. Idea(i) ∧ List(Discipline)(d) => 
+              LET m = Derive(i, d) IN Simple(m) ∧ Powerful(m)
+      PROOF {
+        LET i, d, m = Derive(i, d)
+        SHOW Simple(m) BY {
+          ASSUME ∀ p. Person(p) 
+          PROVE Understand(p, m) BY Intuitive(m) ∧ ClearLanguage(m) ∧ GoodStories(m)
+        }
+        SHOW Powerful(m) BY {
+          PROVE ∀ b. Bucket(b) => Validate(m, List(b)) 
+          PROVE Validate(m, List(Universe, Biology, HumanHistory))
+            BY LargeRelevantSamples(Universe, Biology, HumanHistory)
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,216 @@
+CONCEPT AttentiveShapeAnalysis {
+  PARAMETERS {
+    d : Nat -- Ambient dimension
+    𝕜 : Field -- Coefficient field
+    h : Nat -- Number of attention heads
+  }
+
+  CONTEXT {
+    TYPES {
+      Shape := CS(ℝ^d)
+      DIR := 𝕊^(d-1)
+      Cover := {U_i ↪ M}
+      MPD := Multiset(Δ)
+      Δ := {(b, d) | b ≤ d}
+      Seq(T) := FUNC(Fin(N), T)
+      ShapeFeature := ℝ^m -- m-dimensional feature vector
+    }
+    
+    STRUCTURES {
+      STRUCTURE APHT EXTENDS PHT {
+        FIELD f_M : Z_M -> DIR × ℝ × ShapeFeature
+        FIELD APHT_M := R(f_M)_*𝕜_Z_M IN D^b(Shv(DIR × ℝ × ShapeFeature))
+        FIELD APHT^i_M := H^i(APHT_M) IN Shv(DIR × ℝ × ShapeFeature)
+        FIELD Dgm_M(i, v, feat) -> MPD
+          WHERE ∃ p : ℝ × ShapeFeature -> MPD . 
+            Dgm_M(i, v, feat) = p(v, feat) AND 
+            p = Dgm(APHT^i_M|_{v}×ℝ×{feat})
+      }
+      
+      STRUCTURE AttentiveLS EXTENDS APHT, LS {
+        FIELD AttentionMechanism : Attention(ShapeFeature, ShapeFeature, MPD)
+        FIELD AECT_M(v, t, feat) := AttentionMechanism(
+          feat,
+          Seq(f_M(x, v', t') for (x, v', t') in Z_M),
+          Seq(ECT_M(v', t') for (x, v', t') in Z_M)
+        )
+        FIELD ABCT_M(v, t, feat) := AttentionMechanism(
+          feat,
+          Seq(f_M(x, v', t') for (x, v', t') in Z_M),
+          Seq(BCT_M(v', t') for (x, v', t') in Z_M)
+        )
+        AXIOM AECT_ABCT: AECT_M(v, t, feat) = <ABCT_M(v, t, feat), 1>
+      }
+      
+      STRUCTURE AttentiveMet EXTENDS Met {
+        FIELD AttentionMechanism : Attention(ShapeFeature, ShapeFeature, ℝ≥0)
+        OVERRIDE d(M : Shape, N : Shape) := AttentionMechanism(
+          GlobalFeature(M),
+          Seq(LocalFeature(x) for x in SamplePoints(M)),
+          Seq(LocalDistance(x, N) for x in SamplePoints(M))
+        )
+        AXIOM AttentiveMetricProperties {
+          ∀ M N. M ≃ N => d(M,N) = 0
+          ∀ M N O. d(M,O) ≤ d(M,N) + d(N,O)
+        }
+      }
+    }
+    
+    ASSERTIONS {
+      AXIOM isManifold(M : Shape) => AttentiveLS(M)
+      AXIOM AttentiveDescent(M : Shape, 𝓤 : Cover) 
+        APHT_M ≃ holim[ ∏ APHT_U -> ∏ APHT_{U ∩ V} ⇉ ∏ APHT_{U ∩ V ∩ W} ⋯ ] 
+                           U           U,V               U,V,W            
+    }
+    
+    NOTATION {
+      ⟨_, _⟩ := InnerProduct
+      Shv := Shv(DIR × ℝ × ShapeFeature, 𝕜)
+      D^b := D^b(Shv)
+      "_|_A" := Restrict(_, A)
+      ≃ := WeakEquivalence  
+      ∫ := Integral
+      χ := EulerCharacteristic
+      β_i := BettiNumber(_, i)
+      R := DerivedDirectImage
+      H^i := CohomologyFunctor(_, i)
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE AttentiveIntervalDecomp(M : Shape) {
+      Dgm_M(i, v, feat) = AttentionMechanism(
+        feat,
+        Seq(LocalFeature(I) for I in π₀(ABCT_M(v, ?))),
+        Seq(GenDgm(β_i(M_I)) for I in π₀(ABCT_M(v, ?)))
+      )
+        WHERE M_I := Sublevel(M, ⟨v, ?⟩, I)
+    }
+    
+    SIMPLIFY AttentivePartialI(i, v, t : ℝ, feat : ShapeFeature | d(v, v') < ε AND |t-t'| < ε AND ‖feat - feat'‖ < δ) -> ℝ≥0 {
+      ‖ABCT_M(v, t, feat) - ABCT_M(v', t', feat')‖ ≤ 
+        AttentionMechanism(
+          feat,
+          Seq(LocalFeature(x) for x in f^(-1)_M(v×[t-ε,t+ε]×B(feat,δ))),
+          Seq(βᵀ_i(f^(-1)_M(v×[t-ε,t+ε]×B(feat,δ))) for x in f^(-1)_M(v×[t-ε,t+ε]×B(feat,δ)))
+        )
+    }
+    
+    REWRITE AttentiveInterpolatedPHT(M, i, v, t, feat, ε, δ) -> D^b {
+      LET F := Fun(
+        (p, f) ↦ AttentionMechanism(
+          f,
+          Seq(LocalFeature(x) for x in {x | |v'-v|<ε, |f'-f|<δ}),
+          Seq(Res(APHT^i_M, v' × {p} × {f'}) -> 𝕜 for v',f' in {x | |v'-v|<ε, |f'-f|<δ})
+        ),
+        {t-ε≤p≤t+ε, ‖f-feat‖≤δ}
+      )
+      IN RΓ_c(F(?, ?) -> 𝕜)
+    }
+  }
+
+  PROOFS {
+    THEOREM AttentiveStability(𝓓 : AttentiveMet) ∀ M N . dI(APHT_M, APHT_N) ≤ 𝓓(M, N) {
+      dI(APHT_M, APHT_N) 
+        ≤ inf {ε | ∃ (f : M ≃_ε N) . APHT_f : APHT_M =[ε]= APHT_N} -- Interpolation
+        ≤ inf {ε | ∃ (f : M ≃_ε N)} -- Stability of persistent homology
+        = 𝓓(M, N) -- By AttentiveMet
+      QED
+    }
+    
+    THEOREM AttentiveApprox ∀ (M : Shape, τ : ℝ>0, ε δ : ℝ>0)
+      ε < τ/4 ∧ Prob_{X~𝒰(M)} [Xᵉ ⊆ M ⊆ X^{√(2)ε} | |X| = O((1/ε)^d)] > 1-δ
+      => ∃ K. Prob[dI(APHT_M, APHT_K) ≤ Cε] > 1-δ {
+      GIVEN M : Shape, τ : ℝ>0, ε δ : ℝ>0 
+        WHERE ε < τ/4 ∧ Prob_{X~𝒰(M)} [Xᵉ ⊆ M ⊆ X^{√(2)ε} | |X| = O((1/ε)^d)] > 1-δ
+
+      X ≔ SAMPLE_(x ∈ M) |X| = O((1/ε)^d) 
+      LET U_x ≔ Ball(x, ε) ∀ x ∈ X
+      LET K ≔ NerveComplex({U_x}_x)
+
+      HAVE M ≃ ⋃ U_x w.p. > 1-δ -- Cech approximation 
+      HAVE ⋃ U_x ≃ K -- Nerve theorem
+      HENCE M ≃ K w.p. > 1-δ
+
+      Mᵉ ⊆ M ⊆ M^{√(2)ε} => dI(APHT_M, APHT_K) ≤ √(2)ε w.p. > 1-δ -- Sandwich theorem
+      TAKE C := √2  
+      QED
+    }
+
+    THEOREM APHTDeterminesShape ∀ M N : Shape . APHT_M ≃ APHT_N => M ≃ N {
+      APHT_M ≃ APHT_N 
+      => ∀ i. APHT^i_M ≃ APHT^i_N -- By definition
+      => ABCT_M(v,t,feat) = ABCT_N(v,t,feat) ∀ v t feat -- By definition
+      => AECT_M(v,t,feat) = AECT_N(v,t,feat) ∀ v t feat -- By AttentiveLS.AECT_ABCT
+      => M ≃ N -- By AttentiveCurrySchapira
+      QED
+    }
+    
+    THEOREM APHTDescentTheorem ∀ (M : Shape, 𝓤 : Cover | FiniteCover(𝓤, M)) . 
+      APHT_M ≃ holim[ ∏ APHT_U -> ∏ APHT_{U ∩ V} ⇉ ∏ APHT_{U ∩ V ∩ W} ⋯ ] {
+      
+      SUFFICES_TO_SHOW APHT_M -> holim[⋯] is a quasi-isomorphism
+      
+      DEFINE 𝓖_• := GodementResolution(𝕜_Z_M)
+      
+      HAVE R(f_M)_*(𝓖_•) is a quasi-isomorphism:
+        APHT_M ≃ R(f_M)_* 𝕜_Z_M -- By definition
+               ≃ R(f_M)_* holim(𝓖_•) -- By 𝓖_• is a resolution 
+               ≃ holim R(f_M)_*(𝓖_•) -- By R ⊣ holim
+               ≃ holim[⋯] -- By Cech
+              
+      HAVE R(f_M)_*(𝓖_•) is a q.i. on stalks ∀ v t feat:
+        H^*(APHT_M_(v,t,feat)) ≃ H^*(f^(-1)_M(v, t, feat)) -- By definition 
+                                ≃ H^*(holim(𝓖_•)_(v,t,feat)) -- By 𝓖_• is a resolution
+                                ≃ H^*(holim[⋯]_(v,t,feat)) -- By Cech
+                         
+      QED
+    }
+
+    THEOREM AttentionInvarianceAPHT {
+      FORALL (M : Shape, U : Unitary(ShapeFeature)) .
+        LET apht = APHT(M)
+            apht' = apht WITH {
+              f_M := λ (x, v, t) . (v, t, U(LocalFeature(x))),
+              AttentionMechanism := λ q ks vs . 
+                apht.AttentionMechanism(U^(-1)(q), Seq(U^(-1)(k) for k in ks), vs)
+            }
+        IN apht(v, t, feat) = apht'(v, t, U(feat))
+    }
+    PROOF {
+      ASSUME M : Shape, U : Unitary(ShapeFeature)
+
+      apht'(v, t, U(feat))
+        = AttentionMechanism(
+            U(feat),
+            Seq(U(LocalFeature(x)) for x in f_M^(-1)(v, t, U(feat))),
+            Seq(ECT_M(v', t') for (x, v', t') in f_M^(-1)(v, t, U(feat)))
+          ) [BY DEF Apply, APHT]
+        = apht.AttentionMechanism(
+            feat,
+            Seq(LocalFeature(x) for x in f_M^(-1)(v, t, feat)),
+            Seq(ECT_M(v', t') for (x, v', t') in f_M^(-1)(v, t, feat))
+          ) [BY DEF apht', AttentionMechanism, U Unitary]
+        = apht(v, t, feat) [BY DEF Apply, APHT]
+      QED
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE AttentiveSphere(d, n) WHERE S^d_n ≔ {x ∈ ℝ^(d+1) | ‖x‖ = 1 ∧ ∀i>n. x_i=0} {
+      LET feat(x) = [x_1, ..., x_(d+1), ‖x‖_2, ‖x‖_∞, SphericalHarmonic(x, 1), ..., SphericalHarmonic(x, 5)]
+      
+      APHT(S^d_n) = AttentionMechanism(
+        GlobalFeature(S^d_n),
+        Seq(feat(x) for x in SamplePoints(S^d_n)),
+        [
+          [],
+          [(0,∞)],
+          [],
+          ...,
+          [(0,∞)] IF d=n, [] o.w.
+        ]
+      )
+    }
+  }
+}

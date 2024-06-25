@@ -1,0 +1,118 @@
+CONCEPT Schnorr {
+  LANGUAGE {  
+    TYPE Group
+    TYPE Element <: Group
+    TYPE Scalar    
+
+    FUNC Generator(G : Group) : Element
+    FUNC Identity(G : Group) : Element
+    FUNC Inverse(G : Group, a : Element) : Element
+    FUNC Op(G : Group, a b : Element) : Element
+    FUNC ScalarMul(G : Group, a : Element, n : Scalar) : Element
+    FUNC RandomScalar(G : Group) : Scalar
+    FUNC Hash(a : Element, b : Element) : Scalar
+
+    PRED Associative : Group -> Bool
+    PRED Commutative : Group -> Bool  
+    PRED Discrete : Group -> Bool
+    PRED Hard : Group -> Bool
+
+    AXIOM GroupProperties {
+      ∀ (G : Group).  
+        Associative(G) ∧ 
+        Commutative(G) ∧
+        Discrete(G) ∧ 
+        Hard(G)
+    }
+
+    AXIOM ScalarMulProperties {  
+      ∀ (G : Group) (a : Element) (n m : Scalar).
+        ScalarMul(G, a, 0) = Identity(G) ∧
+        ScalarMul(G, a, 1) = a ∧  
+        ScalarMul(G, a, n + m) = Op(G, ScalarMul(G, a, n), ScalarMul(G, a, m))
+    }
+
+    NOTATION "g" = Generator
+    NOTATION "0" = Identity  
+    NOTATION "+" = Op
+    NOTATION "-" = Inverse
+    NOTATION "*" = ScalarMul
+    NOTATION "H" = Hash
+  }
+
+  STRUCTURE SchnorrProof(G : Group, x : Scalar) {
+    DEF Prover(r : Scalar) : (Element, Scalar) = {
+      LET R = g(G) * r,  
+          h = H(g(G) * x, R), 
+          s = r + x * h
+      IN (R, s)
+    }
+
+    DEF Verifier(X : Element, R : Element, s : Scalar) : Bool = {  
+      LET h = H(X, R),
+          Rs = g(G) * s
+      IN Rs = R + X * h  
+    }
+  }
+
+  PROOFS {
+    TACTIC SchnorrSound(G : Group, X R S : Element, x s : Scalar) = {
+      ASSUME X = g(G) * x, (R, s) = SchnorrProof(G, x).Prover(s - x * H(X, R))
+      SHOW SchnorrProof(G, x).Verifier(X, R, s)
+    }
+
+    TACTIC SchnorrComplete(G : Group, X R S : Element, x r : Scalar) = {
+      ASSUME X = g(G) * x, (R, s) = SchnorrProof(G, x).Prover(r), SchnorrProof(G, x).Verifier(X, R, s)  
+      SHOW s = r + x * H(X, R)
+    }
+
+    TACTIC SchnorrZeroKnowledge(G : Group, X R S : Element, x r : Scalar) = {
+      ASSUME X = g(G) * x, (R, s) = SchnorrProof(G, x).Prover(r)
+      SHOW SimulatedProof(R, s) ≈ RealProof(R, s)  
+    }
+
+    THEOREM SchnorrSecurity {
+      STATEMENT:  
+        ∀ (G : Group) (g := Generator(G)) (X : Element) (x : Scalar).
+          X = g * x ⇒
+            SchnorrSound(G, X, _, _, x, _) ∧  
+            SchnorrComplete(G, X, _, _, x, _) ∧
+            SchnorrZeroKnowledge(G, X, _, _, x, _)
+
+      PROOF:
+        LET G : Group, g = Generator(G), X : Element, x : Scalar
+        ASSUME X = g * x
+        SHOW SchnorrSound(G, X, _, _, x, _) BY {
+          LET R S : Element, s : Scalar  
+          ASSUME (R, s) = SchnorrProof(G, x).Prover(s - x * H(X, R))
+          REWRITE SchnorrProof(G, x).Verifier(X, R, s)
+            = (g * s = R + X * H(X, R))                                BY DEFINITION Verifier  
+            = (g * s = R + (g * x) * H(X, R))                          BY ASSUMPTION  
+            = (g * s = R + g * (x * H(X, R)))                          BY ScalarMulProperties
+            = (g * s = g * (s - x * H(X, R)) + g * (x * H(X, R)))      BY ASSUMPTION
+            = (g * s = g * ((s - x * H(X, R)) + (x * H(X, R))))        BY ScalarMulProperties  
+            = (g * s = g * s)                                          BY ARITHMETIC
+            = TRUE                                                     BY REFLEXIVITY
+        }
+        SHOW SchnorrComplete(G, X, _, _, x, _) BY {  
+          LET R S : Element, r : Scalar
+          ASSUME (R, s) = SchnorrProof(G, x).Prover(r), SchnorrProof(G, x).Verifier(X, R, s)
+          REWRITE s  
+            = r + x * H(X, R)                                          BY DEFINITION Prover
+        }
+        SHOW SchnorrZeroKnowledge(G, X, _, _, x, _) BY {
+          LET R S : Element, r : Scalar  
+          ASSUME (R, s) = SchnorrProof(G, x).Prover(r)
+          LET SimulatedProof(R, s) = {
+            r' := RandomScalar(G), 
+            h := H(X, g * r'), 
+            s' := r' + x * h
+          }
+          REWRITE RealProof(R, s)  
+            ≈ (R = g * r ∧ s = r + x * H(X, R))                        BY DEFINITION Prover
+            ≈ (R = g * r' ∧ s = r' + x * H(X, R))                      BY r ≈ r'  
+            ≈ SimulatedProof(R, s)                                     BY DEFINITION SimulatedProof
+        }
+    }
+  }
+}

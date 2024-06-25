@@ -1,0 +1,203 @@
+CONCEPT LambdaCalculus {
+  LANGUAGE {
+    type Term = Var(ℕ) | Abs(ℕ, Term) | App(Term, Term)
+
+    notation "λ x . M" = Abs(x, M)
+    notation "M N" = App(M, N)
+
+    func subst(M: Term, x: ℕ, N: Term): Term
+    func eval(M: Term): Term
+
+    pred reduces(M: Term, N: Term)
+
+    notation "M ⇒ N" = reduces(M, N)
+    notation "M =β N" = (∃ P. M ⇒* P ∧ N ⇒* P)
+
+    infer BetaReduction(M: Term, x: ℕ, N: Term):
+      App(Abs(x, M), N) ~> subst(M, x, N)
+
+    infer AlphaEquivalence(M: Term, x: ℕ, y: ℕ):
+      y ∉ FV(M) --> Abs(x, M) =β Abs(y, subst(M, x, Var(y)))
+
+    infer EtaEquivalence(M: Term, x: ℕ):
+      Abs(x, App(M, Var(x))) =β M
+
+    rewrite EvaluationReduction: eval(M) ~> N ⟺ M ⇒* N
+  }
+
+  STRUCTURE {
+    ; Church numeral
+    ∀n: ℕ. church(n) := λ f . λ x . f^n x  ; where f^n = f ∘ ... ∘ f (n times)
+
+    ; Church boolean
+    tru := λ t . λ f . t
+    fls := λ t . λ f . f
+
+    ; Combinators
+    I := λ x . x                        ; Identity
+    K := λ x . λ y . x                  ; Konstant
+    S := λ x . λ y . λ z . x z (y z)    ; Substitution
+
+    ; Recursion
+    Y := λ f . (λ x . f (x x)) (λ x . f (x x))   ; Y Combinator
+  }
+
+  PROOFS {
+    theorem ChurchRosser: ∀M, N, P: Term. (M =β N) ∧ (M ⇒* P) ⟹ ∃Q. (N ⇒* Q) ∧ (P =β Q) {
+      assume (M =β N) ∧ (M ⇒* P)
+
+      ; By definition of =β, we have:
+      ; ∃R. M ⇒* R ∧ N ⇒* R
+      let R such that (M ⇒* R) ∧ (N ⇒* R)
+
+      ; We prove P =β R by induction on the reduction sequence M ⇒* P
+      by Induction(λM, P. (M ⇒* P) ⟹ (P =β R)) {
+        ; Base case: M = P
+        ; In this case, P =β R holds trivially since M =β R
+        
+        ; Inductive case: M ⇒ M' ⇒* P
+        ; IH: M' ⇒* P ⟹ P =β R
+        assume M ⇒ M'
+        assume M' ⇒* P
+        by IH have P =β R
+
+        ; It remains to show M =β M'
+        by DiamondProperty(M, N, M', R) have ∃S. (N ⇒* S) ∧ (M' ⇒* S)
+        let S such that (N ⇒* S) ∧ (M' ⇒* S)
+        by def. of =β have M =β M'
+      }
+
+      ; We have shown P =β R
+      ; By symmetry and transitivity of =β, we have:
+      ; N =β R ∧ P =β R ⟹ N =β P
+      let Q = P
+      hence ∃Q. (N ⇒* Q) ∧ (P =β Q)
+    }
+
+    theorem FixedPointCombinator: ∀f: Term. ∃X. App(f, X) =β X {
+      let X = App(Y, f)
+
+      App(f, X) ~> App(f, App(Y, f))
+                ~> App(f, App(λ x . f (x x), λ x . f (x x)))
+                ~> App(f, f (App(λ x . f (x x), λ x . f (x x))))
+                ~> App(f, f (App(Y, f)))
+                ~> App(f, f X)
+                ~> App(f, X)
+    }
+
+    theorem UniversalTuringMachine: ∀M: TuringMachine. ∃T: Term. ∀w. eval(App(T, w)) =β M(w) {
+      assume M: TuringMachine
+
+      ; We define T as follows:
+      let T = λ w . Y (λ f . λ x .
+        match x with
+        | Nil => init(M)
+        | Cons(h, t) => step(M, f t, read(M, h))
+      )
+
+      ; We prove ∀w. eval(App(T, w)) =β M(w) by induction on w
+      by Induction(λw. eval(App(T, w)) =β M(w)) {
+        ; Base case: w = Nil
+        calc eval(App(T, Nil))
+             ~> eval(App(Y (λ f . λ x . ...), Nil))
+             ~> eval(App(λ x . ..., Nil))   ; by FixedPointCombinator
+             ~> eval(init(M))
+             =β M(Nil)                      ; by def. of TuringMachine
+        
+        ; Inductive case: w = Cons(h, t)
+        ; IH: eval(App(T, t)) =β M(t)
+        assume eval(App(T, t)) =β M(t)
+        
+        calc eval(App(T, Cons(h, t)))
+             ~> eval(App(Y (λ f . λ x . ...), Cons(h, t)))
+             ~> eval(App(λ x . ..., Cons(h, t)))   ; by FixedPointCombinator
+             ~> eval(step(M, App(Y (λ f . λ x . ...), t), read(M, h)))
+             =β eval(step(M, M(t), read(M, h)))   ; by IH
+             =β M(Cons(h, t))                      ; by def. of TuringMachine
+      }
+
+      ; We have shown ∀w. eval(App(T, w)) =β M(w)
+      hence ∃T. ∀w. eval(App(T, w)) =β M(w)
+    }
+  }
+}
+
+CONCEPT SymbolicDifferentialGeometry {
+  LANGUAGE {
+    type Sym = Const(ℝ) | Var(ℕ) | Binary(Sym, Sym) | Unary(Sym)
+    type Man = Manifold(ℝ^n) | Riemannian(Manifold) | Lie(Group) | Symplectic(Manifold)
+    type Fld = Fun(Man, ℝ) | Vec(Man, TangentBundle) | Form(Man, CotangentBundle)
+    type Corr = Correspond(Sym, Fld) | InvCorrespond(Sym, Fld)
+
+    notation "S + T" = Binary(S, T)
+    notation "S - T" = Binary(S, T)
+    notation "S * T" = Binary(S, T)
+    notation "S / T" = Binary(S, T)
+    notation "S ∘ T" = Binary(S, T)
+    notation "S⁻¹" = Unary(S)
+    notation "d[S]" = Unary(S)
+    notation "∫[S]" = Unary(S)
+    notation "L[v, S]" = Binary(v, S)
+    notation "[S, T]" = Binary(S, T)
+    notation "⟨S, T⟩" = Binary(S, T)
+    notation "S ∧ T" = Binary(S, T)
+
+    notation "S ≈ F" = Correspond(S, F)
+    notation "S ≋ F" = InvCorrespond(S, F)
+
+    pred determines(S: Sym, X: ℝ | Vec | Form | Fun)
+
+    infer Correspondence(S: Sym, F: Fld):
+      S ≈ F
+
+    infer Determination(S: Sym, X: ℝ | Vec | Form | Fun):
+      determines(S, X)
+
+    rewrite CorrespondenceRule(S: Sym, F: Fld, prop: Fld -> Bool):
+      (S ≈ F) ~> prop(F) ⟺ prop(S)
+
+    rewrite BinaryCorrespondence(S: Sym, T: Sym, f: Fld, g: Fld, op: Sym -> Sym -> Sym, ∘: Fld -> Fld -> Fld):
+      (S ≈ f) ∧ (T ≈ g) ∧ (∀ A, B: Sym. (A ≈ B) ⟹ (op(A, B) ≈ ∘(A, B))) ~> op(S, T) ≈ ∘(f, g)
+  }
+
+  STRUCTURE {
+    
+  }
+
+  PROOFS {
+    theorem CorrespondOfDerivative: ∀S: Sym, f: Fun. (S ≈ f) ⊢ d[S] ≈ d(f) {
+      by Correspondence(S, f)
+      by CorrespondenceRule(d[S], d(f), λF. F ≈ d(f))
+    }
+
+    theorem NoncommutativeDerivative: ∀S, T: Sym, X, Y: Vec. (S ≈ X) ∧ (T ≈ Y) ⊢ [d[S], d[T]] ≈ d[L[X, Y]] {
+      by Correspondence(S, X)
+      by Correspondence(T, Y)
+      by CorrespondenceRule([d[S], d[T]], [d(X), d(Y)], λF. F ≈ d[L[X, Y]])
+      [d(X), d(Y)] ≈ d[X, Y]
+    }
+
+    theorem StokesTheorem: ∀S: Sym, ω: Form, M: Man, ∂M: Man. (∂M = ∂(M)) ∧ (S ≈ ω) ⊢ ∫[d[S], M] ≈ ∫[S, ∂M] {
+      assume (∂M = ∂(M)) ∧ (S ≈ ω)
+      by CorrespondenceRule(∫[d[S], M], ∫[d(ω), M], λF. F ≈ ∫[S, ∂M])
+      by CorrespondenceRule(∫[S, ∂M], ∫[ω, ∂M], λF. F ≈ ∫[S, ∂M])
+      ∫[d(ω), M] ≈ ∫[ω, ∂M]
+    }
+
+    theorem ClosedFormTheorem: ∀S: Sym, ω: Form, M: Manifold. (S ≈ ω) ⊢ (d[d[S]] ≈ 0 ⟺ ∫[S] ≈ ∫[d[B]] for some B: Sym) {
+      assume S ≈ ω
+
+      d[d[S]] ≈ 0 
+      ⟺ d[d(ω)] = 0   ; by CorrespondenceRule
+      ⟺ ω = d(τ) for some τ: Form   ; by PoincareLemma
+      ⟺ ∫[S] ≈ ∫[ω] ≈ ∫[d(τ)] ≈ ∫[d[B]]   ; by CorrespondenceRule and Stokes, with B ≈ τ
+    }
+
+    theorem SymplecticStructureTheorem: ∀S, T: Sym, M: Symplectic. ⟨d[S], d[T]⟩ ≈ 0 ⟺ [S, T] ≈ 0 {
+      ⟨d[S], d[T]⟩ ≈ 0
+      ⟺ ω(d(S), d(T)) = 0   ; by CorrespondenceRule, with ω the symplectic form
+      ⟺ L[S, T] = 0   ; by CartanMagicFormula
+      ⟺ [S, T] ≈ L[S, T]   ; by CorrespondenceRule
+    }
+  }
+}

@@ -1,0 +1,243 @@
+CONCEPT MetamaterialLanguage_v2 {
+  LANGUAGE {
+    type Material = PrimitiveCell(Geometry, Property) | Composite(Material, Symmetry)
+    type Geometry = Lattice(ℝ^n) | Amorphous(ℝ^n) | Freeform(Mesh)
+    type Property = Field(Geometry, TensorRank, ℂ) | Response(Field, Field)
+    type Symmetry = Translation(ℝ^n) | Rotation(SO(n)) | Reflection(O(n)) | Scaling(ℝ) | Composition(Symmetry, Symmetry)
+    type Mesh = Points(ℝ^n) | Edges(ℤ^2) | Faces(ℤ^3) | Cells(ℤ^4)
+    type TensorRank = Scalar | Vector | Matrix | Tensor(ℤ)
+    
+    func HomogenizedProperty(M: Material, P: Property): Property
+    func LocalProperty(M: Material, x: ℝ^n): Property  
+    func TransformedMaterial(M: Material, S: Symmetry): Material
+    func ProjectedProperty(M: Material, P: Property, G: Geometry): Property
+    func Match(M1: Material, M2: Material, G: Geometry): ℝ
+    
+    pred IsSatisfied(M: Material, C: Constraint)
+    pred IsRealized(M: Material, G: Geometry)
+    pred Overlaps(G1: Geometry, G2: Geometry)
+    pred HasSymmetry(M: Material, S: Symmetry)
+    
+    notation "M | C" = MaterialConstraint(M: Material, C: Constraint)
+    notation "P @ G" = ProjectedProperty(P: Property, G: Geometry)
+    notation "M ∘ S" = TransformedMaterial(M: Material, S: Symmetry)
+    notation "M1 ≈ M2" = Match(M1: Material, M2: Material)
+    
+    axiom Conservation(M: Material, P: Property):
+      ∫(P, ∂(M.Geometry)) = 0
+      
+    axiom Compatibility(M1: Material, M2: Material):  
+      Overlaps(M1.Geometry, M2.Geometry) ⟹ 
+        ∀ x ∈ M1.Geometry ∩ M2.Geometry. LocalProperty(M1, x) = LocalProperty(M2, x)
+        
+    axiom Symmetry(M: Material, S: Symmetry):
+      HasSymmetry(M, S) ⟺ (M ∘ S = M)
+  }
+  
+  PROOFS {
+    tactic Homogenization(M: Material, C: Constraint):
+      IsSatisfied(M, C) ⊢ IsSatisfied(HomogenizedMaterial(M), C)
+      
+    tactic ProjectionOptimization(M: Material, P: Property, C: Constraint):  
+      IsSatisfied(M, C) ⊢ 
+        ∃ G: Geometry. (P @ G) = arg min_{G: Geometry} |ProjectedProperty(M, P, G) - P|
+        
+    tactic SymmetryExploitation(M: Material, S: Symmetry, C: Constraint):
+      IsSatisfied(M, C) ∧ HasSymmetry(M, S) ⊢ IsSatisfied(M ∘ S⁻¹, C)
+      
+    tactic MultiScaleConsistency(M1: Material, M2: Material):
+      M1 ≈ M2 ⊢ 
+        ∃ S: Symmetry, G: Geometry. IsRealized(M1 ∘ S, G) ∧ IsRealized(M2, G) ∧ 
+          ∀ P: Property. |ProjectedProperty(M1 ∘ S, P, G) - ProjectedProperty(M2, P, G)| < ε
+          
+    theorem StructuredDesign(C: Constraint, P: Property):  
+      ∃ M: Material. IsSatisfied(M, C) ∧ |HomogenizedProperty(M, P) - P| < ε  
+    {
+      ...
+    }
+    
+    theorem TopologyOptimization(C: Constraint, P: Property):
+      ∃ M: Material, G: Geometry. IsSatisfied(M | G, C) ∧ |ProjectedProperty(M, P, G) - P| < ε
+    {
+      ...  
+    }
+      
+    theorem SymmetryAdaption(M: Material, C: Constraint, S: Symmetry):
+      IsSatisfied(M, C) ⟹ ∃ M': Material. (M' ∘ S⁻¹ = M) ∧ IsSatisfied(M', C)
+    {
+      ...
+    }
+      
+    theorem MultiscaleHomogenization(M: Material, C: Constraint, n: ℤ):
+      IsSatisfied(M, C) ⟹ 
+        ∃ M₁, ..., Mₙ: Material. (∏ᵢ Mᵢ) ≈ M ∧ ∀ i. IsSatisfied(Mᵢ, C)
+    {
+      ...
+    }
+  }
+}
+
+
+
+
+CONCEPT AuxeticMetamaterial : MetamaterialLanguage_v2 {
+  PARAMETERS {
+    ν_min: ℝ = -0.5  ; Minimum Poisson's ratio
+    E_min: ℝ = 1e6   ; Minimum Young's modulus (1 MPa) 
+    ρ_max: ℝ = 1e3   ; Maximum mass density (1000 kg/m³)
+  }
+
+  REQUIREMENTS {
+    Geometry: Periodic(2) | Thickness(1e-3)  ; 2D periodic with 1 mm thickness
+    Property: {
+      PoissonRatio @ Geometry < ν_min        ; Negative Poisson's ratio
+      YoungsModulus @ Geometry > E_min      ; Sufficient stiffness
+      MassDensity @ Geometry < ρ_max         ; Lightweight  
+    }
+    Symmetry: {
+      ReflectionSymmetry(Geometry, {1, 0})   ; Symmetric about x-axis
+      ReflectionSymmetry(Geometry, {0, 1})   ; Symmetric about y-axis
+    }
+  }
+
+  PROOF {
+    theorem AuxeticDesign:
+      ∃ M: Material. IsSatisfied(M, REQUIREMENTS)
+    {
+      // Step 1: Choose a blueprint for auxetic geometry  
+      let S: Shape = ChiralHoneycomb(10, 30°)  ; Chiral honeycomb with 10 mm cell size and 30° angle
+      
+      // Step 2: Parametrize the blueprint with a freeform mesh
+      let G: Geometry = Freeform(Honeycomb(S, 1e-3))
+      
+      // Step 3: Define target properties as fields over the mesh
+      let ν: Field(G, Scalar, ℝ) = ∀ p ∈ G. ν_min  ; Uniform target Poisson's ratio
+      let E: Field(G, Scalar, ℝ) = Interpolate(G, [1e6, 1e7])  ; Graded target Young's modulus 
+      let ρ: Field(G, Scalar, ℝ) = ∀ p ∈ G. 500  ; Uniform target mass density
+      
+      // Step 4: Set up an optimization problem for the mesh vertices
+      let X: Points(ℝ^2) = Vertices(G)  ; Mesh vertices as design variables
+      let P: Property = (PoissonRatio, YoungsModulus, MassDensity)
+      let objectiveFunction = λ X. |ProjectedProperty(X, P, G) - (ν, E, ρ)|
+      let constraintFunction = λ X. IsSatisfied(X | G, REQUIREMENTS)
+      
+      // Step 5: Solve the optimization problem numerically  
+      let X_opt: Points(ℝ^2) = ArgMin(objectiveFunction, X, constraintFunction)
+      let G_opt: Geometry = Freeform(Faces(G), X_opt)
+      
+      // Step 6: Create the optimized metamaterial primitive cell
+      let M_cell: Material = PrimitiveCell(G_opt, P)
+      assert IsSatisfied(M_cell, REQUIREMENTS)
+      
+      // Step 7: Construct the periodic metamaterial by symmetry  
+      let Λ: Lattice(ℝ^2) = SquareLattice(X_opt)
+      let T: Translation(ℝ^2) = Translation(Λ)
+      let M: Material = Composite(M_cell, T)
+      
+      // Step 8: Verify that the metamaterial satisfies the requirements
+      have IsRealized(M, Periodic(2) | Thickness(1e-3))
+      have HasSymmetry(M, ReflectionSymmetry({1, 0}))
+      have HasSymmetry(M, ReflectionSymmetry({0, 1}))
+      have ∀ P ∈ {PoissonRatio, YoungsModulus, MassDensity}. IsSatisfied(M, P @ M.Geometry)
+      hence proved.
+    }
+  }
+}
+
+This Concept constructs a 2D periodic auxetic metamaterial with a chiral honeycomb structure. The key steps are:
+
+Choose a blueprint for the auxetic geometry, here a chiral honeycomb lattice with specified cell size and angle.
+Parametrize the blueprint with a freeform mesh, allowing local geometric variations.
+Define target properties as fields over the mesh, including a negative Poisson's ratio, a graded Young's modulus, and a maximum mass density.
+Set up an optimization problem for the mesh vertex positions, minimizing the deviation from the target properties while satisfying the geometric and physical requirements.
+Solve the optimization problem numerically to obtain the optimized mesh geometry.
+Create a primitive cell material from the optimized mesh and verify it satisfies the requirements.
+Construct the periodic metamaterial by applying translational symmetry to the primitive cell.
+Verify that the resulting metamaterial realizes the target geometry, possesses the desired symmetries, and satisfies the property requirements.
+
+
+
+
+CONCEPT NonlinearOpticalMetamaterial : MetamaterialLanguage_v2 {
+  PARAMETERS {
+    λ_fund: ℝ = 1.064 * μm  ; Fundamental wavelength (1064 nm)  
+    λ_shg: ℝ = 532 * nm     ; Second harmonic wavelength (532 nm)
+    χ²_eff: ℂ = 1e-12 * m/V ; Target effective nonlinear susceptibility
+  }
+
+  REQUIREMENTS {
+    Geometry: Lattice(ℝ³) | Translation((a, 0, 0)) ∘ Translation((0, a, 0)) ∘ Translation((0, 0, a))
+    Property: {  
+      ε(E, λ_fund) = ε_fund + χ¹(λ_fund) * |E|² ; Nonlinear permittivity  
+      ε(E, λ_shg) = ε_shg + χ¹(λ_shg) * |E|²   ; Nonlinear permittivity
+      χ²(E, E, λ_fund, λ_shg) = χ²_eff          ; Effective nonlinear susceptibility
+    }
+    Constraints: {
+      Im(ε_fund) < 1e-3  ; Low absorption at fundamental      
+      Im(ε_shg) < 1e-3   ; Low absorption at second harmonic
+      ∀ G ≠ 0. |S(G, λ_fund)| < 0.01  ; Low scattering at fundamental
+      ∀ G ≠ 0. |S(G, λ_shg)| < 0.01   ; Low scattering at second harmonic  
+    }
+  }
+  
+  PROOF {
+    theorem NonlinearOpticalDesign:
+      ∃ M: Material. 
+        IsSatisfied(M, REQUIREMENTS.Constraints) ∧ 
+        |HomogenizedProperty(M, χ²(●, ●, λ_fund, λ_shg)) - χ²_eff| < ε
+    {
+      // Step 1: Choose a nonlinear optical material with high χ²  
+      let χ²_mat: ℂ = 1e-10 * m/V  ; Intrinsic nonlinear susceptibility  
+      let ε_mat(λ): ℂ = ε_mat_0 - λ² / (λ² - λ_0²)  ; Lorentzian dispersion 
+      
+      // Step 2: Design a subwavelength resonator geometry
+      let a: ℝ = λ_fund / 20        ; Lattice constant  
+      let r: ℝ = a / 3              ; Resonator radius
+      let h: ℝ = a / 2              ; Resonator height
+      let G_res: Geometry = Cylinder(0, r, h) | Translate(0, 0, h/2) ∘ Rotate(π/2, (1,0,0))
+      
+      // Step 3: Construct a metamaterial unit cell  
+      let M_unit: Material = 
+        PrimitiveCell(
+          Lattice(ℝ³) | Translation((a,0,0)) ∘ Translation((0,a,0)) ∘ Translation((0,0,a)),
+          Field(G_res, Scalar, ε_mat) 
+        ) | 
+        PrimitiveCell(
+          Amorphous(Complement(G_res)),
+          Field(Scalar, 1)
+        )
+        
+      // Step 4: Homogenization and parameter optimization 
+      let ε_hom = HomogenizedProperty(M_unit, ε(●)) 
+      let χ²_hom = HomogenizedProperty(M_unit, χ²(●,●))
+      letrec optimize(M: Material): Material = {
+        if IsSatisfied(M, REQUIREMENTS.Constraints) ∧ 
+           |HomogenizedProperty(M, χ²(●, ●, λ_fund, λ_shg)) - χ²_eff| < ε
+        then M  
+        else {
+          let ∇_ε = Gradient(λ x: ℝ. |HomogenizedProperty(M | x, ε(●)) - ε_hom|)   
+          let ∇_χ² = Gradient(λ x: ℝ. |HomogenizedProperty(M | x, χ²(●,●)) - χ²_eff|)
+          let x_new = x - γ * (∇_ε(x) + ∇_χ²(x))
+          optimize(M | x_new)  
+        }
+      }
+      let M_opt = optimize(M_unit | (r, h))
+      
+      // Step 5: Verify the optimized metamaterial properties
+      have IsSatisfied(M_opt, REQUIREMENTS.Constraints)  
+      have |HomogenizedProperty(M_opt, χ²(●, ●, λ_fund, λ_shg)) - χ²_eff| < ε
+      let M = M_opt ∘ Translation((10*a, 0, 0)) ∘ Translation((0, 10*a, 0)) ∘ Translation((0, 0, 10*a)) 
+      hence proved.
+    }
+  }
+}
+
+In this NonlinearOpticalMetamaterial concept, we:
+
+Choose a nonlinear optical material with high intrinsic nonlinear susceptibility χ² and Lorentzian dispersion.
+Design a subwavelength resonator geometry that enhances the local field intensity and nonlinear interaction.
+Construct a metamaterial unit cell by combining the resonator geometry with the nonlinear optical material, embedded in a lattice.
+Perform homogenization to compute the effective linear and nonlinear properties, and optimize the geometrical parameters to satisfy the target requirements on χ²_eff while minimizing absorption and scattering losses.
+Verify that the optimized metamaterial design satisfies the constraints and achieves the target nonlinear optical response.
+
+The key aspects are the use of a resonant geometry to enhance the nonlinear interaction, the homogenization to extract effective properties, and the optimization to tune the metamaterial parameters to meet the target requirements.

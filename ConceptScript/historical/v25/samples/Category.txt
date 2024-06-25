@@ -1,0 +1,154 @@
+CONCEPT Category {
+  LANGUAGE {
+    TYPE Object
+    TYPE Arrow(dom : Object, cod : Object)
+    TYPE Composable(f : Arrow, g : Arrow) = (cod(dom(f)) = dom(g))
+    TYPE Composition(f : Arrow, g : Arrow | Composable(f, g)) <: Arrow(dom(f), cod(g))  
+
+    FUNC identity(A : Object) : Arrow(A, A)
+    FUNC compose(f : Arrow, g : Arrow | Composable(f, g)) : Composition(f, g)
+
+    NOTATION "∘" = compose
+    NOTATION "1[" A "]" = identity(A)
+    
+    AXIOM IdentityLaws {
+      FORALL (A B : Object) (f : Arrow(A, B)). 
+        (1[B] ∘ f = f) AND (f ∘ 1[A] = f)
+    }
+    
+    AXIOM AssociativityLaw {
+      FORALL (A B C D : Object) (f : Arrow(A, B)) (g : Arrow(B, C)) (h : Arrow(C, D)).
+        (h ∘ g) ∘ f = h ∘ (g ∘ f)  
+    }
+  }
+  
+  STRUCTURE Isomorphism(A : Object, B : Object) {
+    LET f : Arrow(A, B), g : Arrow(B, A)
+
+    REQUIRE g ∘ f = 1[A]  
+    REQUIRE f ∘ g = 1[B]
+
+    DEF inverse(iso : Isomorphism(A, B)) : Isomorphism(B, A) = MATCH iso WITH
+      Isomorphism { f := f, g := g } -> Isomorphism { f := g, g := f }
+  }
+  
+  STRUCTURE Functor(C : Category, D : Category) {
+    LET map_obj : C.Object -> D.Object
+    LET map_arr(A B : C.Object) : C.Arrow(A, B) -> D.Arrow(map_obj(A), map_obj(B))
+
+    REQUIRE FORALL (A : C.Object). map_arr(A, A)(C.identity(A)) = D.identity(map_obj(A))
+    REQUIRE FORALL (A B C : C.Object) (f : C.Arrow(A, B)) (g : C.Arrow(B, C)).
+      map_arr(A, C)(g ∘ f) = map_arr(B, C)(g) ∘ map_arr(A, B)(f)  
+
+    DEF compose(F : Functor(C, D), G : Functor(D, E)) : Functor(C, E) = 
+      Functor {
+        map_obj := λ (A : C.Object). G.map_obj(F.map_obj(A)),
+        map_arr := λ (A B : C.Object) (f : C.Arrow(A, B)). 
+          G.map_arr(F.map_obj(A), F.map_obj(B))(F.map_arr(A, B)(f))
+      }
+  }
+  
+  STRUCTURE NaturalTransformation(F : Functor(C, D), G : Functor(C, D)) {
+    LET component(A : C.Object) : D.Arrow(F.map_obj(A), G.map_obj(A))
+
+    REQUIRE FORALL (A B : C.Object) (f : C.Arrow(A, B)).
+      G.map_arr(A, B)(f) ∘ component(A) = component(B) ∘ F.map_arr(A, B)(f)  
+
+    DEF vertical_compose(
+      α : NaturalTransformation(F, G), β : NaturalTransformation(G, H)
+    ) : NaturalTransformation(F, H) = NaturalTransformation {  
+      component := λ (A : C.Object). β.component(A) ∘ α.component(A)
+    }
+
+    DEF whisker_left( 
+      K : Functor(B, C), α : NaturalTransformation(F, G)
+    ) : NaturalTransformation(compose(K, F), compose(K, G)) = NaturalTransformation {
+      component := λ (A : B.Object). α.component(K.map_obj(A))  
+    }
+
+    DEF whisker_right(
+      α : NaturalTransformation(F, G), K : Functor(D, E)  
+    ) : NaturalTransformation(compose(F, K), compose(G, K)) = NaturalTransformation {
+      component := λ (A : C.Object). K.map_arr(F.map_obj(A), G.map_obj(A))(α.component(A))
+    }
+  }
+
+  PROOFS {
+    TACTIC FunctorCompositionAssociativity(F : Functor(A, B), G : Functor(B, C), H : Functor(C, D)) = {
+      LET compose' = λ (F G). compose(F, G) IN  
+      SHOW compose'(compose'(F, G), H) = compose'(F, compose'(G, H)) BY {
+        LET K1 = compose'(compose'(F, G), H), K2 = compose'(F, compose'(G, H)) IN
+        HAVE FORALL (X : A.Object).
+          K1.map_obj(X) = H.map_obj(G.map_obj(F.map_obj(X))) = K2.map_obj(X)
+        HAVE FORALL (X Y : A.Object) (f : A.Arrow(X, Y)).  
+          K1.map_arr(X, Y)(f) 
+            = H.map_arr(compose'(F, G).map_obj(X), compose'(F, G).map_obj(Y))(compose'(F, G).map_arr(X, Y)(f))
+            = H.map_arr(G.map_obj(F.map_obj(X)), G.map_obj(F.map_obj(Y)))(G.map_arr(F.map_obj(X), F.map_obj(Y))(F.map_arr(X, Y)(f))) 
+            = K2.map_arr(X, Y)(f)
+      }
+    }
+
+    TACTIC WhiskerComposition(
+      F : Functor(A, B), G : Functor(B, C), H : Functor(C, D), 
+      α : NaturalTransformation(F, G), β : NaturalTransformation(G, H)  
+    ) = {
+      SHOW whisker_right(vertical_compose(α, β), K) = vertical_compose(whisker_right(α, K), whisker_right(β, K))  
+      SHOW whisker_left(K, vertical_compose(α, β)) = vertical_compose(whisker_left(K, α), whisker_left(K, β))
+      BY {  
+        LET K : Functor(D, E) IN
+        FORALL (X : A.Object).
+          (whisker_right(vertical_compose(α, β), K).component(X)
+            = K.map_arr(F.map_obj(X), H.map_obj(X))(vertical_compose(α, β).component(X))
+            = K.map_arr(F.map_obj(X), H.map_obj(X))(β.component(G.map_obj(X)) ∘ α.component(X))  
+            = K.map_arr(G.map_obj(X), H.map_obj(X))(β.component(G.map_obj(X))) 
+              ∘ K.map_arr(F.map_obj(X), G.map_obj(X))(α.component(X))
+            = whisker_right(β, K).component(X) ∘ whisker_right(α, K).component(X)
+            = vertical_compose(whisker_right(α, K), whisker_right(β, K)).component(X)
+          )
+          AND
+          (whisker_left(K, vertical_compose(α, β)).component(X) 
+            = vertical_compose(α, β).component(K.map_obj(X))
+            = β.component(G.map_obj(K.map_obj(X))) ∘ α.component(K.map_obj(X))
+            = whisker_left(K, β).component(X) ∘ whisker_left(K, α).component(X)
+            = vertical_compose(whisker_left(K, α), whisker_left(K, β)).component(X) 
+          )
+      }
+    }
+
+    THEOREM Isomorphisms {
+      STATEMENT:
+        FORALL (C : Category) (A B : C.Object).
+          (EXISTS (iso : Isomorphism(A, B)) <-> A = B)
+      
+      PROOF:
+        LET C : Category, A B : C.Object
+        SHOW (EXISTS (iso : Isomorphism(A, B)) -> A = B) BY {  
+          ASSUME EXISTS (iso : Isomorphism(A, B))
+          LET Isomorphism { f := f, g := g } = iso IN
+          HAVE g ∘ f = 1[A] AND f ∘ g = 1[B]    BY DEFINITION Isomorphism
+          HENCE A = dom(1[A]) = cod(g ∘ f) = cod(f) = dom(1[B]) = B
+        }
+        SHOW (A = B -> EXISTS (iso : Isomorphism(A, B))) BY {
+          ASSUME A = B  
+          LET iso = Isomorphism {
+            f := 1[A],
+            g := 1[A]  
+          } IN
+          HAVE iso : Isomorphism(A, A) BY {
+            iso.g ∘ iso.f = 1[A] ∘ 1[A] = 1[A]    BY IdentityLaws  
+            iso.f ∘ iso.g = 1[A] ∘ 1[A] = 1[A]    BY IdentityLaws
+          }
+          HENCE EXISTS (iso : Isomorphism(A, B))  
+        }
+    }
+    
+    THEOREM Yoneda {
+      STATEMENT:
+        FORALL (C : Category) (F : Functor(C, Set)) (A : C.Object).
+          Isomorphism(
+            F(A), 
+            Functor(Arrow(A, -), F)
+          )
+    }
+  } 
+}

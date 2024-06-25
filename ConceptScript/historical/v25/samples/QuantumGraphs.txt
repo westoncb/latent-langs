@@ -1,0 +1,125 @@
+CONCEPT QuantumGraphs {
+  LANGUAGE {
+    TYPE Vertex
+    TYPE Edge(v w : Vertex)
+    TYPE Graph = 𝒫(Vertex) × 𝒫(Edge)
+    TYPE Hilbert = Graph -> ℂ^n
+    TYPE Operator = Hilbert -> Hilbert
+
+    FUNC I : Operator
+    FUNC Adj : Graph -> Graph
+    FUNC In(v) : Graph -> 𝒫(Edge)
+    FUNC Out(v) : Graph -> 𝒫(Edge)  
+
+    AXIOM Hermitian {
+      ∀ (A : Operator) . ⟨A(ψ) | φ⟩ = ⟨ψ | A*(φ)⟩
+    }
+
+    AXIOM Unitary {
+      ∀ (U : Operator) . U* ∘ U = I
+    }
+
+    NOTATION "⟨_|_⟩" = InnerProduct
+    NOTATION "A*" = Adjoint(A)
+    NOTATION "δ(v)" = card(In(v)) + card(Out(v))
+  }
+
+  STRUCTURE QuantumGraph(G : Graph, H : Hilbert(G)) {
+    DEF Adjacency(v w : Vertex) : Operator = 
+      ∑[e : In(v) ∩ Out(w)] ⟨e| + ∑[e : Out(v) ∩ In(w)] |e⟩
+
+    DEF Laplacian : Operator = 
+      ∑[v : G.Vertices] δ(v) |v⟩⟨v| - Adjacency
+
+    DEF Transition(t : ℝ≥0) : Operator = 
+      exp(-i * t * Laplacian / ℏ)
+
+    REQUIRE ∀ (v w : Vertex) . 
+      Adjacency(v, w) = Adjacency(w, v)*
+
+    REQUIRE ∀ (t : ℝ≥0) .
+      Transition(t) is Unitary
+  }
+
+  PROOFS {
+    THEOREM Eigenvalues {
+      STATEMENT : ∀ (G : QuantumGraph) .
+        spect(G.Laplacian) ⊆ ℝ≥0
+
+      PROOF {
+        LET G : QuantumGraph, L = G.Laplacian, ψ : Hilbert(G.Graph)
+
+        ⟨ψ | L(ψ)⟩
+          = ∑[v] ⟨ψ | δ(v) |v⟩⟨v| ψ⟩ - ∑[v, w] ⟨ψ | Adjacency(v, w)(ψ)⟩
+            BY definition of L
+          = ∑[v] δ(v) ⟨ψ | v⟩⟨v | ψ⟩ - ∑[v, w] ⟨ψ | v⟩⟨v | Adjacency(v, w) | w⟩⟨w | ψ⟩  
+            BY linearity of ⟨_|_⟩
+          = ∑[v] δ(v) |⟨v | ψ⟩|^2 - ∑[v, w] ⟨v | ψ⟩* ⟨v | Adjacency(v, w) | w⟩ ⟨w | ψ⟩
+            BY properties of ⟨_|_⟩
+          = ∑[v] δ(v) |⟨v | ψ⟩|^2 - ∑[e : Edge] ⟨e.src | ψ⟩* ⟨e.dst | ψ⟩
+            BY definition of Adjacency and rearranging
+          = (1/2) * ∑[e : Edge] |⟨e.src | ψ⟩ - ⟨e.dst | ψ⟩|^2  
+            BY expanding |⟨e.src | ψ⟩ - ⟨e.dst | ψ⟩|^2
+          ≥ 0
+
+        HENCE ⟨ψ | L(ψ)⟩ ≥ 0 FOR ALL ψ
+        HENCE λ ≥ 0 FOR ALL λ : spect(L)  
+      }
+    }
+
+    THEOREM Connectivity {
+      STATEMENT : ∀ (G : QuantumGraph) .
+        connected(G.Graph) <=> 
+        min(spect(G.Laplacian \ {0})) > 0
+
+      PROOF {
+        LET G : QuantumGraph, L = G.Laplacian, λ1 = min(spect(L \ {0}))
+        
+        connected(G.Graph)
+          => ∃ (t : ℝ>0) . ∀ (v w : Vertex) . ⟨v | Transition(t) | w⟩ ≠ 0
+            BY {
+              LET t : ℝ>0, v w : Vertex
+              ⟨v | Transition(t) | w⟩ 
+                = ⟨v | exp(-i * t * L / ℏ) | w⟩
+                = ∑[n=0 to ∞] (-i*t/ℏ)^n / n! * ⟨v | L^n | w⟩
+                ≈ ⟨v | w⟩ - (i*t/ℏ) * ⟨v | L | w⟩ + ...    FOR small t
+              
+              ⟨v | L | w⟩ = Adjacency(v, w) ≠ 0            IF v ~ w
+              ⟨v | L^n | w⟩ ≠ 0                           FOR some n IF v connected to w
+            }
+          => λ1 > 0  
+            BY {
+              ⟨ψ1 | L | ψ1⟩ = λ1 * ⟨ψ1 | ψ1⟩ > 0         FOR eigenvector ψ1
+              
+              LET t > 0, v w : Vertex
+              ⟨v | Transition(t) | w⟩ ≠ 0                 BY ASSUME
+              ⟨v | exp(-i * t * L / ℏ) | w⟩ ≠ 0
+              ⟨v | (∑ exp(-i * t * λ / ℏ) |ψ⟩⟨ψ|) | w⟩ ≠ 0  FOR L eigenbasis {ψ, λ} 
+              ∑ exp(-i * t * λ / ℏ) ⟨v | ψ⟩⟨ψ | w⟩ ≠ 0
+              exp(-i * t * λ1 / ℏ) * ⟨v | ψ1⟩⟨ψ1 | w⟩ ≠ 0   FOR dominant term as t -> ∞
+              λ1 > 0                                      USING ⟨ψ1 | L | ψ1⟩ > 0
+            }
+
+        λ1 > 0  
+          => ∃ (t : ℝ>0) . ∀ (v w : Vertex) . ⟨v | Transition(t) | w⟩ ≠ 0
+            BY {
+              LET t > log(N) * ℏ / (λ1 * ε), N = card(Vertices), ε : ℝ>0
+              
+              |⟨v | Transition(t) | w⟩|
+                = |∑ exp(-i * t * λ / ℏ) ⟨v | ψ⟩⟨ψ | w⟩|
+                ≥ |exp(-i * t * λ1 / ℏ)| * |⟨v | ψ1⟩⟨ψ1 | w⟩| - |∑[λ≠λ1] exp(-i * t * λ / ℏ) ⟨v | ψ⟩⟨ψ | w⟩|
+                ≥ |⟨v | ψ1⟩⟨ψ1 | w⟩| - N * exp(-t * (λ2 - λ1) / ℏ)
+                > |⟨v | ψ1⟩⟨ψ1 | w⟩| - ε
+                > 0                                        FOR small ε
+            }
+          => connected(G.Graph)
+            BY {
+              LET v w : Vertex
+              ⟨v | Transition(t) | w⟩ ≠ 0                 BY ASSUME  
+              ∃ (n : ℕ) . ⟨v | L^n | w⟩ ≠ 0               BY expanding Transition
+              v connected to w                            BY definition of L
+            }
+      }
+    }
+  }
+}

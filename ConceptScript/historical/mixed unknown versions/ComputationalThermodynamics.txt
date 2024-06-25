@@ -1,0 +1,183 @@
+CONCEPT ComputationalThermodynamics {
+  LANGUAGE {
+    type Exp<S>
+    type Val<S>
+
+    type Env<S> = S -> Val<S>
+    type Dyn<S> = S -> S
+    
+    func Eval<S>(e: Exp<S>, ρ: Env<S>): Val<S>
+    func Quote<S>(v: Val<S>): Exp<S>
+    func Entropy<S>(ρ: Env<S>): ℝ
+    
+    pred Reduces<S>(e: Exp<S>, ρ: Env<S>, v: Val<S>)
+    notation "e ⇓[ρ] v" = Reduces(e, ρ, v)
+    
+    notation "e ⇓〈s〉 v" = Reduces(e, λ_. s, v)
+
+    notation "H[ρ]" = Entropy(ρ)
+    notation "⟪e⟫" = Quote(Eval(e, ρ))
+
+    infer EvalQuote<S>(e: Exp<S>, ρ: Env<S>):
+      ⟪e⟫ ⇓[ρ] Eval(e, ρ)
+
+    infer EntropyReduction<S>(e: Exp<S>, ρ: Env<S>, v: Val<S>):
+      e ⇓[ρ] v -> H[ρ] ≥ H[ρ[v/e]]
+      
+    infer ComputationalInvariance<S>(e: Exp<S>, s: S, T: Dyn<S>):
+      (e ⇓〈s〉 v) = (e ⇓〈T(s)〉 v)
+  }
+
+  STRUCTURE {
+    ; 2nd Law of Computational Thermodynamics
+    ∀S, (e: Exp<S>, ρ: Env<S>, v: Val<S>).
+      e ⇓[ρ] v -> H[ρ] ≥ H[ρ[v/e]]
+
+    ; Landauer's Principle
+    ∀S, (e: Exp<S>, ρ: Env<S>, v: Val<S>). 
+      e ⇓[ρ] v -> H[ρ[v/e]] - H[ρ] ≥ kT ln(2)
+
+    ; Computational Ergodicity  
+    ∀S, (s: S, e: Exp<S>, T: Dyn<S>).
+      (∀t. e ⇓〈T^t(s)〉 = e ⇓〈s〉) <->
+        ∃ρ: Env<S>. (∀t. H[ρ ∘ T^t] = H[ρ]) ∧ (e ⇓[ρ] = e ⇓〈s〉)
+  }
+
+  PROOFS {
+    theorem LandauerBound<S>:
+      ∀(e: Exp<S>, ρ: Env<S>, v: Val<S>).
+        e ⇓[ρ] v -> Entropy(ρ[v/e]) - Entropy(ρ) ≥ kT ln(2)
+    {
+      assume e ⇓[ρ] v
+      have H[ρ] ≥ H[ρ[v/e]]    ; by EntropyReduction
+      hence H[ρ[v/e]] - H[ρ] ≤ 0
+      
+      let Q = Heat dissipated during e ⇓[ρ] v
+      have Q ≥ (H[ρ] - H[ρ[v/e]]) * T   ; by Clausius inequality
+           ≥ -kT ln(2)                 ; since H[ρ] - H[ρ[v/e]] ≤ kT ln(2)
+           = kT ln(2)                  ; by properties of logarithms
+    }
+
+    theorem ComputationalErgodicity<S>:
+      ∀(s: S, e: Exp<S>, T: Dyn<S>).
+        (∀t. e ⇓〈T^t(s)〉 = e ⇓〈s〉) ⟺ 
+        ∃ρ. (∀t. H[ρ ∘ T^t] = H[ρ]) ∧ (e ⇓[ρ] = e ⇓〈s〉) 
+    {
+      assume ∀t. e ⇓〈T^t(s)〉 = e ⇓〈s〉
+      let ρ = Env<S> such that ∀a. ρ(a) = Eval(e, λ_. T^a(s))
+      
+      have ∀t. e ⇓[ρ ∘ T^t] = e ⇓[ρ]   ; by ComputationalInvariance
+      have ∀t. H[ρ ∘ T^t] = H[ρ]       ; by invariance of entropy
+
+      have e ⇓[ρ] = e ⇓〈s〉             ; by def. of ρ and e ⇓〈s〉
+      hence ∃ρ. (∀t. H[ρ ∘ T^t] = H[ρ]) ∧ (e ⇓[ρ] = e ⇓〈s〉)
+      
+      ; The converse follows by unfolding definitions
+    }
+  }
+}
+
+This Concept blends ideas from lambda calculus (expressions, values, environments, evaluation), thermodynamics (entropy, heat dissipation, Landauer's principle), and dynamical systems (invariance under dynamics, ergodicity).
+The key ideas are:
+
+Expressions are evaluated in environments to produce values
+Evaluation has an associated entropy reduction (2nd Law)
+There is a lower bound on the heat dissipated during irreversible computation (Landauer)
+Expressions that are invariant under a dynamics correspond to invariant entropy measures (Computational Ergodicity)
+
+
+
+
+
+CONCEPT ComputationalThermodynamics {
+  LANGUAGE {
+    type Sys<S>
+    type State<S>
+    type Dynamics<S>
+
+    type Program
+    type ProgramState
+    
+    func Entropy<S>(s: State<S>): ℝ 
+    func FreeEnergy<S>(s: State<S>): ℝ
+    func Hamiltonian<S>(s: Sys<S>): State<S> -> ℝ
+    func Compile<S>(p: Program): Sys<ProgramState>
+    func Evaluate<S>(s: Sys<ProgramState>, input: State<S>): State<S>
+
+    pred Terminates(p: Program, input: State<S>)
+    pred Invariant<S>(s: Sys<S>, φ: State<S> -> 𝔹) 
+
+    notation "⟦p⟧(x)" = Evaluate(Compile(p), x)
+    notation "H(s)" = Hamiltonian(s) 
+    notation "F[s]" = FreeEnergy(s)
+    notation "p ⇓" = ∀input. ∃output. Terminates(p, input) ∧ ⟦p⟧(input) = output
+    notation "s ⥲ φ" = Invariant(s, φ)
+
+    infer ProgramDynamics<S>(p: Program):
+      p ⇓ -> ∀input. ∃s: Sys<ProgramState>. 
+        s = Compile(p) ∧ Dynamics(s)(input) = ⟦p⟧(input)
+        
+    infer StatisticalComplexity<S>(s: Sys<S>):
+      ∀μ. (s ⥲ λx. μ(x) = μ(Dynamics(s)(x))) -> Entropy(s) ≥ FreeEnergy(s)
+      
+    infer ComputationalIrreversibility<S>(p: Program, s: Sys<S>):  
+      ¬(p ⇓) -> ∀input. Entropy(Evaluate(s, input)) > Entropy(input)
+  }
+
+  STRUCTURE {
+    ; Landauer's principle
+    ∀S, (s: Sys<S>). p ⇓ -> kT ln(2) × Entropy(⟦p⟧(s)) ≥ Energy(p)
+
+    ; Computability of invariants  
+    ∀S, (s: Sys<S>, φ: State<S> -> 𝔹).
+      (s ⥲ φ) <-> ∃p: Program. p ⇓ ∧ ∀x. φ(x) <-> ⟦p⟧(x) = 1
+
+    ; Logical Hamiltonian  
+    ∀S, (s: Sys<S>, Γ ⊢ φ).
+      H(s)(x) = if (x ⊧ Γ) then 0 else ∞  
+  }
+
+  PROOFS {
+    theorem StatisticalComplexityOfPrograms:
+      ∀S, (p: Program, μ: State<S> -> ℝ).
+        p ⇓ -> kT × Entropy(⟦p⟧(μ)) ≥ FreeEnergy(Compile(p))
+    {
+      assume p ⇓
+      let s = Compile(p) 
+      assume ∀x. μ(x) = μ(Dynamics(s)(x))   ; invariance of μ
+
+      have Entropy(s) ≥ FreeEnergy(s)   ; by StatisticalComplexity
+      calc kT × Entropy(⟦p⟧(μ)) 
+           = kT × Entropy(Evaluate(s, μ))
+           ≥ kT × Entropy(s)              ; by ComputationalIrreversibility
+           ≥ kT × FreeEnergy(s)           ; by StatisticalComplexity  
+           = FreeEnergy(Compile(p))
+    }
+
+    theorem LogicalInvariance:
+      ∀S, (s: Sys<S>, Γ: Set<State<S> -> 𝔹>, φ: State<S> -> 𝔹).
+        (s ⥲ λx. x ⊧ Γ) ∧ (Γ ⊢ φ) -> s ⥲ φ
+    {
+      assume s ⥲ λx. x ⊧ Γ   ; invariance of Γ
+      assume Γ ⊢ φ            ; entailment 
+      
+      let H(s)(x) = if (x ⊧ Γ) then 0 else ∞   ; logical Hamiltonian
+      
+      take x
+      have x ⊧ Γ -> H(s)(x) = H(s)(Dynamics(s)(x))   ; by invariance of Γ
+      have H(s)(x) = 0 <-> x ⊧ Γ                      ; by def. of H
+      have x ⊧ Γ -> x ⊧ φ                             ; by entailment
+      hence x ⊧ φ -> H(s)(x) = H(s)(Dynamics(s)(x))
+      hence s ⥲ φ   ; by definition
+    }
+  }
+}
+
+This Concept combines ideas from thermodynamics, computation theory, and logic to study the connections between the dynamics of physical systems and the execution of programs. Some key ideas:
+
+Programs are viewed as dynamical systems over program states
+Notions like entropy and free energy are defined for computational processes
+Logical invariants of a dynamical system are related to provability in a formal system
+Irreversibility and complexity of computation are related to the thermodynamics of the underlying physical system
+
+The proofs establish some fundamental theorems linking these notions, such as the statistical complexity of program invariants, and the entropy cost of irreversible computation. The logical Hamiltonian construction shows how logical reasoning about invariants can be embedded into the dynamical description of the system.

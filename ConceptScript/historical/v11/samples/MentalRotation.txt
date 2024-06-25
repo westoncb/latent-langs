@@ -1,0 +1,61 @@
+CONCEPT MentalRotation {
+  STRUCTURE {
+    [MentalImage := Mental representation of a visual stimulus]
+    [∀x ∈ MentalImage, ∃!θ ∈ Orientation, x ↦ θ]
+    [Orientation := Angle of rotation in 3D space]
+    [MentalRotation := Process of transforming a MentalImage's Orientation]
+    [∀x ∈ MentalImage, ∀θ, φ ∈ Orientation,
+      MentalRotation(x, θ, φ) ↦ MentalImage(x, φ)]
+    [RotationTime := Duration of MentalRotation process]
+    [∀x ∈ MentalImage, ∀θ, φ ∈ Orientation,
+      RotationTime(MentalRotation(x, θ, φ)) ∝ ShortestRotationAngle(θ, φ)]
+  }
+
+  PROOFS {
+    theorem mental_rotation_linearity :
+      ∀x ∈ MentalImage, ∀θ, φ ∈ Orientation,
+        RotationTime(MentalRotation(x, θ, φ)) = k * ShortestRotationAngle(θ, φ) + b
+    {
+      assume x ∈ MentalImage by hypothesis
+      assume θ, φ ∈ Orientation by hypothesis
+      let t = RotationTime(MentalRotation(x, θ, φ))
+      let d = ShortestRotationAngle(θ, φ)
+      t ∝ d by structure
+      t = k * d + b by definition of linear proportionality
+    }
+
+    theorem mental_rotation_additivity :
+      ∀x ∈ MentalImage, ∀θ, φ, ψ ∈ Orientation,
+        MentalRotation(x, θ, ψ) = MentalRotation(MentalRotation(x, θ, φ), φ, ψ)
+    {
+      assume x ∈ MentalImage by hypothesis
+      assume θ, φ, ψ ∈ Orientation by hypothesis
+      let y = MentalRotation(x, θ, φ) by structure
+      let z = MentalRotation(y, φ, ψ) by structure
+      MentalRotation(x, θ, ψ) = z by {
+        RotationTime(MentalRotation(x, θ, ψ)) 
+          = k * ShortestRotationAngle(θ, ψ) + b by mental_rotation_linearity
+        RotationTime(z)
+          = RotationTime(MentalRotation(y, φ, ψ))
+          = k * ShortestRotationAngle(φ, ψ) + b by mental_rotation_linearity
+        ShortestRotationAngle(θ, ψ) = ShortestRotationAngle(θ, φ) + ShortestRotationAngle(φ, ψ)
+          by additivity of shortest rotation angles
+        RotationTime(MentalRotation(x, θ, ψ)) = RotationTime(z) by substitution
+        MentalRotation(x, θ, ψ) = z by uniqueness of MentalRotation
+      }
+    }
+  }
+
+  LANGUAGE {
+    type MentalImage
+    type Orientation
+    type RotationTime
+
+    func MentalRotation (x : MentalImage, θ : Orientation, φ : Orientation) : MentalImage
+    func RotationTime (r : MentalRotation) : RotationTime
+    func ShortestRotationAngle (θ : Orientation, φ : Orientation) : Orientation
+    
+    pred "↦" (x : MentalImage, θ : Orientation) = x has orientation θ
+    pred "∝" (t : RotationTime, d : Orientation) = t is proportional to d
+  }
+}

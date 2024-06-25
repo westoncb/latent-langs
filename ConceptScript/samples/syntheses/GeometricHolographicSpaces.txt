@@ -1,0 +1,209 @@
+CONCEPT GeometricHolographicSpaces {
+  PARAMETERS {
+    d : Nat -- Ambient dimension 
+    N : Nat -- Rank of the gauge group
+    R : Real -- AdS radius
+    α' : Real -- String scale squared
+    g_s : Real -- String coupling  
+  }
+
+  CONTEXT {
+    TYPES {
+      Space := CS(ℝ^d)
+      Direction := {v ∈ 𝕊^(d-1)}
+      Subspace(n : Nat) := {S ∈ Space | dim(S) = n}  
+      
+      CellComplex {
+        SCALAR_FIELD Cells : Set(Subspace)
+        SCALAR_FIELD BoundaryMap : FUNC(Subspace, Subspace) 
+        STRUCTURE_FIELD CW : INDUCTIVE {
+          CASE Point : Cells(0)  
+          CASE Attach(ϕ : FUNC(𝕊^(n-1), Subspace(n-1)), b : Cells(n)) : Cells(n)
+        }
+        AXIOM BoundaryOfBoundaryIsEmpty {
+          FORALL (c : Cells) . BoundaryMap(BoundaryMap(c)) = ∅
+        }
+      }
+
+      Network {
+        SCALAR_FIELD Nodes : CellComplex
+        SCALAR_FIELD Edges : FUNC(Nodes.Cells(0), Nodes.Cells(0))
+        AXIOM LocallyFinite {
+          FORALL (v : Nodes.Cells(0)) . FINITE({w | (v, w) ∈ Edges})  
+        }
+      } 
+
+      Embedding(M N : Space) := FUNC(M, N)
+
+      Diagram(C D : Category) {
+        SCALAR_FIELD Objects : FUNC(C.Objects, D.Objects)
+        SCALAR_FIELD Morphisms : FUNC(C.Morphisms, D.Morphisms)
+        AXIOM Functorial {
+          Morphisms(f ∘ g) = Morphisms(f) ∘ Morphisms(g)
+          Morphisms(id_X) = id_{Objects(X)}
+        }
+      }
+    }
+    
+    STRUCTURES {      
+      STRUCTURE AdSCFTGeometry {
+        SCALAR_FIELD Boundary : Subspace(d-1)
+        SCALAR_FIELD Bulk : Space
+        SCALAR_FIELD BulkRadius : Real
+        STRUCTURE_FIELD PoincarePatch : {
+          SCALAR_FIELD Embedding : Embedding(ℍ^d, Bulk)
+          AXIOM IsometricEmbedding(u v : ℍ^d) {
+            d_H(u, v) = d_Bulk(Embedding(u), Embedding(v))
+          } 
+        }
+
+        AXIOM AdSMetric(x : Bulk) {
+          g_Bulk(x) = (R^2 / r(x)^2) dr(x)^2 + r(x)^2 / R^2 g_𝕊(θ(x)) 
+          WHERE (r, θ) = PoincarePatch.Embedding^(-1)(x)
+        }
+        AXIOM BoundaryLimit {
+          lim_{r -> ∞} PoincarePatch.Embedding(ℍ^d) = Boundary  
+        }
+      }
+      
+      STRUCTURE RealizationDiagram EXTENDS Diagram(Net, Space) {
+        IMPLEMENT Objects := v ↦ v.Subspace
+        IMPLEMENT Morphisms := e ↦ (u ↦ e.Embedding(u))
+
+        AXIOM IncidenceCompatibility {
+          FORALL (e : Net.Edges, c : e.Domain.BoundaryMap.Fiber(e.Codomain)) .
+            e.Embedding(c) ⊆ ∂(e.Codomain.Subspace)
+        }
+      }
+
+      STRUCTURE Tensor(k l : Nat) EXTENDS FUNC(V^k × V*^l, F) {
+        SCALAR_FIELD Components : F^(Dim(V)^(k+l))
+        IMPLEMENT MultilinearMap WITH {
+          FORALL (i : Fin(k), j : Fin(l), m_i : V, ω^j : V*) .
+            Apply(m_0, ..., ω^0, ...) = Σ_{i,j} Components[i,j] m_0[i_0] ... ω^0[j_0] ...
+        }
+      }
+
+      STRUCTURE Correlator {
+        SCALAR_FIELD FieldMap : FUNC(Fields, Subspace(0) -> Tensor(*))
+        SCALAR_FIELD nPoint(n : Nat) : FUNC(Fields^n × (Subspace(0))^n, F)
+          WITH nPoint ϕs xs = ⟨Π_i FieldMap(ϕ_i)(x_i)⟩  
+        AXIOM ConformalCovariance(g : Conf(d)) {
+          nPoint(ϕs, xs) = Π_i J[g](x_i)^{Δ_i} nPoint(ϕs, g(xs))
+        }
+        AXIOM CrossingSymmetry {
+          nPoint(ϕs, xs) = nPoint(σ(ϕs), σ(xs)) 
+        }
+      }
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE CorrelatorTensorProduct {
+      (⟨Π_i ϕ_i(x_i)⟩ ⟨Π_j ψ_j(y_j)⟩) <=>
+        ⟨Π_i ϕ_i(x_i) Π_j ψ_j(y_j)⟩
+    }
+
+    REWRITE OperatorStateCorrespondence(ψ : Hilbert, x : Subspace(0)) {
+      ⟨ψ|ϕ(x)|0⟩ <=> ϕ[x → 1](|ψ⟩)
+    }
+  }
+  
+  PROOFS {  
+    THEOREM RealizabilityTheorem {
+      FORALL (N : Network, X : Space, R R' : RealizationDiagram(N, X)) .     
+        R ≅ R' IFF (
+          FORALL (v : N.Nodes) . R.Objects(v) ≅ R'.Objects(v)
+          FORALL (e : N.Edges) . R.Morphisms(e) ≃ R'.Morphisms(e)
+        )
+    }
+    PROOF {
+      DEFINE HomSpace(R R' : RealizationDiagram) := {
+        η : FUNC(N.Nodes, X.Morphisms) |
+        FORALL (e : N.Edges) . η(e.Codomain) ∘ R.Morphisms(e) = R'.Morphisms(e) ∘ η(e.Domain)
+      }
+
+      ASSUME R R' : RealizationDiagram(N, X),
+             ObjectIsos : FORALL (v : N.Nodes) . R.Objects(v) ≅ R'.Objects(v),
+             MorphismHtpys : FORALL (e : N.Edges) . R.Morphisms(e) ≃ R'.Morphisms(e)
+
+      ObjectIsos 
+        ⇒ FORALL (v : N.Nodes) . ∃! (η_v : R.Objects(v) -> R'.Objects(v)) iso 
+      MorphismHtpys
+        ⇒ FORALL (e : N.Edges) . 
+            η_(e.Codomain) ∘ R.Morphisms(e) ≃ R'.Morphisms(e) ∘ η_(e.Domain)
+      
+      ⇒ ∃! (η : HomSpace(R, R')) . η : R ≅ R'
+
+      ⇐ ASSUME η : R ≅ R'
+         FORALL (v : N.Nodes) . 
+           R.Objects(v) ≅_{η_v} R'.Objects(v)
+         FORALL (e : N.Edges) .
+           R.Morphisms(e) ≃_{H_e} R'.Morphisms(e)
+           WHERE H_e(t) := η_(e.Codomain) ∘ R.Morphisms(e) ∘ η_(e.Domain)⁻¹ 
+    }
+
+    THEOREM RiemannHilbertCorrespondence {
+      FORALL (X : AdSCFTGeometry, ϕs : Correlators.Fields) .
+        ∃! (G : FUNC(X.Bulk^n, F)) . 
+          FORALL (xs : X.Boundary^n) .
+            lim_{x_i -> X.Boundary} G(x_1, ..., x_n) = Correlators.nPoint(ϕs, xs)  
+    }
+    PROOF {
+      ASSUME X : AdSCFTGeometry, ϕs : Correlators.Fields
+
+      DEFINE G(x_1, ..., x_n) := ∫_{γ_1, ..., γ_n} 
+        K(x_1, y_1) ... K(x_n, y_n) Correlators.nPoint(ϕs, y_1, ..., y_n)
+      WHERE γ_i : [0, ∞] -> X.Bulk with
+        γ_i(0) = x_i, lim_{t -> ∞} γ_i(t) ∈ X.Boundary
+      AND K(x, y) := C R^{d-1} ((1 - |w|^2) / |x - w|^2)^Δ
+        WHERE (r, w) = X.PoincarePatch.Embedding^(-1)(y)
+
+      THEN lim_{x_i -> X.Boundary} G(x_1, ..., x_n)
+             = lim_{x_i -> X.Boundary} ∫_{γ_1, ..., γ_n} 
+                K(x_1, y_1) ... K(x_n, y_n) Correlators.nPoint(ϕs, y_1, ..., y_n) [BY DEF G]
+             = ∫_{X.Boundary} K(x_1, y_1) ... K(x_n, y_n) Correlators.nPoint(ϕs, y_1, ..., y_n) 
+               [DOMINATED CONVERGENCE, LIMIT INTEGRAL EXCHANGE]
+             = Correlators.nPoint(ϕs, x_1, ..., x_n)
+               [BY K|_{X.Boundary} = δ, FUNDAMENTAL THEOREM OF CALCULUS]
+
+      UNIQUENESS_OF G {
+        ASSUME G' also satisfies boundary condition
+        SUFFICES_TO_SHOW G' = G
+        
+        G'(x_1, ..., x_n) - G(x_1, ..., x_n) 
+          = ∫_{γ_1, ..., γ_n} K(x_1, y_1) ... K(x_n, y_n) (G'(y_1, ..., y_n) - G(y_1, ..., y_n))
+            [BY INTEGRAL OPERATOR PROPERTY]
+          = 0 
+            [BY INDUCTION ON BULK DEPTH, G'|_{X.Boundary} = G|_{X.Boundary}]
+          QED  
+      }
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE HyperbolicSpace {
+      DEFINE X = ℍ^d
+      DEFINE Ideal_Boundary(X) := {x : X | x_d = 0}
+      DEFINE g_X(x)(v, w) := (1/x_d^2) ⟨v, w⟩_{ℝ^d} 
+      DEFINE vol_X(x) := dx_1 ∧ ... ∧ dx_n / x_d^d
+
+      THEN (X, g_X, vol_X, Ideal_Boundary(X)) satisfies AdSCFTGeometry
+    }
+
+    EXAMPLE NetworkEmbedding {
+      DEFINE N : Network WITH {
+        Nodes := {v_0, v_1, v_2, v_3, v_4}
+        Edges := {(v_i, v_j) | i < j}  
+      }
+      DEFINE ℍ³ : Space
+      DEFINE R : RealizationDiagram(N, ℍ³) WITH {
+        Objects(v_i) := B(p_i, r_i) 
+        Morphisms(e) := Cone(B(p_i, r_i), B(p_j, r_j))
+        WHERE {p_i} ⊂ ℍ³, {r_i} ⊂ ℝ₊ chosen s.t. B(p_i, r_i) ∩ B(p_j, r_j) =/= ∅ IFF v_i ~ v_j
+      } SATISFYING IncidenceCompatibility
+
+      THEN R describes a 3D hyperbolic network embedding of N
+    }  
+  }
+}

@@ -1,0 +1,130 @@
+CONCEPT InteractionCombinators {
+  CONTEXT {
+    TYPES {
+      Symbol := String
+      Cell := (Symbol, List(Port))
+      Port := (Cell, Nat)
+      Net := (Set(Cell), Set(Port), Set((Port, Port)))
+    }
+
+    NOTATION {
+      INFIX "→[_]" := Reduces
+      INFIX "→*[_]" := ReducesInMany
+      INFIX "→ᴵᶜ" := Reduces(?, InteractionCombinatorsSystem, ?)
+      INFIX "→*ᴵᶜ" := ReducesInMany(?, InteractionCombinatorsSystem, ?)
+      𝒯(_, _) := TranslationMap
+      MIXFIX "⟨_ ↦ _⟩_" := Substitution
+    }
+    
+    STRUCTURES {
+      STRUCTURE InteractionSystem {
+        FIELD alphabet : Set(Symbol)
+        FIELD rules : MAP((Symbol, Symbol), Net)
+        
+        AXIOM WellFormedRules(a b : Symbol)(α : Net) : 
+          rules(a, b) = α IMPLIES (a ∈ alphabet ∧ b ∈ alphabet ∧ Reduced(α))
+  
+        AXIOM Totality(a b : Symbol) :
+          a ∈ alphabet ∧ b ∈ alphabet IMPLIES ((a, b) ∈ rules.Keys ∨ (b, a) ∈ rules.Keys)
+      }
+    }
+  
+    DEFINITIONS {
+      Arity(s : Symbol) -> Nat
+      Interaction(a b : Symbol) -> Net?
+      Reduced(net : Net) -> Bool
+  
+      Reduces(net net' : Net, S : InteractionSystem) -> Bool
+      ReducesInMany(net net' : Net, S : InteractionSystem) -> Bool
+  
+      TranslationMap(S T : InteractionSystem) -> Set(FUNC(Net) -> Net) = 
+        {t : Net -> Net | Equivariant(t, S, T) ∧ ∀ net . Reduced(t(net), T) ⟺ Reduced(net, S)}
+
+      Symmetry := ∀ (a b : Symbol) (α β : Net) .
+        Interaction(a, b) = α ∧ Interaction(b, a) = β IMPLIES α = Flip(β)
+  
+      Determinism := ∀ (a b : Symbol)(α β : Net) .
+        Interaction(a, b) = α ∧ Interaction(a, b) = β IMPLIES α = β
+    }
+
+    AXIOMS {
+      PortCount(s : Symbol)(c : Cell)(ps : List(Port)) : 
+        c.1 = s ∧ c.2 = ps IMPLIES Length(ps) = Arity(s) + 1
+  
+      PortDistinct(c : Cell)(ps : List(Port))(i j : Nat) :
+        c ∈ net.1 ∧ (c, i) ∈ ps ∧ (c, j) ∈ ps ∧ i ≠ j IMPLIES (c, i) ≠ (c, j)
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE Substitution(net : Net, c : Cell, sub : Net) : Net
+      LET (cs, ps, ws) = net
+      IN (cs ∪ sub.1, ⟨c ↦ sub.2⟩ps, ⟨c ↦ sub.3⟩ws)
+  }
+
+  PROOFS {    
+    THEOREM ChurchRosser(S : InteractionSystem) {
+      ∀ net net₁ net₂ . (net →*[S] net₁ ∧ net →*[S] net₂) ⇒ 
+        (∃ result . net₁ →*[S] result ∧ net₂ →*[S] result)
+    }
+    PROOF {
+      ASSUME net : Net, net₁ net₂ : Net, 
+             net →*[S] net₁, net →*[S] net₂
+      
+      DEFINE LocalConfluence := ∀ net' net₁' net₂' .
+        (net' →[S] net₁' ∧ net' →[S] net₂') ⇒ 
+          (∃ result . net₁' →[S] result ∧ net₂' →[S] result)
+      
+      SHOW ∃ result . net₁ →*[S] result ∧ net₂ →*[S] result
+      PROOF {
+        net₁ →*[S] result₁ BY Assumption
+        net₂ = net →[S] ... →[S] net_k →[S] ... →[S] result₂
+        
+        result₁ = result₂ 
+          BY Induction, LocalConfluence
+        
+        TAKE result = result₁
+      }
+      
+      SHOW ∀ result₁ result₂ . 
+        (net₁ →*[S] result₁ ∧ net₂ →*[S] result₂) ⇒ result₁ = result₂  
+      PROOF {
+        ASSUME net₁ →*[S] result₁, net₂ →*[S] result₂
+        
+        net₁ →*[S] result₁ = net →[S] ... →[S] result₁  
+        net₂ →*[S] result₂ = net →[S] ... →[S] net_k →[S] ... →[S] result₂
+        
+        result₁ →[S] ... →[S] r₁  
+        result₂ →[S] ... →[S] r₂
+        
+        r₁ = r₂ BY Induction, Determinism
+        
+        HENCE result₁ = result₂
+      }
+    }
+    
+    THEOREM TranslationTheorem(S : InteractionSystem) {
+      ∃ (T : 𝒯(S, InteractionCombinatorsSystem)) . FaithfullyRepresents(T)  
+    }
+    PROOF {
+      LET C D E #p #q $p $q = InteractionCombinatorsSystem.alphabet
+      
+      DEFINE 𝒯 : 𝒯(S, InteractionCombinatorsSystem) {
+        ∀ a : S.alphabet . 𝒯(a) = TreeOf(CodesOf({α | (a, b) ↦ α ∈ S.rules}))
+        ∀ net : Net . 𝒯(net) = ⟨a ↦ 𝒯(a)⟩net
+      }
+      
+      SHOW Equivariant(𝒯)  
+      PROOF {
+        ASSUME net result : Net, net →[S] result
+        SHOW 𝒯(net) →*ᴵᶜ 𝒯(result)
+          BY DecodingSimulation
+      }
+      
+      SHOW ∀ net . Reduced(𝒯(net), InteractionCombinatorsSystem) ⟺ Reduced(net, S)
+        BY DecodingSimulation, Definitions
+      
+      HENCE FaithfullyRepresents(𝒯)
+    }
+  }
+}

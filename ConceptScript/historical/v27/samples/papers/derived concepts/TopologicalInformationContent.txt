@@ -1,0 +1,145 @@
+CONCEPT TopologicalInformationContent {
+  NOTATION {
+    M = FeatureMemoryComplex
+    M_i = FeatureMemoryComplex at layer i
+    X = input space
+    E_i: X -> M_i = encoder function at layer i  
+    d_i = intrinsic dimension of M_i
+    PHT_i = PersistentHomologyTransform of M_i
+    β_k(M_i) = dim H_k(M_i) = k-th Betti number of M_i
+    φ_i = TopologicalInformationContent of M_i
+    ψ_i = GeometricInformationContent of M_i
+    ρ(x,y) = correlation between x and y
+  }
+
+  LANGUAGE {
+    TYPE FeatureMemoryComplex = SimplicialComplex
+    TYPE PersistentHomologyTransform = F: SimplicialComplex -> PersistenceDiagram
+    TYPE TopologicalVector = [β_0, β_1, ..., β_k]
+    
+    FUNC PersistentBetti(k: ℕ, M: FeatureMemoryComplex, p: ℝ, q: ℝ): ℕ =
+      LET D = PHT(M) IN
+      COUNT(b ∈ D.k_dim_pairs : b.birth ≤ p ∧ b.death > q)
+
+    FUNC TopologicalEntropy(M: FeatureMemoryComplex, k_max: ℕ): ℝ =
+      ∑_{k=0}^{k_max} β_k(M) * log(β_k(M))
+
+    FUNC TopologicalInformationContent(M: FeatureMemoryComplex, k_max: ℕ, p: ℝ, q: ℝ): ℝ =
+      ∑_{k=0}^{k_max} PersistentBetti(k, M, p, q) * log(PersistentBetti(k, M, p, q))
+
+    FUNC GeometricInformationContent(M: FeatureMemoryComplex): ℝ =
+      d_M * log(VolumeRatio(M))
+      
+    FUNC VolumeRatio(M: FeatureMemoryComplex): ℝ =
+      LET C = MinimalCoveringOfM IN
+      VolumeBound(C) / ∏_{σ ∈ C} Volume(BoundingSimplex(σ))
+
+    FUNC PartitionFunction(M: FeatureMemoryComplex, β: ℝ): ℝ =
+      ∑_{σ ∈ M} exp(-β * DimensionDistortion(σ))
+      
+    FUNC DimensionDistortion(σ: Simplex): ℝ =
+      LET d_σ = IntrinsicDimension(σ) IN
+      |d_σ - d_M| / d_M
+
+    FUNC LocalTopologicalCorrelation(i: ℕ, j: ℕ, p: ℝ, q: ℝ, k_max: ℕ): ℝ =
+      ρ(TopologicalInformationContent(M_i, k_max, p, q), 
+        TopologicalInformationContent(M_j, k_max, p, q))
+        
+    FUNC GlobalTopologicalCorrelation(p: ℝ, q: ℝ, k_max: ℕ): ℝ =
+      MEAN(LocalTopologicalCorrelation(i, i+1, p, q, k_max) for i in [0..L-1])
+  }
+  
+  THEOREMS {
+    THEOREM TopologicalInformationBound:
+      ∀ M: FeatureMemoryComplex, k_max: ℕ, p: ℝ, q: ℝ .
+        TopologicalEntropy(M, k_max) ≥ TopologicalInformationContent(M, k_max, p, q)
+    {
+      TopologicalInformationContent(M, k_max, p, q) 
+         = ∑_{k=0}^{k_max} PersistentBetti(k, M, p, q) * log(PersistentBetti(k, M, p, q))
+        ≤ ∑_{k=0}^{k_max} β_k(M) * log(β_k(M))  -- Since PersistentBetti(k,M,p,q) ≤ β_k(M)
+        = TopologicalEntropy(M, k_max)
+      QED
+    }
+
+    THEOREM GeometricTopologicalDecomposition:
+      ∀ M: FeatureMemoryComplex, k_max: ℕ, p: ℝ, q: ℝ .
+        log(PartitionFunction(M, β)) = 
+          TopologicalInformationContent(M, k_max, p, q) + β * GeometricInformationContent(M) 
+          + O(1/β)
+    {
+      SKETCH:
+      - Express partition function as sum over Morse complex cells
+      - Approximate cell volume by local dimension distortion
+      - Relate number of cells to persistent Betti numbers
+      - Take β → ∞ limit and equate terms
+    }
+    
+    THEOREM GeneralizationCorrelation:
+      ρ(TopologicalInformationContent(M_L-1, k_max, p, q), GeneralizationError) > 0
+      for suitable k_max, p, q
+    {
+      ARGUMENT:
+      - High topological information in final layer → overparametrized/overfitted
+        - Many small holes between densely clustered class representations
+      - Low topological information in final layer → underparametrized/underfitted  
+        - Few large voids between coarsely separated class representations
+      - Optimal topological information → balanced separability and generalizability
+        - Persistent homology of appropriate scale detects decision boundary complexity
+    } 
+    
+    THEOREM TopologicalInformationBottleneck:
+      GlobalTopologicalCorrelation(p, q, k_max) ≤
+        MAX[LocalTopologicalCorrelation(i, i+1, p, q, k_max) for i in [0..L-2]]
+      for suitable p, q, k_max  
+    {
+      ARGUMENT:
+      - Topological bottleneck: layer where topological complexity most compressed
+      - Maximally informative about input-output relationship
+      - Analogous to information bottleneck in information theory
+      - Can be detected by drop in local topological correlation across layers
+    }
+  }
+  
+  EXAMPLES {
+    EXAMPLE GeneralizationPerformance {
+      LET V = vision transformer trained on IMAGENET IN
+      LET M_i = FeatureMemoryComplex(V.Activations(i)) for i in [0..11] IN
+      
+      PLOT TrainingError, TestError, TopologicalInformationContent(M_i, 2, 0, ∞) vs i
+      
+      OBSERVE:
+        - TopologicalInformationContent decreases during training
+        - Reaches minimum at early stopping point 
+        - Increases in overfitting regime
+        - Negatively correlated with test error
+    }
+    
+    EXAMPLE DomainAdaptation {
+      LET V_S = vision transformer pretrained on source domain S IN
+      LET V_T = vision transformer finetuned on target domain T IN
+      LET M_i_S = FeatureMemoryComplex(V_S.Activations(i)) for i in [0..11] IN  
+      LET M_i_T = FeatureMemoryComplex(V_T.Activations(i)) for i in [0..11] IN
+      
+      PLOT ∑_{k=0}^{k_max} |PersistentBetti(M_i_S, k, 0, ∞) - PersistentBetti(M_i_T, k, 0, ∞)| vs i
+      
+      OBSERVE:
+        - Topological difference between domains highest in middle layers  
+        - Adaptation by topological alignment of feature spaces
+        - Reduce difference by topological regularization during finetuning
+    }
+
+    EXAMPLE RobustnessUnderAttack {
+      LET V = vision transformer trained on IMAGENET IN
+      LET M_i = FeatureMemoryComplex(V.Activations(i)) for i in [0..11] IN
+      LET M'_i = FeatureMemoryComplex(V.Activations(i, UnderFastGradientAttack)) IN
+      
+      PLOT GlobalTopologicalCorrelation(M_i, M'_i, 0, ∞, 2) vs i 
+      
+      OBSERVE:
+        - Topological correlation between clean and attacked activations 
+          decreases in final layers
+        - Suggests decision boundary distortion  
+        - Regularize to improve topological robustness
+    }
+  }
+}

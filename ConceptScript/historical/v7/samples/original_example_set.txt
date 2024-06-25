@@ -1,0 +1,365 @@
+EXTEND Algebra {
+  Set := (Elements, Operations)
+  Group := Set(Elements:G, Operations:(+)) {
+    [∀a,b ∈ G, a + b ∈ G] // Closure
+    [∀a,b,c ∈ G, (a + b) + c = a + (b + c)] // Associativity
+    [∃e ∈ G, ∀a ∈ G, a + e = e + a = a] // Identity
+    [∀a ∈ G, ∃b ∈ G, a + b = b + a = e] // Inverse
+  }
+  Ring := Set(Elements:R, Operations:(+, *)) {
+    [R under + is an abelian Group] // Additive group
+    [∀a,b ∈ R, a * b ∈ R] // Multiplicative closure
+    [∀a,b,c ∈ R, (a * b) * c = a * (b * c)] // Multiplicative associativity
+    [∃1 ∈ R, ∀a ∈ R, a * 1 = 1 * a = a] // Multiplicative identity
+    [∀a,b,c ∈ R, a * (b + c) = a * b + a * c] // Distributivity
+  }
+  Field := Ring(R) {
+    [∀a ∈ R\{0}, ∃b ∈ R, a * b = b * a = 1] // Multiplicative inverse
+  }
+}
+
+GeometricSpace := (
+  Points : Set,
+  Lines : Set(Point, Point),
+  Distances : Points × Points -> R⁺,
+  Angles : Lines × Lines -> [0, π]
+)
+GIVEN {
+  R := Algebra.Field(ℝ)
+  R⁺ := {x ∈ R | x > 0}
+  EuclideanPlane := GeometricSpace(
+    Points : R × R,
+    Lines : {((x1, y1), (x2, y2)) | x1, y1, x2, y2 ∈ R},
+    Distances : ((x1, y1), (x2, y2)) ↦ √((x2 - x1)^2 + (y2 - y1)^2),
+    Angles : (((x1, y1), (x2, y2)), ((x3, y3), (x4, y4))) ↦ arccos((u·v) / (|u||v|))
+  ) {
+    [u := (x2 - x1, y2 - y1), v := (x4 - x3, y4 - y3)]
+    [|u| := √((x2 - x1)^2 + (y2 - y1)^2), |v| := √((x4 - x3)^2 + (y4 - y3)^2)]
+    [u·v := (x2 - x1)(x4 - x3) + (y2 - y1)(y4 - y3)]
+  }
+}
+ASSERT {
+  [∀A,B,C ∈ EuclideanPlane.Points, Distances(A, B) + Distances(B, C) ≥ Distances(A, C)] // Triangle inequality
+  [∀l,m ∈ EuclideanPlane.Lines, Angles(l, m) + Angles(m, l) = π] // Supplementary angles
+}
+PROOF {
+  Theorem: ∀A,B,C ∈ EuclideanPlane.Points, Distances(A, C)^2 + Distances(B, C)^2 ≥ Distances(A, B)^2
+  
+  Proof:
+    Let A, B, C ∈ EuclideanPlane.Points.
+    Let A = (x1, y1), B = (x2, y2), C = (x3, y3).
+    By the definition of Distances in EuclideanPlane, we have:
+      Distances(A, C)^2 = (x3 - x1)^2 + (y3 - y1)^2
+      Distances(B, C)^2 = (x3 - x2)^2 + (y3 - y2)^2
+      Distances(A, B)^2 = (x2 - x1)^2 + (y2 - y1)^2
+    Expanding the squares and simplifying:
+      Distances(A, C)^2 + Distances(B, C)^2 - Distances(A, B)^2
+      = 2(x3 - x1)(x3 - x2) + 2(y3 - y1)(y3 - y2)
+      = 2((x3 - x1)(x3 - x2) + (y3 - y1)(y3 - y2))
+      = 2((x3 - x1, y3 - y1)·(x3 - x2, y3 - y2))
+    By the Cauchy-Schwarz inequality in R^2, we have:
+      ((x3 - x1, y3 - y1)·(x3 - x2, y3 - y2))^2 ≤ |(x3 - x1, y3 - y1)|^2|(x3 - x2, y3 - y2)|^2
+    Therefore:
+      2((x3 - x1, y3 - y1)·(x3 - x2, y3 - y2)) ≥ 0
+      Distances(A, C)^2 + Distances(B, C)^2 - Distances(A, B)^2 ≥ 0
+      Distances(A, C)^2 + Distances(B, C)^2 ≥ Distances(A, B)^2
+}
+
+
+
+  EXTEND Computation {
+    Complexity := (Time, Space)
+    Problem := (Instance, Question)
+    Algorithm := (Input, Output, Procedure)
+    DataStructure := (Store, Retrieve, Modify)
+    
+    Reduction(P1 : Problem, P2 : Problem) := (
+      InstanceMap : P1.Instance -> P2.Instance,
+      SolutionMap : P2.Question -> P1.Question
+    ) {
+      [∀i ∈ P1.Instance, ∀q ∈ P1.Question,
+        (SolutionMap(P2.Question(InstanceMap(i))) = q) ⟺ (P1.Question(i) = q)]
+    }
+    
+    Hardness(P : Problem, C : Complexity) := {
+      [∄A : Algorithm, A solves P in O(C.Time) time and O(C.Space) space]
+    }
+    
+    Completeness(P : Problem, C : Complexity) := {
+      [∀Q : Problem, Q ∈ C ⟹ ∃Reduction(Q, P)]
+    }
+  }
+
+  SatisfiabilityProblem := (
+    Instance : Formula(Variables, Operators),
+    Question : IsSatisfiable
+  )
+  GIVEN {
+    Variables := {x1, x2, ..., xn}
+    Operators := {AND, OR, NOT}
+    IsSatisfiable(f : Formula) := ∃Assignment(Variables -> {True, False}), f evaluates to True
+    
+    Formula(Variables, Operators) := (
+      Var(x : Variables) |
+      Not(f : Formula) |
+      And(f1 : Formula, f2 : Formula) |
+      Or(f1 : Formula, f2 : Formula)
+    )
+    
+    AssignmentSearch := Algorithm(
+      Input : Formula(Variables, Operators),
+      Output : Assignment(Variables -> {True, False}),
+      Procedure : ExhaustiveSearch
+    )
+    
+    NPComplexity := (Time : Exponential, Space : Polynomial)
+  }
+  ASSERT {
+    [Hardness(SatisfiabilityProblem, NPComplexity)] // SAT is NP-hard
+    [Completeness(SatisfiabilityProblem, NPComplexity)] // SAT is NP-complete
+    [∀P : Problem, P ∈ NPComplexity ⟹ ∃Reduction(P, SatisfiabilityProblem)] // Cook-Levin theorem
+  }
+  PROOF {
+    Theorem: ∀P : Problem, P ∈ NPComplexity ⟹ ∃Reduction(P, SatisfiabilityProblem)
+    
+    Proof:
+      Let P be an arbitrary problem in NPComplexity.
+      By the definition of NPComplexity, there exists a non-deterministic Turing machine M that decides P in polynomial time.
+      We construct a reduction from P to SatisfiabilityProblem as follows:
+        InstanceMap(i : P.Instance) := f : Formula {
+          f encodes the computation of M on input i
+          Each variable in f represents a cell of M's tape at a specific time step
+          Each clause in f represents a transition rule of M
+          f is satisfiable ⟺ M accepts i
+        }
+        SolutionMap(s : IsSatisfiable) := (s = True) ? Accept : Reject
+      To show that this is a valid reduction, we need to prove:
+        ∀i ∈ P.Instance, ∀q ∈ P.Question,
+          (SolutionMap(SatisfiabilityProblem.Question(InstanceMap(i))) = q) ⟺ (P.Question(i) = q)
+      Expanding the definitions:
+        ∀i ∈ P.Instance, ∀q ∈ P.Question,
+          ((IsSatisfiable(f) = True) ? Accept : Reject = q) ⟺ (M accepts i ⟺ q = Accept)
+      By the construction of f:
+        IsSatisfiable(f) = True ⟺ M accepts i
+      Therefore, the reduction is valid, and P reduces to SatisfiabilityProblem.
+      Since P was arbitrary, the theorem holds.
+  }
+
+
+
+
+
+
+
+EXTEND QuantumComputation {
+  Qubit := (State, Operator)
+  State := (Superposition, Entanglement)
+  Operator := (Unitary, Measurement)
+  Superposition(α, β) := α|0⟩ + β|1⟩ WHERE |α|^2 + |β|^2 = 1
+  Entanglement(q1, q2) := α|00⟩ + β|11⟩ WHERE |α|^2 + |β|^2 = 1
+  Unitary(U) := U^†U = UU^† = I
+  Measurement(q) := |0⟩ WITH PROBABILITY |α|^2, |1⟩ WITH PROBABILITY |β|^2
+}
+
+QuantumTeleportation := (
+  Alice : (Qubit, Qubit),
+  Bob : Qubit,
+  EntangledPair : QuantumComputation.Entanglement,
+  BellMeasurement : QuantumComputation.Operator.Measurement,
+  UnitaryCorrection : QuantumComputation.Operator.Unitary
+)
+GIVEN {
+  |ψ⟩ := α|0⟩ + β|1⟩
+  |Φ⁺⟩ := (|00⟩ + |11⟩) / √2
+  H := (|0⟩⟨0| + |0⟩⟨1| + |1⟩⟨0| - |1⟩⟨1|) / √2
+  X := |0⟩⟨1| + |1⟩⟨0|
+  Z := |0⟩⟨0| - |1⟩⟨1|
+}
+WHERE {
+  EntangledPair(Alice.Qubit, Bob.Qubit) = |Φ⁺⟩
+  BellMeasurement(Alice.Qubit, |ψ⟩) = (I ⊗ H ⊗ I)(CNOT ⊗ I)(Alice.Qubit ⊗ |ψ⟩)
+  UnitaryCorrection(Bob.Qubit) = X^m ⊗ Z^n WHERE (m, n) = BellMeasurement(Alice.Qubit, |ψ⟩)
+}
+ASSERT {
+  [UnitaryCorrection(Bob.Qubit) = |ψ⟩]
+}
+PROOF {
+  Theorem: QuantumTeleportation ⟹ Bob.Qubit = |ψ⟩
+  
+  Proof:
+    Let |ψ⟩ be the state to be teleported, and |Φ⁺⟩ be the entangled pair shared by Alice and Bob.
+    The initial state of the system is: |ψ⟩ ⊗ |Φ⁺⟩
+    Applying the Bell measurement on Alice's qubits yields:
+      (I ⊗ H ⊗ I)(CNOT ⊗ I)(|ψ⟩ ⊗ |Φ⁺⟩)
+      = (α|00⟩ + β|01⟩) ⊗ |0⟩ + (α|10⟩ + β|11⟩) ⊗ |1⟩
+    Depending on the outcome (m, n) of the Bell measurement, Bob applies the unitary correction:
+      U_mn = X^m ⊗ Z^n
+    After applying the correction, Bob's qubit becomes:
+      U_mn((α|00⟩ + β|01⟩) ⊗ |0⟩ + (α|10⟩ + β|11⟩) ⊗ |1⟩)
+      = α|0⟩ + β|1⟩ = |ψ⟩
+    Therefore, the state |ψ⟩ has been successfully teleported to Bob's qubit.
+}
+
+
+
+
+
+EXTEND CognitiveBiases {
+  Bias := (Heuristic, Systematic)
+  Heuristic := (Availability, Representativeness, Anchoring)
+  Systematic := (Confirmation, Framing, Hindsight)
+  Availability(P) := P(A) ∝ Retrievability(A)
+  Representativeness(P) := P(A|B) ∝ Similarity(A, B)
+  Anchoring(E) := E = InitialEstimate + Adjustment
+  Confirmation(H, E) := P(H|E) > P(H) IF P(E|H) > P(E|¬H)
+  Framing(A, F) := Preference(A) ∝ F
+  Hindsight(O) := P(O|Observed) > P(O|¬Observed)
+}
+
+DecisionMaking := (
+  Options : List(Option),
+  Preferences : List(Preference),
+  Biases : CognitiveBiases.Bias,
+  Choice : Option
+)
+GIVEN {
+  Preference(A, B) := Value(A) > Value(B)
+  Value(O) := Σ(a : Attribute, Importance(a) × Score(O, a))
+  ExpectedUtility(A) := Σ(o : Outcome, P(o|A) × Utility(o))
+}
+WHERE {
+  Choice = ArgMax(O : Options, ExpectedUtility(O))
+  ExpectedUtility(O) ≠ Value(O) WHEN ∃(b : Biases, b(O))
+}
+ASSERT {
+  [Rational(Choice) ⟺ ∀(b : Biases, ¬b(Choice))]
+}
+PROOF {
+  Theorem: ∀(O1, O2 : Options, Preference(O1, O2) ⟹ Choice = O1)
+  
+  Proof:
+    Let O1 and O2 be arbitrary options such that Preference(O1, O2) holds.
+    By the definition of Preference, we have:
+      Value(O1) > Value(O2)
+    By the definition of ExpectedUtility and the WHERE block, we have:
+      ExpectedUtility(O1) = Value(O1) IF ¬∃(b : Biases, b(O1))
+      ExpectedUtility(O2) = Value(O2) IF ¬∃(b : Biases, b(O2))
+    Assuming ¬∃(b : Biases, b(O1) ∨ b(O2)), we get:
+      ExpectedUtility(O1) > ExpectedUtility(O2)
+    By the definition of Choice in the WHERE block, we have:
+      Choice = ArgMax(O : Options, ExpectedUtility(O))
+    Therefore, Choice = O1, and the theorem holds.
+    
+  Corollary: ∃(O1, O2 : Options, Preference(O1, O2) ∧ Choice = O2) ⟹ ∃(b : Biases, b(Choice))
+  
+  Proof:
+    Let O1 and O2 be options such that Preference(O1, O2) and Choice = O2.
+    By the theorem above, we have:
+      Choice ≠ O1 ⟹ ∃(b : Biases, b(O2))
+    Therefore, the corollary holds.
+}
+
+
+EXTEND Algebra {
+  Group := (Set, BinaryOperation)
+  Semigroup := (Set, AssociativeBinaryOperation)
+  Monoid := (Semigroup, Identity)
+  Ring := (AdditionGroup, MultiplicationMonoid)
+  Field := (CommutativeRing, MultiplicativeInverse)
+}
+
+EXTEND Geometry {
+  VectorSpace := (Field, Addition, ScalarMultiplication)
+  InnerProductSpace := (VectorSpace, InnerProduct)
+  NormedVectorSpace := (VectorSpace, Norm)
+  HilbertSpace := (CompleteInnerProductSpace)
+}
+
+LinearMap := (
+  Source : VectorSpace,
+  Target : VectorSpace,
+  Transformation : ∀(u, v : Source, α : Field, T(u + v) = T(u) + T(v) ∧ T(α × u) = α × T(u))
+)
+GIVEN {
+  V, W : VectorSpace
+  T : LinearMap(V, W)
+  KerT := {v : V | T(v) = 0}
+  ImT := {w : W | ∃(v : V, T(v) = w)}
+}
+WHERE {
+  Injective(T) := ∀(u, v : V, T(u) = T(v) ⟹ u = v)
+  Surjective(T) := ∀(w : W, ∃(v : V, T(v) = w))
+  Bijective(T) := Injective(T) ∧ Surjective(T)
+}
+ASSERT {
+  [Algebra.Group ⊆ Algebra.Monoid ⊆ Algebra.Ring ⊆ Algebra.Field]
+  [Geometry.VectorSpace ⊆ Geometry.NormedVectorSpace ⊆ Geometry.InnerProductSpace ⊆ Geometry.HilbertSpace]
+  [KerT = {0} ⟺ Injective(T)]
+  [ImT = W ⟺ Surjective(T)]
+  [Bijective(T) ⟺ ∃(S : LinearMap(W, V), ∀(v : V, S(T(v)) = v) ∧ ∀(w : W, T(S(w)) = w))]
+}
+PROOF {
+  Theorem: ∀(T : LinearMap(V, W), dim(KerT) + dim(ImT) = dim(V))
+  
+  Proof:
+    Let T be an arbitrary LinearMap from V to W.
+    Consider the following short exact sequence:
+      0 → KerT → V → ImT → 0
+    where the first map is the inclusion, the second map is T, and the third map is the zero map.
+    By the rank-nullity theorem, we have:
+      dim(V) = dim(KerT) + dim(ImT)
+    Therefore, the theorem holds.
+}
+
+
+
+EXTEND ComputabilityTheory {
+  Model := (Computation, Problem)
+  TuringMachine := (States, Alphabet, TransitionFunction, StartState, AcceptState, RejectState)
+  LambdaCalculus := (Terms, Variables, Abstraction, Application, Reduction)
+  RecursiveFunction := (NaturalNumbers, Composition, Primitive_Recursion, Minimization)
+}
+
+EXTEND ComplexityTheory {
+  Complexity := (Model, Resource)
+  TimeComplexity := (TuringMachine, NumberOfSteps)
+  SpaceComplexity := (TuringMachine, NumberOfTapeCells)
+  AsymptoticNotation := (BigO, BigOmega, BigTheta)
+  ComplexityClass := (P, NP, PSPACE, EXPTIME, LOGSPACE)
+}
+
+Reduction := (
+  SourceProblem : Problem,
+  TargetProblem : Problem,
+  Transformation : ∀(I : SourceProblem.Instance, T(I) ∈ TargetProblem.Instance) ∧
+                   ∀(I : SourceProblem.Instance, I ∈ SourceProblem.Language ⟺ T(I) ∈ TargetProblem.Language)
+)
+GIVEN {
+  A, B : Problem
+  ≤p : Reduction(A, B)
+  ≤m : Reduction(A, B) ∧ ∀(I : A.Instance, T(I) is computable in polynomial time)
+}
+WHERE {
+  NP_Hard(B) := ∀(A : NP, A ≤p B)
+  NP_Complete(B) := B ∈ NP ∧ NP_Hard(B)
+}
+ASSERT {
+  [ComputabilityTheory.TuringMachine ≡ ComputabilityTheory.LambdaCalculus ≡ ComputabilityTheory.RecursiveFunction]
+  [ComplexityTheory.P ⊆ ComplexityTheory.NP ⊆ ComplexityTheory.PSPACE ⊆ ComplexityTheory.EXPTIME]
+  [A ≤p B ∧ B ∈ P ⟹ A ∈ P]
+  [A ≤m B ∧ B ∈ NP ⟹ A ∈ NP]
+  [NP_Complete(B) ⟺ B ∈ NP ∧ ∀(A : NP, A ≤m B)]
+}
+PROOF {
+  Theorem: ∀(A, B : Problem, A ≤p B ∧ NP_Hard(B) ⟹ NP_Hard(A))
+  
+  Proof:
+    Let A and B be arbitrary problems, and assume A ≤p B and NP_Hard(B).
+    Let C be an arbitrary problem in NP.
+    By the definition of NP_Hard, we have C ≤p B.
+    By the transitivity of reductions, we have:
+      C ≤p A ≤p B
+    Therefore, C ≤p A.
+    Since C was arbitrary, we have ∀(C : NP, C ≤p A), which is the definition of NP_Hard(A).
+    Therefore, the theorem holds.
+}

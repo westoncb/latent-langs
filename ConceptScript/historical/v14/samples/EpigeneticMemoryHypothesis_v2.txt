@@ -1,0 +1,121 @@
+CONCEPT EpigeneticMemoryHypothesis_v2 {
+  LANGUAGE {
+    type Neuron = {
+      epigenome: Epigenome,
+      synapses: Synapse[],
+      activity: Real
+    }
+    
+    type Epigenome = {
+      methylation: BitVector,
+      acetylation: BitVector
+    }
+    
+    type Synapse = {
+      preNeuron: Neuron,
+      postNeuron: Neuron,
+      strength: Real
+    }
+    
+    type Memory = Sequence<Bit>
+    type Time = Nat
+    
+    notation "⟦⟧_t" = TemporalEncoding
+    notation "⟬⟭_t" = TemporalDecoding
+    notation "⊛_t" = TemporalAssociation
+    notation "Δ" = Difference
+    
+    func Methylate(E: Epigenome, M: Memory): Epigenome = 
+      {methylation = E.methylation | encode(M),
+       acetylation = E.acetylation}
+       
+    func Acetylate(E: Epigenome): Epigenome =
+      {methylation = E.methylation,
+       acetylation = ~E.methylation}
+       
+    func TemporalEncoding(m: Memory, t: Time): Epigenome =
+      Acetylate(Methylate(0, m))
+      
+    func TemporalDecoding(E: Epigenome, t: Time): Memory =
+      decode(E.methylation & E.acetylation) 
+      
+    func TemporalAssociation(N: Neuron, m: Memory, t: Time) = {
+      require N.activity > θ_activity;
+      N.epigenome := ⟦m⟧_t
+    }
+    
+    func HebbianPlasticity(S: Synapse, t: Time) =
+      Δ(S.strength) = η * S.preNeuron.activity * S.postNeuron.activity
+      
+    pred Recalls(N: Neuron, m: Memory, t: Time) ⇔
+      N.activity > θ_activity ∧ ⟬N.epigenome⟭_t ≈ m
+      
+    pred Associates(N: Neuron, m1: Memory, m2: Memory, t: Time) ⇔
+      ∃t1 < t, t2 < t. N ⊛_t1 m1 ∧ N ⊛_t2 m2 ∧ |t1 - t2| ≤ τ
+      
+    axiom EpiAc1(N: Neuron, t: Time):  
+      N.activity > θ_activity ⇒ N.epigenome := Acetylate(N.epigenome)
+      
+    axiom EpiAc2(N: Neuron, t: Time):
+      N.activity ≤ θ_activity ⇒ N.epigenome := Deacetylate(N.epigenome)
+  }
+  
+  STRUCTURE {
+    [MemoryTrace(m: Memory, t: Time) = 
+      {N: Neuron | ⟦m⟧_t ⊑ N.epigenome}
+    ]
+       
+    [MemoryRecall(m: Memory, t: Time) ⇔
+      ∃N ∈ MemoryTrace(m, t). Recalls(N, m, t)
+    ]
+    
+    [MemoryAssociation(m1: Memory, m2: Memory, t: Time) ⇔
+      ∃N: Neuron. Associates(N, m1, m2, t)
+    ]
+      
+    [MemoryExtinction(m: Memory, t: Time) ⇔
+      ∀N ∈ MemoryTrace(m, t). N.activity = 0
+    ]
+      
+    [MemoryReconsolidation(m: Memory, t: Time) ⇔ 
+      ∃N ∈ MemoryTrace(m, t). N ⊛_t EncodedMemory(N.epigenome, t)
+    ]
+  }
+  
+  PROOFS {
+    theorem MemoryPersistence:
+      ∀m: Memory, t: Time. MemoryRecall(m, t) ⇒ MemoryRecall(m, t+1)
+    {
+      assume m: Memory, t: Time
+      assume MemoryRecall(m, t)
+      
+      let N: Neuron such that N ∈ MemoryTrace(m, t) ∧ Recalls(N, m, t)
+      
+      have N.epigenome := Acetylate(N.epigenome)  ; by EpiAc1 and assumption
+      have Recalls(N, m, t+1)                    ; by definition of Recalls
+      hence MemoryRecall(m, t+1)                 ; by definition of MemoryRecall
+    }
+    
+    tactic FindAssociatedMemories(N: Neuron, t: Time) = {
+      let associated = {}
+      for m : Memory do
+        if Associates(N, m, _, t) then associated := associated ∪ {m}
+      qed associated
+    }
+    
+    theorem AssociationSymmetry:
+      ∀m1 m2: Memory, t: Time. MemoryAssociation(m1, m2, t) ⇒ MemoryAssociation(m2, m1, t)
+    {
+      assume m1 m2: Memory, t: Time  
+      assume MemoryAssociation(m1, m2, t)
+      
+      let N: Neuron such that Associates(N, m1, m2, t)
+      let t1, t2 < t such that N ⊛_t1 m1 ∧ N ⊛_t2 m2 ∧ |t1 - t2| ≤ τ
+      
+      have N ⊛_t2 m2 ∧ N ⊛_t1 m1          ; by commutativity of ∧
+      have |t2 - t1| ≤ τ                   ; by symmetry of |⋅|
+      hence Associates(N, m2, m1, t)       ; by definition of Associates
+      hence MemoryAssociation(m2, m1, t)   ; by definition of MemoryAssociation
+    }
+  }
+}

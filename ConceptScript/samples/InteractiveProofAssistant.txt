@@ -1,0 +1,229 @@
+CONCEPT InteractiveProofAssistant {
+  PARAMETERS {
+    Sentence : TYPE
+    Formula : TYPE 
+    Proof : TYPE
+  }
+  
+  CONTEXT {
+    TYPES {
+      Context := List(Sentence)
+      Goal := Formula
+      State := (Context, Goal)
+      Rule := FUNC(State, List(State))
+      ProofState := (Proof, State)
+      Tactic := FUNC(ProofState, List(ProofState))
+      
+      INDUCTIVE ProofTree {
+        CASE Theorem(ctx : Context, phi : Formula, prf : Proof)        
+        CASE Hypothesis(ctx : Context, phi : Formula)
+        CASE Conjunction(lhs : ProofTree, rhs : ProofTree) 
+        CASE Implication(hyp : Sentence, tree : ProofTree)
+        CASE Universal(x : Symbol, tree : ProofTree)
+      }
+      
+      Language := (Sentence, Formula, Proof)
+      Theory := (Language, List(Rule))
+    }
+    
+    NOTATION {
+      "Γ ⊢ φ" := (Γ : Context, φ : Formula)
+      "τ : Γ ⊢ φ" := (Γ : Context, φ : Formula, τ : Tactic)
+      "⟨Γ, φ⟩" := (Γ : Context, φ : Formula)
+      "Γ, φ ⊢ ψ" := Implication(φ, Hypothesis(Γ, ψ))
+      "∀ x . φ" := Universal(x, φ)
+    }
+    
+    STRUCTURES {
+      STRUCTURE NaturalDeductionProver(theory : Theory) {
+        IMPLEMENT Tactic {
+          CASE Assumption => (
+            MATCH ⟨Γ, φ⟩ 
+            WHERE φ ∈ Γ
+            RETURN [Theorem(Γ, φ, φ)]
+          )
+          CASE Conjunction(τ1, τ2) => (
+            MATCH ⟨Γ, φ1 ∧ φ2⟩
+            LET [Theorem(Γ1, φ1, π1)] = τ1(Γ, φ1)
+            LET [Theorem(Γ2, φ2, π2)] = τ2(Γ, φ2)
+            RETURN [Theorem(Γ1 ∪ Γ2, φ1 ∧ φ2, Conjunction(π1, π2))]   
+          )
+          CASE Implication(φ, τ) => (
+            MATCH ⟨Γ, φ → ψ⟩
+            LET [Theorem(Γ', ψ, π)] = τ(Γ ∪ {φ}, ψ)
+            RETURN [Theorem(Γ, φ → ψ, Implication(φ, π))]
+          )
+          CASE Universal(x, τ) => (
+            MATCH ⟨Γ, ∀ x . φ⟩
+            LET [Theorem(Γ, φ, π)] = τ(Γ, φ) 
+            RETURN [Theorem(Γ, ∀ x . φ, Universal(x, π))]
+          )
+        }
+        
+        IMPLEMENT Rule
+          MATCH (Γ, _)
+          REWRITE (Γ, φ2) 
+          WHERE φ1 ∈ Γ AND (φ1, φ2) ∈ theory.2
+      }
+      
+      STRUCTURE ProofAssistantInterface {
+        FIELD Prover : NaturalDeductionProver
+        FIELD CurrentProof : ProofState
+        
+        FUNC Prove(Γ : Context, φ : Formula) -> Proof
+          SET CurrentProof := (EmptyProof, ⟨Γ, φ⟩)
+          REPEAT {
+            PRINT "Current subgoal:", CurrentProof.2
+            INPUT τ : Tactic 
+            MATCH τ(CurrentProof) {
+              CASE [] => FAIL "Tactic not applicable"
+              CASE [(prf, ⟨[], _⟩)] => RETURN prf
+              CASE [(prf, state), ...] => SET CurrentProof := (prf, state)
+            }
+          }
+          
+        PRED ProofComplete(prf : Proof, Γ : Context, φ : Formula)
+          MATCH prf {
+            CASE Theorem(Γ, φ, _) => TRUE
+            CASE _ => FALSE
+          }
+          
+        AXIOM Soundness {
+          ∀ Γ φ τ . 
+            (Γ ⊢ φ) ∧ ProofComplete(τ(⟨EmptyProof, Γ, φ⟩)) ⇒ 
+            ∃ π . τ(⟨EmptyProof, Γ, φ⟩) = [(Theorem(Γ, φ, π), ⟨[], TRUE⟩)]
+        }
+      }
+    }  
+  }
+
+  PROOFS {
+    THEOREM ProverSoundness {
+      ∀ (theory : Theory) (Γ : Context) (φ : Formula) .
+        NaturalDeductionProver(theory).prove(Γ, φ) = Some(π) ⇒ 
+        Theorem(Γ, φ, π) : ProofTree  
+    }
+    PROOF {
+      <1>. ASSUME theory Γ φ π, NaturalDeductionProver(theory).prove(Γ, φ) = Some(π)
+      
+      <2>. PROVE π : ProofTree
+        <2>1. INDUCT ON the derivation of NaturalDeductionProver(theory).prove(Γ, φ)
+          <2>1. CASE Assumption: φ ∈ Γ, π = φ
+            SHOW Theorem(Γ, φ, φ) : ProofTree BY DEFINITION ProofTree.Theorem  
+          <2>2. CASE Conjunction: 
+            φ = φ1 ∧ φ2, NaturalDeductionProver(theory).prove(Γ, φ1) = Some(π1),
+            NaturalDeductionProver(theory).prove(Γ, φ2) = Some(π2), π = Conjunction(π1, π2)
+            <2>2.1. π1 : ProofTree BY <2>1 INDUCTIVE_HYPOTHESIS
+            <2>2.2. π2 : ProofTree BY <2>1 INDUCTIVE_HYPOTHESIS
+            <2>2.3. SHOW Conjunction(π1, π2) : ProofTree BY DEFINITION ProofTree.Conjunction
+          <2>3. CASE Implication:  
+            φ = φ1 → ψ, NaturalDeductionProver(theory).prove(Γ ∪ {φ1}, ψ) = Some(π'),
+            π = Implication(φ1, π')
+            <2>3.1. π' : ProofTree BY <2>1 INDUCTIVE_HYPOTHESIS 
+            <2>3.2. SHOW Implication(φ1, π') : ProofTree BY DEFINITION ProofTree.Implication
+          <2>4. CASE Universal:
+            φ = ∀ x . ψ, NaturalDeductionProver(theory).prove(Γ, ψ) = Some(π'),
+            π = Universal(x, π')  
+            <2>4.1. π' : ProofTree BY <2>1 INDUCTIVE_HYPOTHESIS
+            <2>4.2. SHOW Universal(x, π') : ProofTree BY DEFINITION ProofTree.Universal
+      
+      <3>. QED BY <1>, <2>    
+    }
+
+    THEOREM TacticSoundness {
+      ∀ Γ φ τ prf state .
+        ProofAssistantInterface.ProofComplete(prf, Γ, φ) ∧ 
+        (prf, state) ∈ τ(⟨EmptyProof, Γ, φ⟩) ⇒
+        state.1 = [] ∧ state.2 = TRUE 
+    }
+    PROOF {
+      ASSUME Γ φ τ prf ⟨[], _⟩,
+        ProofAssistantInterface.ProofComplete(prf, Γ, φ),
+        (prf, ⟨[], _⟩) ∈ τ(⟨EmptyProof, Γ, φ⟩)
+        
+      PROVE ⟨[], _⟩.2 = TRUE
+        BY ProofAssistantInterface.ProofComplete DEF, 
+           prf = Theorem(Γ, φ, _),
+           Theorem(Γ, φ, _) → Γ ⊢ φ
+           
+      QED  
+    }
+  }
+  
+  EXAMPLES {
+    EXAMPLE NaturalDeductionProofOfPeirce {
+      LET Γ = [(p → q) → p]
+      LET p = Sentence("p")
+      LET q = Sentence("q")
+      LET peirce = (p → q) → p
+      
+      PROVE ([], peirce)
+      PROOF {
+        SUPPOSE p → q                    -- Implication Introduction 
+        SUPPOSE p                        -- Implication Introduction
+        SUPPOSE q                        -- Implication Elimination 1, 2
+        CONCLUDE p                       -- Assumption Elimination 2
+        CONCLUDE (p → q) → p             -- Implication Introduction 1 
+        QED        
+      }
+    }
+    
+    EXAMPLE AutomatedProofInTheory {
+      LET theory = (
+        (Sentence, Formula, Proof),
+        [AXIOM A, AXIOM K, RULE ModusPonens]  
+      )
+      LET prover = NaturalDeductionProver(theory)
+      
+      DEFINE AXIOM A = (p → (q → p))
+      DEFINE AXIOM K = (p → (q → r)) → ((p → q) → (p → r))
+      DEFINE RULE ModusPonens(p q : Formula) = (p, p → q) ↦ q
+      
+      LET Γ = [p → (q → p)]
+      LET φ = (p → (q → r)) → ((p → q) → (p → r))
+      
+      THEN prover.prove(Γ, φ) = Some(π)
+      AND π : ProofTree BY ProverSoundness
+      WHERE π = (
+        Implication(p → (q → r), 
+          Implication(p → q,
+            Implication(p,
+              Implication(q,
+                Assumption(r)))))
+      )
+    }
+    
+    EXAMPLE AutoProve {
+      DEFINE Peano := (
+        (0 : Nat, S : Nat → Nat),
+        (Nat, Formula, Proof),
+        [Axiom1, Axiom2, RULE Induction]
+      )
+      WHERE {
+        AXIOM Axiom1 = ∀ n m . S(n) = S(m) → n = m
+        AXIOM Axiom2 = ∀ n . S(n) ≠ 0
+        RULE Induction(P : Nat → Formula) = 
+          (P(0), ∀ k . P(k) → P(S(k))) ↦ ∀ n . P(n) 
+      }
+      
+      LET assistant = ProofAssistantInterface(NaturalDeductionProver(Peano))
+      
+      THEN assistant.Prove([], ∀ n . 0 + n = n)
+      PROOF {
+        SUPPOSE 0 : Nat
+        SUPPOSE n : Nat
+        SHOW 0 + n = n BY Induction
+        CASE 0 => SHOW 0 + 0 = 0 BY Computation 
+        CASE S(k) => (
+          ASSUME 0 + k = k 
+          SHOW 0 + S(k) = S(k) BY (
+            0 + S(k) = S(0 + k)   BY Computation
+                     = S(k)        BY INDUCTIVE_HYPOTHESIS 0 + k = k
+          )    
+        )
+        CONCLUDE ∀ n . 0 + n = n BY Induction
+        QED
+      }
+    }
+  }
+}

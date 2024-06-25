@@ -1,0 +1,107 @@
+CONCEPT MinimalFundamentalTheory {
+  IMPORT SymbolicDualityEmergence
+
+  LANGUAGE {
+    TYPE FundamentalObject = {
+      Degrees : SET(SymTensor),
+      Interactions : LIST(SymTensor -> SymTensor)
+    }
+
+    TYPE FundamentalDynamics = {
+      Objects : LIST(FundamentalObject),
+      Action : SymTensor
+    }
+
+    FUNC Quantize(FundamentalDynamics) -> QuantumTheory
+    FUNC Approximate(FundamentalDynamics) -> LIST(SymTensor)
+
+    PRED ConsistentDynamics : FundamentalDynamics -> BOOLEAN
+    PRED UniqueConsistentDynamics : FundamentalDynamics -> BOOLEAN
+  }
+
+  AXIOMS {
+    ConsistencyCondition {
+      STATEMENT :
+        ∀ (FD : FundamentalDynamics) . 
+          ConsistentDynamics(FD) <->
+            ∀ (O : FundamentalObject) . (O ∈ FD.Objects) ->
+              ∀ (I : SymTensor -> SymTensor) . (I ∈ O.Interactions) ->
+                (I = I†) ∧ (δI = 0)
+    }
+
+    UniquenessCondition {
+      STATEMENT :
+        UniqueConsistentDynamics(FD) <->
+          ∀ (FD' : FundamentalDynamics) .
+            ConsistentDynamics(FD') -> (FD' = FD)
+    }
+
+    ApproximationProperty {
+      STATEMENT :
+        ∀ (FD : FundamentalDynamics), (T : Theory) .
+          (T.StateSpace = SymbolicManifold(Approximate(FD))) ∧
+          (T.Quantities ⊆ Approximate(FD)) ∧
+          (T.Dynamics = Approximation(FD.Action))
+    }
+  }
+
+  THEOREMS {
+    UniversalityTheorem {
+      STATEMENT :
+        ∃! (FD : FundamentalDynamics) .
+          ConsistentDynamics(FD) ∧
+          ∀ (T : Theory) . ∃ (E : Emergence) .
+            (E.Fine = Quantize(FD)) ∧ (E.Coarse = T)
+
+      PROOF {
+        ASSUME ∃ (FD : FundamentalDynamics) . ConsistentDynamics(FD)
+          PROVE UniqueConsistentDynamics(FD) BY UniquenessCondition
+        
+        LET T : Theory
+          LET FD_approx = Approximate(FD)
+          HAVE (T.StateSpace = SymbolicManifold(FD_approx)) BY ApproximationProperty
+          HAVE (T.Quantities ⊆ FD_approx) BY ApproximationProperty
+          HAVE (T.Dynamics = Approximation(FD.Action)) BY ApproximationProperty
+        
+          LET E : Emergence
+            WITH (E.Fine = Quantize(FD))
+             AND (E.Coarse = T) 
+             AND (E.Approximation = λ (ψ : E.Fine.StateSpace) . Project(ψ, T.StateSpace))
+             AND (E.CoarseGraining = λ (q : E.Fine.Quantities) . Approximate(q, T.Quantities))
+             AND (E.Novel = T.Quantities \ E.CoarseGraining(E.Fine.Quantities))
+             AND (E.Robust = λ (q_F : E.Fine.Quantities), (q_C : E.Coarse.Quantities) . 
+                    (q_C = E.CoarseGraining(q_F)) ∧ 
+                    ∀ (δq_F : E.Fine.Quantities) . (|δq_F| < ε) -> (|E.CoarseGraining(δq_F) - q_C| < ε))
+              
+          CONCLUDE ∃ (E : Emergence) . (E.Fine = Quantize(FD)) ∧ (E.Coarse = T)
+            
+        CONCLUDE ∀ (T : Theory) . ∃ (E : Emergence) . (E.Fine = Quantize(FD)) ∧ (E.Coarse = T)
+      }
+    }
+  }
+
+  PHILOSOPHY {
+    MinimalStructurePrinciple {
+      STATEMENT :  
+        ∀ (T : Theory) . FundamentalTheory(T) -> 
+          ∃ (FD : FundamentalDynamics) . 
+            (T = Quantize(FD)) ∧ 
+            ∀ (FD' : FundamentalDynamics) . (T = Quantize(FD')) -> (FD' ≥ FD)
+
+      ARGUMENT {
+        "A fundamental theory should have the minimal structure necessary to capture all of physics through emergence."
+      }
+    }
+
+    ComplementarityPrinciple {
+      STATEMENT :
+        ∀ (T : Theory), (D : Duality), (E : Emergence) .
+          (D.T1 = T) ∧ (E.Coarse = T) ->
+            Complementary(D.T2, E.Fine)
+
+      ARGUMENT {
+        "Any theory that has both a dual and an emergent description should be complementary, in the sense that the dual and emergent theories are structurally interdependent."
+      }
+    }
+  }
+}

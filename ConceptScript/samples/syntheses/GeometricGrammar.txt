@@ -1,0 +1,418 @@
+CONCEPT GeometricGrammar {
+  IMPORTS {
+    Language
+    Shape
+  }
+  
+  PARAMETERS {
+    n : Nat -- dimension of ambient space  
+  }
+  
+  CONTEXT {
+    TYPES {
+      GeoEntity := Submanifold(EuclideanSpace(n))
+      SynEntity := Language.SyntacticType
+      
+      GeoExpression {
+        SCALAR_FIELD Support     : GeoEntity
+        SCALAR_FIELD Valuation   : FUNC(Support, Scalar)
+        VECTOR_SPACE_OVER Scalar  
+      }
+      
+      SynExpression {
+        SCALAR_FIELD SyntacticType : SynEntity
+        SCALAR_FIELD SemanticValue : Meaning
+        SATISFIES ∀ (e : SynExpression) . e.SemanticValue ∈ ⟦e.SyntacticType⟧
+      }
+    }
+    
+    OPERATORS {
+      GEOMETRIC {
+        _·_ : GeoExpression × GeoExpression -> GeoExpression
+        _*_ : Scalar × GeoExpression -> GeoExpression  
+        ⟨_,_⟩ : GeoExpression × GeoExpression -> Scalar
+        ∫_ : GeoExpression -> Scalar
+        d : GeoExpression -> GeoExpression
+        PullBack(f : FUNC(GeoEntity, GeoEntity)) : 
+          FUNC(GeoExpression, GeoExpression)
+        PushForward(f : FUNC(GeoEntity, GeoEntity)) : 
+          FUNC(GeoExpression, GeoExpression)
+      }
+      
+      SYNTACTIC {
+        _+_ : SynExpression × SynExpression -> SynExpression -- concatenation
+        _⊗_ : SynEntity × SynEntity -> SynEntity -- tensor product
+        ↑ : SynEntity -> SynEntity -- raising (dual space)
+        ↓ : SynEntity -> SynEntity -- lowering  
+        ∂ : SynEntity -> SynEntity -- derivation (tangent space)  
+      }
+    }
+    
+    NOTATION {  
+      τ := PullBack
+      Π := PushForward
+      × := Cartesian product of spaces
+      ⊠ := Tensor product of vector spaces
+      Ω^k(M) := Set(AlternatingKForm(M))
+      X(M) := Set(VectorField(M))
+    }
+    
+    AXIOMS {  
+      GeoExpression_VectorSpace {
+        (u · v) · w = u · (v · w)
+        u · v = v · u  
+        ∃ (E : GeoExpression) . ∀ (u : GeoExpression) . u · E = u
+        ∀ (u : GeoExpression) . ∃ (-u : GeoExpression) . u + (-u) = 0
+        a * (u + v) = a * u + a * v
+        (a + b) * u = a * u + b * u
+        (a * b) * u = a * (b * u)
+        1 * u = u
+      }
+      
+      GeoExpression_InnerProduct {  
+        ⟨u, v⟩ = ∫_{x ∈ u.Support ∩ v.Support} u.Valuation(x) * v.Valuation(x)
+        ⟨u, v⟩ = ⟨v, u⟩
+        ⟨a * u + b * v, w⟩ = a * ⟨u, w⟩ + b * ⟨v, w⟩ 
+        ⟨u, u⟩ ≥ 0 ∧ (⟨u, u⟩ = 0 <=> u = 0)
+      }
+      
+      GeoExpression_Differential {
+        d(u + v) = du + dv
+        d(a * u) = a * du
+        d(u · v) = du · v + u · dv
+        d(df) = 0  
+        ∫_M d(u) = ∫_∂M u  -- generalized Stokes' theorem
+      }
+      
+      SynExpression_Concatenation {
+        u + v : SynExpression <=> 
+          ∃ (T S : SynEntity) . u.SyntacticType = T ∧ v.SyntacticType = S 
+        (u + v).SyntacticType = u.SyntacticType ⊗ v.SyntacticType
+        (u + v).SemanticValue = (u.SemanticValue, v.SemanticValue)
+        u + (v + w) = (u + v) + w
+      }
+      
+      SynEntityAlgebra {
+        T ⊗ (S ⊗ U) = (T ⊗ S) ⊗ U
+        T ⊗ S = S ⊗ T  
+        T ⊗ 1 = T
+        ↑(↓(T)) = ↓(↑(T)) = T
+        ∂(S ⊗ T) = (∂S ⊗ T) ⊕ (S ⊗ ∂T)
+        ∂(↑T) = ↑(∂T)
+        ∂(∂T) = 0
+      }
+      
+      Language_Shape_Correspondence {
+        FORALL (M : GeoEntity) . ∃! (T : SynEntity) . ⟦T⟧ ≅ C^∞(M)
+        FORALL (T : SynEntity) . ∃! (M : GeoEntity) . X(M) ≅ ⟦∂T⟧
+        FORALL (T S: SynEntity) . ↑(S ⊗ T) ≅ ↑S ⊗ ↑T
+        FORALL (e : SynExpression) . ∃! (ϕ : GeoExpression) . 
+          ϕ.Support ≅ ⟦e.SyntacticType⟧ ∧ ϕ.Valuation ≅ e.SemanticValue
+      }  
+    }
+  }
+  
+  EXAMPLES {
+    EXAMPLE Bracket {
+      (u, v) => ⟨u, dv⟩  
+      
+      Bracket(Bracket(u, v), w) + Bracket(Bracket(v, w), u) + Bracket(Bracket(w, u), v) = 0
+    }
+    
+    EXAMPLE InfinitesimalAction {
+      (X : VectorField(M), f : C^∞(M)) => Xf := df(X)  
+      
+      [X, Y](f) = X(Yf) - Y(Xf)
+    }
+    
+    EXAMPLE Quantifier {
+      ∃ := (Noun -> Sentence) -> Sentence
+      ∀ := (Noun -> Sentence) -> Sentence
+      
+      ⟦∃⟧ = λP . ∫_M P  WHERE M : Manifold, P : Ω^n(M)
+      ⟦∀⟧ = λP . ∏_i ⟨P, e_i⟩ WHERE {e_i} orthonormal basis of Ω^n(M)
+    }
+    
+    EXAMPLE Metaphor {
+      SIM := (Noun ⊗ Noun) ⊗ ↑Verb
+      
+      SourceDomain ⊠ TargetDomain -[ τ(SIM) ]-> Meaning
+    }
+  }
+}
+
+
+
+CONCEPT SpatialPrepositions EXTENDS GeometricGrammar {
+  PARAMETERS {
+    n = 3  -- assuming 3D Euclidean space
+  }
+
+  CONTEXT {
+    TYPES {
+      Trajector := GeoEntity -- figure 
+      Landmark := GeoEntity  -- ground
+      
+      Preposition {
+        SCALAR_FIELD Relation : FUNC(Trajector × Landmark, Boolean)  
+        SATISFIES ∀ (R : Relation) . ∃ (ϕ : GeoExpression) . R = λ(x, y) . ⟨1_x, ϕ_y⟩ > 0
+      }
+    }
+    
+    FUNCTIONS {
+      Interior : GeoEntity -> GeoEntity  
+      Exterior : GeoEntity -> GeoEntity
+      Boundary : GeoEntity -> GeoEntity
+      Closure : GeoEntity -> GeoEntity
+      
+      Distance : GeoEntity × GeoEntity -> Scalar
+      SpatialMeasure : GeoEntity -> Scalar
+      Orientation : GeoEntity -> VectorField 
+      Centroid : GeoEntity -> Point
+    }
+    
+    NOTATION {
+      χ_A := Indicator function of set A
+      1_A := Constant function with value 1 on A
+    }
+    
+    ASSERTIONS {
+      ∀ (X : GeoEntity) . X = Interior(X) ∪ Boundary(X)
+      ∀ (X : GeoEntity) . Closure(X) = Interior(X) ∪ Boundary(X)
+      ∀ (X : GeoEntity) . X ∩ Exterior(X) = ∅
+      ∀ (X Y : GeoEntity) . Distance(X, Y) = inf_{x ∈ X, y ∈ Y} |x - y|
+      ∀ (X : GeoEntity) . SpatialMeasure(X) = ∫_X 1
+      ∀ (X Y : GeoEntity) . Centroid(X ∪ Y) = 
+        (SpatialMeasure(X) * Centroid(X) + SpatialMeasure(Y) * Centroid(Y)) / 
+        (SpatialMeasure(X) + SpatialMeasure(Y))
+    }
+  }
+  
+  LEXICON {
+    "in" -> Preposition {
+      Relation := λ(x, y) . x ⊆ Interior(y)
+    }
+    
+    "on" -> Preposition {
+      Relation := λ(x, y) . x ⊆ Closure(y) ∧ ∃ (ϕ : GeoExpression) . 
+        ϕ.Support = x ∩ Boundary(y) ∧ ⟨ϕ, dy⟩ > 0
+    }
+    
+    "above" -> Preposition {
+      Relation := λ(x, y) . ⟨Centroid(x) - Centroid(y), e_z⟩ > 0
+    }
+    
+    "below" -> Preposition {
+      Relation := λ(x, y) . ⟨Centroid(x) - Centroid(y), e_z⟩ < 0  
+    }
+    
+    "near" -> Preposition {
+      Relation := λ(x, y) . Distance(x, y) < ε
+    }
+    
+    "far" -> Preposition {  
+      Relation := λ(x, y) . Distance(x, y) > δ
+    }
+    
+    "around" -> Preposition {
+      Relation := λ(x, y) . ∃ (γ : Circle) .
+        γ.Center = Centroid(y) ∧ x ⊆ Tubular(γ, ε)
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE ContainmentVsSupport {
+      "The apple is in the bowl"
+        REPRESENΤED_AS ⟨1_apple, χ_InteriorOfBowl⟩ > 0
+      "The apple is on the table"  
+        REPRESENΤED_AS ⟨1_apple, dχ_Table⟩ > 0
+    }
+    
+    EXAMPLE ProximalVsDistal {  
+      "The cat is near the house"
+        REPRESENΤED_AS Distance(cat, house) < ε
+      "The mountain is far from the city"
+        REPRESENΤED_AS Distance(mountain, city) > δ  
+    }
+    
+    EXAMPLE Orientation {
+      "The bird is above the tree"
+        REPRESENΤED_AS ⟨Centroid(bird) - Centroid(tree), e_z⟩ > 0
+      "The rug is below the chair"  
+        REPRESENΤED_AS ⟨Centroid(rug) - Centroid(chair), e_z⟩ < 0
+    }
+    
+    EXAMPLE Path {
+      "The satellite orbits around the Earth"
+        REPRESENΤED_AS ∃ (γ : Circle) . 
+          γ.Center = Centroid(Earth) ∧ satellite ⊆ Tubular(γ, ε)
+    }
+  }
+  
+  PROOFS {
+    LEMMA PrepositionsAreMonotone {
+      ∀ (P : Preposition) (x y z : GeoEntity) .  
+        (P.Relation(x, y) ∧ x ⊆ z) => P.Relation(z, y)
+    }
+    PROOF {
+      ASSUME P : Preposition, x y z : GeoEntity
+      ASSUME P.Relation(x, y) AND x ⊆ z
+      
+      P.Relation(x, y)
+        ⇒ ∃ (ϕ : GeoExpression) . 
+             ϕ.Support ⊆ x AND ⟨1_x, ϕ⟩ > 0 
+             [BY Preposition.SATISFIES]
+      x ⊆ z  
+        ⇒ 1_x ≤ 1_z
+      
+      ⟨1_x, ϕ⟩ ≤ ⟨1_z, ϕ⟩  
+        BY properties of inner product
+      
+      ⇒ ⟨1_z, ϕ⟩ > 0
+      ⇒ P.Relation(z, y)  
+    }
+    
+    LEMMA PrepositionsClosed {
+      ∀ (P : Preposition) (K : Compact) . 
+        { y | ∃ (x ∈ K) . P.Relation(x, y) } is closed  
+    }
+    PROOF {
+      ASSUME P : Preposition, K : Compact
+      
+      Relation(K) := { (x, y) | x ∈ K ∧ P.Relation(x, y) }
+      π_2 := FUNC(x, y) . y
+      
+      { y | ∃ (x ∈ K) . P.Relation(x, y) }
+        = π_2(Relation(K))
+        = compact  
+          BECAUSE Relation(K) = closed [BY continuity of Relation]
+          AND π_2 = continuous
+    }
+  }
+}
+
+
+
+CONCEPT AdSCFTCorrespondence EXTENDS GeometricGrammar {
+  PARAMETERS {
+    d : Nat -- dimension of CFT spacetime
+    n = d + 1 -- dimension of AdS space  
+  }
+  
+  CONTEXT {
+    TYPES {
+      CFTOperator := Function(ContinuousFunction(R^d))
+      AdSField := Function(ContinuousFunction(AdS[d+1]))
+      Correlator := Multilinear(CFTOperator^k, R) 
+      
+      SUPERSYMMETRY {
+        Supercharge {
+          VECTOR_FIELD Generators : VectorField(AdS[d+1])
+          SATISFIES LieAlgebra(Generators) AND 
+            ∀ (X Y : Generators) . ⟨X, Y⟩ = 0 OR ⟨X, Y⟩ = ±δ_ij
+        }
+        Representation(G : Supercharge, V : VectorSpace) {
+          SCALAR_FIELD Action : Hom(G ⊗ V, V)  
+          SATISFIES ∀ (X Y : G) (v : V) . 
+            Action(X, Action(Y, v)) + Action(Y, Action(X, v)) = ⟨X, Y⟩ * v
+        }
+      }
+    }
+    
+    FUNCTIONS {  
+      AdS : Nat -> Manifold
+      CFT : Nat -> Manifold
+      BulkToBoyndary : AdSField -> CFTOperator
+      WittenDiagram : AdSField^k -> Correlator
+      Partition : Action(Supercharge, AdSField) -> Correlator
+    }
+    
+    NOTATION {
+      ⟦_⟧ := WittenDiagram  
+      Z[_] := Partition
+    }
+    
+    ASSERTIONS {
+      ∀ (d : Nat) . AdS(d) = Hyperboloid(Minkowski(d+1), -1)  
+      ∀ (d : Nat) . CFT(d) = Compactification(Minkowski(d), Cone)
+      ∀ (d : Nat) . ∂(AdS(d)) = CFT(d-1)
+      ∀ (ϕ : AdSField) . BulkToBoundary(ϕ) = ϕ ∘ Embedding(CFT(d-1), AdS(d))
+    }
+  }
+  
+  EXAMPLES {
+    EXAMPLE CorrelatorDictionary {  
+      CFTOperator -> "O"
+      ⟦O(x1) O(x2)⟧ -> "⟨O(x1) O(x2)⟩"
+      ⟦O1(x1) O2(x2) O3(x3)⟧ -> "⟨O1(x1) O2(x2) O3(x3)⟩"
+    }
+    
+    EXAMPLE BulkToBoundaryPropagator {
+      K(z, x) := C((z0^2 + |z - x|^2) / z0)^-Δ
+        WHERE C = Γ(Δ) / (2 π^(d/2) Γ(Δ - d/2))
+        AND Δ = conformal dimension
+      
+      BulkToBoyndary(ϕ)(x) = ∫_AdS K(z, x) ϕ(z)
+    }
+    
+    EXAMPLE GaugeGravityDuality {
+      S[ϕ] := CFT action 
+      
+      Z[S] = ∫_ϕ exp(i S[ϕ]) <=> ∫_G exp(i S_AdS[G])
+        WHERE G := AdS metric  
+    }
+    
+    EXAMPLE RyuTakayanagi {
+      A := region in CFT
+      γ_A := minimal surface in AdS with ∂γ_A = ∂A
+      
+      S_A = Area(γ_A) / 4 G_N  
+    }
+  }
+  
+  PROOFS {
+    THEOREM CFTUnitarity {
+      ∀ (O1 O2 : CFTOperator) .
+        ⟨O1(x1) O2(x2)⟩ = ⟨O2(x2) O1(x1)⟩^*   
+    }
+    PROOF {
+      DEFINE time_reflection: (t, x) -> (-t, x)
+      
+      ⟨O1(x1) O2(x2)⟩  
+        = ⟦BulkToBoundary(ϕ_O1)(x1) BulkToBoundary(ϕ_O2)(x2)⟧
+          FOR SOME ϕ_O1 ϕ_O2 : AdSField [BY AdS/CFT dictionary]
+        = ∫_AdS K(z1, x1) K(z2, x2) ⟨ϕ_O1(z1) ϕ_O2(z2)⟩_AdS   
+        = ∫_AdS K(z2, x2) K(z1, x1) ⟨ϕ_O2(z2) ϕ_O1(z1)⟩_AdS
+          [BY time_reflection symmetry of AdS correlators]  
+        = ⟨O2(x2) O1(x1)⟩^*  
+    }
+      
+    THEOREM ERBridgeTheorem {
+      ASSUME ρ_AB : DensityMatrix((H_A ⊗ H_B)^*) -- maximally entangled state  
+      THEN ∃ (γ_AB) . ρ_AB = Tr_AdS-γ_AB |Ψ⟩⟨Ψ|
+        WHERE |Ψ⟩ := ground state of H_AdS  
+        AND γ_AB := minimal surface separating A and B
+    }
+    PROOF {
+      S(A) 
+        = - Tr(ρ_A log(ρ_A))
+        = Area(γ_A) / 4 G_N  
+          [BY RyuTakayanagi]
+        
+      S(A ∪ B) + S(A ∩ B) ≤ S(A) + S(B)  
+        [BY StrongSubadditivity]
+      Area(γ_A∪B) + Area(γ_A∩B) ≤ Area(γ_A) + Area(γ_B)
+        [BY RyuTakayanagi]
+        
+      γ_A∪B ≥ γ_A, γ_B  
+      γ_A∩B = ∅
+        [BY MinimalSurfaceConditions]
+        
+      ρ_AB = Tr_AdS-γ_AB |Ψ⟩⟨Ψ|  
+        WHERE γ_AB = γ_A ∪ γ_B
+        BECAUSE ρ_AB = maximally entangled  
+        AND S(A ∪ B) = S(A) + S(B) 
+        IFF γ_AB = γ_A∪B separates A and B
+    }
+  }
+}

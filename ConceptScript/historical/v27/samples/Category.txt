@@ -1,0 +1,110 @@
+CONCEPT Category {
+  NOTATION {
+    A -> B = Arrow(A, B)  
+    A × B = Product(A, B)
+    A + B = Coproduct(A, B)
+    A ^ B = Exponential(A, B)
+    0 = InitialObject
+    1 = TerminalObject
+    f · g = Compose(f, g)
+    idA = Identity(A)
+  }
+
+  LANGUAGE {
+    TYPE Object
+    TYPE Arrow = (domain: Object, codomain: Object)
+    TYPE Morphism = Arrow
+    
+    FUNC Compose(f: Arrow, g: Arrow) : Arrow =
+      LET (A, B) = (f.domain, f.codomain) IN 
+      LET (B', C) = (g.domain, g.codomain) IN
+      IF B == B' THEN Arrow(A, C) ELSE FAIL
+      
+    FUNC Identity(A: Object) : Arrow = Arrow(A, A)
+    
+    FUNC Product(A: Object, B: Object) : Object
+    FUNC Coproduct(A: Object, B: Object) : Object
+    FUNC Exponential(A: Object, B: Object) : Object
+    FUNC InitialObject : Object  
+    FUNC TerminalObject : Object
+  }
+  
+  STRUCTURES {
+    STRUCTURE Category {
+      FIELD Objects : Set<Object>
+      FIELD Arrows : Set<Arrow>
+      
+      AXIOM CompositionAssociativity : 
+        ∀ f : A -> B, g : B -> C, h : C -> D .
+          (f · g) · h = f · (g · h)
+          
+      AXIOM IdentityMorphisms :
+        ∀ A : Object . 
+          (∀ f : A -> B . f · idA = f) ∧ 
+          (∀ g : C -> A . idA · g = g)
+    }
+    
+    STRUCTURE Functor(C: Category, D: Category) {
+      FIELD ObjectMap : C.Objects -> D.Objects
+      FIELD ArrowMap : C.Arrows -> D.Arrows
+      
+      AXIOM IdentityPreservation : 
+        ∀ A : C.Objects . ArrowMap(idA) = idObjectMap(A)
+      
+      AXIOM CompositionPreservation :
+        ∀ f : A -> B, g : B -> C in C.Arrows .
+          ArrowMap(f · g) = ArrowMap(f) · ArrowMap(g)
+    }
+    
+    STRUCTURE NaturalTransformation(F: Functor, G: Functor) {
+      FIELD Components : ∀ X : C.Objects . F.ObjectMap(X) -> G.ObjectMap(X)
+      
+      AXIOM Naturality : 
+        ∀ f : A -> B in C.Arrows .
+          Components(B) · F.ArrowMap(f) = G.ArrowMap(f) · Components(A)
+    }
+  }
+  
+  THEOREMS {
+    THEOREM Isomorphisms {  
+      f : A -> B is an isomorphism <=> 
+        ∃ g : B -> A . (f · g = idB) ∧ (g · f = idA)
+    }
+    
+    THEOREM UniversalProperty(P: Object -> Prop) {
+      ∃! A : Object . P(A)  <=>  
+        (∃ A : Object . P(A) ∧ 
+         (∀ X : Object . P(X) => ∃! f : X -> A))
+    }
+    
+    THEOREM Yoneda {
+      ∀ F : Functor(C, Set), A : C.Objects .
+        Nat(C(A, -), F) ≅ F(A)  -- Yoneda Lemma   
+    }
+  }
+  
+  EXAMPLES {
+    EXAMPLE MonoidAsCategory {
+      GIVEN (M, ·, e) is a monoid, THEN
+      DEFINE Category Mon(M):
+        Objects = { * }  -- single object 
+        Arrows = { * -> * }  -- arrows are elements of M
+        FOR f, g : * -> * . f · g = f ·m g
+    }
+    
+    EXAMPLE PreorderAsCategory {
+      GIVEN (X, ≤) is a preorder, THEN 
+      DEFINE Category Pre(X, ≤):
+        Objects = X
+        Arrows = { (a, b) | a ≤ b }
+        FOR a ≤ b, b ≤ c . (a, b) · (b, c) = (a, c)
+    }
+    
+    EXAMPLE SetCategory {  
+      DEFINE Category Set:
+        Objects = all sets
+        Arrows = all functions between sets
+        FOR f : A -> B, g : B -> C . f · g(x) = g(f(x))
+    }
+  }
+}

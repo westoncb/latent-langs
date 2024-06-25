@@ -1,0 +1,268 @@
+CONCEPT SimplyTypedLambdaCalculus {
+  LANGUAGE {
+    TYPE Type
+    TYPE BaseType <: Type
+    TYPE ArrowType <: Type
+
+    TYPE Term    
+    TYPE Variable <: Term
+    TYPE Abstraction <: Term
+    TYPE Application <: Term
+
+    FUNC Var(name : String) : Variable
+    FUNC Abs(v : Variable, t : Type, body : Term) : Abstraction
+    FUNC App(func : Term, arg : Term) : Application
+    
+    FUNC Base(name : String) : BaseType
+    FUNC Arrow(dom : Type, cod : Type) : ArrowType
+
+    PRED HasType(t : Term, T : Type)
+    PRED TypeReduces(T : Type, S : Type)
+
+    AXIOM BaseIrreducible {
+      ∀ (A B : BaseType) . TypeReduces(A, B) => A = B
+    }
+    
+    AXIOM ArrowReduces {
+      ∀ (A B C D : Type) . 
+        TypeReduces(Arrow(A, B), Arrow(C, D)) => TypeReduces(A, C) ∧ TypeReduces(B, D)  
+    }
+  }
+
+  NOTATION {
+    "A -> B" = Arrow(A, B)
+    "t : T" = HasType(t, T)
+  }
+  
+  TRANSFORMERS {
+    REWRITE TypeReduces(t, t) = True
+    
+    TACTIC HasType(t : Term, T : Type) -> Bool = {
+      MATCH t WITH
+      | Var(x) -> ASSUME (x : S) IN T = S
+      | Abs(x, S1, t1) -> ASSUME (x : S1) SHOW t1 : S2, T = S1 -> S2  
+      | App(t1, t2) -> ASSUME t1 : S1 -> S2, t2 : S1 SHOW S2 = T
+    }
+  }
+
+  STRUCTURE STLCChurch EXTENDS Church {
+    DEF I = λ x : A . x
+    DEF K = λ x : A . λ y : B . x
+    DEF S = λ x : (A->B->C) . λ y : (A->B) . λ z : A . x z (y z)
+    DEF Zero = λ f : (Nat->Nat) . λ x : Nat . x
+    DEF Succ = λ n : Nat . λ f : (Nat->Nat) . λ x : Nat . f (n f x)
+    DEF Plus = λ m : Nat . λ n : Nat . λ f : (Nat->Nat) . λ x : Nat . m f (n f x)
+    DEF Mult = λ m : Nat . λ n : Nat . λ f : (Nat->Nat) . m (n f)
+    DEF Pow = λ m : Nat . λ n : Nat . n m
+    DEF True = λ t : A . λ f : A . t 
+    DEF False = λ t : A . λ f : A . f
+    DEF And = λ p : Bool . λ q : Bool . p q p
+    DEF Or = λ p : Bool . λ q : Bool . p p q
+    DEF Not = λ p : Bool . p False True
+    DEF IfThenElse = λ p : Bool . λ a : A . λ b : A . p a b
+    DEF Pair = λ f : A . λ s : B . λ b : (A->B->C) . b f s
+    DEF Fst = λ p : (A × B) . p (λ x : A . λ y : B . x) 
+    DEF Snd = λ p : (A × B) . p (λ x : A . λ y : B . y)
+  }
+  
+  PROOFS {
+    THEOREM Normalization {
+      STATEMENT:
+        ∀ (t : Term) (T : Type) . t : T => ∃ (n : Term) . t ->β* n ∧ ¬∃ (m : Term) . n ->β m
+        
+      PROOF:
+        ASSUME (A) : ∀ (T : Type) . ∃ (k : ℕ) . ∀ (S : Type) . TypeReduces(T, S) => size(T) ≤ k  
+        
+        LET t : Term, T : Type
+        ASSUME (B) : t : T
+        SHOW ∃ (n : Term) . t ->β* n ∧ ¬∃ (m : Term) . n ->β m {
+          WE PROCEED by lexicographic induction on (size(T), size(t))
+          
+          REWRITE size(T) = MATCH T WITH
+                            | BaseType(_) -> 1
+                            | Arrow(A, B) -> 1 + size(A) + size(B)
+          REWRITE size(t) = MATCH t WITH                    
+                            | Var(_) -> 1
+                            | Abs(_, _, t') -> 1 + size(t')
+                            | App(t1, t2) -> 1 + size(t1) + size(t2)
+          
+          LET k = k(T) BY A
+          CASES size(T) ≤ k
+          CASE False:  // T does not normalize  
+            CASE t = Var(x):
+              REWRITE B: Var(x) : T = (x : S) ∈ Γ, S = T
+              HENCE S normalizes BY size(S) ≤ k < size(T)
+              HENCE Var(x) normalizes
+              
+            CASE t = Abs(x, S, t1):
+              REWRITE B: Abs(x, S, t1) : T = (x : S), t1 : S', T = S->S'
+              HAVE S normalizes BY size(S) < size(T)
+              HAVE S' normalizes BY size(S') < size(T) 
+              HAVE t1 normalizes BY IH: size(S') < size(T) ∨ 
+                                   (size(S') = size(T) ∧ size(t1) < size(t))
+              LET t1 ->β* n, n normal
+              HENCE Abs(x, S, t1) ->β Abs(x, S, n), Abs(x, S, n) normal
+              
+            CASE t = App(t1, t2):
+              REWRITE B: App(t1, t2) : T = t1 : S->T, t2 : S
+              HAVE t1 normalizes, t2 normalizes BY size(t1), size(t2) < size(t)
+              CASES t1 ->β* n1, n1 normal
+              CASE n1 = Abs(x, S1, t'):
+                HAVE S1 = S BY B
+                HAVE t' [x := t2] normalizes BY IH: size(t') < size(t1) ≤ size(t)
+                LET t' [x := t2] ->β* u, u normal  
+                HENCE App(t1, t2) ->β* u, u normal
+              CASE ¬∃ (x S1 t') . n1 = Abs(x, S1, t'):
+                HAVE t2 ->β* n2, n2 normal
+                HENCE App(t1, t2) ->β* App(n1, n2), App(n1, n2) normal                
+        }
+        
+        QED
+    }
+
+    THEOREM SubjectReductionAndExpansion {
+      STATEMENT:
+        ∀ (t s : Term) (T : Type) . t : T ∧ t =β s => s : T
+        
+      PROOF:
+        LET t s : Term, T : Type
+        ASSUME (A) : t : T, (B) : t =β s
+        SHOW s : T BY induction on the derivation of (B)
+        CASE BetaReduction:
+          LET t = App(Abs(x, S1, t1), t2)
+          REWRITE B: t =β s = App(Abs(x, S1, t1), t2) ->β t1 [x := t2] = s
+          REWRITE A: t : T = App(Abs(x, S1, t1), t2) : T
+            <= Abs(x, S1, t1) : S2->T, t2 : S2, S1 = S2
+          HAVE (x : S1), t1 : T1 AND S1->T1 = S2->T
+            HENCE S1 = S2 = U, say, T1 = T
+          HAVE t2 : U          
+          HENCE t1 [x := t2] : T
+          HENCE s : T
+        
+        CASE BetaExpansion:
+          LET s = App(Abs(x, S1, s1), s2)
+          REWRITE B: t =β s = t ->β App(Abs(x, S1, s1), s2) = s
+          REWRITE A: s : T = App(Abs(x, S1, s1), s2) : T  
+            <= Abs(x, S1, s1) : S2->T, s2 : S2, S1 = S2
+          HAVE (x : S1), s1 : T1 AND S1->T1 = S2->T
+            HENCE S1 = S2 = U, say, T1 = T  
+          HAVE s1 [x := s2] : T
+          HAVE t ->β s1 [x := s2] BY B  
+          HENCE t : T BY IH
+          
+        CASE Application:
+          REWRITE B: t =β s = App(t1, t2) =β App(s1, s2)
+            <= t1 =β s1, t2 =β s2  
+          REWRITE A: t : T = App(t1, t2) : T
+            <= t1 : S->T, t2 : S
+          HAVE s1 : S->T, s2 : S BY IH
+          HENCE App(s1, s2) : T
+          HENCE s : T
+          
+        CASE Abstraction:  
+          REWRITE B: t =β s = Abs(x, S1, t1) =β Abs(x, S1, s1)
+            <= t1 =β s1
+          REWRITE A: t : T = Abs(x, S1, t1) : S1->T1
+            <= (x : S1), t1 : T1
+          HAVE (x : S1), s1 : T1 BY IH
+          HENCE Abs(x, S1, s1) : S1->T1
+          HENCE s : T
+          
+        QED
+    }
+  }  
+}
+
+
+
+
+CONCEPT SimplyTypedLambdaCalculus {
+  LANGUAGE {
+    TYPE Type ::= BaseType | Type "->" Type
+    TYPE Term ::= Variable | Abstraction | Application
+    TYPE Variable <: Term ::= Symbol
+    TYPE Abstraction <: Term ::= "\" Variable ":" Type "." Term  
+    TYPE Application <: Term ::= "(" Term Term ")"
+    TYPE TypeEnvironment = List[(Variable, Type)]
+    
+    AXIOM EnvironmentLookup {
+      ∀ (Γ : TypeEnvironment, x : Variable, T : Type) .
+        ((x, T) ∈ Γ ∧ ∀ (S : Type) . (x, S) ∈ Γ => S = T) <=>
+        Γ ⊢ x : T 
+    }
+  }
+  
+  NOTATION {
+    "T ::= B | T1 -> T2" = "Types T are either base types B or function types T1 -> T2"
+    "t ::= x | \x:T.t | t1 t2" = "Terms t are either variables x, abstractions \x:T.t, or applications t1 t2"
+    "Γ ⊢ t : T" = "Term t has type T under type environment Γ" 
+    "⊢ t : T" = "Term t has type T in the empty environment"
+  }
+
+  TRANSFORMERS {
+    RULE T_Var {
+      (x, T) ∈ Γ
+      ------------------ [Var]
+      Γ ⊢ x : T
+    }
+
+    RULE T_Abs {
+      Γ, x : T1 ⊢ t2 : T2  
+      --------------------------- [Abs]
+      Γ ⊢ (\x : T1 . t2) : T1 -> T2
+    }
+
+    RULE T_App {
+      Γ ⊢ t1 : T1 -> T2
+      Γ ⊢ t2 : T1
+      -------------------- [App]
+      Γ ⊢ (t1 t2) : T2  
+    }
+  }
+
+  PROOFS {
+    THEOREM PreservationTheorem {
+      STATEMENT:
+        ∀ (Γ : TypeEnvironment, t t' : Term, T : Type) .
+          (Γ ⊢ t : T ∧ t --> t') => Γ ⊢ t' : T
+
+      PROOF:
+        ASSUME (H1) : Γ ⊢ t : T,
+               (H2) : t --> t'
+        
+        SHOW Γ ⊢ t' : T BY Induction on derivation of t --> t' {
+          CASE E_AppAbs {
+            (\x : T1 . t1) t2 --> [x ↦ t2]t1
+
+            Γ ⊢ (\x : T1 . t1) t2 : T2   (H1)
+            Γ ⊢ (\x : T1 . t1) : T1 -> T2 (Inv. of [App] on H1)
+            Γ, x : T1 ⊢ t1 : T2           (Inv. of [Abs] on prev)
+            Γ ⊢ t2 : T1                   (Inv. of [App] on H1) 
+            Γ ⊢ [x ↦ t2]t1 : T2           (Substitution Lemma) 
+          }
+
+          CASE E_App1 {
+            t1 t2 --> t1' t2 where t1 --> t1'
+
+            Γ ⊢ t1 t2 : T2          (H1)
+            Γ ⊢ t1 : T1 -> T2       (Inv. of [App] on H1)
+            Γ ⊢ t1' : T1 -> T2      (IH on t1 --> t1')
+            Γ ⊢ t2 : T1             (Inv. of [App] on H1)
+            Γ ⊢ t1' t2 : T2         ([App])
+          }
+          
+          CASE E_App2 {
+            t1 t2 --> t1 t2' where t2 --> t2'
+
+            Γ ⊢ t1 t2 : T2          (H1) 
+            Γ ⊢ t1 : T1 -> T2       (Inv. of [App] on H1)
+            Γ ⊢ t2 : T1             (Inv. of [App] on H1)
+            Γ ⊢ t2' : T1            (IH on t2 --> t2') 
+            Γ ⊢ t1 t2' : T2         ([App])
+          }
+        }
+        
+        QED
+    }
+  }
+}

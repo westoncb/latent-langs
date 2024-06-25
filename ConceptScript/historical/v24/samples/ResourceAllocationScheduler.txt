@@ -1,0 +1,108 @@
+CONCEPT ResourceAllocationScheduler {
+  LANGUAGE {
+    TYPE Resource
+    TYPE Task
+    TYPE Allocation = Task ⊸ Resource ⊸ (Resource ⊗ Bool)
+    TYPE Schedule = List(Task ⊗ Allocation)
+    
+    FUNC Alloc : Resource ⊸ Task ⊸ (Allocation ⊗ Resource)
+    FUNC Free : Allocation ⊸ Resource ⊸ Resource
+    FUNC Run : Allocation ⊸ Resource ⊸ (Resource ⊗ Bool)
+    
+    CLASS Monoid(A) {
+      mempty : A
+      mappend : A -> A -> A
+    }
+    
+    INSTANCE Monoid(Resource) {
+      mempty = EmptyResource
+      mappend = CombineResource
+    }
+    
+    REWRITE Assoc(mappend(mappend(a, b), c)) = mappend(a, mappend(b, c))
+    REWRITE LeftId(mappend(mempty, a)) = a
+    REWRITE RightId(mappend(a, mempty)) = a
+  }
+  
+  STRUCTURE {
+    DEF Alloc(r, t) = (Alloc'(t), UseResource(r))
+      WHERE
+        Alloc'(t) = λr. Run(Alloc'(t), r)
+        
+    DEF Free(a, r) = FreeResource(r)
+    
+    DEF Run(a, r) = a(r)
+    
+    DEF Schedule(ts, r) = Fold(ScheduleTask, ([], r), ts)
+      WHERE
+        ScheduleTask((s, r), t) =
+          LET (a, r') = Alloc(r, t) IN
+          (a :: s, r')
+          
+    DEF RunSchedule(s, r) = Fold(RunTask, (r, True), s)
+      WHERE
+        RunTask((r, b), (t, a)) =
+          LET (r', b') = Run(a, r) IN
+          (Free(a, r'), b && b')
+  }
+  
+  PROOFS {
+    THEOREM ScheduleSound {
+      STATEMENT: ∀ (ts : List(Task)) (r : Resource) (s : Schedule) (r' : Resource) (b : Bool).
+        Schedule(ts, r) = (s, r') ->
+        RunSchedule(s, r') = (r'', b) ->
+        b = True
+        
+      PROOF:
+        LET ts : List(Task), r : Resource
+        HAVE Schedule(ts, r) = (s, r') BY Assumption
+        HAVE RunSchedule(s, r') = (r'', b) BY Assumption
+        
+        REWRITE Schedule(ts, r) = Fold(ScheduleTask, ([], r), ts) BY Definition(Schedule)
+        REWRITE RunSchedule(s, r') = Fold(RunTask, (r', True), s) BY Definition(RunSchedule)
+        
+        SHOW b = True BY {
+          INDUCE ON ts
+          CASE [] :
+            HAVE s = [] BY {
+              Fold(ScheduleTask, ([], r), [])
+              = ([], r) BY Definition(Fold)
+            }
+            HAVE r' = r BY {
+              Fold(ScheduleTask, ([], r), [])
+              = ([], r) BY Definition(Fold)
+            }
+            HAVE RunSchedule([], r) = (r, True) BY {
+              Fold(RunTask, (r, True), [])
+              = (r, True) BY Definition(Fold)
+            }
+            HENCE b = True
+          CASE t :: ts' :
+            LET (s', r'') = Schedule(ts', r) BY {
+              Fold(ScheduleTask, ([], r), t :: ts')
+              = LET (a, r') = Alloc(r, t) IN
+                Fold(ScheduleTask, (a :: [], r'), ts') BY Definition(Fold)
+              = LET (a, r') = Alloc(r, t) IN
+                LET (s', r'') = Schedule(ts', r') IN
+                (a :: s', r'')
+            }
+            HAVE RunSchedule(a :: s', r'') = (r''', b) BY {
+              Fold(RunTask, (r'', True), a :: s')
+              = LET (r''', b') = Run(a, r'') IN
+                Fold(RunTask, (Free(a, r'''), b' && True), s') BY Definition(Fold)
+              = LET (r''', b') = Run(a, r'') IN
+                LET (r'''', b'') = RunSchedule(s', Free(a, r''')) IN
+                (r'''', b' && b'')
+            }
+            HAVE b' = True BY {
+              Run(a, r'')
+              = Run(Alloc'(t), UseResource(r'')) BY Definition(Alloc)
+              = Alloc'(t)(UseResource(r'')) BY Definition(Run)
+              = (FreeResource(UseResource(r'')), True) BY Definition(Alloc')
+            }
+            HAVE b'' = True BY IH
+            HENCE b = True
+        }
+    }
+  }
+}

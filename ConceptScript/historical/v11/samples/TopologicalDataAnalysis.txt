@@ -1,0 +1,71 @@
+CONCEPT TopologicalDataAnalysis {
+  STRUCTURE {
+    [X := Topological space representing the dataset]
+    [∀x ∈ X, x ↦ Data point]
+    [d : X × X → ℝ⁺ ∪ {0} ↦ Metric on X]
+    [∀x, y ∈ X, d(x, y) = d(y, x) ∧ d(x, y) ≥ 0 ∧ (d(x, y) = 0 ⇔ x = y)]
+    [∀x, y, z ∈ X, d(x, z) ≤ d(x, y) + d(y, z)]
+    [VR(X, ε) := Vietoris-Rips complex of X with parameter ε]
+    [∀ε > 0, VR(X, ε) ↦ Simplicial complex]
+    [∀σ ∈ VR(X, ε), σ = {x₀, ..., xₖ} ⊆ X ∧ ∀i, j ∈ {0, ..., k}, d(xᵢ, xⱼ) ≤ ε]
+    [H_n(VR(X, ε), F) := n-th homology group of VR(X, ε) with coefficients in field F]
+    [PD{X, F} := Persistence diagram of X with coefficients in F]
+    [∀p = (ε_birth, ε_death) ∈ PD{X, F}, p ↦ Persistent homology class]
+    [pers(p) := ε_death - ε_birth ↦ Persistence of homology class p]
+  }
+
+  PROOFS {
+    tactic homology_class_exists(p, n) :
+      p ∈ PD{X, F} by hypothesis
+      p = (ε_birth, ε_death) by definition of persistence diagram
+      ε_birth < ε_death by definition of persistence
+      ∃[α] ∈ H_n(VR(X, ε_birth), F), ∀ε ∈ (ε_birth, ε_death), [α] ∈ H_n(VR(X, ε), F) by definition of p
+      [α] ↦ p by definition of persistence diagram
+
+    theorem stability_of_persistence_diagrams :
+      ∀X, Y : TopologicalSpace, ∀F : Field,
+      d_B(PD{X, F}, PD{Y, F}) ≤ d_GH(X, Y)
+
+    {
+      let X, Y : TopologicalSpace by hypothesis
+      let F : Field by hypothesis
+      ∀ε > 0, d_GH(VR(X, ε), VR(Y, ε)) ≤ d_GH(X, Y) by stability of Vietoris-Rips complex
+      ∀p ∈ PD{X, F}, ∃q ∈ PD{Y, F}, |pers(p) - pers(q)| ≤ d_GH(X, Y) by {
+        p = (ε_birth, ε_death) by definition of persistence diagram
+        [α] ↦ p by homology_class_exists(p, n)
+        ∀ε ∈ (ε_birth, ε_death), [α] ∈ H_n(VR(X, ε), F) by definition of p
+        ∃ε' ∈ (ε_birth, ε_death), [α'] ∈ H_n(VR(Y, ε'), F) ∧ |ε - ε'| ≤ d_GH(X, Y) by stability of Vietoris-Rips complex
+        q := (ε', ε_death) by definition
+        q ∈ PD{Y, F} by definition of persistence diagram
+        |pers(p) - pers(q)| = |(ε_death - ε_birth) - (ε_death - ε')| = |ε' - ε_birth| ≤ d_GH(X, Y) by triangle inequality
+      }
+      ∀q ∈ PD{Y, F}, ∃p ∈ PD{X, F}, |pers(p) - pers(q)| ≤ d_GH(X, Y) by symmetric argument
+      d_B(PD{X, F}, PD{Y, F}) ≤ d_GH(X, Y) by definition of bottleneck distance
+    }
+  }
+
+  LANGUAGE {
+    type TopologicalSpace
+    type DataPoint
+    type Metric
+    type SimplicialComplex
+    type HomologyGroup
+    type PersistenceDiagram
+    type PersistenceModule
+
+    func VR(X : TopologicalSpace, ε : ℝ⁺) : SimplicialComplex
+    func H_n(K : SimplicialComplex, F : Field) : HomologyGroup
+    func PD(X : TopologicalSpace, F : Field) : PersistenceDiagram
+    func pers(p : PersistencePoint) : ℝ⁺
+
+    pred is_metric(d : Metric) =
+      ∀x, y : DataPoint, d(x, y) = d(y, x) ∧
+      d(x, y) ≥ 0 ∧ (d(x, y) = 0 ⇔ x = y) ∧
+      ∀z : DataPoint, d(x, z) ≤ d(x, y) + d(y, z)
+
+    pred is_persistence_module(M : PersistenceModule) =
+      ∀ε₁ ≤ ε₂, ∃f_ε₁_ε₂ : M(ε₁) → M(ε₂), 
+      (ε₁ ≤ ε₂ ≤ ε₃ ⇒ f_ε₂_ε₃ ∘ f_ε₁_ε₂ = f_ε₁_ε₃) ∧
+      (ε₁ = ε₂ ⇒ f_ε₁_ε₂ = id_M(ε₁))
+  }
+}

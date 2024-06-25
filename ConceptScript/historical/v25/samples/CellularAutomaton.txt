@@ -1,0 +1,307 @@
+CONCEPT CellularAutomaton {
+  LANGUAGE {
+    TYPE Cell
+    TYPE State  
+    TYPE Rule = List[State] -> State
+    TYPE Grid = Matrix[Cell, N, M]
+    TYPE CellularAutomaton = (Grid, Rule)
+    TYPE Pattern
+    TYPE Feature
+    
+    FUNC NumSteps : Nat
+    FUNC NumCells : Nat  
+    FUNC NumStates : Nat
+    FUNC NumNeighbors : Nat
+    FUNC NextState : (Cell, Grid, Rule) -> State
+
+    FUNC Init : Grid
+    FUNC Step : (Grid, Rule) -> Grid
+    FUNC Evolve : (Grid, Rule, Nat) -> Grid
+
+    PRED LocalRule : Rule -> Bool
+    PRED GlobalDynamics : CellularAutomaton -> Bool
+    PRED Emergent : Feature -> Bool  
+    PRED Stable : Pattern -> Bool
+
+    AXIOM EmergenceProperty {
+      ∀ (f : Feature) (g : Grid).
+        Emergent(f) ⇔ 
+          (∀ (c : Cell). ¬LocalRule(λ (s : List[State]). NextState(c, g, s))) ∧
+          (∃ (p : Pattern). Match(g, p) ∧ Expresses(p, f))
+    }
+
+    AXIOM StabilityProperty {
+      ∀ (p : Pattern) (g : Grid) (r : Rule).
+        Stable(p) ⇔ 
+          Match(g, p) ∧
+          ∀ (k : Nat). Match(Evolve(g, r, k), p)
+    }  
+
+    NOTATION "[[" <Row> ("," <Row>)* "]]" = Grid
+    NOTATION "[" <Cell> ("," <Cell>)* "]" = Row
+
+    TACTIC MatchAt(g, p, i, j) = 
+      APPLY (RULE (∀ (di : 0..Height(p)-1) (dj : 0..Width(p)-1).
+                   g[i+di, j+dj] = p[di, dj])
+             THEN Match(g, p))
+
+    TACTIC EvolveBy(g, rule, k) = 
+      MATCH k {
+        0 -> REWRITE g
+        k' -> LET h = EvolveBy(g, rule, k'-1)
+              IN REWRITE Evolve(h, rule, 1)
+      }
+  }
+
+  STRUCTURE ElementaryCellularAutomaton {  
+    REQUIRE N = 1 ∧ M > 2 ∧ NumStates = 2 ∧ NumNeighbors = 2  
+
+    DEF Rule30 : Rule = λ (s : List[State]).
+      MATCH s {
+        [1,1,1] -> 0  
+        [1,1,0] -> 0
+        [1,0,1] -> 0
+        [1,0,0] -> 1  
+        [0,1,1] -> 1
+        [0,1,0] -> 1
+        [0,0,1] -> 1
+        [0,0,0] -> 0
+      }
+      
+    DEF RandomInit : Grid = 
+      Generate(M, N, λ (i, j). IF i = ⌊M/2⌋ ∧ j = ⌊N/2⌋ THEN 1 ELSE 0)
+  }
+
+  STRUCTURE ConwaysGameOfLife {
+    REQUIRE N ≥ 10 ∧ M ≥ 10 ∧ NumStates = 2 ∧ NumNeighbors = 8
+
+    DEF ConwayRule : Rule = λ (s : List[State]).  
+      LET count = Count(1, s)
+      IN IF s[4] = 1 THEN
+           IF count = 2 ∨ count = 3 THEN 1 ELSE 0
+         ELSE 
+           IF count = 3 THEN 1 ELSE 0
+
+    DEF GliderInit : Grid =
+      [[0,0,0,0,0],  
+       [0,0,1,0,0],
+       [0,0,0,1,0],
+       [0,1,1,1,0],
+       [0,0,0,0,0]]
+
+    DEF BlinkerInit : Grid =
+      [[0,0,0,0,0],
+       [0,0,1,0,0],  
+       [0,0,1,0,0],
+       [0,0,1,0,0],
+       [0,0,0,0,0]]  
+  }
+
+  PROOFS {
+    THEOREM Rule30Elementary {
+      STATEMENT:  
+        ∀ (g : Grid) (n : Nat).
+          LET ca = (RandomInit, Rule30)
+          IN GlobalDynamics(Evolve(g, Rule30, n))
+
+      PROOF:
+        LET g = RandomInit, n : Nat
+        LET h = EvolveBy(g, Rule30, n)
+        ASSUME ∀ (c : Cell). ¬LocalRule(λ (s : List[State]). NextState(c, g, s))
+          BY DEFINITION(Rule30)
+        
+        SHOW ∃ (p : Pattern). Match(h, p) BY {
+          LET p = [[1,0,1,0],
+                   [0,1,0,1],  
+                   [1,0,1,0],
+                   [0,1,0,1]]  
+          SHOW Match(h, p) BY {
+            < Omitted proof: MatchAt(h, p, ?, ?) > 
+          }  
+        }
+
+        HENCE GlobalDynamics((RandomInit, Rule30)) 
+          BY EmergenceProperty
+    }
+    
+    THEOREM ConwayGliders {
+      STATEMENT:
+        ∀ (n : Nat).
+          LET ca = (GliderInit, ConwayRule)  
+          IN Emergent(Glider)
+
+      PROOF:
+        LET n : Nat
+        LET g = EvolveBy(GliderInit, ConwayRule, n)
+        
+        SHOW Emergent(Glider) BY {
+          ASSUME ∀ (c : Cell). ¬LocalRule(λ (s : List[State]). NextState(c, g, s))
+            BY DEFINITION(ConwayRule)
+          SHOW ∃ (p : Pattern). Match(g, p) ∧ Expresses(p, Glider) BY {
+            LET p = [[0,1,0], 
+                     [0,0,1],
+                     [1,1,1]]
+            SHOW Match(g, p) BY {
+              < MatchAt(g, p, (n+1)%M, (n+1)%N) >  
+            }
+            SHOW Expresses(p, Glider) BY {
+              < Argue that p captures glider essence: 
+                  small pattern that translates by diagonal steps >
+            }
+          }
+          HENCE Emergent(Glider) BY EmergenceProperty
+        }
+    }
+
+    THEOREM ConwayBlinkers {
+      STATEMENT:
+        LET ca = (BlinkerInit, ConwayRule)
+        IN Stable(Blinker)
+      
+      PROOF:
+        LET p1 = [[0,1,0],
+                  [0,1,0],
+                  [0,1,0]]
+
+        LET p2 = [[0,0,0],  
+                  [1,1,1],
+                  [0,0,0]]
+
+        SHOW Stable(Blinker) BY StabilityProperty {
+          SHOW Match(BlinkerInit, p1) BY {
+            < MatchAt(BlinkerInit, p1, 1, 1) >
+          }
+          
+          SHOW ∀ (k : Nat). Match(Evolve(BlinkerInit, ConwayRule, k), IF Even(k) THEN p1 ELSE p2) BY {
+            LET k : Nat
+            LET g = EvolveBy(BlinkerInit, ConwayRule, k) 
+            IF Even(k) THEN {
+              SHOW Match(g, p1) BY {
+                < MatchAt(g, p1, 1, 1) >
+              }
+            }
+            ELSE {
+              SHOW Match(g, p2) BY {
+                < MatchAt(g, p2, 1, 1) >  
+              }
+            }
+          }
+        }
+    }
+  }
+}
+
+
+
+
+
+
+CONCEPT CellularAutomaton {
+  LANGUAGE {
+    TYPE Cell
+    TYPE State  
+    TYPE Rule = List[State] -> State
+    TYPE Grid = Matrix[Cell, N, M]
+    TYPE CA = (Grid, Rule)
+    TYPE Pattern
+    TYPE Feature
+    
+    FUNC Evolve : (Grid, Rule, Nat) -> Grid
+
+    PRED LocalRule : Rule -> Bool
+    PRED Emergent : Feature -> Bool  
+    PRED Stable : Pattern -> Bool
+
+    AXIOM Emergence {
+      ∀ (f : Feature) (g : Grid).
+        Emergent(f) ⇔ 
+          (∀ (c : Cell). ¬LocalRule(λ s. NextState(c, g, s))) ∧
+          (∃ p. Match(g, p) ∧ Expresses(p, f))
+    }
+
+    AXIOM Stability {
+      ∀ (p : Pattern) (g : Grid) (r : Rule).
+        Stable(p) ⇔ 
+          Match(g, p) ∧ ∀ k. Match(Evolve(g, r, k), p)
+    }  
+
+    NOTATION "[[" <Row> ("," <Row>)* "]]" = Grid
+    NOTATION "[" <Cell> ("," <Cell>)* "]" = Row
+  }
+
+  STRUCTURE ConwaysLife {
+    DEF Rule : Rule = λ s.  
+      LET n = Count(1, s)
+      IN IF s[4] = 1 THEN IF n = 2 ∨ n = 3 THEN 1 ELSE 0
+         ELSE IF n = 3 THEN 1 ELSE 0
+
+    DEF Glider : Grid = 
+      [[0,0,0,0,0],  
+       [0,0,1,0,0],
+       [0,0,0,1,0],
+       [0,1,1,1,0],
+       [0,0,0,0,0]]
+
+    DEF Blinker : Grid =
+      [[0,0,0,0,0],
+       [0,0,1,0,0],  
+       [0,0,1,0,0],
+       [0,0,1,0,0],
+       [0,0,0,0,0]]  
+  }
+
+  PROOFS {
+    TACTIC MatchAt(g, p, i, j) = 
+      APPLY (RULE (∀ di dj. g[i+di, j+dj] = p[di, dj]) 
+             THEN Match(g, p))
+
+    TACTIC EvolveBy(g, rule, k) = 
+      MATCH k {
+        0 -> REWRITE g
+        k' -> REWRITE Evolve(EvolveBy(g, rule, k'-1), rule, 1)
+      }
+
+    THEOREM GliderEmergence {
+      STATEMENT:
+        ∀ n. LET g = EvolveBy(Glider, Rule, n) 
+             IN Emergent(Glider)
+
+      PROOF:
+        LET n, g = EvolveBy(Glider, Rule, n)  
+        ASSUME ∀ c. ¬LocalRule(λ s. NextState(c, g, s)) 
+        LET p = [[0,1,0],[0,0,1],[1,1,1]]
+        SHOW Match(g, p) BY MatchAt(g, p, (n+1)%M, (n+1)%N)
+        SHOW Expresses(p, Glider) BY {
+          ARGUE ∀ k. ∃ i j. Match(Evolve(Embed(p, Zero), Rule, k), p)
+            WHERE (i,j) = (k%M, k%N)
+          ARGUE ∀ k q r. q ≠ r ⇒ ¬Intersect(Evolve(Embed(p, q), Rule, k), 
+                                              Evolve(Embed(p, r), Rule, k))
+          HENCE Expresses(p, Glider)
+            WHERE Glider = FEATURE (∃ p. ∀ k. Translates(p, k) ∧ Disjoint(p))
+        }
+        HENCE Emergent(Glider) BY Emergence
+    }  
+
+    THEOREM BlinkerStability {
+      STATEMENT:
+        Stable(Blinker)
+
+      PROOF:
+        LET p1 = [[0,1,0],[0,1,0],[0,1,0]],
+            p2 = [[0,0,0],[1,1,1],[0,0,0]]
+        
+        SHOW Match(Blinker, p1) BY MatchAt(Blinker, p1, 1, 1)
+        
+        SHOW ∀ k. Match(Evolve(Blinker, Rule, k), 
+                        IF Even(k) THEN p1 ELSE p2) BY {  
+          LET k, g = EvolveBy(Blinker, Rule, k)
+          IF Even(k) THEN 
+            SHOW Match(g, p1) BY MatchAt(g, p1, 1, 1)
+          ELSE
+            SHOW Match(g, p2) BY MatchAt(g, p2, 1, 1)
+        }
+
+        HENCE Stable(Blinker) BY Stability
+    }
+  }
+}

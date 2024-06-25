@@ -1,0 +1,39 @@
+CONCEPT OpticalNeuralCausality:
+
+EXTEND OpticalComputing:
+  OpticalObservable := (Intensity, Phase, Polarization, Spectrum)
+  OpticalState := ElectromagneticField(Distribution)
+  OpticalEvolution := Propagation(Medium), Transformation(Element)
+  
+EXTEND NeuralCausality:
+  NeuralVariable := (Neuron, Weight, Activation, Input, Output)  
+  NeuralCausalEffect := Change(Output, Intervention(Weight))
+  NeuralCausalStructure := DAG(NeuralVariable, NeuralCausalEffect)
+
+DEFINE OpticalNeuralVariable := OpticalObservable(NeuralVariable)
+DEFINE OpticalNeuralIntervention(W=Φ) := Set(OpticalState, Φ, W) in OpticalNeuralNetwork
+DEFINE OpticalNeuralCausalEffect := Difference(Output, OpticalNeuralIntervention(W))
+
+THEOREM OpticalNeuralCausalityTheorem:
+  ∀(ONN : OpticalNeuralNetwork, W : Weight, A : Activation):
+    W \*→ A in ONN ⟺ 
+    ∃(Φ : PhaseShift(W)) Intensity(Output_Φ) ≠ Intensity(Output)
+
+PROOF SKETCH:  
+  Changing the phase shift Φ of an optical weight W changes its interference pattern.
+  If W \*→ A, this changes the intensity distribution at the activation A.
+  Conversely, if changing Φ changes the output intensity, W must causally affect A.
+  Details depend on the specific optical implementation of weights and activations.
+  Key challenges: linearity, passivity, and lack of isolation in optical systems.
+
+ASSERT Implications:
+  Optical ⟹ Interference ≢ Causation
+  Optical ⟹ Fine-Alignment Problem  
+  Optical ⟹ Architecture Discovery Harder
+  Optical ⟹ Interventions ≠ Ablations
+
+ASSERT Opportunities: 
+  Optics-Enhanced Neural Computation
+  Optical Neural Architecture Search
+  Optical Causal Reasoning  
+  Optical Causal Learning

@@ -1,0 +1,76 @@
+CONCEPT EulerLagrange {
+  EXTENDS SymbolicDifferentialGeometry {
+    DECLARE {
+      L : Sym  ; Lagrangian function  
+      φ : Sym  ; Variation function
+      𝓛 : Fld  ; Lagrangian density
+      
+      CriticalPoint : {φ : Sym | (δ(∫(L, φ)) = 0) } 
+    }
+    
+    DEFINE {
+      δ : Sym -> Sym  ; Variation operator
+      δ(S) ≜ (ε ↦ (S + ε*φ) - S)/ε  ; Gateaux derivative
+    }
+  }
+  
+  THEOREM EulerLagrangeEquation {
+    ASSUME {
+      L ≈ 𝓛 ; Lagrangian correspondence
+      ∀(q : Sym) (t : ℝ). q ∘ t ≈ π ∘ (t, q, q') ; Coordinate correspondence  
+      
+      ; Regularity conditions  
+      ∀(q₀ q₁ : Fld). q₀ = φ(a) ∧ q₁ = φ(b) -> φ ∈ C²([a, b])
+      ∀(q : Fld) (t : ℝ). 𝓛(t, q(t), q'(t)) ∈ C²([a, b])
+    }
+    
+    PROVE {
+      show ∀(φ : CriticalPoint). φ satisfies 
+        ∂[L, 0, 2] - d/dt ∂[L, 0, 1] = 0
+
+      assume (φ : CriticalPoint)
+      
+      let S = ∫(L, φ) 
+      have δ(S) = 0 by definition of CriticalPoint
+      
+      calc {
+        0 
+        = δ(S)  ; by above
+        
+        = δ(∫(L, φ))
+        = δ(∫(𝓛 ∘ (t, φ, φ'))) ; by Substitution and assume
+        
+        = ∫(δ(𝓛 ∘ (t, φ, φ'))) ; by Leibniz integral rule
+        
+        = ∫(∂[𝓛, 1, 0](φ) * δ(φ) + ∂[𝓛, 2, 0](φ) * δ(φ')) ; by chain rule 
+        
+        = ∫(∂[𝓛, 1, 0](φ) * δ(φ) + ∂[𝓛, 2, 0](φ) * d/dt δ(φ))
+        
+        = ∫(∂[𝓛, 1, 0](φ) * δ(φ)) + ∫(∂[𝓛, 2, 0](φ) * d/dt δ(φ)) ; by linearity
+        
+        = ∫(∂[𝓛, 1, 0](φ) * δ(φ)) - ∫(d/dt ∂[𝓛, 2, 0](φ) * δ(φ)) ; by integration by parts
+          ; and δ(φ) = 0 at endpoints by assume  
+        
+        = ∫((∂[𝓛, 1, 0](φ) - d/dt ∂[𝓛, 2, 0](φ)) * δ(φ)) ; by linearity
+      }
+      
+      hence ∫((∂[𝓛, 1, 0](φ) - d/dt ∂[𝓛, 2, 0](φ)) * δ(φ)) = 0
+      
+      have ∂[𝓛, 1, 0](φ) - d/dt ∂[𝓛, 2, 0](φ) = 0 by {
+        assume ∂[𝓛, 1, 0](φ) - d/dt ∂[𝓛, 2, 0](φ) ≠ 0
+        obtain (x : ℝ) where (∂[𝓛, 1, 0](φ) - d/dt ∂[𝓛, 2, 0](φ))(x) ≠ 0 by continuity  
+        let δ(φ)(t) = { (t - a)*(t - b) if t ∈ [a, x)
+                       { 0                if t ∉ [a, x) }
+        have δ(φ) ∈ C²([a, b]) by construction
+        have ∫(∂[𝓛, 1, 0](φ) - d/dt ∂[𝓛, 2, 0](φ)) * δ(φ) ≠ 0 by choice of δ(φ)
+        hence contradiction
+      }
+      
+      show ∂[L, 0, 2](φ) - d/dt ∂[L, 0, 1](φ) = 0 by {
+        have ∂[𝓛, 1, 0](φ) - d/dt ∂[𝓛, 2, 0](φ) = 0 by above
+        have ∂[L, 0, 2] ≈ ∂[𝓛, 1, 0] by Substitution and assume
+        have ∂[L, 0, 1] ≈ ∂[𝓛, 2, 0] by Substitution and assume
+      }
+    }
+  }
+}

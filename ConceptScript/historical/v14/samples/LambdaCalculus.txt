@@ -1,0 +1,108 @@
+CONCEPT LambdaCalculus {
+  LANGUAGE {
+    type Term = Var(ℕ) | Abs(ℕ, Term) | App(Term, Term)
+    
+    notation "λ x . M" = Abs(x: ℕ, M: Term)  ; lambda abstraction 
+    notation "M N" = App(M: Term, N: Term)   ; application
+    
+    func subst(M: Term, x: ℕ, N: Term): Term  ; substitution function
+    func eval(M: Term): Term                  ; evaluation function
+    
+    pred reduces(M: Term, N: Term) = eval(M) = N   ; reduction relation
+    
+    notation "M ⇒ N" = reduces(M, N)
+    notation "M =β N" = (∃ P. M ⇒* P ∧ N ⇒* P)   ; beta equivalence
+    
+    axiom α(M: Term, x, y: ℕ): 
+      y ∉ FV(M) ⇒ (λ x . M) =β (λ y . [y/x]M)        ; alpha equivalence
+      
+    axiom β(M: Term, x: ℕ, N: Term):  
+      ((λ x . M) N) ⇒ [N/x]M                         ; beta reduction
+    
+    axiom η(M: Term, x: ℕ): 
+      (λ x . (M x)) =β M                             ; eta equivalence
+  }
+  
+  STRUCTURE {
+    [ChurchNumeral(n: ℕ):
+      λ f . λ x . fⁿ x  
+      where fⁿ = f ∘ ... ∘ f   ; n-fold composition
+    ]
+    
+    [ChurchBoolean:
+      tru = λ t . λ f . t
+      fls = λ t . λ f . f 
+    ]
+    
+    [Combinator:  
+      I = λ x . x                         ; Identity
+      K = λ x . λ y . x                   ; Konstant  
+      S = λ x . λ y . λ z . (x z) (y z)   ; Substitution
+    ]
+    
+    [Recursion:
+      Y = λ f . (λ x . f (x x)) (λ x . f (x x))   ; Y Combinator
+    ]
+  }
+  
+  PROOFS {  
+    tactic Reduce(S: Term, prop): 
+      (∀ M, N. M ⇒ N ⊢ prop(M) ⟹ prop(N)) ⊢ prop(S)
+    
+    theorem ChurchRosser(M, N, P: Term):
+      (M =β N) ∧ (M ⇒* P) ⇒ ∃ Q. (N ⇒* Q) ∧ (P =β Q)   ; Church-Rosser theorem
+    {  
+      assume (M =β N) ∧ (M ⇒* P)
+      
+      have ∃ R. M ⇒* R ∧ N ⇒* R   ; By definition of =β
+      let R such that M ⇒* R ∧ N ⇒* R
+      
+      P =β R by {
+        Reduce(P, λ X. X =β R) 
+      }
+      
+      hence ∃ Q. (N ⇒* Q) ∧ (P =β Q) by {
+        exists R
+      }
+    }
+      
+    theorem FixedPointCombinator(f: Term):
+      ∃ X. f X =β X
+    {
+      exists Y f
+      
+      calc (Y f) 
+           = (λ x . f (x x)) (λ x . f (x x))   ; Def. of Y
+        ⇒β f ((λ x . f (x x)) (λ x . f (x x))) ; β 
+           = f (Y f)                           ; Def. of Y
+    }
+      
+    theorem UniversalTuringMachine(M: TuringMachine): 
+      ∃ T: Term. ∀ w. (T w) =β (M w)
+    {  
+      let T = λ w . Y (λ f . λ x . 
+        match x with
+        | []     => init(M)
+        | h :: t => step(M, f t, read(M, h))
+      )  
+        
+      {{  
+        fix (w: List<Bit>)
+          calc (T w)
+               = Y (λ f . λ x . ...) w   
+            ⇒β (λ f . λ x . ...) (Y (λ f . λ x . ...)) w    ; β        
+            ⇒β (λ x . ...) [(Y (λ f . λ x . ...))/f] w      ; β
+            ⇒β ... ⇒β init(M)                               ; Base case
+               
+          assume (T t) =β (M t) for t: List<Bit>, t ⊏ w  ; Induction hypothesis
+            
+          calc (T w) 
+               ⇒β* step(M, (T t), read(M, h))              ; By IH 
+               ⇒β step(M, (M t), read(M, h))  
+               =β (M w)
+      }}
+        
+      hence ∀ w. (T w) =β (M w)
+    }
+  }
+}

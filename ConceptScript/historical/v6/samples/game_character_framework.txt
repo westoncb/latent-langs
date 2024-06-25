@@ -1,0 +1,46 @@
+// Abstract GameCharacter Concept
+GameCharacter(Name:_, Class:_, Attributes:_, Abilities:_, Equipment:_) :: {
+    [Attributes ⊆ (Strength, Dexterity, Intelligence, Wisdom, Charisma, Constitution)]
+    [Abilities ⊆ (Attack, Defend, Cast, Heal, Sneak, Persuade)]
+    [Equipment ⊆ (Weapon, Armor, Accessory, Consumable)]
+}
+
+// Specializing the GameCharacter Concept
+Warrior := GameCharacter(
+    Class:Fighter,
+    Attributes:(Strength:_, Dexterity:_, Constitution:_),
+    Abilities:(Attack:_, Defend:_),
+    Equipment:(Weapon:_, Armor:_)
+)
+
+Mage := GameCharacter(
+    Class:Spellcaster,
+    Attributes:(Intelligence:_, Wisdom:_),
+    Abilities:(Cast:_, Heal:_),
+    Equipment:(Weapon:Staff, Armor:Robes, Accessory:_)
+)
+
+Rogue := GameCharacter(
+    Class:Thief,
+    Attributes:(Dexterity:_, Charisma:_),
+    Abilities:(Sneak:_, Persuade:_),
+    Equipment:(Weapon:Dagger, Armor:LeatherArmor, Accessory:Lockpicks)
+)
+
+// Further specialization
+FireMage := Mage(Attributes:(Intelligence:High, Wisdom:Medium), Abilities:(Cast:FireSpells, Heal:Minor))
+
+// Specific instances
+Gandalf := Mage(
+    Name:"Gandalf",
+    Attributes:(Intelligence:Exceptional, Wisdom:High),
+    Abilities:(Cast:MasterWizard, Heal:Moderate),
+    Equipment:(Weapon:Staff("Wizard's Staff"), Armor:Robes("Grey Robes"), Accessory:Ring("Narya"))
+)
+
+Frodo := Rogue(
+    Name:"Frodo",
+    Attributes:(Dexterity:High, Charisma:Exceptional),
+    Abilities:(Sneak:Expert, Persuade:Convincing),
+    Equipment:(Weapon:Dagger("Sting"), Armor:LeatherArmor("Mithril Vest"), Accessory:Ring("One Ring"))
+) + (Ability:Resilience, Trait:Brave)

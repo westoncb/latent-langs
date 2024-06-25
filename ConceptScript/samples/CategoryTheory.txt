@@ -1,0 +1,239 @@
+CONCEPT CategoryTheory {
+  CONTEXT {
+    TYPES {
+      Object := TYPE  // Abstract type for objects
+      Morphism := FUNC(Object, Object)  // Morphisms as functions between objects
+
+      Category := STRUCTURE {
+        objects : SET(Object)
+        morphisms : SET(Morphism)
+        compose : FUNC(Morphism, Morphism) -> Morphism
+        identity : FUNC(Object) -> Morphism
+
+        AXIOM Associativity {
+          ∀ f g h : Morphism .
+            compose(compose(f, g), h) = compose(f, compose(g, h))
+        }
+
+        AXIOM IdentityLaws {
+          ∀ f : Morphism, A : Object .
+            compose(identity(A), f) = f = compose(f, identity(A))
+        }
+      }
+
+      // Commentary: A category consists of objects and morphisms (arrows) between them.
+      // The key operations are composition of morphisms and identity morphisms.
+      // The axioms ensure that composition is associative and that identity morphisms behave as expected.
+
+      Functor := STRUCTURE {
+        source : Category
+        target : Category
+        map_obj : FUNC(source.Object) -> target.Object
+        map_mor : FUNC(source.Morphism) -> target.Morphism
+
+        AXIOM PreservesComposition {
+          ∀ f g : source.Morphism .
+            map_mor(source.compose(f, g)) = target.compose(map_mor(f), map_mor(g))
+        }
+
+        AXIOM PreservesIdentity {
+          ∀ A : source.Object .
+            map_mor(source.identity(A)) = target.identity(map_obj(A))
+        }
+      }
+
+      // Commentary: Functors are structure-preserving maps between categories.
+      // They map objects to objects and morphisms to morphisms, preserving composition and identities.
+
+      NaturalTransformation := STRUCTURE {
+        source : Functor
+        target : Functor
+        components : FUNC(source.source.Object) -> target.target.Morphism
+
+        AXIOM Naturality {
+          ∀ A B : source.source.Object, f : source.source.Morphism .
+            LET η = components
+            IN target.target.compose(η(A), target.map_mor(f)) = 
+               target.target.compose(source.map_mor(f), η(B))
+        }
+      }
+
+      // Commentary: Natural transformations are maps between functors.
+      // The naturality condition ensures that the transformation commutes with the functors' actions.
+
+      INDUCTIVE Limit {
+        CASE Terminal
+        CASE Product(Object, Object)
+        CASE Equalizer(Morphism, Morphism)
+        CASE Pullback(Morphism, Morphism)
+      }
+
+      INDUCTIVE Colimit {
+        CASE Initial
+        CASE Coproduct(Object, Object)
+        CASE Coequalizer(Morphism, Morphism)
+        CASE Pushout(Morphism, Morphism)
+      }
+
+      // Commentary: Limits and colimits are universal constructions that capture
+      // the essence of many mathematical structures. They are defined by their
+      // universal properties.
+
+      Adjunction := STRUCTURE {
+        F : Functor  // Left adjoint
+        G : Functor  // Right adjoint
+        unit : NaturalTransformation     // F ○ G → Id
+        counit : NaturalTransformation   // Id → G ○ F
+
+        AXIOM TriangularIdentities {
+          ∀ A : F.source.Object, B : G.source.Object .
+            compose(F.map_mor(unit.components(A)), counit.components(F.map_obj(A))) = identity(F.map_obj(A))
+          ∧ compose(unit.components(G.map_obj(B)), G.map_mor(counit.components(B))) = identity(G.map_obj(B))
+        }
+      }
+
+      // Commentary: Adjunctions capture a special relationship between functors,
+      // generalizing concepts like free/forgetful functor pairs and Galois connections.
+    }
+
+    STRUCTURES {
+      STRUCTURE SetCategory IMPLEMENTS Category {
+        objects = SET(TYPE)
+        morphisms = SET(FUNC(TYPE, TYPE))
+        compose = λ f g . λ x . f(g(x))
+        identity = λ A . λ x . x
+      }
+
+      // Commentary: The category of sets is a fundamental example in category theory.
+      // Objects are sets, morphisms are functions, composition is function composition,
+      // and the identity morphism is the identity function.
+
+      STRUCTURE Yoneda IMPLEMENTS Functor {
+        source = C : Category
+        target = FUNCTOR_CATEGORY(C^op, SetCategory)
+        map_obj = λ A . HOM(_, A)  // Hom functor
+        map_mor = λ f . λ g . compose(f, g)
+
+        // Yoneda Lemma
+        AXIOM YonedaLemma {
+          ∀ A : C.Object, F : FUNCTOR(C^op, SetCategory) .
+            NAT(HOM(_, A), F) ≅ F(A)
+        }
+      }
+
+      // Commentary: The Yoneda lemma is a fundamental result in category theory,
+      // stating that an object is completely determined by its relationships to other objects.
+    }
+
+    NOTATION {
+      A → B := Morphism from A to B
+      F ⊣ G := F is left adjoint to G
+      C^op := Opposite category of C
+      ≅ := Isomorphic
+      ∀ := For all
+      ∃ := There exists
+      λ := Lambda abstraction
+      ○ := Functor composition
+    }
+
+    ASSERTIONS {
+      AXIOM DualityPrinciple {
+        ∀ theorem : THEOREM .
+          DUAL(theorem) IS_ALSO_THEOREM
+      }
+
+      // Commentary: The duality principle states that for any theorem in category theory,
+      // its dual (obtained by reversing all arrows) is also a theorem.
+
+      AXIOM FunctorCategoryIsCategory {
+        ∀ C D : Category .
+          FUNCTOR(C, D) IS_A Category
+      }
+
+      // Commentary: The collection of all functors between two categories,
+      // along with natural transformations as morphisms, forms a category.
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE Opposite(C : Category) -> Category :=
+      Category {
+        objects = C.objects
+        morphisms = {f^op | f ∈ C.morphisms}
+        compose = λ f g . (C.compose(g^op, f^op))^op
+        identity = C.identity
+      }
+
+    // Commentary: The opposite category is obtained by reversing all arrows.
+    // This transformer formalizes the construction of the opposite category.
+
+    SIMPLIFY Currying(f : FUNC(A × B, C)) -> FUNC(A, FUNC(B, C)) :=
+      λ a . λ b . f(a, b)
+
+    // Commentary: Currying is a process of transforming a function with multiple
+    // arguments into a sequence of functions, each with a single argument.
+    // This can be viewed as an adjunction between product and exponential objects.
+  }
+
+  PROOFS {
+    THEOREM YonedaEmbedding {
+      ∀ C : Category . Yoneda IS_FULLY_FAITHFUL
+    }
+    PROOF {
+      GIVEN C : Category
+      <1> ∀ A B : C.Object, Yoneda.map_mor : HOM(A, B) → NAT(HOM(_, A), HOM(_, B))
+      <2> This map is bijective by Yoneda Lemma
+      <3> ∴ Yoneda is fully faithful
+      □
+    }
+
+    // Commentary: The Yoneda embedding theorem states that every category can be
+    // fully and faithfully embedded into a category of functors. This provides
+    // a way to study abstract categories in terms of more concrete set-valued functors.
+
+    THEOREM AdjointFunctorTheorem {
+      ∀ F : Functor . 
+        (F preserves all small limits ∧ Solution Set Condition) ⇒
+        ∃ G : Functor . F ⊣ G
+    }
+    PROOF {
+      // Sketch: Construct right adjoint using limits and Solution Set Condition
+      // Details omitted for brevity
+      □
+    }
+
+    // Commentary: The adjoint functor theorem provides conditions under which
+    // a functor has an adjoint. This is a powerful tool for constructing adjunctions,
+    // which appear ubiquitously in mathematics.
+  }
+
+  EXAMPLES {
+    EXAMPLE FreeAbelianGroup {
+      LET F : Functor = FREE_ABELIAN_GROUP
+      LET G : Functor = FORGETFUL_FUNCTOR
+
+      ASSERT F ⊣ G
+
+      // Universal property
+      ∀ X : Set, A : AbelianGroup .
+        HOM_Set(X, G(A)) ≅ HOM_AbelianGroup(F(X), A)
+    }
+
+    // Commentary: This example illustrates an important adjunction in algebra.
+    // The free abelian group functor is left adjoint to the forgetful functor.
+    // This captures the universal property of free abelian groups.
+
+    EXAMPLE LimitsInSets {
+      IN SetCategory {
+        Terminal = {∗}  // Singleton set
+        Product(A, B) = A × B
+        Equalizer(f, g) = {x | f(x) = g(x)}
+        Pullback(f : A → C, g : B → C) = {(a, b) | f(a) = g(b)}
+      }
+    }
+
+    // Commentary: This example shows how various limits are realized in the
+    // category of sets. These universal constructions have concrete interpretations
+    // in familiar mathematical structures.
+  }
+}

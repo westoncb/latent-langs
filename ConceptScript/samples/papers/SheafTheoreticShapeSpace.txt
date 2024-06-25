@@ -1,0 +1,166 @@
+CONCEPT SheafTheoreticShapeSpace {
+  PARAMETERS {
+    d : Nat  // dimension of the ambient space
+  }
+
+  CONTEXT {
+    TYPES {
+      TYPE Constructible <: Set(R^d)
+      TYPE PHT(M : Constructible) := FUNC(S^(d-1) × R, Dgm^d)
+      TYPE ECT(M : Constructible) := FUNC(S^(d-1) × R, Z)
+      TYPE BCT(M : Constructible) := FUNC(S^(d-1) × R, N^d)
+      
+      INDUCTIVE ShapeTransform {
+        CASE ECTransform(ECT)
+        CASE BCTransform(BCT)
+        CASE PHTransform(PHT)
+      }
+
+      DerivedCategory := D^b(Shv(S^(d-1) × R))
+      
+      InfinityCategory := FUNC(Δ^op, Set)  // Simplicial set
+    }
+
+    STRUCTURES {
+      STRUCTURE ConstructibleSet EXTENDS Constructible {
+        AXIOM Definability {
+          EXISTS (O : OMinimalStructure) .
+            FORALL (M : ConstructibleSet) . M ∈ O
+        }
+
+        AXIOM Triangulability {
+          FORALL (M : ConstructibleSet) .
+            EXISTS (T : Triangulation) . T Triangulates M
+        }
+      }
+
+      STRUCTURE PersistenceDiagram {
+        FIELD points : SET((R ∪ {-∞, ∞})^2)
+        
+        AXIOM FiniteEssentialClasses {
+          COUNTABLE({p ∈ points | p.1 = -∞ OR p.2 = ∞})
+        }
+        
+        AXIOM ConvergentSum {
+          SUM({d - b | (b, d) ∈ points, d - b < ∞}) < ∞
+        }
+      }
+
+      STRUCTURE PHT_Sheaf(M : Constructible) EXTENDS Sheaf(S^(d-1) × R) {
+        DEF Z_M := {(x, v, t) ∈ M × S^(d-1) × R | x · v ≤ t}
+        DEF f_M := PROJ(Z_M, S^(d-1) × R)
+        
+        IMPLEMENT Stalk(v : S^(d-1), t : R) := H^*(f_M^(-1)(v, t); k)
+        
+        AXIOM LeraySheaf {
+          THIS = R^i f_M_* k_Z_M
+        }
+      }
+    }
+
+    ASSERTIONS {
+      AXIOM ECT_Injectivity {
+        FORALL (M N : Constructible) .
+          ECT(M) = ECT(N) => M = N
+      }
+
+      AXIOM PHT_Injectivity {
+        FORALL (M N : Constructible) .
+          PHT(M) = PHT(N) => M = N
+      }
+
+      AXIOM ECT_InclusionExclusion {
+        FORALL (M : Constructible, {M_i}_i : FiniteCover(M)) .
+          ECT(M) = SUM(I ⊆ IndexSet, (-1)^(|I|+1) * ECT(Intersection(M_i for i ∈ I)))
+      }
+    }
+  }
+
+  TRANSFORMERS {
+    DERIVE PHT_From_ECT {
+      ECT(M) => PHT(M)
+        WHERE PHT(M) = FUNC(v, t) -> PD_From_ECT(ECT(M)(v, _))
+    }
+
+    DERIVE BCT_From_PHT {
+      PHT(M) => BCT(M)
+        WHERE BCT(M) = FUNC(v, t) -> Betti_From_PD(PHT(M)(v, t))
+    }
+
+    DERIVE ECT_From_BCT {
+      BCT(M) => ECT(M)
+        WHERE ECT(M) = FUNC(v, t) -> AlternatingSum(BCT(M)(v, t))
+    }
+  }
+
+  PROOFS {
+    THEOREM HomotopySheaf {
+      LET F := FUNC(M : ConstructibleSet) -> PHT(M)
+      THEN F IS HomotopySheaf
+    }
+    PROOF {
+      // Outline of proof steps:
+      <1> DEFINE CechComplex(U) := [Prod(F(U_i)) => Prod(F(U_ij)) ==> ...]
+      <2> SHOW FORALL (M : ConstructibleSet, U : OpenCover(M)) .
+           F(M) ~= holim(CechComplex(U))
+      <3> USE LeraySheafResolution TO CONSTRUCT QuasiIsomorphism
+      <4> APPLY CechDescentTheorem
+      QED
+    }
+
+    THEOREM PHT_Stability {
+      FORALL (M N : ConstructibleSet, ε : PositiveReal) .
+        (EXISTS (φ : M -> N, ψ : N -> M) . 
+          IsHomotopyEquivalence(φ, ψ) AND
+          FORALL (x ∈ M) . ||x - φ(x)|| ≤ ε AND
+          FORALL (y ∈ N) . ||y - ψ(y)|| ≤ ε)
+        =>
+        d_I(PHT(M), PHT(N)) ≤ ε
+    }
+    PROOF {
+      // Outline of proof steps:
+      <1> CONSTRUCT ε-interleaving between PHT(M) and PHT(N)
+      <2> SHOW commutativity of interleaving diagram
+      <3> APPLY definition of interleaving distance
+      QED
+    }
+
+    THEOREM PHT_Approximation {
+      FORALL (M : Submanifold(R^d), ε : PositiveReal) .
+        EXISTS (K : Polyhedron, δ : PositiveReal) .
+          (SampleDensity(K, M) < δ => 
+            Prob(d_I(PHT(M), PHT(K)) < ε) > 1 - δ)
+    }
+    PROOF {
+      // Outline of proof steps:
+      <1> APPLY Niyogi-Smale-Weinberger sampling theorem
+      <2> CONSTRUCT alpha complex K from sample
+      <3> SHOW homotopy equivalence between K and M
+      <4> APPLY PHT_Stability theorem
+      QED
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE LetterV_Comparison {
+      LET V1 := LetterV(angle1)
+      LET V2 := LetterV(angle2)
+      
+      COMPUTE d_I(PHT(V1), PHT(V2))
+      COMPUTE d_PHT^0_∞,∞(V1, V2)
+      
+      SHOW PHT_Stability(V1, V2, 2√2)
+    }
+
+    EXAMPLE PointCloud_Distances {
+      LET A := PointCloud([a_1, ..., a_n])
+      LET B := PointCloud([b_1, ..., b_n])
+      
+      COMPUTE d_I(PHT(A), PHT(B))
+      COMPUTE d_PHT^0_2,2(A, B)
+      COMPUTE d_PHT^0_2,∞(A, B)
+      
+      COMPARE WITH ProcrustesDistance(A, B)
+    }
+  }
+}

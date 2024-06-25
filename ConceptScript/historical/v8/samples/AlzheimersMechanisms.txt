@@ -1,0 +1,43 @@
+CONCEPT AlzheimersMechanisms:
+    EXTEND Neuroscience:
+        Neuron := Cell(Dendrites, Axon, Synapse)
+        Synapse := Structure(PreNeuron, PostNeuron, NeurotransmitterVesicles)
+    EXTEND Biochemistry:  
+        Protein := Sequence(AminoAcids)
+        Enzyme := Protein(Catalytic)
+    DEFINE Aβ := Peptide(Cleavage(APP, β-secretase, γ-secretase))  
+    DEFINE Tau := Protein(Microtubule-Associated, Phosphorylation-Regulated)
+    DEFINE Inflammation := Response(Immune, (Microglia, Astrocytes, Cytokines))
+    ASSERT Observation(Patients(Alzheimers)):
+        Accumulation(Aβ, Plaques) * Accumulation(Tau, Tangles) * Inflammation  
+    THEOREM AmyloidCascadeHypothesis:
+        Imbalance(Production(Aβ), Clearance(Aβ)) ⟹ 
+            Oligomerization(Aβ) ⟹
+                Toxicity(Synapses) * Activation(Inflammation) ⟹
+                    Dysregulation(Tau, Phosphorylation) ⟹ 
+                        Neurodegeneration
+    PROOF:
+        In vitro: Aβ oligomers impair LTP and synaptic function.
+        Transgenic mice: FAD mutations ⟹ Aβ plaques, synaptic loss, cognitive deficits. 
+        Human genetics: FAD mutations affect APP processing ⟹ Aβ production.
+        Biomarkers: Aβ changes precede tau, inflammation, neurodegeneration.
+        But: Clinical trials targeting Aβ have not reversed symptoms.
+        Thus: Amyloid may initiate pathogenesis but not solely drive progression.
+    THEOREM AlternativeHypotheses:
+        (InsulinResistance ∨ VascularInsufficiency ∨ InfectiousAgent) *
+        GeneticPredisposition * AgingProcesses ⟹
+            Parallel(AmyloidCascade, TauPathology, Inflammation) ⟹
+                SynapticFailure * NeuronalDeath
+    PROOF:
+        Epidemiology: Diabetes, hypertension, infections ⟹ ↑ risk.
+        Genetics: APOE4 ⟹ ↑ Aβ, inflammation; other risk genes.  
+        Aging: Major risk factor. Interacts with other hypothesized factors.
+        Complexity: Multiple interrelated processes, not one linear cascade.
+        Heterogeneity: Different combinations of factors across patients.
+        Prevention: Multifactorial interventions most promising.
+        
+This Concept attempts to capture some of the complexity around Alzheimer's disease mechanisms, which remain incompletely understood despite decades of research. I defined key entities like Aβ and tau proteins, inflammation, and various hypotheses that have been proposed, including the dominant amyloid cascade hypothesis. 
+
+The proofs sketch some key evidence for and against the amyloid hypothesis, and reasons to consider alternative models involving interactions between Aβ, tau, inflammation, and other factors like insulin resistance, vascular dysfunction, infections, and aging.
+
+The Concept aims to highlight the likely multifactorial nature of Alzheimer's pathogenesis and the need to consider multiple hypotheses and intervention targets. Let me know what you think! I'd be curious to further refine this or try expressing other complex disease concepts.

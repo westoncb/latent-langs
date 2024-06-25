@@ -1,0 +1,73 @@
+STRUCTURE Unification {
+  NOTATION {
+    Γ ⊢ t := TERM_IN_CONTEXT(Γ, t)
+    Γ ⊢ t₁ = t₂ := UNIFY_IN_CONTEXT(Γ, t₁, t₂)
+    Γ ⊢ t₁ ≠ t₂ := NOT_UNIFIABLE_IN_CONTEXT(Γ, t₁, t₂)
+    σ(t) := SUBST_APPLY(σ, t)
+    σ₁ ∘ σ₂ := SUBST_COMPOSE(σ₁, σ₂)
+    σ₁ ≈ σ₂ := SUBST_EQUIV(σ₁, σ₂) 
+  }
+
+  DEF Variable := String
+  DEF FunctionSymbol := String
+  DEF Constant := Int | Float | String | Bool
+
+  STRUCTURE Term {
+    DEF Variable(name: Variable)
+    DEF Function(symbol: FunctionSymbol, args: [Term])
+    DEF Constant(value: Constant)
+  }
+
+  DEF Substitution := MAP(Variable, Term)
+  DEF Context := [Variable]
+
+  DEF occurs_check(v: Variable, t: Term) -> Bool := (
+    CASE t OF
+      Variable(u) -> v = u,
+      Function(_, args) -> ANY(occurs_check(v, arg) FOR arg : args),
+      Constant(_) -> FALSE
+  )
+
+  DEF unify(ctx: Context, t1: Term, t2: Term) -> Substitution? := (
+    CASE (t1, t2) OF
+      (Variable(v), _) -> IF occurs_check(v, t2) THEN None ELSE Some({v -> t2}),
+      (_, Variable(v)) -> IF occurs_check(v, t1) THEN None ELSE Some({v -> t1}),
+      (Function(f1, args1), Function(f2, args2)) -> (
+        IF f1 != f2 OR args1.length != args2.length THEN 
+          None
+        ELSE
+          LET subst := {},
+              unif_results := [unify(ctx, σ(a1), σ(a2)) FOR (a1, a2) : zip(args1, args2), σ := subst]
+          IN IF ANY(IS_NONE(r) FOR r : unif_results) THEN 
+               None
+             ELSE
+               SOME(FOLDL(subst_compose, {}, [s FOR Some(s) : unif_results]))
+      ),
+      (Constant(c1), Constant(c2)) -> IF c1 = c2 THEN Some({}) ELSE None,
+      _ -> None
+  )
+
+  DEF subst_compose(σ1: Substitution, σ2: Substitution) -> Substitution := (
+    LET domain := σ1.keys ∪ σ2.keys
+    IN {v -> SUBST_APPLY(σ1, σ2.get(v, Variable(v))) FOR v : domain} 
+  )
+
+  DEF subst_apply(σ: Substitution, t: Term) -> Term := (
+    CASE t OF
+      Variable(v) -> σ.get(v, t),
+      Function(f, args) -> Function(f, [subst_apply(σ, arg) FOR arg : args]),
+      _ -> t
+  )
+
+  DEF subst_equiv(σ1: Substitution, σ2: Substitution, ctx: Context) -> Bool := (
+    ALL(σ1(v) = σ2(v) FOR v : ctx)
+  )
+
+  [Γ ⊢ t  =>  σ(Γ) ⊢ σ(t)] # Apply a substitution to both sides 
+  [Γ ⊢ t₁ = t₂  <=>  ∃σ . σ(t₁) = σ(t₂)] # Unifiability is existence of a unifier
+  [Γ ⊢ t₁ = t₂  =>  σ(t₁) = σ(t₂)] # A unifier makes terms identical
+  [σ₁ ≈ σ₂  =>  ∀Γ, ∀t . σ₁(Γ) ⊢ σ₁(t) = σ₂(Γ) ⊢ σ₂(t)] # Equivalent substitutions unify the same 
+  [Γ ⊢ t  AND  σ₁ ≈ σ₂  =>  σ₁(Γ) ⊢ σ₁(t) <=> σ₂(Γ) ⊢ σ₂(t)] # Equiv substs preserve term validity
+  
+  RETURN (Term, unify)
+}

@@ -1,0 +1,144 @@
+CONCEPT MetamaterialCFC_v4 {
+  LANGUAGE {
+    M := m(C, S, P) | M + M | M * M | M - M | M / M | M @ M | d/dt(M) | ∫M | δM
+    C := c(p, f) | C + C | C * C | C - C | C / C | C @ C | d/dt(C) | ∫C | δC  
+    S := s(G, T, I) | S + S | S * S | S - S | S / S | S @ S | d/dt(S) | ∫S | δS
+    P := p(V, U) | P + P | P * P | P - P | P / P | P @ P | d/dt(P) | ∫P | δP
+    
+    m(C, S, P): material with composition C, structure S, and properties P
+    c(p, f): component with properties p and volume fraction f
+    s(G, T, I): structure with geometry G, topology T, and interfaces I 
+    p(V, U): property with value V and unit U
+    
+    G := Dim | Sym | Ani | Per | Hie | Gra 
+    T := Cel | Por | Fib | Lam | Foa | Lat
+    I := Adh | Dis | Cap | Oxi | Sol | Cat
+    
+    Dim := dims(n, (l_1, ..., l_n))  ; Dimensionality and lengths  
+    Sym := sym(R)                   ; Symmetry group
+    Ani := ani((a_1, ..., a_n))     ; Anisotropy tensor
+    Per := per((t_1, ..., t_n))     ; Periodicity
+    Hie := hie(Graphs)              ; Hierarchy of substructures
+    Gra := gra(φ)                   ; Gradation function
+    
+    Cel := cell(Polytope)           ; Unit cell  
+    Por := pore(Size, Dist)         ; Pore size and distribution
+    Fib := fiber(Diam, Len, Ori)    ; Fiber diameter, length, orientation
+    Lam := laminate(Thick, Ang)     ; Laminate thickness and angles
+    Foa := foam(Porosity, Conn)     ; Foam porosity and connectivity
+    Lat := lattice(Bravais)         ; Bravais lattice type
+    
+    Adh := adhesion(Strength)       ; Interfacial adhesion  
+    Dis := dispersion(Size, Pack)   ; Dispersion size and packing
+    Cap := capillary(Tension)       ; Capillary forces 
+    Oxi := oxidation(Rate)          ; Oxidation kinetics
+    Sol := solvation(Energy)        ; Solvation energy
+    Cat := catalysis(Activity)      ; Catalytic activity
+    
+    Property(M, T) = ∫_Ω (F(M, x, T) * dΩ) / |Ω|
+    PropertyGradient(M, T) = ∇(Property(M, T))
+    PropertyRate(M, T) = d/dt(Property(M, T))  
+    PropertyVariation(M, T) = δ(Property(M, T))
+    
+    Constraint(M, T, (V_min, V_max)) ⟺ V_min ≤ Property(M, T) ≤ V_max
+    Optimize(M, T, (M_ref, Δ)) ⟺ |Property(M, T) - Property(M_ref, T)| ≥ Δ
+    MultiObjective(M, (T_1, w_1), ..., (T_n, w_n)) ⟺ ∑_i w_i * Property(M, T_i)  
+  }
+
+  TACTIC {
+    Decomposition(M, C, S, P):
+      m(C, S, P) ⊢ C * S * P
+    
+    Substitution(M, M', T):
+      M = M' ⊢ Property(M, T) = Property(M', T)
+      
+    Linearity(M, M', T):
+      Property(M + M', T) ⊢ Property(M, T) + Property(M', T)  
+    
+    Differentiation(M, T):  
+      ∂/∂M(Property(M, T)) ⊢ PropertyGradient(M, T)
+    
+    Integration(M, T):
+      ∫_Ω (F(M, x, T) * dΩ) ⊢ |Ω| * Property(M, T)
+    
+    ConstraintPropagation(M, C, S, (T, (V_min, V_max))):
+      Constraint(M, T, (V_min, V_max)) ⊢ Constraint(C, T_C, (V_min_C, V_max_C)),
+                                          Constraint(S, T_S, (V_min_S, V_max_S))
+    
+    OptimizationCriterion(M, M_ref, T, Δ):  
+      |Property(M, T) - Property(M_ref, T)| ≥ Δ ⊢ Optimize(M, T, (M_ref, Δ))
+    
+    MultiObjectiveWeighting((M, (T_1, w_1), ..., (T_n, w_n))):
+      ∑_i w_i * Property(M, T_i) ⊢ MultiObjective(M, (T_1, w_1), ..., (T_n, w_n))
+  }
+  
+  STRATEGY {
+    ConstraintSatisfaction(M, T, (V_min, V_max)):
+      1. Decomposition(M, C, S, P)  
+      2. ConstraintPropagation(M, C, S, (T, (V_min, V_max)))
+      3. Solve constraints on C, S
+      4. Substitution(M, m(C, S, P), T)
+    
+    OptimalitySearch(M, T, (M_ref, Δ)):  
+      1. Initialize M = M_ref
+      2.while not Optimize(M, T, (M_ref, Δ))  
+         2.1. Decomposition(M, C, S, P)
+         2.2. Differentiation(Property(M, T), M) 
+         2.3. Update C, S along PropertyGradient(M, T)
+         2.4. Substitution(M, m(C, S, P), T)
+      3. return M
+    
+    PerformanceBalance(M, (T_1, w_1), ..., (T_n, w_n)):  
+      1. Initialize M
+      2. while not converged
+         2.1. MultiObjectiveWeighting(M, (T_1, w_1), ..., (T_n, w_n))  
+         2.2. Differentiation(MultiObjective(M), M)
+         2.3. Update M along MultiObjectiveGradient  
+      3. return M
+  }
+
+  PROOF {
+    theorem MetamaterialOptimization:  
+      ∀ T_i, (V_min_i, V_max_i), w_i, Δ_i.
+        ∃ M: m(C, S, P).
+          ∀ i. Constraint(M, T_i, (V_min_i, V_max_i)) ∧ 
+               Optimize(M, T_i, (M_ref, Δ_i)) ∧
+               MultiObjective(M, (T_1, w_1), ..., (T_n, w_n)) = max
+    {
+      assume T_1, ..., T_n and (V_min_1, V_max_1), ..., (V_min_n, V_max_n) and w_1, ..., w_n and Δ_1, ..., Δ_n
+      
+      let M_ref : m(C_ref, S_ref, P_ref)
+      
+      let M = PerformanceBalance(
+                M_ref, 
+                [(T_1, w_1, (V_min_1, V_max_1), Δ_1), 
+                 ..., 
+                 (T_n, w_n, (V_min_n, V_max_n), Δ_n)]
+              )
+      
+      have ∀ i. Constraint(M, T_i, (V_min_i, V_max_i)) by {
+        Decomposition(M, C, S, P)
+        ConstraintPropagation(M, C, S, (T_i, (V_min_i, V_max_i)))  
+        Solve constraints on C, S
+        Substitution(M, m(C, S, P), T_i)
+      }
+      
+      have ∀ i. Optimize(M, T_i, (M_ref, Δ_i)) by {  
+        Decomposition(M, C, S, P)
+        Differentiation(Property(M, T_i), M)
+        Update C, S along PropertyGradient(M, T_i)  
+        Substitution(M, m(C, S, P), T_i) 
+        |Property(M, T_i) - Property(M_ref, T_i)| ≥ Δ_i 
+        OptimizationCriterion(M, M_ref, T_i, Δ_i)
+      }
+      
+      have MultiObjective(M, (T_1, w_1), ..., (T_n, w_n)) = max by {
+        MultiObjectiveWeighting(M, (T_1, w_1), ..., (T_n, w_n))
+        Differentiation(MultiObjective(M), M)  
+        Update M along MultiObjectiveGradient until convergence
+      }
+      
+      hence proved.
+    }
+  }
+}

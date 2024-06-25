@@ -1,0 +1,75 @@
+CONCEPT SimplyTypedLambdaCalculus {
+
+  LANGUAGE {
+    TYPE Term
+    TYPE Type
+    
+    FUNC TVar : String -> Term
+    FUNC TLam : String -> Type -> Term -> Term
+    FUNC TApp : Term -> Term -> Term
+    
+    FUNC TArrow : Type -> Type -> Type
+    FUNC TBase : String -> Type
+    
+    PRED HasType : Term -> Type -> Bool
+    
+    CLASS Eq(A) {
+      (==) : A -> A -> Bool
+    }
+    
+    INSTANCE Eq(Type) {
+      TArrow(a, b) == TArrow(c, d) = a == c && b == d
+      TBase(x) == TBase(y) = x == y
+      _ == _ = False
+    }
+    
+    REWRITE AppLam(x, t, s) = Subst(x, s, t)
+    REWRITE SubstVar(x, s, TVar(y)) = If(x == y, s, TVar(y))
+    REWRITE SubstLam(x, s, TLam(y, ty, t)) = If(x == y, TLam(y, ty, t), TLam(y, ty, Subst(x, s, t)))
+    REWRITE SubstApp(x, s, TApp(t1, t2)) = TApp(Subst(x, s, t1), Subst(x, s, t2))
+    
+    NOTATION "t : T" = HasType(t, T)
+    NOTATION "λ x : T . t" = TLam(x, T, t)
+    NOTATION "s · t" = TApp(s, t)
+    NOTATION "S → T" = TArrow(S, T)
+  }
+  
+  STRUCTURE {
+    DEF HasType(TVar(x), T) = False
+    DEF HasType(TLam(x, S, t), TArrow(S, T)) = HasType(t, T)
+    DEF HasType(TApp(s, t), T) = ∃ S . HasType(s, TArrow(S, T)) ∧ HasType(t, S)
+  }
+  
+  PROOFS {
+    THEOREM Substitution {
+      STATEMENT: ∀ x s t T . (λ x : S . t) : T → s : S → Subst(x, s, t) : T
+      PROOF:
+        LET x : String, s : Term, t : Term, T : Type
+        ASSUME (λ x : S . t) : T, s : S
+        HAVE t : TArrow(S, T) BY InversionLam
+        SHOW Subst(x, s, t) : T BY {
+          Subst(x, s, t)
+          = Subst(x, s, TLam(x, S, t)) BY DefSubst
+          = TLam(x, S, Subst(x, s, t)) BY SubstLam
+          : T BY HasType(TLam(x, S, t), T)
+        }
+    }
+    
+    THEOREM Preservation {
+      STATEMENT: ∀ t t' T . t : T → t ↦ t' → t' : T
+      PROOF:
+        LET t : Term, t' : Term, T : Type
+        ASSUME t : T, t ↦ t'
+        CASE t OF
+          TApp(TLam(x, S, s), r) ->
+            HAVE s : TArrow(S, T), r : S BY InversionApp
+            HAVE t' = Subst(x, r, s) BY BetaReduction
+            SHOW t' : T BY Substitution
+          _ -> SHOW t' : T BY {
+            t ↦ t'
+            = t = t' BY NoReduction
+            : T BY Assumption
+          }
+    }
+  }
+}

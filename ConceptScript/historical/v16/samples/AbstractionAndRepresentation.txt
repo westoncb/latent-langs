@@ -1,0 +1,106 @@
+CONCEPT AbstractionAndRepresentation {
+  LANGUAGE {
+    ; Formal system components
+    type S = L × I × T × P × M
+    
+    ; Language, inference rules, theorems, proofs, and models
+    type L;  type I = ℘(L);  type T = ℘(L);  type P = L × T;  type M
+    
+    ; Abstraction and representation functors between systems
+    func α{S₁, S₂}: S₁ -> S₂;  func ρ{S₂, S₁}: S₂ -> S₁
+    
+    ; Semantic interpretation, logical entailment, and proof checking
+    func ⟦_⟧{S}: L -> M;  pred ⊢ ⊆ ℘(L) × L;  pred ⊨ ⊆ M × L
+    
+    ; Soundness and completeness conditions
+    Sound{S} := ∀Γ ⊆ L, φ ∈ L. (Γ ⊢ φ) -> (∀M. (∀ψ ∈ Γ. M ⊨ ψ) -> M ⊨ φ)
+    Complete{S} := ∀Γ ⊆ L, φ ∈ L. (∀M. (∀ψ ∈ Γ. M ⊨ ψ) -> M ⊨ φ) -> (Γ ⊢ φ)
+    
+    ; Galois connection between abstraction and representation
+    GaloisConnection{S₁, S₂} := ∀s₁ ∈ S₁, s₂ ∈ S₂. α{S₁, S₂}(s₁) ≤ s₂ <-> s₁ ≤ ρ{S₂, S₁}(s₂)
+    
+    ; Preservation of provability under interpretation between systems
+    PreservesProvability{S₁, S₂, ι} := ∀Γ ⊆ L₁, φ ∈ L₁. (Γ ⊢ φ) -> (ι(Γ) ⊢ ι(φ))
+    
+    ; Reflection of provability under interpretation between systems  
+    ReflectsProvability{S₁, S₂, ι} := ∀Γ ⊆ L₁, φ ∈ L₁. (ι(Γ) ⊢ ι(φ)) -> (Γ ⊢ φ)
+  }
+  
+  STRUCTURE {
+    ; Soundness and completeness axioms
+    ∀S. Sound{S} ∧ Complete{S}
+    
+    ; Galois connection between abstraction and representation
+    ∀S₁, S₂. GaloisConnection{S₁, S₂}
+    
+    ; Provability preservation and reflection under interpretation
+    ∀S₁, S₂, ι: S₁ -> S₂. PreservesProvability{S₁, S₂, ι} ∧ ReflectsProvability{S₁, S₂, ι}
+  }
+  
+  PROOFS {
+    theorem AbstractInterpretation: ∀S₁, S₂, ι: S₁ -> S₂, Γ ⊆ L₁, φ ∈ L₁. 
+      (Sound{S₂} ∧ PreservesProvability{S₁, S₂, ι}) -> ((Γ ⊢ φ) -> (ι(Γ) ⊨ ι(φ))) {
+        assume S₁, S₂, ι: S₁ -> S₂, Γ ⊆ L₁, φ ∈ L₁
+        assume Sound{S₂} and PreservesProvability{S₁, S₂, ι}
+        assume Γ ⊢ φ
+        
+        have ι(Γ) ⊢ ι(φ)   ; by PreservesProvability{S₁, S₂, ι}
+        ι(Γ) ⊨ ι(φ)        ; by Sound{S₂}
+      }
+      
+    theorem ConcreteInterpretation: ∀S₁, S₂, ι: S₁ -> S₂, Γ ⊆ L₁, φ ∈ L₁.
+      (Complete{S₁} ∧ ReflectsProvability{S₁, S₂, ι}) -> ((ι(Γ) ⊨ ι(φ)) -> (Γ ⊢ φ)) {  
+        assume S₁, S₂, ι: S₁ -> S₂, Γ ⊆ L₁, φ ∈ L₁
+        assume Complete{S₁} and ReflectsProvability{S₁, S₂, ι}
+        assume ι(Γ) ⊨ ι(φ)
+        
+        ∀M. (∀ψ ∈ Γ. M ⊨ ψ) -> M ⊨ φ   ; by assumption and semantics of ι
+        Γ ⊢ φ                            ; by Complete{S₁}
+      }
+      
+    theorem GaloisConnectionTheorem: ∀S₁, S₂. GaloisConnection{S₁, S₂} <->
+      (∀s₁ ∈ S₁. s₁ ≤ ρ{S₂, S₁}(α{S₁, S₂}(s₁))) ∧ (∀s₂ ∈ S₂. α{S₁, S₂}(ρ{S₂, S₁}(s₂)) ≤ s₂) {
+        assume S₁, S₂
+        
+        (->):
+          assume GaloisConnection{S₁, S₂}
+          
+          (∀s₁ ∈ S₁. s₁ ≤ ρ{S₂, S₁}(α{S₁, S₂}(s₁))):
+            let s₁ ∈ S₁
+            have α{S₁, S₂}(s₁) ≤ α{S₁, S₂}(s₁)   ; by reflexivity
+            s₁ ≤ ρ{S₂, S₁}(α{S₁, S₂}(s₁))         ; by GaloisConnection{S₁, S₂}
+            
+          (∀s₂ ∈ S₂. α{S₁, S₂}(ρ{S₂, S₁}(s₂)) ≤ s₂):  
+            let s₂ ∈ S₂
+            have ρ{S₂, S₁}(s₂) ≤ ρ{S₂, S₁}(s₂)   ; by reflexivity
+            α{S₁, S₂}(ρ{S₂, S₁}(s₂)) ≤ s₂         ; by GaloisConnection{S₁, S₂}
+            
+        (<-):  
+          assume ∀s₁ ∈ S₁. s₁ ≤ ρ{S₂, S₁}(α{S₁, S₂}(s₁)) and 
+                 ∀s₂ ∈ S₂. α{S₁, S₂}(ρ{S₂, S₁}(s₂)) ≤ s₂
+          
+          let s₁ ∈ S₁, s₂ ∈ S₂
+          assume α{S₁, S₂}(s₁) ≤ s₂
+          
+          have s₁ ≤ ρ{S₂, S₁}(α{S₁, S₂}(s₁))   ; by assumption
+          ρ{S₂, S₁}(α{S₁, S₂}(s₁)) ≤ ρ{S₂, S₁}(s₂)   ; by monotonicity of ρ
+          hence s₁ ≤ ρ{S₂, S₁}(s₂)             ; by transitivity
+          
+          assume s₁ ≤ ρ{S₂, S₁}(s₂)  
+          α{S₁, S₂}(s₁) ≤ α{S₁, S₂}(ρ{S₂, S₁}(s₂))   ; by monotonicity of α
+          α{S₁, S₂}(ρ{S₂, S₁}(s₂)) ≤ s₂               ; by assumption
+          hence α{S₁, S₂}(s₁) ≤ s₂             ; by transitivity
+      }
+  }
+}
+
+This Concept formalizes key ideas about abstraction and representation between formal systems, including:
+
+Formal systems consisting of a language, inference rules, theorems, proofs, and models
+Abstraction and representation functors between systems that form a Galois connection
+Soundness and completeness conditions on proof systems wrt semantics
+Preservation and reflection of provability under interpretation between systems
+Abstract and concrete interpretation theorems relating provability and semantic entailment
+A theorem characterizing Galois connections in terms of unit and counit inequalities
+
+The proofs illustrate some basic reasoning patterns for deriving consequences from the definitions and axioms. The overall framework provides a foundation for studying how logical properties and reasoning capabilities are transferred across different levels of abstraction.

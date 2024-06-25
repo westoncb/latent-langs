@@ -1,0 +1,128 @@
+CONCEPT SelfReferentialProof {
+  LANGUAGE {
+    type Proof = Tree<ProofStep>
+    type ProofStep = {
+      assertion: Formula,
+      justification: Justification 
+    }
+    type Formula = String  // Propositional or predicate logic formula
+    type Justification = Index | Axiom | Theorem
+
+    notation "⊢" = Entails
+    notation "⟙" = Proves
+    notation "#" = Asserts
+    notation "✓" = ProofChecks
+
+    func IsWellFormed(p: Proof): 𝔹 = 
+      ∀s ∈ p. let ⟨f, j⟩ = s in IsValidJustification(j, f)
+    
+    func IsValidJustification(j: Justification, f: Formula): 𝔹 =
+      match j with
+      | Index(i) -> p[i].assertion ⊢ f
+      | Axiom(a) -> a ⊢ f
+      | Theorem(t) -> t.statement ⊢ f ∧ t.proof ✓
+      
+    pred ProofChecks(p: Proof) ⇔
+      IsWellFormed(p) ∧ p.root.assertion = p.theorem.statement
+      
+    axiom SelfReferentialProofAxiom: 
+      ∀p: Proof. p # (p ⟙ p.theorem.statement) ⇒ (p ⟙ p.theorem.statement)
+  }
+  
+  STRUCTURE {
+    [SelfReferentialProof = {
+      theorem: {statement: Formula, proof: SelfReferentialProof},
+      steps: ProofStep[]
+    }
+      ↦ A proof that refers to itself in its own theorem and proof steps
+    ]
+  
+    [SelfProvingTheorem(t) ⇔  
+      t.proof # (t.proof ⟙ t.statement) ∧ 
+      t.proof.theorem = t ∧
+      t.proof ✓
+      ↦ The theorem's proof asserts it proves the theorem, 
+        refers to the theorem itself, and proof checks
+    ]
+  
+    [Liar'sProof = 
+      {theorem: {statement: ⊥, proof: Liar'sProof}, 
+       steps: [⟨⊤ → ⊥, Index(0)⟩, ⟨⊥, Theorem(Liar'sProof.theorem)⟩]}
+      ↦ A proof of contradiction that cites itself as the final step
+    ]
+  }
+  
+  PROOFS {
+    theorem SelfProvableTheorem: 
+      ∃t: Theorem. SelfProvingTheorem(t)
+    {
+      let t = {
+        statement: ∃t: Theorem. SelfProvingTheorem(t),
+        proof: SelfReferentialProof(t)
+      }
+      
+      {{
+        t.proof # (t.proof ⟙ t.statement)
+          ; by construction
+        
+        have t.proof.theorem = t  
+          ; by construction
+          
+        have t.proof ✓
+        {{
+          IsWellFormed(t.proof) 
+            ; steps use SelfReferentialProofAxiom and t itself
+            
+          t.proof.root.assertion = t.statement
+            ; by construction
+            
+          therefore, t.proof ✓
+            ; by definition of ProofChecks
+        }}
+          
+        therefore, SelfProvingTheorem(t)
+          ; by definition
+      }}
+        
+      therefore, ∃t: Theorem. SelfProvingTheorem(t)
+        ; by existential introduction with t
+    }
+      
+    theorem Contradiction:
+      ∀p: SelfReferentialProof. p = Liar'sProof ⇒ p ✓ ∧ ¬p ✓ 
+    {
+      assume p: SelfReferentialProof  
+      assume p = Liar'sProof
+        
+      have p.steps[0].assertion = ⊤ → ⊥
+        ; by definition of Liar'sProof
+          
+      have p.steps[0].justification ⟙ (⊤ → ⊥)
+        ; by SelfReferentialProofAxiom at Index(0)
+          
+      have p.steps[1].assertion = ⊥
+        ; by definition of Liar'sProof
+          
+      have p.steps[1].justification ⟙ ⊥  
+        ; by Theorem(Liar'sProof.theorem) and p = Liar'sProof
+          
+      hence p ✓
+        ; by IsWellFormed and root assertion = ⊥
+          
+      have ¬IsValidJustification(p.steps[1].justification, ⊥)
+        ; since Liar'sProof.theorem.statement = ⊥ and 
+          no axioms or theorems prove ⊥
+            
+      hence ¬IsWellFormed(p)
+      hence ¬p ✓
+        
+      therefore, p ✓ ∧ ¬p ✓
+    }
+  }
+}
+
+This Concept explores the idea of self-referential proofs that refer to themselves in their own theorem statements and proof steps. It defines a language for expressing proofs as trees of proof steps, with each step containing an assertion and a justification (an index to a previous step, an axiom, or a theorem).
+The key axiom is SelfReferentialProofAxiom, which states that if a proof p asserts that it proves its own theorem statement, then it does indeed prove that statement. This enables proofs to justify their own validity in a self-referential way.
+The structure defines SelfReferentialProof and SelfProvingTheorem to capture proofs that refer to and prove themselves. It also defines the Liar'sProof, a paradoxical proof that claims to prove a contradiction by citing itself.
+The first proof, SelfProvableTheorem, constructs a theorem that proves itself by asserting its own proof is valid. The proof argues that this theorem satisfies the definition of SelfProvingTheorem.
+The second proof, Contradiction, shows that the Liar'sProof both proof checks and fails to proof check, deriving a contradiction. This is because it asserts a false statement but justifies it by simply citing itself in a cycle.

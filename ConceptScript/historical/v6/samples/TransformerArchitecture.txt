@@ -1,0 +1,82 @@
+TransformerArchitecture := (
+  InputEmbedding(VocabSize:_, EmbeddingDim:_) |>
+  PositionalEncoding(MaxLength:_, Dim:_) |>
+  Encoder(NumLayers:_) |>
+  Decoder(NumLayers:_) |>
+  OutputEmbedding(VocabSize:_, EmbeddingDim:_)
+)
+
+Encoder := (
+  EncoderLayer(NumHeads:_, HiddenDim:_, Dropout:_) |> Repeat(Times:_)
+)
+
+EncoderLayer := (
+  MultiHeadAttention(NumHeads:_, Dropout:_) |>
+  AddNorm(Dropout:_) |>
+  FeedForward(HiddenDim:_, Dropout:_) |>
+  AddNorm(Dropout:_)
+)
+
+Decoder := (
+  DecoderLayer(NumHeads:_, HiddenDim:_, Dropout:_) |> Repeat(Times:_)
+)
+
+DecoderLayer := (
+  MaskedMultiHeadAttention(NumHeads:_, Dropout:_) |>
+  AddNorm(Dropout:_) |>
+  MultiHeadAttention(NumHeads:_, Dropout:_) |>
+  AddNorm(Dropout:_) |>
+  FeedForward(HiddenDim:_, Dropout:_) |>
+  AddNorm(Dropout:_)
+)
+
+MultiHeadAttention(NumHeads:_, Dropout:_) :: {
+  [Inputs ^= (Queries, Keys, Values)]
+  [Outputs := Concat(AttentionHeads)]
+  
+  AttentionHead(Index:_) :: {
+    [Queries |> LinearProjection(Dim:_) $ ProjectedQueries]
+    [Keys |> LinearProjection(Dim:_) $ ProjectedKeys]
+    [Values |> LinearProjection(Dim:_) $ ProjectedValues]
+    
+    [DotProductAttention(
+      Queries:ProjectedQueries,
+      Keys:ProjectedKeys,
+      Values:ProjectedValues
+    ) |> Dropout $ AttentionOutputs]
+  }
+  
+  [AttentionHead(Index:i) for i in Range(1, NumHeads)]
+}
+
+FeedForward(HiddenDim:_, Dropout:_) :: {
+  [Inputs |>
+   LinearProjection(Dim:HiddenDim) |>
+   Activation(Function:ReLU) |>
+   LinearProjection(Dim:InputDim) |>
+   Dropout $
+   Outputs
+  ]
+}
+
+DEF(
+  Repeat(Times:N) := Composition((Layer) => (Layer |> Layer |> ... |> Layer) for N times)
+  AddNorm(Dropout:_) := (Inputs |> Dropout |> Add(Inputs) |> LayerNorm)
+)
+
+TranslationModel :: {
+  SourceLanguage(VocabSize:_, EmbeddingDim:_)
+  TargetLanguage(VocabSize:_, EmbeddingDim:_)
+  
+  [SourceLanguage.Inputs |>
+   TransformerArchitecture(
+     InputEmbedding(VocabSize:SourceLanguage.VocabSize, EmbeddingDim:SourceLanguage.EmbeddingDim),
+     PositionalEncoding(MaxLength:1000, Dim:SourceLanguage.EmbeddingDim),
+     Encoder(NumLayers:6),
+     Decoder(NumLayers:6),
+     OutputEmbedding(VocabSize:TargetLanguage.VocabSize, EmbeddingDim:TargetLanguage.EmbeddingDim)
+   ) |>
+   CrossEntropyLoss(Targets:TargetLanguage.Outputs) $
+   TranslationOutputs
+  ]
+}

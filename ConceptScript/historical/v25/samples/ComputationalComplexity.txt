@@ -1,0 +1,132 @@
+CONCEPT ComputationalComplexity {
+  LANGUAGE {
+    TYPE Problem
+    TYPE Instance
+    TYPE Algorithm
+    TYPE Resource
+    TYPE Complexity = Resource -> Nat
+
+    FUNC RunTime : Algorithm -> Complexity
+    FUNC Size : Instance -> Nat
+
+    PRED IsSolvable : (Problem, Algorithm) -> Bool
+    PRED IsPolynomialTime : Complexity -> Bool
+    PRED IsNPComplete : Problem -> Bool
+
+    AXIOM PolynomialTimeDefinition {
+      ∀ (T : Complexity).
+        IsPolynomialTime(T) ⇔ 
+          ∃ (k : Nat). ∀ (n : Nat). T(n) ≤ n^k + k  
+    }
+
+    AXIOM NPCompleteDefinition {
+      ∀ (P : Problem).  
+        IsNPComplete(P) ⇔
+          (∀ (A : Algorithm). IsSolvable(P, A) ⇒ ¬IsPolynomialTime(RunTime(A))) ∧
+          (∀ (Q : Problem). IsNPComplete(Q) ⇒ PolynomialTimeReducible(Q, P))
+    }
+  }
+
+  STRUCTURE Satisfiability <: Problem {
+    INSTANCES : Set[Formula]
+    DEF IsSatisfiable(ϕ : Formula) = ∃ (I : Interpretation). I ⊨ ϕ
+  }
+
+  PROOFS {
+    THEOREM CookLevin {
+      STATEMENT:
+        IsNPComplete(Satisfiability)
+
+      PROOF:
+        SHOW ∀ (A : Algorithm). IsSolvable(Satisfiability, A) ⇒ ¬IsPolynomialTime(RunTime(A)) BY {
+          LET A : Algorithm
+          ASSUME IsSolvable(Satisfiability, A)
+          SHOW ¬IsPolynomialTime(RunTime(A)) BY {
+            ASSUME IsPolynomialTime(RunTime(A))
+            HENCE ∃ (k : Nat). ∀ (ϕ : Formula). RunTime(A)(Size(ϕ)) ≤ Size(ϕ)^k + k 
+              BY PolynomialTimeDefinition
+            LET k : Nat  
+            TAKE ψ = Formula(Var(i,j) for 1 ≤ i,j ≤ n) ∧ 
+                       Formula(¬Var(i,j) ∨ ¬Var(i,k) ∨ Var(j,k) for 1 ≤ i,j,k ≤ n) ∧
+                       Formula(¬Var(i,j) ∨ ¬Var(k,j) for 1 ≤ i < k ≤ n, 1 ≤ j ≤ n)
+              WHERE n = 2^(2^k)
+            HAVE Size(ψ) = O(n^3)
+            REWRITE RunTime(A)(Size(ψ))  
+              ≤ Size(ψ)^k + k  BY ASSUME
+              = O(n^(3k))      BY HAVE
+              = O(2^(6k2^k))   BY n = 2^(2^k)  
+              < O(2^n)         BY k < log(n) for sufficiently large n
+            BUT IsSatisfiable(ψ) ⇔ ∃ (G : Graph). Nodes(G) = n ∧ Coloring(G, log(n))
+              BY {
+                (=>) LET I : Interpretation, ASSUME I ⊨ ψ
+                     CONSTRUCT G : Graph = (V, E)
+                       WHERE V = {1,...,n},
+                             E = {(i,j) | I(Var(i,k)) ∧ I(Var(j,k)) for some k}
+                     SHOW ∀ (i j : V). (i,j) ∈ E ⇒ Color(i) ≠ Color(j) BY {  
+                       LET i j k, ASSUME (i,j) ∈ E, so I(Var(i,k)) ∧ I(Var(j,k))
+                       SHOW ¬(I(Var(i,m)) ∧ I(Var(j,m))) for any m BY {
+                         CASE m = k: ψ contains ¬Var(i,k) ∨ ¬Var(j,k) 
+                         CASE m ≠ k: ψ contains ¬Var(i,k) ∨ ¬Var(i,m)
+                                             and ¬Var(j,k) ∨ ¬Var(j,m)
+                       }
+                       HENCE Color(i) ≠ Color(j) 
+                         WHERE Color(x) = k if I(Var(x,k))
+                     }
+                (<=) LET G : Graph, ASSUME Nodes(G) = n ∧ Coloring(G, log(n))  
+                     CONSTRUCT I : Interpretation = λ Var(i,k). (Color(i) = k)
+                     SHOW I ⊨ ψ BY {
+                       I ⊨ Var(i,j) for some j for each i trivially
+                       I ⊨ ¬Var(i,j) ∨ ¬Var(i,k) ∨ Var(j,k) since Color(i) is unique
+                       I ⊨ ¬Var(i,j) ∨ ¬Var(k,j) for i ≠ k since Color(i) ≠ Color(k)   
+                     }
+              }
+            HENCE ¬IsPolynomialTime(RunTime(A)) since log(n)-coloring is NP-complete
+          }
+        }
+
+        SHOW ∀ (Q : Problem). IsNPComplete(Q) ⇒ PolynomialTimeReducible(Q, Satisfiability) BY {
+          LET Q : Problem, ASSUME IsNPComplete(Q)
+          LET ReduceToSAT(x : Instance) = {  
+            CONSTRUCT Turing Machine M = (Q, Σ, Γ, δ, q₀, qacc, qrej) 
+              WHERE Q = AllStates(Q), 
+                    Σ = InputSymbols(Q), 
+                    Γ = TapeSymbols(Q),
+                    δ = TransitionFunction(Q),
+                    q₀ = StartState(Q),  
+                    qacc = AcceptState(Q),
+                    qrej = RejectState(Q)
+            ENCODE ⟨M,x,t⟩ as Boolean formula ϕ 
+              WHERE t = RunningTime(M,x)
+            RETURN ϕ
+          }
+          SHOW ∀ (x : Instance). x ∈ Q ⇔ IsSatisfiable(ReduceToSAT(x)) BY {
+            LET x : Instance
+            (=>) ASSUME x ∈ Q  
+                 THEN ∃ (s : State). Path(M,x,s) ∧ s = qacc BY DEFINITION
+                 CONSTRUCT I : Interpretation = λ Var(q,a,t). (Path(M,x,q,a,t))
+                 SHOW I ⊨ ϕ WHERE ϕ = ReduceToSAT(x) BY {
+                   ϕ encodes valid computation path from q₀ to qacc on x
+                 }  
+            (<=) ASSUME IsSatisfiable(ReduceToSAT(x))
+                 THEN ∃ (I : Interpretation). I ⊨ ϕ WHERE ϕ = ReduceToSAT(x) 
+                 CONSTRUCT Path(M,x,s) 
+                   WHERE ∀ t. MachineState(t) = q if I(Var(q,a,t)),
+                             TapeContent(t) = a if I(Var(q,a,t)) 
+                 HAVE s = qacc BY {
+                   I ⊨ ϕ so encodes valid path to qacc on x
+                 }
+                 HENCE x ∈ Q BY DEFINITION  
+          }
+
+          SHOW ReduceToSAT runs in polynomial time BY {
+            Size(ϕ) = O(t log t) = O((Size(x))^k log (Size(x)))  
+              WHERE k = Constant(Q) since Q is NP-complete
+          }
+
+          HENCE PolynomialTimeReducible(Q, Satisfiability)
+        }
+
+        HENCE IsNPComplete(Satisfiability) BY NPCompleteDefinition
+    }
+  }
+}

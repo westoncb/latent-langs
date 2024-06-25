@@ -1,0 +1,248 @@
+CONCEPT SketchAttention {
+  LANGUAGE {
+    FUNC zeros : (ℕ, ℕ) -> Matrix[Float]
+    FUNC dot : (Vector[Float], Vector[Float]) -> Float
+    FUNC softmax : Vector[Float] -> Vector[Float]
+    FUNC min : Sketch[ℝ^d] -> Float
+    FUNC max : Sketch[ℝ^d] -> Float
+    FUNC SimHash : (ℝ^d, Matrix[Float](d, k), Float) -> [m]
+    FUNC L2Distance : (ℝ^d, ℝ^d) -> Float
+
+    AXIOM softmax_sum_to_one:
+      ∀(x : ℝ^d). sum(softmax(x)) = 1
+
+    AXIOM simhash_collision_probability:
+      ∀(x y : ℝ^d). ∀(A : Matrix[Float](d, k)). ∀(r : Float).
+        P(SimHash(x, A, r) = SimHash(y, A, r)) = f(L2Distance(x, y) / r)
+        WHERE f(z) = 1 - 2 * (arccos(z) / π)
+  }
+
+  STRUCTURE SketchAttentionStructure[d : ℕ] {
+    -- Hyperparameters
+    DEF n : ℕ = 1000000  -- Expected number of unique vectors
+    DEF δ : Float = 0.01  -- Desired probability of missing a similar vector
+    DEF d_avg : Float = 0.5  -- Average distance between similar vectors
+
+    -- Derived hyperparameters
+    DEF k : ℕ = ceil(log(1/δ))  -- Number of hash functions
+    DEF m : ℕ = 4 * n  -- Size of each hash table
+    DEF r : Float = 2 * d_avg  -- Radius for SimHash
+
+    DEF Sketch = (ℝ^d -> [m])^k
+    DEF SketchTable = RobinHoodHashTable[[m], List[ℝ^d]]
+
+    DEF Query : ℝ^(n×d)
+    DEF Context : Sketch[ℝ^d]
+
+    DEF Initialize() -> Context {
+      LET hash_params = RANDOM_MATRIX(d, k)
+      LET tables = [RobinHoodHashTable([[m], List[ℝ^d]], LoadFactor(0.75)) FOR i = 1 TO k]
+      RETURN NEW Context(hash_params, tables)
+    }
+
+    DEF Update(C : Context, x : ℝ^d) -> Context {
+      FOR i = 1 TO k:
+        LET idx = SimHash(x, C.hash_params[i], r)
+        C.tables[i].Insert(idx, x)
+      RETURN C
+    }
+
+    DEF Query(C : Context, q : ℝ^d) -> List[ℝ^d] {
+      LET results = EMPTY_LIST
+      FOR i = 1 TO k:
+        LET idx = SimHash(q, C.hash_params[i], r)
+        LET bucket = C.tables[i].Get(idx)
+        IF bucket IS NOT EMPTY:
+          results = CONCAT(results, bucket)
+      RETURN results
+    }
+
+    DEF AttentionWeights(Q : Query, C : Context) -> Matrix[Float] {
+      LET W = zeros(n, k)
+      FOR i = 1 TO n:
+        FOR j = 1 TO k:
+          LET S_j = Query(C, Q[i])
+          LET w_ij = softmax(dot(Q[i], S_j))
+          W[i, j] = w_ij
+      RETURN W
+    }
+
+    DEF AttentionOutput(Q : Query, C : Context) -> Matrix[Float] {
+      LET W = AttentionWeights(Q, C)
+      LET Y = zeros(n, d)
+      FOR i = 1 TO n:
+        FOR j = 1 TO k:
+          LET S_j = Query(C, Q[i])
+          LET y_ij = sum(W[i, j] * S_j)
+          Y[i] = Y[i] + y_ij
+      RETURN Y
+    }
+
+    DEF SketchAttention(Q : Query, C : Context) -> Matrix[Float] {
+      RETURN AttentionOutput(Q, C)
+    }
+  }
+
+  PROOFS {
+    THEOREM attention_weights_sum_to_one {
+      STATEMENT:
+        ∀(Q : ℝ^(n×d)). ∀(C : Context). ∀(i : 1..n).
+        sum(AttentionWeights(Q, C)[i]) = 1
+
+      PROOF {
+        LET Q : ℝ^(n×d), C : Context, i : 1..n
+        LET W = AttentionWeights(Q, C)
+        
+        sum(W[i])
+          = sum(softmax(dot(Q[i], Query(C, Q[i]))) FOR j = 1 TO k)  BY DEFINITION OF AttentionWeights
+          = sum(softmax(dot(Q[i], Query(C, Q[i]))))                BY LINEARITY OF sum
+          = 1                                                       BY softmax_sum_to_one
+      }
+    }
+
+    THEOREM attention_output_bounds {
+      STATEMENT:
+        ∀(Q : ℝ^(n×d)). ∀(C : Context).
+        ∀(i : 1..n). ∀(j : 1..d).
+        AttentionOutput(Q, C)[i, j] ∈ [min(C), max(C)]
+
+      PROOF {
+        LET Q : ℝ^(n×d), C : Context, i : 1..n, j : 1..d
+        LET W = AttentionWeights(Q, C)
+        LET Y = AttentionOutput(Q, C)
+        
+        Y[i, j]
+          = sum(W[i, l] * Query(C, Q[i])[j] FOR l = 1 TO k)        BY DEFINITION OF AttentionOutput
+          ≥ min(C) * sum(W[i, l] FOR l = 1 TO k)                   BY LOWER BOUND ON Query(C, Q[i])[j]
+          = min(C) * 1                                              BY attention_weights_sum_to_one
+          = min(C)
+        
+        Y[i, j]
+          = sum(W[i, l] * Query(C, Q[i])[j] FOR l = 1 TO k)        BY DEFINITION OF AttentionOutput
+          ≤ max(C) * sum(W[i, l] FOR l = 1 TO k)                   BY UPPER BOUND ON Query(C, Q[i])[j]
+          = max(C) * 1                                              BY attention_weights_sum_to_one
+          = max(C)
+      }
+    }
+
+    THEOREM expected_collision_probability {
+      STATEMENT:
+        ∀(x y : ℝ^d). ∀(C : Context).
+        P(Query(C, x) = Query(C, y)) ≥ 1 - 2 * k * (1 - f(L2Distance(x, y) / r))
+        WHERE f(z) = 1 - 2 * (arccos(z) / π)
+
+      PROOF {
+        LET x, y : ℝ^d, C : Context
+        
+        P(Query(C, x) = Query(C, y))
+          = P(∀(i : 1..k). SimHash(x, C.hash_params[i], r) = SimHash(y, C.hash_params[i], r))
+          ≥ ∏(P(SimHash(x, C.hash_params[i], r) = SimHash(y, C.hash_params[i], r)) FOR i = 1 TO k)
+                                                                    BY INDEPENDENCE OF HASH FUNCTIONS
+          = (f(L2Distance(x, y) / r))^k                             BY simhash_collision_probability
+          ≥ 1 - k * (1 - f(L2Distance(x, y) / r))                   BY BERNOULLI'S INEQUALITY
+          = 1 - 2 * k * (arccos(L2Distance(x, y) / r) / π)          BY DEFINITION OF f(z)
+      }
+    }
+  }
+}
+
+
+
+
+
+
+
+
+CONCEPT SketchAttention {
+  LANGUAGE {
+    FUNC zeros : (ℕ, ℕ) -> Matrix[Float]
+    FUNC dot : (Vector[Float], Vector[Float]) -> Float
+    FUNC softmax : Vector[Float] -> Vector[Float]
+    FUNC min : Sketch[ℝ^d] -> Float
+    FUNC max : Sketch[ℝ^d] -> Float
+
+    AXIOM softmax_sum_to_one:
+      ∀(x : ℝ^d). sum(softmax(x)) = 1
+  }
+
+  STRUCTURE SketchAttentionStructure[d : ℕ, n : ℕ, k : ℕ, m : ℕ] {
+    DEF Sketch = (ℝ^d -> [m])^k
+    DEF SketchTable = [m] -> List[ℝ^d]
+
+    DEF Query : ℝ^(n×d)
+    DEF Context : Sketch[ℝ^d]
+
+    DEF AttentionWeights(Q : Query, C : Context) -> Matrix[Float] {
+      LET W = zeros(n, k)
+      FOR i = 1 TO n:
+        FOR j = 1 TO k:
+          LET idx = C.h_j(Q[i])
+          LET S_j = C.tables[j][idx]
+          LET w_ij = softmax(dot(Q[i], S_j))
+          W[i, j] = w_ij
+      RETURN W
+    }
+
+    DEF AttentionOutput(Q : Query, C : Context) -> Matrix[Float] {
+      LET W = AttentionWeights(Q, C)
+      LET Y = zeros(n, d)
+      FOR i = 1 TO n:
+        FOR j = 1 TO k:
+          LET idx = C.h_j(Q[i])
+          LET S_j = C.tables[j][idx]
+          LET y_ij = sum(W[i, j] * S_j)
+          Y[i] = Y[i] + y_ij
+      RETURN Y
+    }
+
+    DEF SketchAttention(Q : Query, C : Context) -> Matrix[Float] {
+      RETURN AttentionOutput(Q, C)
+    }
+  }
+
+  PROOFS {
+    THEOREM attention_weights_sum_to_one {
+      STATEMENT:
+        ∀(Q : ℝ^(n×d)). ∀(C : Sketch[ℝ^d]). ∀(i : 1..n).
+        sum(AttentionWeights(Q, C)[i]) = 1
+
+      PROOF {
+        LET Q : ℝ^(n×d), C : Sketch[ℝ^d], i : 1..n
+        
+        LET W = AttentionWeights(Q, C)
+        
+        FOR j = 1 TO k:
+          LET idx = C.h_j(Q[i])
+          LET S_j = C.tables[j][idx]
+          W[i, j] = softmax(dot(Q[i], S_j))  BY DEFINITION OF AttentionWeights
+        
+        sum(W[i]) = sum(softmax(dot(Q[i], S_j)) FOR j = 1 TO k)
+                  = 1  BY softmax_sum_to_one
+      }
+    }
+
+    THEOREM attention_output_bounds {
+      STATEMENT:
+        ∀(Q : ℝ^(n×d)). ∀(C : Sketch[ℝ^d]). 
+        ∀(i : 1..n). ∀(j : 1..d).
+        AttentionOutput(Q, C)[i, j] ∈ [min(C), max(C)]
+
+      PROOF {
+        LET Q : ℝ^(n×d), C : Sketch[ℝ^d], i : 1..n, j : 1..d
+        
+        LET W = AttentionWeights(Q, C)
+        LET Y = AttentionOutput(Q, C)
+        
+        Y[i, j] = sum(W[i, l] * C.tables[l][C.h_l(Q[i])][j] FOR l = 1 TO k)
+                  BY DEFINITION OF AttentionOutput
+                ≥ min(C) * sum(W[i, l] FOR l = 1 TO k)
+                = min(C)  BY attention_weights_sum_to_one
+                
+        Y[i, j] = sum(W[i, l] * C.tables[l][C.h_l(Q[i])][j] FOR l = 1 TO k)
+                  BY DEFINITION OF AttentionOutput
+                ≤ max(C) * sum(W[i, l] FOR l = 1 TO k)
+                = max(C)  BY attention_weights_sum_to_one
+      }
+    }
+  }
+}

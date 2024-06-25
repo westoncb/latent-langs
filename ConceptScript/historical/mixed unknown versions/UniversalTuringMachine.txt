@@ -1,0 +1,93 @@
+CONCEPT UniversalTuringMachine {
+  DECLARE {
+    State : TYPE
+    Symbol : TYPE
+    Direction : TYPE = {"L", "R"}
+    
+    Tape : TYPE = ℤ -> Symbol
+    Head : TYPE = ℤ
+    
+    Configuration : TYPE = State × Tape × Head
+    
+    Transition : TYPE = State × Symbol -> State × Symbol × Direction
+    Program : TYPE = State -> Symbol -> (State × Symbol × Direction)
+    
+    UTM : Program
+  }
+  
+  DEFINE {
+    Initial(t) = (s0, t, 0)
+    
+    Step((s, t, h), (s', w, d)) = (s', t', h')
+      where t' = t[h := w]
+            h' = if d = "L" then h - 1 else h + 1
+    
+    Halted((s, _, _)) ⇔ ∀r, w, d. (s, r, w, d) ∉ UTM
+    
+    Accepts(P, t) ⇔ ∃n, c. (Initial(t), ^n P, c) ∧ Halted(c)
+  }
+  
+  AXIOM {
+    ; UTM simulates any Turing machine
+    ∀P : Program, t : Tape.
+      Accepts(P, t) ⇔ Accepts(UTM, Encode(P, t))
+  }
+  
+  THEOREM UTM_Existence {
+    PROOF {
+      obtain UTM : Program by construction {
+        let UTM(s, r) = 
+          if s = "Init" then 
+            if r = "(" then ("ReadProg", ")", "R")
+            else ("Reject", r, "R")
+          else if s = "ReadProg" then
+            if r ∈ State then ("ReadProg", r, "R") 
+            else if r = ")" then ("Simulate", ")", "R")
+            else ("Reject", r, "R")
+          else if s = "Simulate" then
+            if r ∈ Symbol then ("ReadSym", r, "R")
+            else if r = ")" then ("Halt", ")", "R") 
+            else ("Reject", r, "R")
+          else if s = "ReadSym" then 
+            if r ∈ Symbol then ("Transition", r, "R")
+            else ("Reject", r, "R")  
+          else if s = "Transition" then
+            if r = "(" then ("WriteAndMove", ")", "R")
+            else ("Reject", r, "R")
+          else if s = "WriteAndMove" then  
+            if r ∈ Symbol then ("ChangeState", r, "R")
+            else ("Reject", r, "R")
+          else if s = "ChangeState" then
+            if r ∈ Direction then 
+              if r = "L" then ("Simulate", ")", "L")
+              else ("Simulate", ")", "R")  
+            else if r ∈ State then ("Simulate", r, "R")
+            else ("Reject", r, "R") 
+          else if s = "Halt" then  
+            ("Halt", r, "R")
+          else if s = "Reject" then
+            ("Reject", r, "R") 
+      }
+      
+      show ∀P : Program, t : Tape. Accepts(P, t) ⇔ Accepts(UTM, Encode(P, t)) by {
+        assume P : Program, t : Tape
+        
+        have Accepts(P, t) ⇔ ∃n, c. (Initial(t), ^n P, c) ∧ Halted(c) by definition
+        
+        calc {
+          Accepts(UTM, Encode(P, t))
+          = ∃n, c. (Initial(Encode(P, t)), ^n UTM, c) ∧ Halted(c)  ; by definition
+          = ∃n, c. (("Init", Encode(P, t), 0), ^n UTM, c) ∧ Halted(c)  ; by definition of Initial
+          = ∃n, c. (("Init", Encode(P, t), 0), ^n UTM, c) ∧ 
+                   (c = ("Halt", Encode(P, t'), h') ∨ c = ("Reject", Encode(P, t'), h')) ; by inspection of UTM
+          = ∃n, c. (("Init", Encode(P, t), 0), ^n UTM, ("Simulate", Encode(P, t'), h')) ∧
+                   (("Simulate", Encode(P, t'), h'), ^* UTM, ("Halt", Encode(P, t''), h'')) ; by inspection of UTM
+          = ∃n, c. (Initial(t), ^n P, c) ∧ Halted(c)  ; by decode property of Encode
+          = Accepts(P, t)  ; by definition
+        }
+        
+        therefore Accepts(P, t) ⇔ Accepts(UTM, Encode(P, t))
+      }
+    }
+  }
+}

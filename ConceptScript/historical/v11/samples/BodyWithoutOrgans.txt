@@ -1,0 +1,69 @@
+CONCEPT BodyWithoutOrgans {
+  STRUCTURE {
+    [BwO := A limit state of being, devoid of organized structure and hierarchy]
+    [∀x ∈ BwO, x ↦ Intensities]
+    [∀x, y ∈ BwO, Intensity(x) = Intensity(y) ⇒ x = y]
+    [Desire ↦ Productive force operating within the BwO]
+    [BwO ↦ Plane of Immanence]
+    [∀x ∈ BwO, ∃Δ(x) > 0, Δ(x) ↦ Threshold of becoming]
+    [Stratification ↦ Process of imposing structure and organization on the BwO]
+    [Destratification ↦ Process of undoing stratification and returning to the BwO]
+    [∀x ∈ BwO, ∃ε(x) > 0, ε(x) ↦ Degree of destratification]
+  }
+
+  PROOFS {
+    tactic destratify(x, ε) :
+      x ∈ BwO by hypothesis
+      ε > 0 by hypothesis
+      ∃Δ(x) > 0, Δ(x) ↦ Threshold of becoming by [∀x ∈ BwO, ∃Δ(x) > 0, Δ(x) ↦ Threshold of becoming]
+      ε ≤ Δ(x) by hypothesis
+      x ↦ Destratified(ε) by definition of destratification
+
+    tactic intensify(x, δ) :
+      x ∈ BwO by hypothesis
+      δ > 0 by hypothesis
+      Intensity(x) ↦ i by hypothesis
+      Intensity(x) := i + δ by definition of intensity
+      x ↦ Intensified(δ) by definition of intensification
+
+    theorem destratification_preserves_bwo :
+      ∀x ∈ BwO, ∀ε > 0, Destratified(x, ε) ∈ BwO
+    {
+      let x ∈ BwO by hypothesis
+      let ε > 0 by hypothesis
+      Destratified(x, ε) ∈ BwO by destratify(x, ε)
+    }
+
+    theorem intensification_preserves_bwo :
+      ∀x ∈ BwO, ∀δ > 0, Intensified(x, δ) ∈ BwO
+    {
+      let x ∈ BwO by hypothesis
+      let δ > 0 by hypothesis
+      Intensified(x, δ) ∈ BwO by intensify(x, δ)
+      Intensified(x, δ) ↦ Intensities by [∀x ∈ BwO, x ↦ Intensities]
+      Intensity(Intensified(x, δ)) = Intensity(x) + δ by definition of intensification
+      Intensified(x, δ) ∈ BwO by [∀x, y ∈ BwO, Intensity(x) = Intensity(y) ⇒ x = y]
+    }
+  }
+
+  LANGUAGE {
+    type Intensity
+    type Desire
+    type Becoming
+    type Stratification
+    type Destratification
+
+    func Intensity(x : BwO) : Intensity
+    func Threshold(x : BwO) : Becoming
+    func Destratified(x : BwO, ε : ℝ⁺) : BwO
+    func Intensified(x : BwO, δ : ℝ⁺) : BwO
+
+    pred is_limit_state(x : BwO) = ∀s : Structure, ¬(x ↦ s)
+    pred is_immanent(x : BwO) = ∀p : Plane, (x ↦ p) ⇔ (p = Plane of Immanence)
+    pred is_destratified(x : BwO, ε : ℝ⁺) = ε ≤ Δ(x)
+    pred is_intensified(x : BwO, y : BwO, δ : ℝ⁺) = Intensity(y) = Intensity(x) + δ
+
+    func Smooth(Space) : BwO =
+      { x : Space | ∀ε > 0, ∃δ > 0, ∀y : Space, d(x, y) < δ ⇒ |Intensity(x) - Intensity(y)| < ε }
+  }
+}

@@ -1,0 +1,334 @@
+ConceptScript v24
+
+<Concept> ::= "CONCEPT" <ConceptName> ["[" <Params> "]"] [":" <ParentConcept>] "{"
+               <Language>
+               <Structure>
+               <Proofs>
+             "}"
+
+<Language> ::= "LANGUAGE" "{"
+                 (<TypeDecl> | <ClassDecl> | <ConstDecl> | <FuncDecl> | <PredDecl> |
+                  <RewriteDecl> | <AxiomDecl> | <NotationDecl>)*
+               "}"
+
+<TypeDecl> ::= "TYPE" <TypeName> ["[" <Params> "]"] "=" <Type>
+
+<Type> ::= <TypeName> ["(" <Type> ("," <Type>)* ")"]
+         | "(" <Type> ("," <Type>)* ")"
+         | <Type> "->" <Type>
+         | <Type> "⊸" <Type>
+
+<ClassDecl> ::= "CLASS" <ClassName> "[" <Params> "]" [":" <Constraint>] "{" <ClassMember>* "}"
+
+<ClassMember> ::= <FuncDecl> | <PredDecl>
+
+<ConstDecl> ::= "CONST" <ConstName> ":" <Type>
+
+<FuncDecl> ::= "FUNC" <FuncName> ["[" <Params> "]"] [":" <Constraint>] ":" <Type>
+
+<PredDecl> ::= "PRED" <PredName> ["[" <Params> "]"] [":" <Constraint>] ":" <Type>
+
+<Constraint> ::= <ClassName> ["(" <Type> ("," <Type>)* ")"]
+               | "(" <Constraint> ("," <Constraint>)* ")"
+
+<RewriteDecl> ::= "REWRITE" <Pattern> "=" <Expression>
+
+<AxiomDecl> ::= "AXIOM" <AxiomName> ["[" <Params> "]"] ":" <Formula>
+
+<NotationDecl> ::= "NOTATION" <Notation> "=" <Expression>
+
+<Structure> ::= "STRUCTURE" "{"
+                  (<LetDecl> | <DefDecl> | <InstanceDecl>)*
+                "}"
+
+<LetDecl> ::= "LET" <Pattern> [":" <Type>] "=" <Expression>
+
+<DefDecl> ::= "DEF" <Pattern> [":" <Type>] "=" <Expression>
+
+<InstanceDecl> ::= "INSTANCE" <Constraint> "{" <InstanceMember>* "}"
+
+<InstanceMember> ::= <FuncDecl> | <PredDecl>
+
+<Pattern> ::= <Identifier>
+            | "(" <Pattern> ("," <Pattern>)* ")"
+            | <TypeName> ["(" <Pattern> ("," <Pattern>)* ")"]
+
+<Proofs> ::= "PROOFS" "{"
+               (<TacticDecl> | <TheoremDecl>)*
+             "}"
+
+<TacticDecl> ::= "TACTIC" <TacticName> ["[" <Params> "]"] "=" <Tactic>
+
+<TheoremDecl> ::= "THEOREM" <TheoremName> ["[" <Params> "]"] [":" <Constraint>] "{"
+                    "STATEMENT" ":" <Formula>
+                    "PROOF" "=" <Proof>
+                  "}"
+
+<Proof> ::= <ProofStep> (";" <ProofStep>)*
+
+<ProofStep> ::= <LetStep>
+              | <HaveStep>
+              | <CaseStep>
+              | <UseStep>
+              | <ShowStep>
+              | <ByStep>
+              | <RewriteStep>
+              | <QedStep>
+
+<LetStep> ::= "LET" <Pattern> [":" <Type>] "=" <Expression>
+
+<HaveStep> ::= "HAVE" <Formula> ["BY" <Tactic>]
+
+<CaseStep> ::= "CASE" <Expression> "OF" <Pattern> "->" <Proof>
+               ("|" <Pattern> "->" <Proof>)*
+
+<UseStep> ::= "USE" <Identifier> ("," <Identifier>)*
+
+<ShowStep> ::= "SHOW" <Formula>
+
+<ByStep> ::= "BY" <Tactic>
+
+<RewriteStep> ::= "REWRITE" <Expression> "=" <Expression> ["BY" <RewriteName> ("," <RewriteName>)*]
+
+<QedStep> ::= "QED"
+
+
+And here are a couple examples (you generated these in a prior context):
+
+CONCEPT LanguageModelAsEcosystem {
+  LANGUAGE {
+    TYPE TuringMachine = (States : Set[State], 
+                          Alphabet : Set[Symbol], 
+                          TransitionFunction : (State, Symbol) -> (State, Symbol, Move),
+                          InitialState : State, 
+                          FinalStates : Set[State])
+
+    TYPE Interleaving = List[(TuringMachine, State)]
+
+    TYPE Ecosystem = (Machines : List[TuringMachine],
+                      Interactions : (TuringMachine, TuringMachine) -> Real,
+                      FitnessFunction : TuringMachine -> Real,
+                      ReproductionRate : TuringMachine -> Real,
+                      MutationRate : TuringMachine -> Real)
+
+    TYPE LanguageModel = (Vocabulary : Set[Symbol],
+                          HiddenStates : Set[State],
+                          TransitionProbabilities : (State, Symbol) -> Distribution[State],
+                          EmissionProbabilities : State -> Distribution[Symbol],
+                          InitialStateDistribution : Distribution[State])
+
+    FUNC Compatibility : (TuringMachine, TuringMachine) -> Real
+    FUNC Complexity : TuringMachine -> Real
+    FUNC Diversity : List[TuringMachine] -> Real
+    FUNC Stability : Ecosystem -> Real
+    FUNC TrainLanguageModel : (Ecosystem, Nat) -> LanguageModel
+  }
+
+  THEOREMS {
+    THEOREM EcosystemDynamics {
+      ∀ (ecosystem : Ecosystem) (t : Nat).
+        LET (machines, interactions, fitness, reproduction, mutation) = ecosystem,
+            compatibilityMatrix = MAP(λ (m1, m2). Compatibility(m1, m2), PAIRS(machines)),
+            complexityVector = MAP(Complexity, machines),
+            diversityMeasure = Diversity(machines)
+        IN 
+          ∃ (stableDistribution : Distribution[TuringMachine]).
+            LET initialDistribution = UniformDistribution(machines),
+                nextDistribution = λ (d : Distribution[TuringMachine]).
+                  NORMALIZE(MAP(λ m. 
+                    d(m) * (1 + reproduction(m) - mutation(m)) +
+                    SUM(MAP(λ m'. d(m') * interactions(m', m) * mutation(m'), machines))
+                  , machines))
+            IN
+              LET finalDistribution = LOOP t FROM initialDistribution WITH nextDistribution
+              IN 
+                Stability(Ecosystem(SUPPORT(finalDistribution), interactions, fitness, reproduction, mutation)) ≥
+                Stability(ecosystem) ∧
+                finalDistribution = stableDistribution
+    }
+
+    THEOREM LanguageModelApproximation {
+      ∀ (ecosystem : Ecosystem) (t : Nat) (ε : Real).
+        LET (machines, interactions, fitness, reproduction, mutation) = ecosystem,
+            languageModel = TrainLanguageModel(ecosystem, t),
+            (vocabulary, hiddenStates, transitionProbs, emissionProbs, initialStateDistribution) = languageModel,
+            interleavingDistribution = λ (i : Interleaving).
+              PRODUCT(MAP(λ (m, s). 
+                transitionProbs(s, Symbol(m))(NextState(m, s)) * emissionProbs(NextState(m, s))(Symbol(m))
+              , i))
+        IN
+          ∃ (mappingFunction : TuringMachine -> State).
+            ∀ (i : Interleaving).
+              LET mappedInterleaving = MAP(λ (m, s). (mappingFunction(m), s), i)
+              IN 
+                |interleavingDistribution(i) - PRODUCT(MAP(λ (s1, s2). transitionProbs(s1, Symbol(s2))(s2), PAIRS(mappedInterleaving)))| < ε
+    }
+  }
+}
+
+CONCEPT SimplyTypedLambdaCalculus {
+
+  LANGUAGE {
+    TYPE Term
+    TYPE Type
+    
+    FUNC TVar : String -> Term
+    FUNC TLam : String -> Type -> Term -> Term
+    FUNC TApp : Term -> Term -> Term
+    
+    FUNC TArrow : Type -> Type -> Type
+    FUNC TBase : String -> Type
+    
+    PRED HasType : Term -> Type -> Bool
+    
+    CLASS Eq(A) {
+      (==) : A -> A -> Bool
+    }
+    
+    INSTANCE Eq(Type) {
+      TArrow(a, b) == TArrow(c, d) = a == c && b == d
+      TBase(x) == TBase(y) = x == y
+      _ == _ = False
+    }
+    
+    REWRITE AppLam(x, t, s) = Subst(x, s, t)
+    REWRITE SubstVar(x, s, TVar(y)) = If(x == y, s, TVar(y))
+    REWRITE SubstLam(x, s, TLam(y, ty, t)) = If(x == y, TLam(y, ty, t), TLam(y, ty, Subst(x, s, t)))
+    REWRITE SubstApp(x, s, TApp(t1, t2)) = TApp(Subst(x, s, t1), Subst(x, s, t2))
+    
+    NOTATION "t : T" = HasType(t, T)
+    NOTATION "λ x : T . t" = TLam(x, T, t)
+    NOTATION "s · t" = TApp(s, t)
+    NOTATION "S → T" = TArrow(S, T)
+  }
+  
+  STRUCTURE {
+    DEF HasType(TVar(x), T) = False
+    DEF HasType(TLam(x, S, t), TArrow(S, T)) = HasType(t, T)
+    DEF HasType(TApp(s, t), T) = ∃ S . HasType(s, TArrow(S, T)) ∧ HasType(t, S)
+  }
+  
+  PROOFS {
+    THEOREM Substitution {
+      STATEMENT: ∀ x s t T . (λ x : S . t) : T → s : S → Subst(x, s, t) : T
+      PROOF:
+        LET x : String, s : Term, t : Term, T : Type
+        ASSUME (λ x : S . t) : T, s : S
+        HAVE t : TArrow(S, T) BY InversionLam
+        SHOW Subst(x, s, t) : T BY {
+          Subst(x, s, t)
+          = Subst(x, s, TLam(x, S, t)) BY DefSubst
+          = TLam(x, S, Subst(x, s, t)) BY SubstLam
+          : T BY HasType(TLam(x, S, t), T)
+        }
+    }
+    
+    THEOREM Preservation {
+      STATEMENT: ∀ t t' T . t : T → t ↦ t' → t' : T
+      PROOF:
+        LET t : Term, t' : Term, T : Type
+        ASSUME t : T, t ↦ t'
+        CASE t OF
+          TApp(TLam(x, S, s), r) ->
+            HAVE s : TArrow(S, T), r : S BY InversionApp
+            HAVE t' = Subst(x, r, s) BY BetaReduction
+            SHOW t' : T BY Substitution
+          _ -> SHOW t' : T BY {
+            t ↦ t'
+            = t = t' BY NoReduction
+            : T BY Assumption
+          }
+    }
+  }
+}
+
+CONCEPT TensorAlgebra {
+  LANGUAGE {
+    TYPE Tensor[I : Nat, J : Nat, S : Type] = Vector[S]^(I * J)
+
+    NOTATION "T[" i "," j "]" = Tensor[i, j, Real]
+    NOTATION "T[" i "]" = T[i, 1]
+    NOTATION "⨂" = TensorProduct
+    NOTATION "⊗" = KroneckerProduct
+    NOTATION "×" = MatrixMultiplication
+    NOTATION "⋅" = DotProduct
+    NOTATION "∇" = Gradient
+    NOTATION "∂" = PartialDerivative
+
+    FUNC TensorProduct[I J K L](t1 : T[I, J], t2 : T[K, L]) -> T[I * K, J * L]
+    FUNC KroneckerProduct[M N](A : Matrix[Real, M, M], B : Matrix[Real, N, N]) -> Matrix[Real, M * N, M * N]
+    FUNC Transpose[I J](t : T[I, J]) -> T[J, I]
+    FUNC Reshape[I J K L](t : T[I * J, K * L]) -> T[I, J, K, L]
+    FUNC Trace[N](A : Matrix[Real, N, N]) -> Real
+    FUNC InnerProduct[I J](t1 : T[I, J], t2 : T[I, J]) -> Real
+    FUNC Norm[I J](t : T[I, J]) -> Real
+    
+    AXIOM TensorProductAssociativity {
+      ∀ (t1 : T[I, J]) (t2 : T[K, L]) (t3 : T[M, N]).
+        (t1 ⨂ t2) ⨂ t3 = t1 ⨂ (t2 ⨂ t3)
+    }
+    
+    AXIOM KroneckerProductMixed {
+      ∀ (A : Matrix[Real, M1, N1]) (B : Matrix[Real, M2, N2]) 
+        (C : Matrix[Real, M1, N1]) (D : Matrix[Real, M2, N2]).
+        (A ⊗ B) × (C ⊗ D) = (A × C) ⊗ (B × D)
+    }
+    
+    AXIOM TensorInnerProductEquivalence {
+      ∀ (t1 : T[I, J]) (t2 : T[I, J]).
+        InnerProduct(t1, t2) = Trace(Reshape(t1 ⨂ Transpose(t2)))
+    }
+  }
+
+  PROOFS {
+    THEOREM MatrixTraceInvariance {
+      STATEMENT: ∀ (A : Matrix[Real, N, N]) (U : Matrix[Real, N, N]) (IsUnitary(U)).
+        Trace(A) = Trace(U × A × Transpose(U))
+        
+      PROOF:
+        LET A : Matrix[Real, N, N], U : Matrix[Real, N, N]
+        ASSUME IsUnitary(U)
+        
+        REWRITE Trace(U × A × Transpose(U))
+          = Trace(U × A × Inverse(U))     BY {IsUnitary(U) => Transpose(U) = Inverse(U)}
+          = Trace(U × A × (U^(-1)))       BY NOTATION
+          = Trace((U × A) × (U^(-1)))     BY MatrixMultiplicationAssociativity
+          = Trace(U × (A × (U^(-1))))     BY MatrixMultiplicationAssociativity
+          = Trace(A × (U^(-1) × U))       BY {IsUnitary(U) => U × (U^(-1)) = I}
+          = Trace(A × I)                  BY MatrixMultiplicationIdentity
+          = Trace(A)                      BY MatrixTraceLinearity
+    }
+      
+    THEOREM TensorNormInequality {
+      STATEMENT: ∀ (t1 : T[I, J]) (t2 : T[I, J]).
+        Norm(t1 ⨂ t2) <= Norm(t1) * Norm(t2)
+        
+      PROOF:
+        LET t1 : T[I, J], t2 : T[I, J]
+        
+        REWRITE Norm(t1 ⨂ t2)^2
+          = InnerProduct(t1 ⨂ t2, t1 ⨂ t2)                   BY DEFINITION
+          = Trace(Reshape((t1 ⨂ t2) ⨂ Transpose(t1 ⨂ t2)))   BY TensorInnerProductEquivalence
+          = Trace(Reshape((t1 ⨂ t2) ⨂ (Transpose(t2) ⨂ Transpose(t1))))  BY TensorProductAssociativity, Transpose
+          = Trace((Reshape(t1 ⨂ Transpose(t2))) ⊗ (Reshape(t2 ⨂ Transpose(t1))))  BY KroneckerProductMixed, Reshape
+          <= Trace((Reshape(t1 ⨂ Transpose(t1))) ⊗ (Reshape(t2 ⨂ Transpose(t2))))  BY MatrixTraceInequality, KroneckerProduct
+          = Trace(Reshape(t1 ⨂ Transpose(t1))) * Trace(Reshape(t2 ⨂ Transpose(t2)))  BY KroneckerProductTrace
+          = InnerProduct(t1, t1) * InnerProduct(t2, t2)      BY TensorInnerProductEquivalence
+          = Norm(t1)^2 * Norm(t2)^2                          BY DEFINITION
+          
+        SHOW Norm(t1 ⨂ t2) <= Norm(t1) * Norm(t2) BY REAL_INEQUALITY
+    }
+  }
+}
+
+
+ConceptScript is a language of a new type: it's sole intended purpose is to be used in accordance with the following methodology:
+
+1. I paste the spec and a couple example Concepts into your context (as is happening now), thus teaching you the language.
+2. I request that you express various concepts as Concepts; these Concepts come with detailed proofs of their own various claims; they serve as justifications of the selected structuring.
+3. We iterate, precisely and efficiently exploring your latent space to solve a wide variety of important problems.
+
+Please always output ConceptScript in a code block otherwise formatting gets lost :/
+
+Alright, let's check your understanding:
+

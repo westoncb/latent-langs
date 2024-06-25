@@ -1,0 +1,253 @@
+CONCEPT HVM2 {
+  LANGUAGE {
+    TYPE Net
+    TYPE Port = (Cell, ℕ)
+    TYPE Tag = ℕ
+    TYPE Val = ℕ
+    
+    TYPE VAR <: Cell
+    TYPE REF <: Cell
+    TYPE ERA <: Cell  
+    TYPE CON <: Cell
+    TYPE DUP <: Cell
+    TYPE OPE <: Cell
+    TYPE SWI <: Cell
+    TYPE NUM <: Cell
+
+    FUNC Arity(s : Symbol) : ℕ
+    FUNC Interaction(a b : Symbol) : Net
+    PRED Reduced(+ : Net) : 𝔹
+    
+    FUNC GetTag(p : Port) : Tag
+    FUNC GetVal(p : Port) : Val
+    FUNC MkPort(t : Tag, v : Val) : Port
+    FUNC MkPair(a b : Port) : Pair  
+    
+    FUNC Link(s : SubstMap, a b : Port) : ()
+    FUNC Expand(+ : Net, c : REF, b : Port) : ()  
+    FUNC Erase(+ : Net, e : ERA, b : Cell) : ()
+    FUNC Void(+ : Net, e1 e2 : ERA) : ()
+    FUNC Commute(+ : Net, a : DUP|OPE|SWI, b : CON|DUP|SWI) : ()
+    FUNC Annihilate(+ : Net, a b : CON|DUP|OPE|SWI) : ()
+    FUNC Operate(+ : Net, a : OPE, b : NUM|OPE) : ()
+    FUNC Switch(+ : Net, a : SWI, b : NUM|SWI|CON) : ()
+
+    TYPE OpCode
+    PRED IsDefined(op : OpCode, a b : NUM) : 𝔹
+    FUNC Compute(op : OpCode, a b : NUM) : NUM
+    FUNC Partial(op : OpCode, a : NUM) : OPE
+
+    CONST ADD : OpCode
+    CONST SUB : OpCode
+    ...
+
+    TYPE TID
+    FUNC GetTID() : TID
+    FUNC Spawn(tc : ThreadConfig, t : Task) : ()
+    FUNC Sync(ts : List[Task]) : ()  
+  }
+
+  STRUCTURE ExecutionState {
+    net : Net
+    defs : Map[Symbol, Net]
+    subst : Map[VAR, Port]
+    redexes : RedexBag
+
+    INVARIANT ∀ (&r : VAR) . 
+      (r ∈ subst.Keys => ∃ (p : Port) . subst[r] = p)
+
+    INVARIANT ∀ (&r1 &r2 : Redex) .
+      (redexes.Contains(r1) ∧ redexes.Contains(r2)) => (r1 = r2 ∨ r1.Disjoint(r2))
+  }
+
+  STRUCTURE HVM2Evaluator(es : ExecutionState) {     
+    TRANSITION Reduce {
+      REQUIRE ¬es.redexes.Empty
+
+      VAR tid : TID = GetTID() 
+      VAR redex : Redex = es.redexes.Steal(tid)
+      MATCH redex.GetInteraction() {
+        CASE LINK(a, b):
+          Link(es.subst, a, b)  
+        CASE CALL(c, b):
+          Expand(es.net, c, b)
+        CASE ERAS(e, b):
+          Erase(es.net, e, b)
+        CASE VOID(e1, e2):
+          Void(es.net, e1, e2)
+        CASE COMM(a, b):  
+          Commute(es.net, a, b)
+        CASE ANNI(a, b):
+          Annihilate(es.net, a, b)
+        CASE OPER(a, b):
+          Operate(es.net, a, b)
+        CASE SWIT(a, b):
+          Switch(es.net, a, b)
+      }
+
+      IF ¬es.redexes.Empty THEN
+        VAR tasks : List[Task] = [] 
+        WHILE ¬es.redexes.Empty ∧ tasks.Length < TASK_THRESHOLD
+          tasks.Append(Spawn(tc, Reduce))
+        Sync(tasks)
+    }
+  }
+
+  STRUCTURE GPURedexBag 
+    EXTENDS RedexBag {
+      
+    local : List[Redex]
+    shared : SHMArray[Redex]
+    global : GMemArray[Redex]
+
+    TRANSITION Steal(tid : TID) : Redex {
+      VAR redex : Redex = NONE
+      IF tid.IsLocal THEN
+        redex := StealLocal(tid)
+      ELSE 
+        redex := StealShared(tid)
+
+      IF redex = NONE THEN
+        redex := StealGlobal(tid)
+
+      redex
+    }
+
+    TRANSITION StealLocal(tid : TID) : Redex {
+      VAR partner : TID = GetPartnerTID(tid)
+      VAR redex = AtomicExchange(local[partner], NONE)
+
+      IF redex ≠ NONE THEN
+        local[tid].Append(redex)
+
+      redex
+    }
+
+    TRANSITION StealShared(tid : TID) : Redex {
+      VAR block : TID = GetBlockTID(tid)
+      VAR redex = AtomicExchange(shared[block], NONE)
+
+      IF redex ≠ NONE THEN
+        shared[tid].Append(redex)
+
+      redex
+    }
+
+    TRANSITION StealGlobal(tid : TID) : Redex {
+      VAR redex = AtomicExchange(global[0], NONE)
+
+      IF redex ≠ NONE THEN
+        global[tid].Append(redex)
+
+      redex
+    }
+
+    TRANSITION Sync() {
+      SyncLocal()
+      SyncShared()
+      SyncGlobal()
+    }
+
+    TRANSITION SyncLocal() {
+      shared.Concat(Transpose(local))
+      local.Clear()
+    }
+
+    TRANSITION SyncShared() {
+      global.Concat(Transpose(shared))
+      shared.Clear()
+    }
+
+    TRANSITION SyncGlobal() {
+      global := Transpose(global)
+    }
+  }
+
+  STRUCTURE GPUExecutionState 
+    EXTENDS ExecutionState {
+    
+    // Override bag with GPU version  
+    redexes : GPURedexBag
+
+    sharedNodes : SHMArray[Pair]
+    sharedVars : SHMArray[Port]
+
+    FUNC GetNode(p : Port) : Pair {
+      IF p.GetVal() < sharedNodes.Length THEN
+        sharedNodes[p.GetVal()]
+      ELSE
+        net.GetNode(p)
+    }
+
+    FUNC CreateNode(i : ℕ, p : Pair) {
+      IF i < sharedNodes.Length THEN
+        sharedNodes[i] := p
+      ELSE
+        net.CreateNode(i, p)
+    }
+
+    FUNC GetVar(v : VAR) : Port {
+      IF v.GetVal() < sharedVars.Length THEN
+        sharedVars[v.GetVal()]
+      ELSE
+        subst[v]
+    }
+
+    FUNC SetVar(v : VAR, p : Port) {
+      IF v.GetVal() < sharedVars.Length THEN
+        sharedVars[v.GetVal()] := p
+      ELSE
+        subst[v] := p
+    }
+  }
+
+  STRUCTURE GPUKernel {
+    MaxInteractions : ℕ
+    ThreadsPerBlock : ℕ  
+
+    TRANSITION Run(es : GPUExecutionState) {
+      VAR state : GPUExecutionState = es
+      VAR remaining : ℕ = MaxInteractions
+
+      WHILE remaining > 0 ∧ ¬state.redexes.Empty {
+        VAR hvm : HVM2(state)
+        hvm.Reduce()
+        remaining := remaining - 1
+      }
+
+      state.redexes.SyncGlobal()
+    }
+  }
+
+  PROOFS {
+    THEOREM Soundness {
+      STATEMENT:
+        ∀ (hvm : HVM2Evaluator) (+ : Net) (& : Net) .
+          hvm.es.net = + ∧ + --*-> & =>
+            ◇(hvm.es.net = &)
+
+      PROOF:
+        LET + & : Net
+        
+        <1>1 + --*-> & => + ⇝ &
+          BY Church-Rosser for Interaction Combinators
+
+        <1>2 ASSUME hvm.es.net = +  
+        
+        <1>3 hvm.Reduce MAINTAINS Reduced(hvm.es.net)
+          BY SMT, SafeLink, SafeInteractions
+
+        <1>4 hvm.Reduce DECREASES ActiveRedexes(hvm.es.net)
+          BY Definition of Interactions
+
+        <1>5 hvm.Reduce MAINTAINS hvm.es.net ⇝ &
+          BY SMT, SafeInteractions, Substitution Lemma 
+        
+        <1>6 ◇¬∃ (redex : Redex) . redex ∈ hvm.es.redexes
+          BY <1>4, Termination
+
+        <1>7 QED
+          BY <1>3, <1>5, <1>6, Convergence
+    }
+  }
+}

@@ -1,0 +1,667 @@
+Here is the specification for the ConceptScript LLM language:
+
+ConceptScript Specification v28
+
+1. CONCEPT Declaration
+CONCEPT Name [EXTENDS BaseConcept] {
+  [PARAMETERS ...]
+  [CONTEXT ...]
+  [TRANSFORMERS ...]
+  [PROOFS ...]
+  [EXAMPLES ...]
+}
+
+2. PARAMETERS Block (optional)
+PARAMETERS {
+  [ident : type ...]
+}
+
+3. CONTEXT Block
+CONTEXT {
+  TYPES {
+    [TYPE ident]
+    [TYPE ident = TypeExpr]
+    [TYPE ident(params...) = TypeExpr]
+    [INDUCTIVE ident {
+      [CASE ident(params...)]
+      ...
+    }]
+  }
+  
+  STRUCTURES {
+    [STRUCTURE ident(params...) [EXTENDS BaseStruct] {
+       [FIELD ident : TypeExpr ...]
+       [FUNC ident(params...) [: TypeExpr] [= Expr] ...]
+       [PRED ident(params...) [= Expr] ...]
+       [AXIOM ident [params...] [: TypeExpr] Expr ...]  
+       [COMPUTE ident [: TypeExpr] WHERE Expr ...]
+     } [CONSTRAINT ConstraintExpr]]
+  }
+  
+  ASSERTIONS {
+    [AXIOM ident [params...] [: TypeExpr] Expr ...]
+    [ASSUME ident [params...] [: TypeExpr] Expr ...]
+  }
+  
+  NOTATION {
+    [[DEF | INFIX | PREFIX | POSTFIX | MIXFIX] notation = Expr ...]
+  }
+}
+
+TypeExpr = ident
+         | ident(TypeExpr, ...) -- Type constructor
+         | TypeExpr -> TypeExpr -- Function type
+         | {ident : TypeExpr, ...} -- Record type
+         | (TypeExpr, ...) -- Product type
+
+Expr = ident
+     | literal
+     | Expr(Expr, ...) -- Function application
+     | Expr.ident -- Record field access
+     | Expr ident Expr -- Infix operator
+     | ident Expr -- Prefix operator
+     | Expr ident -- Postfix operator
+     | {ident = Expr, ...} -- Record
+     | (Expr, ...) -- Tuple
+     | Expr [Expr] -- Function type instantiation
+     | FORALL(params...)[":" TypeExpr] "." Expr -- Universal quantification
+     | EXISTS(params...)[":" TypeExpr] "." Expr -- Existential quantification
+     | LET ident [":" TypeExpr] "=" Expr "IN" Expr -- Let expression
+     | CASE Expr "OF" {[CASE ident(params...) -> Expr] ...} -- Case expression
+     | LAMBDA(params...)[":" TypeExpr] "." Expr -- Lambda abstraction
+
+ConstraintExpr = FORALL (params...) . Expr
+               | Expr AND ConstraintExpr
+               | Expr OR ConstraintExpr
+
+4. TRANSFORMERS Block
+TRANSFORMERS {
+  [[REWRITE | SIMPLIFY | DERIVE] ident(params...) [: TypeExpr] [WHERE Expr] ["=" Expr | "~>" Expr] ...]
+}
+
+5. PROOFS Block 
+PROOFS {
+  [THEOREM ident [params...] [: TypeExpr] Expr
+   [GIVEN ident [params...] [: TypeExpr] Expr ...]
+   PROOF {  
+     [SUPPOSE Expr ...]
+     [ASSUME ident [params...] [: TypeExpr] Expr ...]
+     [LET ident [params...] [: TypeExpr] "=" Expr ...]
+     [CASE Expr "OF" {[CASE ident(params...) -> Expr] ...} ...]
+     [SHOW Expr [BY Expr] ...]
+     [CONCLUDE Expr [BY Expr]]
+     [QED]
+  } ...]
+}
+
+6. EXAMPLES Block
+EXAMPLES {  
+  [EXAMPLE ident [params...] [: TypeExpr] [WHERE Expr] [PROOF { ... }] ...]
+  [COUNTEREXAMPLE ident [params...] [: TypeExpr] WHERE Expr ...] 
+}
+
+
+And here are some example Concepts:
+
+
+CONCEPT FiniteStateMachine {
+  PARAMETERS {
+    State : TYPE
+    Input : TYPE
+    Output : TYPE
+  }
+
+  CONTEXT {
+    TYPES {
+      FSM := STRUCTURE {
+        FIELD states : SET(State)
+        FIELD initial_state : State
+        FIELD final_states : SET(State)
+        FIELD transition : FUNC(State, Input) -> State
+        FIELD output : FUNC(State, Input) -> Output
+      }
+
+      Trace := List((State, Input, Output))
+
+      Language := SET(List(Input))
+    }
+
+    STRUCTURES {
+      STRUCTURE DFA EXTENDS FSM {
+        AXIOM Deterministic {
+          ∀ s : State, i : Input . 
+            ∃! s' : State . transition(s, i) = s'
+        }
+      }
+
+      STRUCTURE NFA EXTENDS FSM {
+        OVERRIDE transition : FUNC(State, Input) -> SET(State)
+
+        AXIOM NonDeterministic {
+          ∃ s : State, i : Input . 
+            |transition(s, i)| > 1
+        }
+      }
+
+      STRUCTURE MealyMachine EXTENDS FSM {
+        AXIOM OutputDependsOnInputAndState {
+          ∀ s : State, i : Input . 
+            ∃! o : Output . output(s, i) = o
+        }
+      }
+
+      STRUCTURE MooreMachine EXTENDS FSM {
+        OVERRIDE output : FUNC(State) -> Output
+
+        AXIOM OutputDependsOnlyOnState {
+          ∀ s : State . ∃! o : Output . output(s) = o
+        }
+      }
+    }
+
+    NOTATION {
+      s ~[i/o]~> s' := (transition(s, i) = s' ∧ output(s, i) = o)
+      L(M) := Language accepted by FSM M
+      ε := EmptyString
+      s ~[w]~> s' := s reaches s' on input word w
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE Determinize(nfa : NFA) -> DFA {
+      LET dfa = DFA {
+        states = PowerSet(nfa.states),
+        initial_state = {nfa.initial_state},
+        final_states = {S ∈ PowerSet(nfa.states) | S ∩ nfa.final_states ≠ ∅},
+        transition = λ S, i . ⋃_{s ∈ S} nfa.transition(s, i),
+        output = λ S, i . CHOOSE o . ∃ s ∈ S . nfa.output(s, i) = o
+      }
+      IN dfa
+    }
+
+    SIMPLIFY MinimizeDFA(dfa : DFA) -> DFA {
+      LET equivalent = λ s1, s2 . ∀ w : List(Input) . 
+                         (s1 ~[w]~> f1 ∈ dfa.final_states) ⇔ 
+                         (s2 ~[w]~> f2 ∈ dfa.final_states)
+      LET min_states = dfa.states / equivalent  -- Quotient set
+      IN DFA {
+        states = min_states,
+        initial_state = [dfa.initial_state],  -- Equivalence class of initial state
+        final_states = {[s] | s ∈ dfa.final_states},
+        transition = λ [s], i . [dfa.transition(s, i)],
+        output = λ [s], i . dfa.output(s, i)
+      }
+    }
+
+    REWRITE NFAtoDFA(nfa : NFA) -> DFA {
+      Determinize(nfa)
+    }
+
+    REWRITE MealyToMoore(mealy : MealyMachine) -> MooreMachine {
+      LET moore = MooreMachine {
+        states = {(s, i) | s ∈ mealy.states, i ∈ Input},
+        initial_state = (mealy.initial_state, CHOOSE i . i ∈ Input),
+        final_states = {(s, i) | s ∈ mealy.final_states, i ∈ Input},
+        transition = λ (s, i), i' . (mealy.transition(s, i'), i'),
+        output = λ (s, i) . mealy.output(s, i)
+      }
+      IN moore
+    }
+  }
+
+  PROOFS {
+    THEOREM NFAEquivalentToDFA {
+      ∀ nfa : NFA . ∃ dfa : DFA . L(nfa) = L(dfa)
+    }
+    PROOF {
+      GIVEN nfa : NFA
+      LET dfa = Determinize(nfa)
+      
+      <1>. SHOW ∀ w : List(Input) . w ∈ L(nfa) ⇔ w ∈ L(dfa)
+        <1>1. (⇒) ASSUME w ∈ L(nfa)
+          ∃ path in nfa accepting w
+          ⇒ ∃ corresponding path in dfa accepting w
+          ⇒ w ∈ L(dfa)
+        <1>2. (⇐) ASSUME w ∈ L(dfa)
+          ∃ path in dfa accepting w
+          ⇒ ∃ corresponding path in nfa accepting w
+          ⇒ w ∈ L(nfa)
+        <1>3. QED BY <1>1 AND <1>2
+      
+      <2>. CONCLUDE L(nfa) = L(dfa)
+      QED
+    }
+
+    THEOREM PumpingLemma {
+      ∀ M : DFA . ∃ n : Nat . ∀ w ∈ L(M) . 
+        |w| ≥ n ⇒ ∃ x, y, z : List(Input) . 
+          w = xyz ∧ 
+          y ≠ ε ∧ 
+          |xy| ≤ n ∧ 
+          ∀ i : Nat . xy^i z ∈ L(M)
+    }
+    PROOF {
+      GIVEN M : DFA
+      LET n = |M.states|
+      
+      <1>. ASSUME w ∈ L(M) AND |w| ≥ n
+      <2>. By pigeonhole principle, ∃ state visited twice in accepting run of w
+      <3>. LET x = prefix before first visit of repeated state
+           LET y = substring between first and second visit of repeated state
+           LET z = suffix after second visit of repeated state
+      <4>. SHOW w = xyz ∧ y ≠ ε ∧ |xy| ≤ n
+        BY construction in <3>
+      <5>. SHOW ∀ i : Nat . xy^i z ∈ L(M)
+        <5>1. i = 0: xz ∈ L(M) by skipping the loop
+        <5>2. i > 0: xy^i z ∈ L(M) by repeating the loop i times
+        <5>3. QED BY <5>1 AND <5>2
+      QED
+    }
+
+    THEOREM MealyMooreEquivalence {
+      ∀ mealy : MealyMachine . ∃ moore : MooreMachine . 
+        ∀ w : List(Input) . 
+          mealy.output(mealy.initial_state, w) = 
+          moore.output(moore.transition(moore.initial_state, w))
+    }
+    PROOF {
+      GIVEN mealy : MealyMachine
+      LET moore = MealyToMoore(mealy)
+      
+      <1>. SHOW ∀ w : List(Input) . 
+             mealy.output(mealy.initial_state, w) = 
+             moore.output(moore.transition(moore.initial_state, w))
+        BY INDUCTION on |w|
+        <1>1. BASE CASE: |w| = 0
+          moore.output(moore.initial_state) = 
+          mealy.output(mealy.initial_state, CHOOSE i . i ∈ Input)
+        <1>2. INDUCTIVE STEP: w = w' · a
+          ASSUME mealy.output(mealy.initial_state, w') = 
+                 moore.output(moore.transition(moore.initial_state, w'))
+          moore.output(moore.transition(moore.initial_state, w' · a)) =
+          mealy.output(mealy.transition(mealy.initial_state, w'), a) =
+          mealy.output(mealy.initial_state, w' · a)
+        <1>3. QED BY <1>1 AND <1>2
+      
+      <2>. CONCLUDE ∃ moore : MooreMachine . 
+             ∀ w : List(Input) . 
+               mealy.output(mealy.initial_state, w) = 
+               moore.output(moore.transition(moore.initial_state, w))
+      QED
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE BinaryParity {
+      LET M = DFA {
+        states = {Even, Odd},
+        initial_state = Even,
+        final_states = {Even},
+        transition = λ s, i . MATCH (s, i) WITH
+          | (Even, 0) => Even
+          | (Even, 1) => Odd
+          | (Odd, 0) => Odd
+          | (Odd, 1) => Even,
+        output = λ s, i . MATCH s WITH
+          | Even => "Even parity"
+          | Odd => "Odd parity"
+      }
+
+      ASSERT M.transition(Even, [1,1,0,1]) = Odd
+      ASSERT [0,1,1,0,1,1] ∈ L(M)
+      ASSERT [1,0,1] ∉ L(M)
+    }
+
+    EXAMPLE TuringMachineSimulator {
+      -- Simulating a simple Turing Machine that accepts the language a^n b^n
+      LET TM = NFA {
+        states = {q0, q1, q2, q3, q4},
+        initial_state = q0,
+        final_states = {q4},
+        transition = λ s, i . MATCH (s, i) WITH
+          | (q0, 'a') => {(q1, 'X', R)}  -- Replace 'a' with 'X', move right
+          | (q1, 'a') => {(q1, 'a', R)}  -- Move right over 'a's
+          | (q1, 'b') => {(q2, 'Y', L)}  -- Replace 'b' with 'Y', move left
+          | (q2, 'a') => {(q2, 'a', L)}  -- Move left over 'a's
+          | (q2, 'X') => {(q0, 'X', R)}  -- Found 'X', go back to start
+          | (q0, 'Y') => {(q3, 'Y', R)}  -- All 'a's matched, check remaining 'b's
+          | (q3, 'Y') => {(q3, 'Y', R)}  -- Move right over 'Y's
+          | (q3, ε) => {(q4, ε, R)},     -- Reached end, accept
+        output = λ s, i . MATCH s WITH
+          | q4 => "Accept"
+          | _ => "Reject"
+      }
+
+      ASSERT [a,a,b,b] ∈ L(TM)
+      ASSERT [a,a,a,b,b] ∉ L(TM)
+    }
+  }
+}
+
+
+CONCEPT ShapeSpace {
+  PARAMETERS {
+    d : Nat -- Ambient dimension
+    𝕜 : Field -- Coefficient field
+  }
+
+  CONTEXT {
+    TYPES {
+      Shape := CS(ℝ^d)
+      DIR := 𝕊^(d-1)
+      Cover := {U_i ↪ M}
+      MPD := Multiset(Δ)
+      Δ := {(b, d) | b ≤ d}
+    }
+    
+    STRUCTURES {
+      STRUCTURE PHT {
+        FIELD Z_M ≔ {(x,v,t) ∈ M × DIR × ℝ | ⟨x, v⟩ ≤ t}
+        FIELD f_M : Z_M -> DIR × ℝ
+        FIELD PHT_M := R(f_M)_*𝕜_Z_M IN D^b(Shv(DIR × ℝ))
+        FIELD PHT^i_M := H^i(PHT_M) IN Shv(DIR × ℝ)
+        FIELD Dgm_M(i, v) -> MPD
+          WHERE ∃ p : ℝ -> MPD . Dgm_M(i, v) = p(v) AND p = Dgm(PHT^i_M|_{v}×ℝ)
+        AXIOM Naturality(f : M -> N) {
+          f^*(Z_N) ⊆ Z_M
+          f^*(PHT_N) ≃ PHT_M  
+        }
+      }
+      
+      STRUCTURE LS EXTENDS PHT {
+        FIELD ECT_M(v, t) := χ(f^(-1)_M(v, t))
+        FIELD BCT_M(v, t) := [β_i(f^(-1)_M(v, t))]_i
+        AXIOM ECT_BCT: ECT_M(v, t) = <BCT_M(v, t), 1>
+      }
+      
+      STRUCTURE Met {
+        FIELD d : Shape × Shape -> ℝ≥0
+        AXIOM ∀ M N. M ≃ N => d(M,N) = 0
+        AXIOM ∀ M N O. d(M,O) ≤ d(M,N) + d(N,O)
+      }
+    }
+    
+    ASSERTIONS {
+      AXIOM isManifold(M : Shape) => LS(M)
+      AXIOM Descent(M : Shape, 𝓤 : Cover) 
+        PHT_M ≃ holim[ ∏ PHT_U -> ∏ PHT_{U ∩ V} ⇉ ∏ PHT_{U ∩ V ∩ W} ⋯ ] 
+                         U         U,V             U,V,W            
+    }
+    
+    NOTATION {
+      ⟨_, _⟩ := InnerProduct
+      Shv := Shv(DIR × ℝ, 𝕜)
+      D^b := D^b(Shv)
+      "_|_A" := Restrict(_, A)
+      ≃ := WeakEquivalence  
+      ∫ := Integral
+      χ := EulerCharacteristic
+      β_i := BettiNumber(_, i)
+      R := DerivedDirectImage
+      H^i := CohomologyFunctor(_, i)
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE IntervalDecomp(M : Shape) {
+      Dgm_M(i, v) = ∐_{I ∈ π₀(BCT_M(v, ?))} GenDgm(β_i(M_I))
+        WHERE M_I := Sublevel(M, ⟨v, ?⟩, I)
+    }
+    
+    SIMPLIFY PartialI(i, v, t : ℝ | d(v, v') < ε AND |t-t'| < ε) -> ℝ≥0 {
+      |β_i(f^(-1)_M(v, t)) - β_i(f^(-1)_M(v', t'))| <= βᵀ_i(f^(-1)_M(v×[t-ε,t+ε])) 
+    }
+    
+    REWRITE InterpolatedPHT(M, i, v, t, ε) -> D^b {
+      LET F := Fun(p ↦ Σ_{|v'-v|<ε} (Res(PHT^i_M, v' × {p}) -> 𝕜), {t-ε≤p≤t+ε})
+      IN RΓ_c(F(?) -> 𝕜)
+    }
+  }
+  
+  PROOFS {
+    THEOREM Stability(𝓓 : Met) ∀ M N . dI(PHT_M, PHT_N) ≤ 𝓓(M, N) {
+      dI(PHT_M, PHT_N) 
+        ≤ inf {ε | ∃ (f : M ≃_ε N) . PHT_f : PHT_M =[ε]= PHT_N} -- Interpolation
+        ≤ inf {ε | ∃ (f : M ≃_ε N)} -- Stability of persistent homology
+        = 𝓓(M, N) -- By Met
+      QED
+    }
+    
+    THEOREM Approx ∀ (M : Shape, τ : ℝ>0, ε δ : ℝ>0)
+      ε < τ/4 ∧ Prob_{X~𝒰(M)} [Xᵉ ⊆ M ⊆ X^{√(2)ε} | |X| = O((1/ε)^d)] > 1-δ
+      => ∃ K. Prob[dI(PHT_M, PHT_K) ≤ Cε] > 1-δ {
+      GIVEN M : Shape, τ : ℝ>0, ε δ : ℝ>0 
+        WHERE ε < τ/4 ∧ Prob_{X~𝒰(M)} [Xᵉ ⊆ M ⊆ X^{√(2)ε} | |X| = O((1/ε)^d)] > 1-δ
+
+      X ≔ SAMPLE_(x ∈ M) |X| = O((1/ε)^d) 
+      LET U_x ≔ Ball(x, ε) ∀ x ∈ X
+      LET K ≔ NerveComplex({U_x}_x)
+
+      HAVE M ≃ ⋃ U_x w.p. > 1-δ -- Cech approximation 
+      HAVE ⋃ U_x ≃ K -- Nerve theorem
+      HENCE M ≃ K w.p. > 1-δ
+
+      Mᵉ ⊆ M ⊆ M^{√(2)ε} => dI(PHT_M, PHT_K) ≤ √(2)ε w.p. > 1-δ -- Sandwich theorem
+      TAKE C := √2  
+      QED
+    }
+
+    THEOREM PHTDeterminesShape ∀ M N : Shape . PHT_M ≃ PHT_N => M ≃ N {
+      PHT_M ≃ PHT_N 
+      => ∀ i. PHT^i_M ≃ PHT^i_N -- By definition
+      => BCT_M(v,t) = BCT_N(v,t) ∀ v t -- By definition
+      => ECT_M(v,t) = ECT_N(v,t) ∀ v t -- By LS.ECT_BCT
+      => M ≃ N -- By CurrySchapira
+      QED
+    }
+    
+    THEOREM PHTDescentTheorem ∀ (M : Shape, 𝓤 : Cover | FiniteCover(𝓤, M)) . 
+      PHT_M ≃ holim[ ∏ PHT_U -> ∏ PHT_{U ∩ V} ⇉ ∏ PHT_{U ∩ V ∩ W} ⋯ ] {
+      
+      SUFFICES_TO_SHOW PHT_M -> holim[⋯] is a quasi-isomorphism
+      
+      DEFINE 𝓖_• := GodementResolution(𝕜_Z_M)
+      
+      HAVE R(f_M)_*(𝓖_•) is a quasi-isomorphism:
+        PHT_M ≃ R(f_M)_* 𝕜_Z_M -- By definition
+              ≃ R(f_M)_* holim(𝓖_•) -- By 𝓖_• is a resolution 
+              ≃ holim R(f_M)_*(𝓖_•) -- By R ⊣ holim
+              ≃ holim[⋯] -- By Cech
+              
+      HAVE R(f_M)_*(𝓖_•) is a q.i. on stalks ∀ v t:
+        H^*(PHT_M_(v,t)) ≃ H^*(f^(-1)_M(v, t)) -- By definition 
+                         ≃ H^*(holim(𝓖_•)_(v,t)) -- By 𝓖_• is a resolution
+                         ≃ H^*(holim[⋯]_(v,t)) -- By Cech
+                         
+      QED
+    }
+  }
+  
+  EXAMPLES {
+    EXAMPLE Sphere(d, n) WHERE S^d_n ≔ {x ∈ ℝ^(d+1) | ‖x‖ = 1 ∧ ∀i>n. x_i=0} {
+      Dgm(S^d_n) = [
+        [],
+        [(0,∞)],
+        [],
+        ...,
+        [(0,∞)] IF d=n, [] o.w.
+      ]
+    }
+    
+    EXAMPLE KleinBottle {
+      Z := Z_𝕂² = {((x,y,z,w), (v,t)) | x^2v_1 + y^2(v_2 - 2zv_1) + zw = t} ⊆ ℝ⁴ × (𝕊² × ℝ)
+      Dgm(𝕂²) = [
+        [],
+        [(0,∞), (0,∞)],
+        [],
+        [(0,∞)]  
+      ]
+    }
+    
+    EXAMPLE Torus {
+      Z := Z_𝕋² = {((θ,φ), (v,t)) | (R+r·cosθ)·cosφ·v_1 + (R+r·cosθ)·sin φ·v_2 + r·sinθ·v_3 = t}
+      Dgm(𝕋²) = [
+        [],  
+        [(0,∞), (0,∞)],
+        [(0,∞)],
+        []
+      ]
+    }
+  }
+}
+
+
+CONCEPT AttentionMechanism {
+  PARAMETERS {
+    KEY : TYPE
+    QUERY : TYPE
+    VALUE : TYPE
+    N : Nat  -- sequence length
+  }
+
+  CONTEXT {
+    TYPES {
+      Seq(T) := FUNC(Fin(N), T)
+      Attention(K, Q, V) := FUNC(Q, Seq(K), Seq(V)) -> V
+      Alignment(K, Q) := FUNC(K, Q) -> Real
+      Distribution(n : Nat) := List(Real) WITH_CONSTRAINT (
+        ∀ ps : Distribution(n) . SUM(ps) = 1 ∧ ∀ i . 0 ≤ ps[i] ≤ 1
+      )
+    }
+
+    NOTATION {
+      ⟨k, q⟩ := Alignment(k, q)
+      SoftMax(xs) := xs[i] / SUM(j = 0 to LEN(xs) - 1, xs[j])
+      Σ_i x_i := SUM(i = 0 to N - 1, x_i)
+    }
+
+    STRUCTURES {
+      STRUCTURE DotProductAttention IMPLEMENTS Attention(KEY, QUERY, VALUE) {
+        IMPLEMENT Alignment(k : KEY, q : QUERY) -> Real
+          WITH ⟨q, k⟩ / SQRT(DIM(KEY))
+
+        IMPLEMENT FUNC(q : QUERY, ks : Seq(KEY), vs : Seq(VALUE)) -> VALUE
+          WITH Σ_i α_i * vs[i]
+          WHERE α = SoftMax(Seq(⟨ks[i], q⟩ for i in Fin(N)))
+
+        AXIOM DotProductPreservesMagnitude {
+          ∀ k : KEY, q : QUERY . |⟨k, q⟩| ≤ |q| * |k|
+        }
+      }
+
+      STRUCTURE MultiheadAttention(h : Nat) IMPLEMENTS Attention(KEY, QUERY, VALUE) {
+        PARAMETERS {
+          Heads : FUNC(Fin(h), Attention(KEY, QUERY, VALUE))
+          Concat : FUNC(Seq(VALUE), VALUE^h)
+          Proj : FUNC(VALUE^h, VALUE)
+        }
+
+        IMPLEMENT FUNC(q : QUERY, ks : Seq(KEY), vs : Seq(VALUE)) -> VALUE
+          WITH Proj(Concat(Seq(Heads[i](q, ks, vs) for i in Fin(h))))
+
+        AXIOM OrthogonalHeads {
+          ∀ i j : Fin(h), q : QUERY, k : KEY . i =/= j ⇒ ⟨Heads[i].Alignment(k, q), Heads[j].Alignment(k, q)⟩ = 0
+        }
+      }
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE Linearity {
+      Attention(a * ks + b * ks', qs, a * vs + b * vs') <=>
+        a * Attention(ks, qs, vs) + b * Attention(ks', qs, vs')
+    }
+
+    SIMPLIFY IgnoreQueryOrder {
+      Attention(ks, PERMUTE(qs), vs) <=> Attention(ks, qs, vs)
+    }
+
+    SIMPLIFY IgnoreKeyValueOrder {
+      Attention(PERMUTE(ks), qs, PERMUTE(vs)) <=> 
+        PERMUTE(Attention(ks, qs, vs))
+    }
+
+    REWRITE SoftmaxInvariance(U : Unitary(QUERY)) {
+      SoftMax(Seq(⟨ks[i], U(q)⟩ for i in Fin(N))) <=>
+        SoftMax(Seq(⟨ks[i], q⟩ for i in Fin(N)))
+    }
+  }
+
+  PROOFS {
+    THEOREM DotProductAttentionLinearity {
+      FORALL (a b : Real, ks ks' : Seq(KEY), q : QUERY, vs vs' : Seq(VALUE)) .
+        DotProductAttention(a * ks + b * ks', q, a * vs + b * vs') =
+          a * DotProductAttention(ks, q, vs) + b * DotProductAttention(ks', q, vs')
+    } BY Linearity
+
+    THEOREM MultiheadAttentionInvariance {
+      FORALL (q : QUERY, ks : Seq(KEY), vs : Seq(VALUE),
+              U_heads : FUNC(Fin(h), Unitary(QUERY)),
+              U_concat : Unitary(VALUE^h),
+              U_proj : Unitary(VALUE)) .
+        LET m = MultiheadAttention(h)
+            m' = m WITH {
+              Heads := λ i . m.Heads[i] WITH {Alignment := λ k q . U_heads[i](m.Heads[i].Alignment(k, q))},
+              Concat := λ v . U_concat(m.Concat(v)),
+              Proj := λ x . U_proj(m.Proj(x))
+            }
+        IN m(q, ks, vs) = m'(q, ks, vs)
+    }
+    PROOF {
+      ASSUME q : QUERY, ks : Seq(KEY), vs : Seq(VALUE),
+             U_heads : FUNC(Fin(h), Unitary(QUERY)),
+             U_concat : Unitary(VALUE^h),
+             U_proj : Unitary(VALUE)
+
+      m'(q, ks, vs)
+        = U_proj(m'.Proj(U_concat(m'.Concat(Seq(m'.Heads[i](q, ks, vs) for i in Fin(h)))))) [BY DEF Apply]
+        = U_proj(m.Proj(U_concat(m.Concat(Seq(
+            m.Heads[i](U_heads[i](q), ks, vs) for i in Fin(h)))))) [BY DEF m', Heads]
+        = U_proj(m.Proj(U_concat(m.Concat(Seq(
+            Σ_j SoftMax(Seq(m.Heads[i].Alignment(ks[j], U_heads[i](q)) for j in Fin(N)))[j] * vs[j]
+            for i in Fin(h)))))) [BY DEF Heads, DotProductAttention]
+        = U_proj(m.Proj(U_concat(m.Concat(Seq(
+            Σ_j SoftMax(Seq(m.Heads[i].Alignment(ks[j], q) for j in Fin(N)))[j] * vs[j]
+            for i in Fin(h)))))) [BY SoftmaxInvariance]
+        = U_proj(m.Proj(U_concat(m.Concat(Seq(
+            m.Heads[i](q, ks, vs) for i in Fin(h)))))) [BY DEF Heads, DotProductAttention]
+        = U_proj(m.Proj(m.Concat(Seq(m.Heads[i](q, ks, vs) for i in Fin(h))))) [BY Unitary_Invariance]
+        = m(q, ks, vs) [BY DEF Apply, Unitary_Invariance]
+      QED
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE SelfAttention {
+      DEFINE T = Real^d
+      DEFINE SelfAttention(d : Nat, h : Nat) = MultiheadAttention(h) WITH {
+        KEY = T
+        QUERY = T
+        VALUE = T
+      }
+
+      LET sa = SelfAttention(512, 8)
+      
+      THEN ∀ q : T, ks vs : Seq(T) . sa(q, ks, vs) : T
+    }
+
+    EXAMPLE CrossAttention {
+      DEFINE K = Real^d_k 
+      DEFINE Q = Real^d_q
+      DEFINE V = Real^d_v
+      
+      DEFINE CrossAttention(d_k d_q d_v : Nat, h : Nat) = MultiheadAttention(h) WITH {
+        KEY = K
+        QUERY = Q
+        VALUE = V
+      }
+
+      LET ca = CrossAttention(512, 128, 512, 8)
+      
+      THEN ∀ q : Q, ks : Seq(K), vs : Seq(V) . ca(q, ks, vs) : V
+    }
+  }  
+}
+
+
+Let's test your understanding of the language and system: please express a Concepts which in some way naturally integrates key ideas from the given example Concepts. Please express yourself in as much concrete detail as possible.

@@ -1,0 +1,329 @@
+CONCEPT SymbolicPDEs {
+  LANGUAGE {
+    type Sym = Const(ℝ) | Var(ℕ) | Binary(Sym, Sym) | Unary(Sym)  
+             | Abs(ℕ, Sym) | App(Sym, Sym)
+    type PDE = Eqn(Sym, Sym) | System(PDE*)
+    type BC = Dirichlet(Sym) | Neumann(Sym) | Robin(Sym, Sym)
+    type Domain = Rect(ℝ^n) | Disk(ℝ^2) | Manifold(ℝ^n)
+    
+    notation "∂{i}S" = PartialD(i: ℕ, S: Sym)
+    notation "∇S" = Grad(S: Sym)  
+    notation "ΔS" = Laplacian(S: Sym)
+    notation "divV" = Divergence(V: Sym)
+    notation "curlV" = Curl(V: Sym)
+    notation "S ≈ T on Ω" = Approx(S: Sym, T: Sym, Ω: Domain)
+    notation "u{n+1} - u{n} = O(h)" = Converge(u: Sym -> Sym, h: ℝ)
+    
+    notation "λ x . S" = Abs(x: ℕ, S: Sym)   ; lambda abstraction
+    notation "S T" = App(S: Sym, T: Sym)    ; application
+    notation "S ⇒ T" = Reduces(S: Sym, T: Sym)
+    
+    pred DirichletProblem(L: PDE, u: Sym, f: Sym, g: BC)
+    pred Stable(u: Sym, Ω: Domain)
+    pred Converge(u: Sym -> Sym, Ω: Domain)
+    
+    axiom Correspondence(S: Sym, X: ℝ | Fun | PDE): 
+      ∃ u: Sym. S ≈ u ∧ u satisfies X
+      
+    axiom Determination(S: Sym, X: ℝ | Fun | PDE | BC): 
+      ∃! u: Sym. S ≈ u ∧ u satisfies X
+      
+    axiom Approximation(S, T: Sym, Ω: Domain, ε: ℝ):
+      |S - T| < ε on Ω   
+  }
+  
+  STRUCTURE {
+    [HeatEquation: 
+      ∂{t}u = α*Δu,  u(0) = u₀
+    ]
+    [WaveEquation:
+      ∂{tt}u = c²*Δu,  u(0) = f, ∂{t}u(0) = g  
+    ]
+    [NavierStokes: 
+      ∂{t}v + (v•∇)v = -∇p + ν*Δv + f
+      divv = 0,  v(0) = v₀
+    ]
+    [EulerLagrange:
+      ∂{t}(∂{v}L) - ∂{x}(∂{u}L) = 0
+      L(t, u, v) = ∫ L(t, u, ∂{x}u, x) dx
+    ]
+    [FiniteElement:
+      u{n+1} - u{n} = ∑{e}∫{Ω_e}(∇u{n}•∇v + f*v) dx  
+    ]
+    [GalerkinMethod:
+      ∀ i. ∫{Ω} (Lu)*v{i} dx = ∫{Ω} f*v{i} dx
+      u ≈ ∑{i} c{i}*v{i}
+    ]
+  }
+  
+  PROOFS {
+    tactic Expand(S: Sym):
+      S ⇒ T ⊢ S = T
+    tactic Reduce(S: Sym, prop):  
+      (∀ T. S ⇒ T ⊢ prop(S) ⟹ prop(T)) ⊢ prop(S)
+    tactic Separate(Eqn(S, T)):
+      Eqn(S, T) ⊣⊢ (S = 0) ∧ (T = 0)
+    tactic Gronwall(u, α: Sym -> Sym):
+      (∀ t. D{t}u ≤ α*u) ⊢ u(t) ≤ u(0)*exp(∫{0}^t α ds)
+    tactic Galerkin(L: PDE, f: Sym, {v_i}: Sym*, U: Sym):  
+      (∀ i. ∫{Ω} (L(U))*v{i} dx = ∫{Ω} f*v{i} dx) ∧ (U ≈ ∑{i} c{i}*v{i}) ⊢ 
+        U satisfies L(U) = f
+        
+    theorem ExistUnique(L: PDE, f: Sym, g: BC, Ω: Domain):
+      DirichletProblem(L, u, f, g) ⊢ ∃! u. L(u) = f on Ω, u = g on ∂Ω  
+    {
+      LocalExist {
+        let U = ∑{i} c{i}*v{i}  ; Galerkin approximation
+        Galerkin(L, f, {v_i}, U)
+        Approx(U, u, Ω, 1/n)
+      }
+      
+      AssumeExist u, v  
+        L(u) = f, u = g on ∂Ω
+        L(v) = f, v = g on ∂Ω
+      let w = u - v
+      
+      calc L(w) 
+           = L(u - v)  
+           = L(u) - L(v)  ; Linearity
+           = f - f
+           = 0
+           
+      calc w on ∂Ω
+           = u - v        
+           = g - g
+           = 0
+           
+      have L(w) = 0, w = 0 on ∂Ω
+      hence w = 0 by MaximumPrinciple
+      hence u = v  
+    }
+    
+    theorem Stability(L: PDE, u: Sym, f: Sym, g: BC, Ω: Domain):  
+      DirichletProblem(L, u, f, g) ∧ (L is elliptic) ⊢ Stable(u, Ω)
+    {
+      assume L(u) = f on Ω
+      assume u = g on ∂Ω
+      
+      let L{ε}(v) = L(v + εη), η = D{ε}v  ; Linearize
+      
+      have L{ε}(u) = f + O(ε)   
+      have L{ε}(u + εw) = f + O(ε)
+        let z = (u + εw) - u = εw
+        
+      calc L{ε}(z)
+           = L{ε}(εw) 
+           = L{ε}(u + εw) - L{ε}(u)
+           = O(ε)
+           
+      have z = 0 on ∂Ω
+      hence |z| ≤ C*ε on Ω by MaximumPrinciple
+      hence |w| ≤ C on Ω
+    }
+    
+    theorem Convergence(u: Sym -> Sym, f: Sym, Ω: Domain, L: PDE):
+      (∀ n. u{n} satisfies L(u{n}) = f) ∧ Stable(u{n}, Ω) ∧ Converge(u{n}, Ω) ⊢
+        ∃ u*. L(u*) = f ∧ u{n} ⟶ u* on Ω
+    {
+      let e{n} = u* - u{n}, e{0} = u* - u{0}
+      have L(e{n}) = L(u*) - L(u{n}) = f - f = 0
+      
+      calc |e{n+1}| 
+           ≤ (1 - Ch)|e{n}|  ; Stability
+           ≤ ... 
+           ≤ (1 - Ch)^n |e{0}|
+           ⟶ 0  ; Geometric series
+           
+      hence u{n} ⟶ u* on Ω
+      have L(u*) = L(lim u{n}) = lim L(u{n}) = f  ; Continuity of L
+    }
+  }
+}
+
+
+
+
+
+
+
+
+CONCEPT PoissonExample {
+  PROOFS {
+    prove DirichletProblem(Δu = f, u = 0 on ∂Ω) on Ω = [0,1]×[0,1]
+    given:
+      f: Sym, f = λ x y. 2π²*sin(πx)*sin(πy)  
+      u*: Sym, u* = λ x y. sin(πx)*sin(πy)   ; Exact solution
+      {v_i}: Sym*, v_i = λ x y. sin(iπx)*sin(jπy)  ; Basis functions
+    {  
+      let L = λu. -Δu
+      
+      ; Verify the exact solution
+      calc L(u*)
+           = -Δ(λ x y. sin(πx)*sin(πy))
+           = -∂{xx}(sin(πx)*sin(πy)) - ∂{yy}(sin(πx)*sin(πy))
+           = -(π²*sin(πx)*sin(πy) + π²*sin(πx)*sin(πy))
+           = -2π²*sin(πx)*sin(πy)
+           = f
+      
+      have u* = 0 on ∂Ω  ; By inspection
+      
+      ; Galerkin approximation  
+      let U = λ x y. ∑{i,j} c{ij}*sin(iπx)*sin(jπy)
+        
+      for i, j ∈ [1..N] {
+        calc ∫{Ω} L(U)*v{ij} dx
+             = ∫{0}^1 ∫{0}^1 (-Δ(∑{k,l} c{kl}*sin(kπx)*sin(lπy)))*sin(iπx)*sin(jπy) dx dy
+             = ∑{k,l} c{kl} ∫{0}^1 ∫{0}^1 (-Δ(sin(kπx)*sin(lπy)))*sin(iπx)*sin(jπy) dx dy
+             = ∑{k,l} c{kl} ∫{0}^1 ∫{0}^1 (k²π²+l²π²)*sin(kπx)*sin(lπy)*sin(iπx)*sin(jπy) dx dy
+             = c{ij} ∫{0}^1 ∫{0}^1 (i²π²+j²π²)*sin²(iπx)*sin²(jπy) dx dy
+             = c{ij} (i²π²+j²π²) / 4
+             
+        calc ∫{Ω} f*v{ij} dx  
+             = ∫{0}^1 ∫{0}^1 2π²*sin(πx)*sin(πy)*sin(iπx)*sin(jπy) dx dy
+             = δ{i1}*δ{j1} π² / 4   ; By orthogonality
+      }
+        
+      hence ∀ i, j. c{ij} = δ{i1}*δ{j1}
+      hence U = λ x y. sin(πx)*sin(πy) = u*  
+      
+      ; Error estimate
+      let e = u* - U
+      
+      have L(e) = L(u*) - L(U) = f - f = 0
+      have e = 0 on ∂Ω
+      
+      hence |e| ≤ C*||e||{L²} on Ω  ; H² regularity
+      hence |e| ≤ C*h²             ; L² approximation
+      hence ||u* - U||{H¹} ≤ C*h   ; H¹ approximation
+    }
+    conclude ∃! u. Δu = f on Ω, u = 0 on ∂Ω
+  }
+}
+
+In this example, we're proving the existence and uniqueness of the solution to the Dirichlet problem for the Poisson equation on the unit square Ω = [0,1]×[0,1]. The PDE is Δu = f with zero boundary conditions.
+We start by specifying the right-hand side function f and the exact solution u* symbolically, using lambda expressions. We also define a set of basis functions {v_i} for the Galerkin approximation.
+In the proof block, we first verify that the exact solution u* indeed satisfies the PDE and boundary conditions by symbolic calculation.
+Next, we construct a Galerkin approximation U as a linear combination of the basis functions. We compute the Galerkin equations by integrating the PDE against each basis function. Using orthogonality of the basis, we find that the coefficients c_ij are zero except for c_11, implying that U equals the exact solution u*.
+Finally, we estimate the error e = u* - U in various norms. Since the PDE is elliptic, we have H² regularity, allowing us to bound the L^∞ norm of the error by its L² norm. The Galerkin method provides an L² error estimate of order h², where h is the mesh size. We conclude an H¹ error estimate of order h.
+The existence and uniqueness of the solution follow from the Lax-Milgram theorem for elliptic PDEs, which we invoke implicitly.
+
+
+
+
+
+CONCEPT NavierStokesExample {
+  PROOFS {
+    prove ExistUnique(∂{t}v + (v•∇)v = -∇p + ν*Δv, divv = 0, v = 0 on ∂Ω) 
+    given:
+      v₀: Sym, v₀ = λ x y. (sin(πx)*cos(πy), -cos(πx)*sin(πy))  ; Initial velocity
+      Ω: Domain, Ω = [0,1]×[0,1]  ; Unit square
+      ν: ℝ, ν > 0  ; Viscosity
+    {
+      ; Function spaces  
+      let 𝓥 = H¹₀(Ω)^2 ∩ {v | divv = 0}  ; Velocity space
+      let 𝓠 = L²₀(Ω)                     ; Pressure space
+      
+      ; Variational formulation
+      let a(u, v) = ν*∫{Ω} ∇u:∇v dx
+      let b(v, q) = -∫{Ω} q*divv dx
+      let c(u, v, w) = ∫{Ω} (u•∇)v•w dx
+      
+      ∀ u, v, w ∈ 𝓥 {
+        have a(u, v) ≤ ν*||∇u||*||∇v||              ; Cauchy-Schwarz
+        have a(v, v) ≥ ν*||∇v||²                    ; Coercivity
+        have c(u, v, w) ≤ C*||∇u||*||∇v||*||∇w||   ; Sobolev embedding
+        have c(u, v, v) = 0                          ; Skew-symmetry
+      }
+      
+      ∀ v ∈ 𝓥, q ∈ 𝓠 {  
+        have b(v, q) ≤ β*||v||*||q||   ; Bounded
+        have ∃ v ≠ 0. b(v, q) ≥ β*||v||*||q||  ∀q  ; Inf-sup condition
+      }
+      
+      ; Galerkin approximation
+      let 𝓥_h ⊂ 𝓥, dim 𝓥_h = N  ; Finite element spaces
+      let 𝓠_h ⊂ 𝓠, dim 𝓠_h = M
+      
+      find (v_h, p_h) ∈ C([0,T], 𝓥_h) × L²([0,T], 𝓠_h):
+        ∀ w_h ∈ 𝓥_h, q_h ∈ 𝓠_h {
+          (∂{t}v_h, w_h) + a(v_h, w_h) + c(v_h, v_h, w_h) + b(w_h, p_h) = 0
+          b(v_h, q_h) = 0
+          v_h(0) = v₀_h  ; Projection of initial data
+        }
+        
+      ; Energy estimates  
+      choose w_h = v_h, q_h = p_h 
+      
+      calc (∂{t}v_h, v_h) + ν*||∇v_h||² 
+           = (∂{t}v_h, v_h) + a(v_h, v_h)
+           = -(c(v_h, v_h, v_h) + b(v_h, p_h))
+           = 0
+           
+      hence 1/2*∂{t}||v_h||² + ν*||∇v_h||² ≤ 0
+      hence ||v_h(t)||² + ν*∫{0}^t ||∇v_h(s)||² ds ≤ ||v₀_h||²
+      
+      ; Compactness
+      have v_h bounded in L^∞([0,T], 𝓥)  ; By energy estimate
+      have ∂{t}v_h bounded in L²([0,T], 𝓥')  ; Dual estimate
+      
+      hence ∃ v ∈ L^∞([0,T], 𝓥) ∩ L²([0,T], 𝓥₂). v_h ⇀ v
+      have v_h → v in L²([0,T], 𝓥)  ; Aubin-Lions lemma
+      
+      ; Pressure limit  
+      ∀ q ∈ L²([0,T], 𝓠) {
+        let q_h = P_h q  ; 𝓠_h-projection
+        have b(v_h, q) = b(v_h, q - q_h)
+                       ≤ ||v_h||*||q - q_h||
+                       ≤ C*h*||v_h||*||q||  ; Approximation property
+      }
+       
+      hence b(v, q) = 0 ∀ q  ; Inf-sup condition for limit
+      hence ∃ p ∈ L²([0,T], 𝓠). divv = 0
+      
+      ; Nonlinear limit
+      ∀ w ∈ C₁([0,T], 𝓥) {
+        calc lim ∫{0}^T c(v_h, v_h, w) dt
+             = lim ∫{0}^T c(v_h - v, v_h, w) + c(v, v_h - v, w) + c(v, v, w) dt
+             = ∫{0}^T c(v, v, w) dt  ; Strong convergence of v_h
+      }
+      
+      ; Existence
+      ∀ w ∈ C₁([0,T], 𝓥), q ∈ L²([0,T], 𝓠) {
+        have ∫{0}^T (∂{t}v, w) + a(v, w) + c(v, v, w) + b(w, p) dt = 0   
+        have b(v, q) = 0
+        have v(0) = v₀
+      }
+      hence ∃ (v, p) solving Navier-Stokes
+      
+      ; Uniqueness
+      assume ∃ (u, p), (v, q) solving Navier-Stokes
+      let w = u - v
+      
+      calc ∫{0}^T (∂{t}w, w) + a(w, w) dt
+           = -∫{0}^T c(u, u, w) - c(v, v, w) dt  
+           = -∫{0}^T c(w, u, w) dt
+           ≤ ∫{0}^T ||w||*||∇u||*||∇w|| dt
+           ≤ ∫{0}^T (ν/4*||∇w||² + C/ν*||w||²*||∇u||²) dt
+           
+      hence ∂{t}||w||² + ν*||∇w||² ≤ C/ν*||w||²*||∇u||²
+      hence ||w(t)||² ≤ ||w(0)||² * exp(C/ν*∫{0}^t ||∇u||² ds) = 0
+      hence w = 0, u = v
+      
+      ; Pressure uniqueness  
+      have Δ(p - q) = 0   ; From momentum equation
+      have ∇(p - q)•n = 0 on ∂Ω  ; From boundary conditions
+      hence p = q 
+    }
+    conclude ∃! (v, p) solving Navier-Stokes
+  }
+}
+
+This proof follows the standard Galerkin method approach for the Navier-Stokes equations. We start by defining the function spaces for velocity (𝓥) and pressure (𝓠), incorporating the divergence-free and boundary conditions.
+Next, we introduce the variational formulation using the bilinear forms a (viscous term), b (pressure term), and the trilinear form c (convective term). We state their key properties like coercivity, boundedness, and inf-sup condition.
+For the Galerkin approximation, we choose finite-dimensional subspaces 𝓥_h and 𝓠_h and seek a discrete solution (v_h, p_h) satisfying the variational equations for all test functions (w_h, q_h).
+We derive energy estimates by choosing special test functions, giving bounds on the velocity in terms of the initial data. These bounds provide compactness and allow us to pass to the limit in the linear terms.
+The pressure limit is handled using the discrete inf-sup condition and approximation properties of the finite element spaces.
+For the nonlinear term, we use the strong convergence of v_h in L² to pass to the limit. This relies on the Aubin-Lions lemma for compactness.
+Combining the limit equations, we obtain the existence of a weak solution (v, p).
+Uniqueness follows from an energy argument applied to the difference of two solutions, making use of the skew-symmetry of the trilinear form c. Gronwall's inequality is used to conclude that the difference must be zero.
+Pressure uniqueness is obtained from the uniqueness of the Neumann problem for the Laplace equation.

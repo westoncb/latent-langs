@@ -1,0 +1,152 @@
+Vertigo := MedicalSymptom(
+  Description: "Sensation of spinning or dizziness",
+  Causes: (
+    PeripheralCauses(InnerEarDisorders: (BPPV, Labyrinthitis, VestibularNeuritis)),  
+    CentralCauses(BrainDisorders: (Stroke, BrainTumor, Migraine, MultipleSclerosis))
+  ),
+  AssociatedSymptoms: (Nausea, Vomiting, Headache, NystagmusImbalance),
+  RiskFactors: (Age{> 50}, HeadTrauma, MedicationSideEffects),
+  Diagnosis: (
+    ClinicalExam,
+    VestibularTests(CaloriTest, RotatingChairTest),
+    Imaging(MRI, CT)
+  ),
+  Treatment: (
+    Medication(Antihistamines, Anticholinergics, Benzodiazepines),
+    VestibularRehabilitation,
+    CanalithRepositioningManeuvers  
+  )
+) :: {
+  DEF[
+    ⊢: Implies,
+    ⨝: Cooccurs,
+    ⊷: ProgressiveAbstraction,
+    ⋐: HierarchicalDecomposition
+  ]
+
+  [Vertigo ⊢ (Causes.PeripheralCauses | Causes.CentralCauses)]
+  [AssociatedSymptoms ⨝ Vertigo]
+  [RiskFactors ⊷ Causes]
+  [Diagnosis ⋐ (ClinicalExam, VestibularTests, Imaging)]
+  [Treatment ⋐ (Medication, VestibularRehabilitation, CanalithRepositioningManeuvers)]
+}
+
+// Example of a specific type of vertigo
+BPPV := Vertigo(
+  Causes: PeripheralCauses(InnerEarDisorders: BPPV),
+  Pathophysiology: "Otolith crystals dislodged into semicircular canals",
+  Diagnosis: (DixHallpikeManeuver, SupineRollTest),
+  Treatment: (EpleyManeuver, BrandtDaroffExercises)  
+)
+
+// Example of a central cause of vertigo
+VertigoFromStroke := Vertigo(
+  Causes: CentralCauses(BrainDisorders: Stroke(Location: Cerebellum | Brainstem)),
+  AssociatedSymptoms: (DoublVision, DysarthriaDysphasia, FacialWeakness, AtaxiaLimbWeakness),
+  Diagnosis: (NeurologicalExam, MRI(DiffusionWeighted, Angiography)),
+  Treatment: (ThrombolyticTherapy | Anticoagulation, StrokeRehabilitation)
+)
+
+
+
+
+
+// Simple version
+
+VertigoDiagnosticProcess := (
+  PatientPresentation(VertigoSymptom, AssociatedSymptoms) |>
+  HistoryTaking(OnsetTiming, DurationFrequency, AggravatAlleviatingFactors, MedicationsComorbidities) |>
+  PhysicalExamination(
+    VitalSigns,
+    HeadNeckExam, 
+    NeurologicalExam(CranialNerves, Cerebellum, SensoryMotor),
+    SpecialTests(DixHallpikeManeuver, HeadImpulseTest, RombergTest)
+  ) |>
+  [PeripheralCausesSuspected ⊻ CentralCausesSuspected] |>
+  (
+    [PeripheralCausesSuspected] |> VestibularTesting(CaloriTest, RotatingChairTest, VEMPTest) $ PeripheralDiagnosis
+    ⊻
+    [CentralCausesSuspected] |> Imaging(MRI(Brain), CT(BrainNeck)) $ CentralDiagnosis
+  ) |>
+  (PeripheralTreatment(Medication, VestibularRehab, ReposManvrs) ⋈ CentralTreatment(DiseaseSpecific))
+) :: {
+  DEF[
+    |>: Sequence,
+    ⊻: Xor,
+    ⋈: Join,
+    $: Results
+  ]
+  
+  [PatientPresentation ⊸ (HistoryTaking, PhysicalExamination)]
+  [(HistoryTaking, PhysicalExamination) ⊸ (PeripheralCausesSuspected ⊻ CentralCausesSuspected)]
+  [PeripheralCausesSuspected ⊸ VestibularTesting $ PeripheralDiagnosis]
+  [CentralCausesSuspected ⊸ Imaging $ CentralDiagnosis]
+  [(PeripheralDiagnosis, CentralDiagnosis) ⊸ (PeripheralTreatment ⋈ CentralTreatment)]
+}
+
+
+
+
+
+// Detailed version
+
+VertigoDiagnosticProcess := (
+  PatientPresentation(VertigoSymptom, AssociatedSymptoms){urgency: VertigoSeverity} |>
+  HistoryTaking(
+    OnsetTiming{acute: <24hrs, subacute: 24hrs-1wk, chronic: >1wk},
+    DurationFrequency{episodic: Intermittent, continuous: Constant},
+    AggravatAlleviatingFactors{positionChange, headMovement, visualStimuli},
+    MedicationsComorbidities{ototoxicDrugs, cardiovascularDz, neurologicDz}
+  ) |>
+  PhysicalExamination(
+    VitalSigns{checkOrthostatics},
+    HeadNeckExam{auricularInspection, otoneurologicTests}, 
+    NeurologicalExam(
+      CranialNerves{CN5: Facial sensation, CN7: Facial movement, CN8: Hearing},
+      Cerebellum{coordinationTests: FingerNoseTest, HeelShinTest},
+      SensoryMotor{proprioception, strength}
+    ),
+    SpecialTests(
+      DixHallpikeManeuver{positional},
+      HeadImpulseTest{vestibularOcularReflex},
+      RombergTest{proprioceptiveFunction}  
+    )
+  ) |>
+  [PeripheralCausesSuspected{BPPV, Labyrinthitis, VestibularNeuritis} ⊻ CentralCausesSuspected{stroke, migraine, tumor, MS}] |>
+  (
+    [PeripheralCausesSuspected] |>
+    VestibularTesting(
+      CaloriTest{bithermal, unilateralWeakness},
+      RotatingChairTest{perceptualThresholds, gainAsymmetry},
+      VEMPTest{saccularcVEMP, utricularoVEMP}
+    ) $ PeripheralDiagnosis{localization: Unilateral/Bilateral, acuity: Mild/Moderate/Severe}
+    ⊻
+    [CentralCausesSuspected] |>
+    Imaging(
+      MRI(Brain){diffusionWeighted, fluidAttenuated},
+      CT(BrainNeck){baseOfSkull, cerebellum, brainStem}  
+    ) $ CentralDiagnosis{etiology: Vascular, Neoplastic, Degenerative, Autoimmune}
+  ) |>
+  (
+    PeripheralTreatment(
+      Medication{antihistamines, benzodiazepines, antiemetics},
+      VestibularRehab{habituation, gaze stabilization, balance training},
+      ReposManvrs{epleys, semontSemont}
+    ){durationWeeks: 2-6}
+    ⋈
+    CentralTreatment(DiseaseSpecific){strokeProtocols, immunomodulators, surgicalResection}
+  ){followUp: Weeks{4}, Months{3, 6}}
+) :: {
+  DEF[
+    |>: Sequence,
+    ⊻: Xor,
+    ⋈: Join,
+    $: Results
+  ]
+  
+  [PatientPresentation ⊸ (HistoryTaking, PhysicalExamination)]
+  [(HistoryTaking, PhysicalExamination) ⊸ (PeripheralCausesSuspected ⊻ CentralCausesSuspected)]
+  [PeripheralCausesSuspected ⊸ VestibularTesting $ PeripheralDiagnosis]
+  [CentralCausesSuspected ⊸ Imaging $ CentralDiagnosis]
+  [(PeripheralDiagnosis, CentralDiagnosis) ⊸ (PeripheralTreatment ⋈ CentralTreatment)]
+}

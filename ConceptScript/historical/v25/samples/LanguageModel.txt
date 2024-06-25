@@ -1,0 +1,94 @@
+CONCEPT LanguageModel {
+  LANGUAGE {
+    TYPE Token
+    TYPE Sequence = List[Token]
+    TYPE Vocab <: Set[Token]
+    TYPE Distribution = Vocab -> [0, 1]
+    TYPE Embedding = Token -> Vector[Dim]
+
+    FUNC Predict(seq : Sequence) : Distribution
+    FUNC Generate(seq : Sequence, n : Nat) : Sequence  
+    FUNC Encode(seq : Sequence) : Vector[Dim]
+    FUNC Decode(v : Vector[Dim]) : Sequence
+
+    AXIOM NormDist {
+      ∀ (d : Distribution). Sum(d) = 1
+    }
+    
+    AXIOM VocabCoverage {
+      ∀ (seq : Sequence). ∀ (t : Token). t ∈ seq => t ∈ Vocab  
+    }
+
+    NOTATION "D(Vocab)" = Distribution
+    NOTATION "E(Dim)" = Embedding
+  }
+
+  STRUCTURE Transformer(
+    Layers : Nat, 
+    Heads : Nat,
+    HiddenDim : Nat,  
+    FFDim : Nat,
+    Embeddings : Vocab -> E(HiddenDim),
+    PositionalEncoding : Sequence -> E(HiddenDim)
+  ) {
+    REQUIRE Divisible(HiddenDim, Heads)
+
+    LET SelfAttention(Q K V : Vector[HiddenDim]) -> Vector[HiddenDim] = ...
+    LET FeedForward(X : Vector[HiddenDim]) -> Vector[HiddenDim] = ...
+    LET AttentionHead(X : Vector[HiddenDim]) -> Vector[HiddenDim] = ...    
+    LET TransformerLayer(X : Vector[HiddenDim]) -> Vector[HiddenDim] = ...
+    
+    REWRITE Encode(seq : Sequence) =
+      FOLD(TransformerLayer, 
+        MAP((t, i) -> Embeddings(t) + PositionalEncoding(seq)[i], ENUM(seq)),  
+        Layers
+      )
+
+    REWRITE Decode(v : Vector[HiddenDim]) =
+      LET distribution = Softmax(Linear(v))
+      IN SAMPLE(distribution, Length(v))
+  }
+
+  PROOFS {
+    THEOREM Autoregressive {
+      STATEMENT:
+        ∀ (m : LanguageModel) (seq : Sequence) (t : Token).
+          Predict(m, Concat(seq, [t]))[t] = 
+            Predict(m, seq)[t] * Predict(m, Concat(seq, [t]))[t] / 
+              Sum(MAP(t' -> Predict(m, seq)[t'] * Predict(m, Concat(seq, [t']))[t'], Vocab))
+
+      PROOF:
+        LET m : LanguageModel, seq : Sequence, t : Token
+
+        Predict(m, Concat(seq, [t]))[t]  
+          = Exp(DotProduct(Encode(m, seq), Embedding(t))) / 
+              Sum(MAP(t' -> Exp(DotProduct(Encode(m, seq), Embedding(t'))), Vocab))
+          = Exp(DotProduct(Encode(m, seq), Embedding(t))) / Exp(LogSumExp(...))  
+          = Softmax(DotProduct(Encode(m, seq), Embedding(t)))
+          = Softmax(DotProduct(Encode(m, seq), Embedding(t)))[t]  
+          = Softmax(MAP(t' -> DotProduct(Encode(m, seq), Embedding(t')), Vocab))[t]
+          = Predict(m, seq)[t] * Predict(m, Concat(seq, [t]))[t] /
+              Sum(MAP(t' -> Predict(m, seq)[t'] * Predict(m, Concat(seq, [t']))[t'], Vocab))
+    }
+
+    THEOREM UniqueDecoding {
+      STATEMENT:  
+        ∀ (m : LanguageModel) (seq seq' : Sequence).
+          Encode(m, seq) = Encode(m, seq') => seq = seq'
+
+      PROOF:
+        LET m : LanguageModel, seq seq' : Sequence
+        
+        ASSUME Encode(m, seq) = Encode(m, seq')
+        
+        LET v = Encode(m, seq)
+        
+        seq' = Decode(m, Encode(m, seq'))  
+             = Decode(m, Encode(m, seq))
+             = Decode(m, v)  
+             = seq
+        
+        HENCE seq = seq'
+    }
+  }
+}

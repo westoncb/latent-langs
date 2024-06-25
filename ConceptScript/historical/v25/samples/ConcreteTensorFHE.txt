@@ -1,0 +1,221 @@
+CONCEPT ConcreteTensorFHE {
+  PARAMETERS {
+    λ : ℕ  -- Security parameter
+    n : ℕ  -- Lattice dimension 
+    q : ℕ  -- Ciphertext modulus
+    σ : ℝ  -- Gaussian noise parameter
+    ⍺ : ℝ  -- Bound on tensor entries
+    μ : ℝ  -- Bound on homomorphic multiplication depth
+  }
+
+  TYPES {
+    PlainTensor = Tensor[ℝ, ⍺]
+    CipherTensor = Tensor[ℤq, n] × Tensor[ℤq, n]
+    SecretKey = Tensor[ℤq, n]  
+    PublicKey = Tensor[ℤq, n × n] × Tensor[ℤq, n]
+    EvaluationKey = List[Tensor[ℤq, n × n] × Tensor[ℤq, n]]
+  }
+  
+  FUNCTIONS {
+    KeyGen(1^λ) : (SecretKey, PublicKey, EvaluationKey) = {
+      s ← SampleGaussian(0, σ, n)  -- Secret key
+      A ← SampleUniform(ℤq, n × n)  -- Public key matrix
+      e ← SampleGaussian(0, σ, n)   -- Public key error
+      b := As + e  -- Public key vector
+      
+      FOR i = 1 TO ⌈log q⌉ DO
+        s_i ← SampleGaussian(0, (q/2^i)^(1/μ) * σ, n)
+        e_i ← SampleGaussian(0, σ, n × n)
+        A_i := -A * s_i + PowersOfTwo(s, i) + e_i
+      
+      RETURN (s, (A, b), [(A_1, b), ..., (A_⌈log q⌉, b)])
+    }
+
+    Encrypt(plainTensor : PlainTensor, publicKey : PublicKey) : CipherTensor = {
+      R ← SampleBernoulli(0.5, Rows(plainTensor) × n)
+      E ← SampleGaussian(0, σ, Rows(plainTensor) × n)
+      C1 := publicKey.1 * R + E 
+      C2 := publicKey.2 * R + ⌊plainTensor * (q/⍺)⌉ + SampleGaussian(0, σ, Rows(plainTensor))
+      RETURN (C1, C2)
+    }
+
+    Decrypt(cipherTensor : CipherTensor, secretKey : SecretKey) : PlainTensor = {
+      P := cipherTensor.2 - Transpose(secretKey) * cipherTensor.1
+      RETURN ⍺/q * ModulusReduce(P, q)
+    }
+
+    Add(cipherTensor1 : CipherTensor, cipherTensor2 : CipherTensor) : CipherTensor =
+      (cipherTensor1.1 + cipherTensor2.1, cipherTensor1.2 + cipherTensor2.2)
+
+    Multiply(cipherTensor1 : CipherTensor, cipherTensor2 : CipherTensor,
+             evaluationKey : EvaluationKey) : CipherTensor = {
+      (D1, D2) := Decompose(cipherTensor2)
+      (C1, C2) := (cipherTensor1.1, cipherTensor1.2)
+      FOR i = 1 TO ⌈log q⌉ DO
+        (C1, C2) := (C1 + evaluationKey[i].1 * D1[i], C2 + evaluationKey[i].2 * D2[i])
+      RETURN (C1, C2)
+    }
+
+    Decompose(cipherTensor : CipherTensor) : (List[Tensor[ℤ2, n × n]], List[Tensor[ℤ2, n]]) = {
+      RETURN (DecomposeMatrix(cipherTensor.1), DecomposeVector(cipherTensor.2))
+    }
+
+    PREDICATE IsCorrect {
+      ∀ (plainTensor : PlainTensor) (publicKey : PublicKey) (secretKey : SecretKey) .
+        Decrypt(Encrypt(plainTensor, publicKey), secretKey) ≈ plainTensor
+    }
+
+    PREDICATE IsSecure {  
+      ∀ (plainTensor1 plainTensor2 : PlainTensor) (publicKey : PublicKey) 
+        (adversary : CipherTensor -> {0, 1}) .
+        |Pr[adversary(Encrypt(plainTensor1, publicKey)) = 1] -
+         Pr[adversary(Encrypt(plainTensor2, publicKey)) = 1]| ≤ negl(λ)
+    }
+  }
+
+  EXTENSIONS {
+    ReLU(cipherTensor : CipherTensor, evaluationKey : EvaluationKey) : CipherTensor = {  
+      -- Assume ⍺ = 1 for ReLU
+      P := Decrypt(cipherTensor, evaluationKey.secretKey) 
+      P' := Maximum(0, P)
+      RETURN Encrypt(P', evaluationKey.publicKey)
+    }
+
+    MaxPool(cipherTensor : CipherTensor, windowSize : ℕ × ℕ, 
+            evaluationKey : EvaluationKey) : CipherTensor = {
+      -- Sliding window maximum  
+      FOR i = 1 TO Rows(cipherTensor) - windowSize.1 + 1 DO
+        FOR j = 1 TO Columns(cipherTensor) - windowSize.2 + 1 DO
+          window := Submatrix(cipherTensor, i, j, windowSize.1, windowSize.2)
+          P := Decrypt(window, evaluationKey.secretKey)
+          (_, idx) := MaxEntry(P)
+          FOR k = 1 TO Length(window) DO
+            IF k = idx THEN window[k] := Encrypt(1, evaluationKey.publicKey)
+            ELSE window[k] := Encrypt(0, evaluationKey.publicKey)
+      RETURN Combine(windows)  -- Reassemble windows into tensor  
+    }
+
+    Convolution(inputCipher : CipherTensor, kernelCipher : CipherTensor,
+                stride : ℕ, evaluationKey : EvaluationKey) : CipherTensor = {
+      -- Assume inputCipher, kernelCipher, stride are compatible        
+      outputCipher := ZeroTensor(OutputShape(inputCipher, kernelCipher, stride))
+      FOR i = 1 TO Rows(outputCipher) DO
+        FOR j = 1 TO Columns(outputCipher) DO
+          patch := Submatrix(inputCipher, (i-1)*stride+1, (j-1)*stride+1, 
+                             Rows(kernelCipher), Columns(kernelCipher))
+          outputCipher[i,j] := Multiply(Flatten(patch), Flatten(kernelCipher), evaluationKey)
+                                 
+      RETURN outputCipher
+    }
+  }
+}
+
+
+CONCEPT TensorFHE {
+  LANGUAGE {
+    TYPE PlainTensor = Tensor[ℝ]
+    TYPE CipherTensor = Tensor[ℤq]  -- q is the ciphertext modulus
+    TYPE PlainModel = Param[PlainTensor]  -- Model parameters as plain tensors
+    TYPE CipherModel = Param[CipherTensor]  -- Model parameters as cipher tensors
+
+    TYPE SecretKey = List[Tensor[ℤ]]
+    TYPE PublicKey = (List[Tensor[ℤq]], List[Tensor[ℤq]])
+    TYPE EvaluationKey = List[Tensor[ℤq]]
+
+    FUNC KeyGen(1^λ, L) : (SecretKey, PublicKey, EvaluationKey)
+      -- Generates keys for security parameter λ and maximum circuit depth L  
+    
+    FUNC Encrypt(plainModel : PlainModel, publicKey : PublicKey) : CipherModel
+    FUNC Decrypt(cipherModel : CipherModel, secretKey : SecretKey) : PlainModel
+
+    FUNC Add(cipherModel1 : CipherModel, cipherModel2 : CipherModel) : CipherModel  
+    FUNC Multiply(cipherModel1 : CipherModel, cipherModel2 : CipherModel, 
+                  evaluationKey : EvaluationKey) : CipherModel
+    FUNC Negate(cipherModel : CipherModel) : CipherModel
+
+    FUNC PlainAdd(plainModel : PlainModel, cipherModel : CipherModel) : CipherModel
+    FUNC PlainMultiply(plainTensor : PlainTensor, cipherModel : CipherModel) : CipherModel
+    FUNC SumPool(cipherModel : CipherModel, windowSize : (Int, Int)) : CipherModel
+    FUNC AvgPool(cipherModel : CipherModel, windowSize : (Int, Int)) : CipherModel
+
+    AXIOM HomomorphismUnderAddition {
+      ∀ (plainModel1 plainModel2 : PlainModel) (publicKey : PublicKey) .
+        Decrypt(Add(Encrypt(plainModel1, publicKey), Encrypt(plainModel2, publicKey)),
+                secretKey) = plainModel1 + plainModel2
+    }
+
+    AXIOM HomomorphismUnderMultiplication {
+      ∀ (plainModel1 plainModel2 : PlainModel) 
+        (publicKey : PublicKey) (evaluationKey : EvaluationKey) .
+        Decrypt(Multiply(Encrypt(plainModel1, publicKey), Encrypt(plainModel2, publicKey),
+                         evaluationKey), 
+                secretKey) = plainModel1 ⊙ plainModel2
+    }
+
+    AXIOM SemanticSecurity {
+      ∀ (plainModel1 plainModel2 : PlainModel) (publicKey : PublicKey) 
+        (adversary : CipherModel -> {0,1}) .  
+        |Pr[adversary(Encrypt(plainModel1, publicKey)) = 1] - 
+         Pr[adversary(Encrypt(plainModel2, publicKey)) = 1]| ≤ negl(λ)
+    }
+
+    AXIOM CircuitPrivacy {
+      ∀ (plainModel1 plainModel2 : PlainModel) (publicKey : PublicKey) 
+        (evaluationKey : EvaluationKey) (adversary : CipherModel -> {0,1}) (C : Circuit) .
+        |Pr[adversary(Eval(C, Encrypt(plainModel1, publicKey), evaluationKey)) = 1] -
+         Pr[adversary(Encrypt(Eval(C, plainModel1), publicKey)) = 1]| ≤ negl(λ)
+    }
+  }
+
+  PROOFS {
+    THEOREM LinearModelConfidentiality {
+      STATEMENT:  
+        ∀ (linearModel1 linearModel2 : PlainModel) (publicKey : PublicKey) 
+          (adversary : CipherModel -> {0, 1}) .
+          |Pr[adversary(Encrypt(linearModel1, publicKey)) = 1] -
+           Pr[adversary(Encrypt(linearModel2, publicKey)) = 1]| ≤ negl(λ)
+
+      PROOF:
+        FOLLOWS FROM SemanticSecurity
+    }
+
+    THEOREM AggregationConfidentiality {
+      STATEMENT:
+        ∀ (localModel1 localModel2 : PlainModel) (globalModel : CipherModel)
+          (publicKey : PublicKey) (evaluationKey : EvaluationKey) 
+          (adversary : CipherModel -> {0, 1}) .
+          |Pr[adversary(Add(Encrypt(localModel1, publicKey), globalModel)) = 1] -
+           Pr[adversary(Add(Encrypt(localModel2, publicKey), globalModel)) = 1]| ≤ negl(λ)
+
+      PROOF:
+        FOLLOWS FROM SemanticSecurity and CircuitPrivacy  
+    }
+
+    THEOREM ConvolutionHomomorphism {
+      STATEMENT:
+        ∀ (inputModel filterModel : PlainModel) (publicKey : PublicKey) 
+          (evaluationKey : EvaluationKey) .
+          LET encInputModel = Encrypt(inputModel, publicKey)
+              encFilterModel = Encrypt(filterModel, publicKey)
+              encOutputModel = Convolution(encInputModel, encFilterModel, evaluationKey)
+          IN  
+              Decrypt(encOutputModel, secretKey) =
+              Convolution(inputModel, filterModel)
+        
+      PROOF:
+        LET inputModel filterModel : PlainModel,
+            publicKey : PublicKey, evaluationKey : EvaluationKey,
+            encInputModel = Encrypt(inputModel, publicKey),
+            encFilterModel = Encrypt(filterModel, publicKey),
+            encOutputModel = Convolution(encInputModel, encFilterModel, evaluationKey)
+
+        Decrypt(encOutputModel, secretKey)
+          = Decrypt(Convolution(encInputModel, encFilterModel, evaluationKey), secretKey)
+          = Convolution(Decrypt(encInputModel, secretKey), 
+                        Decrypt(encFilterModel, secretKey))
+            BY DEFINITION of Homomorphic Convolution
+          = Convolution(inputModel, filterModel)  
+            BY CORRECTNESS of Decryption
+    }
+  }
+}

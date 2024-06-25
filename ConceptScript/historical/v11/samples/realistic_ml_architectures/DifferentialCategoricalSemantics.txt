@@ -1,0 +1,143 @@
+CONCEPT DifferentialCategoricalSemantics {
+  STRUCTURE {
+    [𝒞 := Category of programming languages]
+    [Ob(𝒞) := {L | L is a programming language}]
+    [∀L₁, L₂ ∈ Ob(𝒞), Hom(L₁, L₂) := {T : L₁ → L₂ | T is a semantic translation}]
+    [∀L ∈ Ob(𝒞), id_L := Identity semantic translation]
+    [∀L₁, L₂, L₃ ∈ Ob(𝒞), ∀T ∈ Hom(L₁, L₂), ∀U ∈ Hom(L₂, L₃), U ∘ T ∈ Hom(L₁, L₃)]
+    [∀L ∈ Ob(𝒞), T_L := Tangent category of L]
+    [∀L ∈ Ob(𝒞), ∀x ∈ Programs(L), ∃T_x(L) ∈ Ob(T_L) ↦ Tangent space of x in L]
+    [Δ : 𝒞 → 𝒞 ↦ Differentiation functor]
+    [∀L ∈ Ob(𝒞), Δ(L) := T_L]
+    [∀L₁, L₂ ∈ Ob(𝒞), ∀T ∈ Hom(L₁, L₂), Δ(T) : T_L₁ → T_L₂]
+  }
+
+  PROOFS {
+    theorem diff_trans_comp:
+      ∀L₁, L₂, L₃ ∈ Ob(𝒞), ∀T ∈ Hom(L₁, L₂), ∀U ∈ Hom(L₂, L₃),
+      Δ(U ∘ T) = Δ(U) ∘ Δ(T)
+    {
+      let L₁, L₂, L₃ ∈ Ob(𝒞) by hypothesis
+      let T ∈ Hom(L₁, L₂) by hypothesis
+      let U ∈ Hom(L₂, L₃) by hypothesis
+      
+      Δ(U ∘ T) : T_L₁ → T_L₃ by definition of Δ on morphisms
+      Δ(U) ∘ Δ(T) : T_L₁ → T_L₂ → T_L₃ by definition of Δ on morphisms
+      
+      ∀x ∈ Programs(L₁), ∀v ∈ Hom(T_x(L₁), T_x(L₁)), {
+        Δ(U ∘ T)(v) = d/dt|₀((U ∘ T)(γ(t))) 
+                     = d/dt|₀(U(T(γ(t)))) 
+                     = dU|_{T(x)}(dT|_x(v))
+                     = Δ(U)(Δ(T)(v))
+                     = (Δ(U) ∘ Δ(T))(v) by definition of Δ
+      }
+
+      Δ(U ∘ T) = Δ(U) ∘ Δ(T) by extensionality
+    }
+    
+    theorem diff_pres_id:
+      ∀L ∈ Ob(𝒞), Δ(id_L) = id_{T_L}
+    {
+      let L ∈ Ob(𝒞) by hypothesis
+      
+      Δ(id_L) : T_L → T_L by definition of Δ on morphisms
+      
+      ∀x ∈ Programs(L), ∀v ∈ Hom(T_x(L), T_x(L)), {
+        Δ(id_L)(v) = d/dt|₀(id_L(γ(t)))
+                    = d/dt|₀(γ(t))
+                    = v by definition of tangent vector
+      }
+      
+      Δ(id_L) = id_{T_L} by definition of identity in T_L
+    }
+
+    theorem diff_trans_injective:
+      ∀L₁, L₂ ∈ Ob(𝒞), ∀T, U ∈ Hom(L₁, L₂), 
+      (∀x ∈ Programs(L₁), ∀v ∈ Hom(T_x(L₁), T_x(L₁)), Δ(T)(v) = Δ(U)(v)) ⇒ T = U
+    {
+      let L₁, L₂ ∈ Ob(𝒞) by hypothesis
+      let T, U ∈ Hom(L₁, L₂) by hypothesis
+      assume ∀x ∈ Programs(L₁), ∀v ∈ Hom(T_x(L₁), T_x(L₁)), Δ(T)(v) = Δ(U)(v)
+
+      ∀x ∈ Programs(L₁), {
+        let γ : ℝ → Programs(L₁) with γ(0) = x
+        ∀t ∈ ℝ, d/dt|_t(T(γ(t))) = Δ(T)(γ'(t)) 
+                               = Δ(U)(γ'(t)) by hypothesis
+                               = d/dt|_t(U(γ(t)))
+        ∫{t. 0 to 1} d/dt|_t(T(γ(t))) dt = ∫{t. 0 to 1} d/dt|_t(U(γ(t))) dt by above equality
+        T(γ(1)) - T(γ(0)) = U(γ(1)) - U(γ(0)) by fundamental theorem of calculus
+        T(x) = U(x) by γ(0) = x and simplification
+      }
+
+      T = U by extensionality
+    }
+
+    theorem diff_retractions:
+      ∀L₁, L₂ ∈ Ob(𝒞), ∀T ∈ Hom(L₁, L₂), ∀U ∈ Hom(L₂, L₁),
+      (U ∘ T = id_L₁) ⇒ (Δ(U) ∘ Δ(T) = id_{T_L₁})
+    {
+      let L₁, L₂ ∈ Ob(𝒞) by hypothesis
+      let T ∈ Hom(L₁, L₂) by hypothesis
+      let U ∈ Hom(L₂, L₁) by hypothesis
+      assume U ∘ T = id_L₁
+
+      Δ(U ∘ T) = Δ(id_L₁) by assumption and congruence of Δ
+      Δ(U ∘ T) = Δ(U) ∘ Δ(T) by diff_trans_comp
+      Δ(U) ∘ Δ(T) = Δ(id_L₁) by transitivity
+      Δ(id_L₁) = id_{T_L₁} by diff_pres_id
+      Δ(U) ∘ Δ(T) = id_{T_L₁} by transitivity
+    }
+  }
+
+  LANGUAGE {
+    type ProgrammingLanguage
+    type SemanticTranslation = ProgrammingLanguage → ProgrammingLanguage
+    type DifferentialProgrammingLanguage = TangentCategory
+    type DifferentialSemanticTranslation = DifferentialProgrammingLanguage → DifferentialProgrammingLanguage
+    
+    func Programs(L : ProgrammingLanguage) : Set
+    func tangent_category(L : ProgrammingLanguage) : DifferentialProgrammingLanguage
+    func tangent_space(x : Program, L : ProgrammingLanguage) : Object in tangent_category(L)
+    func differentiate(T : SemanticTranslation) : DifferentialSemanticTranslation
+    
+    pred preserves_composition(Δ : Functor) = 
+      ∀L₁, L₂, L₃ : ProgrammingLanguage, ∀T : L₁ → L₂, ∀U : L₂ → L₃,
+        Δ(U ∘ T) = Δ(U) ∘ Δ(T)
+      
+    pred preserves_identity(Δ : Functor) =
+      ∀L : ProgrammingLanguage, Δ(id_L) = id_{Δ(L)}
+
+    pred is_injective(Δ : Functor) =
+      ∀L₁, L₂ : ProgrammingLanguage, ∀T, U : L₁ → L₂,
+        (Δ(T) = Δ(U)) ⇒ (T = U)
+
+    pred preserves_retractions(Δ : Functor) =
+      ∀L₁, L₂ : ProgrammingLanguage, ∀T : L₁ → L₂, ∀U : L₂ → L₁,
+        (U ∘ T = id_L₁) ⇒ (Δ(U) ∘ Δ(T) = id_{Δ(L₁)})
+  }
+}
+
+
+In this formalization, programming languages are the objects in the category 𝒞, and semantic translations between languages (e.g., compilers, interpreters, or embeddings) are the morphisms.
+The tangent category T_L at each language L represents the space of infinitesimal perturbations or variations of programs in L. The tangent space T_x(L) at each program x in L is an object in T_L, capturing the possible ways to slightly modify or "wiggle" the program x.
+The differentiation functor Δ maps each language L to its tangent category T_L, and each semantic translation T to a differential semantic translation Δ(T), which describes how infinitesimal changes to programs in the source language are translated to the target language.
+The theorems and language definitions are analogous to those in the DifferentialCategoricalSemiotics concept, but adapted to the context of programming languages and semantic translations.
+Some potential applications of this differential categorical semantics framework could be:
+
+Analyzing the sensitivity of program semantics to small changes in syntax or structure. The differential translations Δ(T) could characterize how robust or fragile a language's semantics are with respect to program perturbations.
+Studying the continuity and differentiability properties of semantic translations. This could provide insights into the well-behavedness and stability of compilers, interpreters, or language embeddings.
+Developing notions of semantic gradient, divergence, and curvature, which could be used to optimize or improve the design of programming languages and their translations.
+Investigating the categorical and differential properties of program transformations, refactorings, and optimizations within a language.
+Comparing and relating the differential semantics of different languages, potentially leading to new techniques for language interoperability, translation, or integration.
+
+This differential categorical approach to formal semantics could offer a fresh perspective on the structure and behavior of programming languages, and could potentially lead to new tools and techniques for language design, implementation, and analysis.
+
+-----------
+
+The two additional theorems are:
+
+diff_trans_injective: This theorem states that if two semantic translations T and U have the same differential (i.e., Δ(T) = Δ(U)), then they are equal. In other words, the differentiation functor Δ is injective. The proof works by showing that if Δ(T) and Δ(U) agree on all tangent vectors, then T and U must agree on all programs (by integrating along curves in the space of programs).
+diff_retractions: This theorem states that if U is a retraction of T (i.e., U ∘ T = id), then Δ(U) is a retraction of Δ(T). In other words, the differentiation functor preserves retractions. The proof follows from the functorial properties of Δ and the previous theorems.
+
+The LANGUAGE block has also been extended with predicates corresponding to these new properties: is_injective and preserves_retractions.
+These additional theorems and predicates further clarify the behavior of the differentiation functor and its interaction with the structure of the category of programming languages. They could be useful in understanding the invertibility and stability of semantic translations, as well as in studying the categorical properties of program transformations and optimizations.

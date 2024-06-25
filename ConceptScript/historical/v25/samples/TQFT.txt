@@ -1,0 +1,94 @@
+CONCEPT TQFT {
+  LANGUAGE {
+    TYPE Manifold(n : ℕ)
+    TYPE Hilbert  
+    TYPE Cobordism(M₁ M₂ : Manifold(n)) = Manifold(n+1) WITH BoundaryComponents(M₁, M₂)
+    TYPE QFT(n : ℕ) = (Manifold(n) -> Hilbert) × (Cobordism -> LinearMap)
+
+    FUNC Z(Q : QFT(n), M : Manifold(n)) : Hilbert
+    FUNC Z(Q : QFT(n), C : Cobordism) : LinearMap
+    FUNC ⊗ : Hilbert × Hilbert -> Hilbert  ; Tensor product
+    FUNC ⊔ : Manifold(n) × Manifold(n) -> Manifold(n)  ; Disjoint union
+    FUNC ∅ : Manifold(n)  ; Empty manifold
+    
+    AXIOM Functoriality {
+      ∀ (Q : QFT(n)) (M₁ M₂ M₃ : Manifold(n)) (C₁ : Cobordism(M₁, M₂)) (C₂ : Cobordism(M₂, M₃)).
+        Z(Q, C₂ ∘ C₁) = Z(Q, C₂) ∘ Z(Q, C₁)
+    }
+
+    AXIOM TensorProduct {  
+      ∀ (Q : QFT(n)) (M₁ M₂ : Manifold(n)).
+        Z(Q, M₁ ⊔ M₂) = Z(Q, M₁) ⊗ Z(Q, M₂)
+    }
+
+    AXIOM EmptySet {
+      ∀ (Q : QFT(n)).
+        Z(Q, ∅) = C
+    }
+  }
+
+  STRUCTURE ChernSimonsTQFT(G : LieGroup, k : ℝ) <: QFT(3) {
+    DEF S(A : Ω¹(P, 𝔤)) : ℝ = ∫∫ Tr(A ∧ dA + ⅔ A ∧ A ∧ A)
+    DEF Z(M : Manifold(3)) : Hilbert = L²(Hom(π₁(M), G) / G)  
+
+    DEF Z(C : Cobordism) : LinearMap = {
+      LET (A : Ω¹(C, 𝔤)) ↦ exp(i k S(A))
+    }
+  }
+
+  PROOFS {
+    THEOREM CSFunctoriality {
+      STATEMENT: ∀ (G : LieGroup) (k : ℝ). 
+        LET Q = ChernSimonsTQFT(G, k) IN
+        ∀ (M₁ M₂ M₃ : Manifold(3)) (C₁ : Cobordism(M₁, M₂)) (C₂ : Cobordism(M₂, M₃)).
+          Z(Q, C₂ ∘ C₁) = Z(Q, C₂) ∘ Z(Q, C₁)
+      
+      PROOF {
+        LET G : LieGroup, k : ℝ, Q = ChernSimonsTQFT(G, k), 
+            M₁ M₂ M₃ : Manifold(3), C₁ : Cobordism(M₁, M₂), C₂ : Cobordism(M₂, M₃)
+
+        Z(Q, C₂ ∘ C₁)
+          = ∫[DA] exp(i k S(A))  ; Over C₂ ∘ C₁
+          = ∫[DA₂] ∫[DA₁] exp(i k (S(A₂) + S(A₁)))  ; Gluing property of S
+          = ∫[DA₂] exp(i k S(A₂)) ∫[DA₁] exp(i k S(A₁))
+          = Z(Q, C₂) ∘ Z(Q, C₁)  ; Definition of Z on cobordisms
+      }
+    }
+
+    THEOREM CSMonoidal {
+      STATEMENT: ∀ (G : LieGroup) (k : ℝ).
+        LET Q = ChernSimonsTQFT(G, k) IN  
+        ∀ (M₁ M₂ : Manifold(3)).
+          Z(Q, M₁ ⊔ M₂) = Z(Q, M₁) ⊗ Z(Q, M₂)
+
+      PROOF {
+        LET G : LieGroup, k : ℝ, Q = ChernSimonsTQFT(G, k),
+            M₁ M₂ : Manifold(3)
+        
+        Z(Q, M₁ ⊔ M₂) 
+          = L²(Hom(π₁(M₁ ⊔ M₂), G) / G)  ; Definition of Z
+          = L²(Hom(π₁(M₁) * π₁(M₂), G) / G)  ; Van Kampen's theorem
+          = L²(Hom(π₁(M₁), G) / G) ⊗ L²(Hom(π₁(M₂), G) / G)  ; Product property of Hom
+          = Z(Q, M₁) ⊗ Z(Q, M₂)  ; Definition of Z
+      }
+    }
+
+    THEOREM CSInvolution {
+      STATEMENT: ∀ (G : LieGroup) (k : ℝ) (M : Manifold(3)).
+        LET Q = ChernSimonsTQFT(G, k), C = Cylinder(M) IN
+        Z(Q, C) = id[Z(Q,M)]
+
+      PROOF {
+        LET G : LieGroup, k : ℝ, Q = ChernSimonsTQFT(G, k),
+            M : Manifold(3), C = Cylinder(M)
+        
+        Z(Q, C) 
+          = ∫[DA] exp(i k S(A))  ; Over C
+          = ∫[DA] exp(0)  ; Since S(A) = 0 on cylinder
+          = Vol(Ω¹(C, 𝔤))  ; Integral over all connections
+          = id[L²(Hom(π₁(M), G) / G)]  ; Since C deformation retracts to M 
+          = id[Z(Q,M)]  ; Definition of Z
+      }
+    }
+  }
+}

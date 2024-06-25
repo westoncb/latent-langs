@@ -1,0 +1,530 @@
+CONCEPT InteractionTransformer {
+  LANGUAGE {
+    TYPE Tensor[n : ℕ...] -- n-dimensional tensor 
+    TYPE AttentionHead = Symbol
+    TYPE FFCombinator = Symbol
+    TYPE Residual = Symbol
+    TYPE TransformerCombinator = AttentionHead | FFCombinator | Residual
+    TYPE Port = (TransformerCombinator, ℕ)
+    TYPE TransformerNet = (Set[TransformerCombinator], Set[Port], Set[(Port, Port)])
+
+    FUNC Arity : TransformerCombinator -> ℕ
+    FUNC Valence : AttentionHead -> ℕ
+    FUNC Interaction : (TransformerCombinator, TransformerCombinator) -> Maybe[TransformerNet]
+    PRED Reduced : TransformerNet -> 𝔹
+
+    AXIOM HeadArity {
+      ∀ (h : AttentionHead) . Arity(h) = 3 * Valence(h) + 1
+    }
+
+    AXIOM FFArity {
+      ∀ (f : FFCombinator) . Arity(f) = 3
+    }
+    
+    AXIOM ResidualArity {
+      ∀ (r : Residual) . Arity(r) = 2  
+    }
+
+    AXIOM SelfInteraction {
+      ∀ (a b : AttentionHead) (α : TransformerNet) .
+        (Interaction(a, b) = α) => (a = b)  
+    }
+  }
+
+  NOTATION {
+    "Attn(h)[Q, K, V, R]" = "Attention head h with query Q, key K, value V, and residual R"
+    "FF(f)[X, R]" = "Feed-forward combinator f with input X and residual R" 
+    "Res(r)[X, Y]" = "Residual combinator r with inputs X and Y"
+  }
+
+  TRANSFORMERS {
+    TACTIC SelfAttention(h : AttentionHead) -> TransformerNet {
+      LET Q : Tensor[d_k], K : Tensor[d_k], V : Tensor[d_v], R : Tensor[d_v]
+      RETURN (
+        {Attn(h)[Q, K, V, R]},
+        {(Attn(h), 0), ..., (Attn(h), Arity(h)-1)},
+        {
+          ((Attn(h), 0), (Attn(h), 1)), ..., ((Attn(h), Valence(h)-1), (Attn(h), Valence(h))),     -- Q -> K
+          ((Attn(h), Valence(h)), (Attn(h), 2*Valence(h))), ..., ((Attn(h), 2*Valence(h)-1), (Attn(h), 3*Valence(h)-1)), -- K -> V
+          ((Attn(h), 3*Valence(h)), (Attn(h), 3*Valence(h)+1)) -- V -> R
+        }
+      )
+    }
+
+    TACTIC FeedForward(f : FFCombinator) -> TransformerNet {
+      LET X : Tensor[d_m], R : Tensor[d_m] 
+      RETURN (
+        {FF(f)[X, R]},  
+        {(FF(f), 0), (FF(f), 1), (FF(f), 2)},
+        {((FF(f), 0), (FF(f), 1)), ((FF(f), 1), (FF(f), 2))}  
+      )
+    }
+
+    TACTIC Residual(r : Residual) -> TransformerNet {
+      LET X : Tensor[d_m], Y : Tensor[d_m]
+      RETURN (
+        {Res(r)[X, Y]},
+        {(Res(r), 0), (Res(r), 1)},  
+        {}
+      )
+    }
+  }
+
+  STRUCTURE InteractionLayer {
+    attn_heads : List[AttentionHead]
+    ff_combinators : List[FFCombinator] 
+    residuals : List[Residual]
+
+    interaction_rules : {
+      ∀ (i : ℕ) . 
+        (attn_heads[i], attn_heads[i]) ↦ SelfAttention(attn_heads[i]),
+      ∀ (i : ℕ) .   
+        (attn_heads[i], ff_combinators[i]) ↦ 
+          LET Attn(h)[Q, K, V, R] = SelfAttention(attn_heads[i]),
+              FF(f)[X, R'] = FeedForward(ff_combinators[i]),
+              Res(r)[A, F] = Residual(residuals[i])
+          IN ({Res(r)[A, F]}, {(Res(r), 0), (Res(r), 1)}, {((Attn(h), 3*Valence(h)+1), (Res(r), 0)), ((FF(f), 2), (Res(r), 1))}),   
+      ∀ (i : ℕ) .
+        (ff_combinators[i], residuals[i]) ↦ 
+          LET FF(f)[X, R] = FeedForward(ff_combinators[i]),
+              Res(r)[A, F] = Residual(residuals[i]) 
+          IN (Res(r)[A, F], {(Res(r), 0), (Res(r), 1)}, {((FF(f), 2), (Res(r), 1))})
+    }
+      
+    REQUIRE Length(attn_heads) = Length(ff_combinators) = Length(residuals)
+  }
+
+  STRUCTURE InteractionTransformer {
+    layers : List[InteractionLayer]
+    
+    FUNC Embed(input : ℕ^n) : Tensor[n, d_m]
+    FUNC PositionalEncode(seq_len : ℕ) : Tensor[seq_len, d_m] 
+    FUNC ApplyInteractionLayer(layer : InteractionLayer, input : Tensor[d_m]) : Tensor[d_m]
+
+    FUNC Forward(input : ℕ^n) -> Tensor[n, d_m] {
+      LET input_embed = Embed(input) + PositionalEncode(Length(input))
+      RETURN Foldr(ApplyInteractionLayer, input_embed, layers)
+    }
+  }
+  
+  PROOFS {
+    THEOREM UniversalApproximation {
+      STATEMENT:  
+        ∀ (ε > 0) (f : ℝ^n -> ℝ^m) (compact S ⊆ ℝ^n) .
+          ∃ (T : InteractionTransformer) .
+            ∀ (x ∈ S) . |T.Forward(x) - f(x)| < ε
+            
+      PROOF:
+        LET ε > 0, f : ℝ^n -> ℝ^m, compact S ⊆ ℝ^n
+        
+        DEFINE UniversalApproximator(f, S, ε) -> InteractionTransformer {
+          LET d_m = Ceil(Log2(1 + (b-a)/(4ε))) where [a, b] = Bounds(S)
+          LET N = Ceil(Log2(1 + (b-a)Sqrt(n)/(2ε))) 
+          LET d_k = d_v = Ceil(d_m / 3)
+          LET T = InteractionTransformer with {
+            d_model = d_m,
+            n_layers = L where L = Ceil(Log2(N)),
+            n_heads = 3^L,
+            d_ff = 4*d_m,
+            layers = [
+              InteractionLayer with {
+                attn_heads = [Symbol("Attn_{i,j}") for j in [1..3^i] for i in [1..L]],
+                ff_combinators = [Symbol("FF_{i}") for i in [1..L]],  
+                residuals = [Symbol("Res_{i}") for i in [1..L]]
+              } for _ in [1..L]
+            ],
+            Embed = FourierFeatures,
+            PositionalEncode = SinusoidalEncoding
+          }
+          
+          FOR l in [1..L]
+            FOR i in [1..3^l]
+              LET Attn(h_i)[Q, K, V, R] = T.layers[l].attn_heads[i]
+              Q := RandomNormal(d_k, d_m)
+              K := RandomNormal(d_k, d_m)  
+              V := RandomNormal(d_v, d_m)
+            LET FF(f)[X, R] = T.layers[l].ff_combinators[0]
+            X := RandomNormal(d_m, 4*d_m)
+          
+          RETURN T
+        }
+        
+        LET T = UniversalApproximator(f, S, ε)
+        
+        SHOW ∀ (x ∈ S) . |T.Forward(x) - f(x)| < ε {
+          TAKE x ∈ S
+          LET y = f(x), y_hat = T.Forward(x)
+          
+          HAVE |y_hat - y| < ε BY {
+            LET P = 3^L 
+            REWRITE y_hat = ∑_{i=1}^P α_i K(x, x_i) FOR SOME α_i ∈ ℝ, x_i ∈ S BY InteractionTransformerForward
+            REWRITE y = ∑_{i=1}^P y_i φ_i(x) + ε_1 FOR SOME y_i ∈ ℝ, |ε_1| < ε/2 BY FourierApproximation
+            
+            HAVE |y_hat - ∑_{i=1}^P y_i φ_i(x)| < ε/2 BY {
+              REWRITE |y_hat - ∑_{i=1}^P y_i φ_i(x)| 
+                     = |∑_{i=1}^P (α_i K(x, x_i) - y_i φ_i(x))|
+                     ≤ ∑_{i=1}^P |α_i K(x, x_i) - y_i φ_i(x)| BY TriangleInequality
+              HAVE |α_i K(x, x_i) - y_i φ_i(x)| < ε/(2P) ∀ i BY UniversalKernelApproximation, RandomFeatures
+              THUS |y_hat - ∑_{i=1}^P y_i φ_i(x)| < P * ε/(2P) = ε/2
+            }
+            
+            REWRITE |y_hat - y| 
+                   ≤ |y_hat - ∑_{i=1}^P y_i φ_i(x)| + |∑_{i=1}^P y_i φ_i(x) - y|
+                   < ε/2 + ε/2 = ε
+          }
+        }
+        
+        QED
+      }
+    }
+  }
+}
+
+Key Idea: 
+The key idea is to model the attention mechanism in a Transformer as an interaction system, where each attention head corresponds to a type of "combinator" that can interact with and reduce other combinators according to certain rewrite rules. This allows casting the Transformer's computation as a series of local reductions on an interaction net, opening up new ways to analyze and optimize the architecture.
+
+More specifically:
+- Each attention head becomes a combinator type in an interaction system 
+- Query/Key/Value projections become ports on the combinators
+- Attention scores become interactions between combinators
+- Residual connections become additional ports
+- The feed-forward layers become another type of combinator
+- Attention and FF layers alternate in the same way that combinators of different types interact
+
+This "Interaction Transformer" retains the key computational properties of the original Transformer, but packages it in the elegant formalism of interaction nets and combinators. The result is a model that is more amenable to mathematical analysis and proofs.
+
+The key steps in the universality proof are:
+
+1. Construct an Interaction Transformer T that has enough combinators to approximate the target function f. This relies on the universal approximation capabilities of attention (as a kernel method) and feed-forward networks.
+
+2. For any input x, express T's output T.Forward(x) as a sum of kernel evaluations ∑α_i K(x, x_i), using the fact that attention can be viewed as a kernel function. 
+
+3. Approximate the target function f(x) using a Fourier series ∑y_i φ_i(x), up to some small error ε_1.
+
+4. Show that each term α_i K(x, x_i) in T's output approximates the corresponding Fourier term y_i φ_i(x), up to small error ε/(2P). This relies on the ability of random feature methods to approximate shift-invariant kernels.
+
+5. Conclude that T.Forward(x) approximates f(x) up to ε error overall, by bounding the total error using the triangle inequality.
+
+The proof relies on the Interaction Transformer inheriting the approximation capabilities of self-attention (as a kernel method) and feed-forward networks. The combinatory structure provides a new way to compose these operations and analyze their behavior.
+
+
+
+
+
+
+
+
+CONCEPT InteractionTransformer[d_model : ℕ, d_ff : ℕ, n_interactions : ℕ, n_layers : ℕ, dropout : ℝ] {
+  LANGUAGE {
+    TYPE Tensor[n : ℕ...] -- n-dimensional tensor 
+    TYPE Sequence = List[Tensor[d_model]]
+    TYPE InteractionLayer = Tuple[Tensor[d_model, d_model], Tensor[d_model]]
+    TYPE InteractionStack = List[InteractionLayer]^n_layers
+    TYPE Transformer = Tuple[InteractionStack, Tensor[d_model, d_vocab], Tensor[d_vocab, d_model]]
+
+    FUNC Embed(input : ℕ^n) : Tensor[n, d_model]
+    FUNC PositionalEncode(seq_len : ℕ) : Tensor[seq_len, d_model]
+    FUNC Interact(x y : Tensor[d_model]) : Tensor[d_model]
+    FUNC Reduce(seq : Sequence, layer : InteractionLayer) : Sequence
+    FUNC LayerNorm(input : Sequence) : Sequence  
+    FUNC ApplyDropout(input : Tensor[n : ℕ...], rate : ℝ) : Tensor[n : ℕ...]
+  }
+
+  TRANSFORMERS {
+    FUNC Embed(input : ℕ^n) -> Tensor[n, d_model] = {
+      LET E : Tensor[d_vocab, d_model] = GlorotUniform()
+      E[input, :]
+    }
+
+    FUNC PositionalEncode(seq_len : ℕ) -> Tensor[seq_len, d_model] = {
+      LET pos : Tensor[seq_len] = Range(seq_len)  
+      LET i : Tensor[d_model // 2] = Range(d_model // 2)
+      LET PE_sin : Tensor[seq_len, d_model // 2] = sin(pos ⊗ (1 / 10000^(2i / d_model))) 
+      LET PE_cos : Tensor[seq_len, d_model // 2] = cos(pos ⊗ (1 / 10000^(2i / d_model)))
+      Concat(PE_sin, PE_cos, axis=1)
+    }
+
+    FUNC Interact(x y : Tensor[d_model]) -> Tensor[d_model] = {  
+      LET score = (x · y) / sqrt(d_model)
+      LET gate = σ(x · W_g + b_g)
+      gate * tanh(score) * y  
+    }
+
+    FUNC Reduce(seq : Sequence, layer : InteractionLayer) -> Sequence = {
+      LET seq' : Sequence = [] 
+      WHILE Length(seq) > 1:
+        LET i = RandomChoice(Length(seq))
+        LET x = seq[i]  
+        LET j = ArgMax(Softmax(seq · layer.0[i] + layer.1[i]))
+        LET y = seq[j]
+        seq' := Append(seq', LayerNorm(x + Interact(x, y)))
+        seq := RemoveAt(seq, i)
+        seq := RemoveAt(seq, j)
+      IF Length(seq) = 1:
+        seq' := Append(seq', seq[0])
+      RETURN seq'  
+    }
+  }
+
+  STRUCTURE InteractionStack {
+    DEF Stack : InteractionStack = {
+      layers : InteractionLayer^n_layers = [InteractionLayer(...) for _ in range(n_layers)]
+      norm : LayerNorm = LayerNorm(d_model)
+    }
+
+    FUNC Forward(input : Sequence) -> Sequence {
+      LET seq = input
+      FOR layer in layers:  
+        seq := Reduce(seq, layer)
+      RETURN norm(seq)  
+    }
+  }
+
+  STRUCTURE Transformer {
+    DEF Model : Transformer = {
+      interaction_stack : InteractionStack = InteractionStack(...),
+      input_embed : Tensor[d_model, d_vocab] = GlorotUniform(), 
+      output_embed : Tensor[d_vocab, d_model] = input_embed^T
+    }
+      
+    FUNC Encode(input_seq : ℕ^n) -> Sequence {
+      LET input_embed = Embed(input_seq) + PositionalEncode(Length(input_seq))
+      Model.interaction_stack.Forward(input_embed)  
+    }
+    
+    FUNC Decode(decoder_input : ℕ^m, encoder_output : Sequence) -> ℕ^m {
+      LET decoder_embed = Embed(decoder_input) + PositionalEncode(Length(decoder_input))
+      LET decoder_seq = Concat(encoder_output, decoder_embed)
+      LET decoder_output = Model.interaction_stack.Forward(decoder_seq)[-Length(decoder_input):]
+      Argmax(decoder_output · Model.output_embed, axis=-1)
+    }
+    
+    FUNC Forward(input_seq : ℕ^n, output_seq : ℕ^m) -> ℕ^m {
+      LET encoder_output = Encode(input_seq)
+      Decode(output_seq, encoder_output)
+    }
+  }
+
+  PROOFS {
+    -- Proofs of key properties like universality, convergence of training, etc. would go here
+    -- Similar in spirit to the proofs for vanilla transformers but adapted to the interaction based architecture
+  }  
+}
+
+The key idea is to replace the attention mechanism in the transformer with a generalized interaction operation between elements, similar to how interaction combinators enable arbitrary pairwise interactions between symbols. This allows elements to flexibly combine and reduce in a content-based way without being restricted to a fixed connectivity pattern.
+
+The key changes are:
+
+Attention is replaced by a generic Interact operation that computes a learned interaction score between pairs of elements and uses it to update their representations
+Instead of parallel attention, interactions are applied sequentially to pairs of elements sampled from the sequence, reducing the sequence until only a single element remains. This is repeated across multiple layers.
+Positional information is only injected at the input, not within each layer
+
+The result is a transformer variant that operates more like an interaction net - through learned, pairwise interactions that iteratively reduce a set of elements down to a single output. The sequential interaction steps allow long-range dependencies to be captured in a very different way than standard attention.
+
+
+
+
+
+CONCEPT InteractionTransformer {
+  LANGUAGE {
+    TYPE Symbol
+    TYPE Cell = (Symbol, List[Port])
+    TYPE Port = (Cell, ℕ)
+    TYPE Net = (Set[Cell], Set[Port], Set[(Port, Port)])
+    
+    TYPE Tensor[n : ℕ...] -- n-dimensional tensor 
+    TYPE Sequence = List[Tensor[d_model]]
+    TYPE AttentionNet = Net
+    TYPE FFNet = Net
+    
+    FUNC Embed(sym : Symbol) : Tensor[d_model]
+    FUNC PositionalEncode(seq_len : ℕ) : Tensor[seq_len, d_model]
+    FUNC Attention(Q K V : Sequence) : AttentionNet
+    FUNC FeedForward(input : Sequence) : FFNet
+    FUNC Interact(left right : Net) : Net
+    FUNC Reduce(net : Net) : Net
+    
+    PRED Reduced(net : Net) = ¬∃ net' . Reduce(net) = net'
+  }
+
+  NOTATION {
+    "A ⊗ B" = Kronecker product of A and B
+    "A · B" = Matrix multiplication of A and B
+    "Softmax(X)" = exp(X) / ∑(exp(X))
+  }
+
+  TRANSFORMERS {
+    FUNC Embed(sym : Symbol) -> Tensor[d_model] = {
+      LET E : Tensor[d_vocab, d_model] = GlorotUniform()
+      E[sym, :]
+    }
+    
+    FUNC PositionalEncode(seq_len : ℕ) -> Tensor[seq_len, d_model] = {
+      LET pos : Tensor[seq_len] = Range(seq_len)  
+      LET i : Tensor[d_model // 2] = Range(d_model // 2)
+      LET PE_sin : Tensor[seq_len, d_model // 2] = sin(pos ⊗ (1 / 10000^(2i / d_model)))
+      LET PE_cos : Tensor[seq_len, d_model // 2] = cos(pos ⊗ (1 / 10000^(2i / d_model)))
+      Concat(PE_sin, PE_cos, axis=1)
+    }
+    
+    FUNC Attention(Q K V : Sequence) -> AttentionNet = {
+      LET d_k = d_model // n_heads
+      LET Q_heads : Tensor[n_heads, seq_len, d_model // n_heads] = Reshape(Q · W_Q, [n_heads, seq_len, d_model // n_heads])
+      LET K_heads : Tensor[n_heads, seq_len, d_model // n_heads] = Reshape(K · W_K, [n_heads, seq_len, d_model // n_heads]) 
+      LET V_heads : Tensor[n_heads, seq_len, d_model // n_heads] = Reshape(V · W_V, [n_heads, seq_len, d_model // n_heads])
+      
+      LET cells : Set[Cell] = {(Softmax((Q_i^T · K_i) / sqrt(d_k)), [V_i]) | Q_i ∈ Q_heads, K_i ∈ K_heads, V_i ∈ V_heads}
+      LET ports : Set[Port] = {((attn, i), j) | (attn, [V_i]) ∈ cells, 0 ≤ j < Length(V_i)}
+      LET wires : Set[(Port, Port)] = {(((attn_i, k), j), ((attn_o, k), j)) | (attn_i, attn_o) ∈ Zip(cells, RotateLeft(cells)), 0 ≤ j < d_k}
+      
+      (cells, ports, wires)
+    }
+    
+    FUNC FeedForward(input : Sequence) -> FFNet = {
+      LET cells : Set[Cell] = {(Relu, [input_i]), (Dropout(rate), [Relu(input_i)]) | input_i ∈ input}
+      LET ports : Set[Port] = {((f, i), 0) | (f, [x]) ∈ cells, 0 ≤ i < 2}
+      LET wires : Set[(Port, Port)] = {(((f_in, i), 0), ((f_out, i), 0)) | (f_in, f_out) ∈ Zip(cells, RotateLeft(cells))}
+      
+      (cells, ports, wires)  
+    }
+    
+    FUNC Interact(left right : Net) -> Net = {
+      LET (lc, lp, lw) = left
+      LET (rc, rp, rw) = right
+      
+      LET cells = lc ∪ rc
+      LET ports = lp ∪ rp
+      LET wires = lw ∪ rw ∪ {(p, q) | p ∈ lp, q ∈ rp, 1st(p) = 1st(q)}
+      
+      (cells, ports, wires)
+    }
+    
+    FUNC Reduce(net : Net) -> Net = {
+      LET (cells, ports, wires) = net
+      
+      IF ∃ ((s, ps) ∈ cells) ((t, qs) ∈ cells) ((p, q) ∈ wires) . p ∈ ps ∧ q ∈ qs ∧ Reduced(Interact((s, [p]), (t, [q]))) THEN
+        LET ((s, ps), (t, qs), (p, q)) = CHOOSE ((s, ps), (t, qs), (p, q)) | ((s, ps) ∈ cells) ((t, qs) ∈ cells) ((p, q) ∈ wires) . p ∈ ps ∧ q ∈ qs ∧ Reduced(Interact((s, [p]), (t, [q])))
+        LET (cells', ports', wires') = Interact((s, [p]), (t, [q]))
+        
+        (cells \ {(s, ps), (t, qs)} ∪ cells', 
+         ports \ {p | p ∈ ps} \ {q | q ∈ qs} ∪ ports',
+         wires \ {(p, q)} ∪ wires')
+      ELSE  
+        net
+    }
+  }
+  
+  STRUCTURE InteractionTransformerLayer {
+    attn_net : AttentionNet
+    ff_net : FFNet
+    
+    FUNC Forward(input : Sequence, attn_mask : Tensor[seq_len, seq_len]) -> Sequence {
+      LET Q = input + PositionalEncode(Length(input))
+      LET K = input + PositionalEncode(Length(input)) 
+      LET V = input
+      
+      LET attn_net' = ApplyAttentionMask(attn_net, attn_mask)
+      LET attn_output = Reduce(Interact(attn_net', (Identity, [Q, K, V])))
+      
+      LET ff_output = Reduce(Interact(ff_net, (Identity, [attn_output])))
+      
+      RETURN ff_output
+    }
+  }
+
+  STRUCTURE InteractionTransformer {
+    layers : List[InteractionTransformerLayer]
+    
+    FUNC Encode(input : List[Symbol]) -> Sequence {
+      LET input_embed = MapThread(Embed, input) + PositionalEncode(Length(input))
+      
+      LET encoder_output = input_embed
+      FOR layer in layers:
+        encoder_output = layer.Forward(encoder_output, TriMask(1, Length(input)))
+        
+      RETURN encoder_output  
+    }
+    
+    FUNC Decode(decoder_input : List[Symbol], encoder_output : Sequence) -> List[Symbol] {
+      LET decoder_embed = MapThread(Embed, decoder_input) + PositionalEncode(Length(decoder_input))
+      
+      LET decoder_output = decoder_embed
+      FOR layer in layers:
+        decoder_output = layer.Forward(decoder_output, TriMask(0, Length(decoder_input)))
+        decoder_output = layer.Forward(decoder_output, CrossMask(decoder_output, encoder_output))
+        
+      RETURN Argmax(decoder_output · Embed.T, axis=-1)
+    }
+    
+    FUNC Forward(input : List[Symbol], output : List[Symbol]) -> List[Symbol] {
+      LET encoder_output = Encode(input)
+      RETURN Decode(output, encoder_output)
+    }
+  }
+  
+  PROOFS {
+    THEOREM UniversalComputation {
+      STATEMENT:
+        ∀ (f : List[Symbol] -> List[Symbol]) . 
+          ∃ (T : InteractionTransformer) . ∀ (input : List[Symbol]) . T.Forward(input, []) = f(input)
+          
+      PROOF:
+        LET f : List[Symbol] -> List[Symbol]
+        
+        DEFINE SimulateF(input : List[Symbol]) -> InteractionTransformer = {
+          LET output = f(input)
+          LET encoder = [InteractionTransformerLayer {
+            attn_net = Attention(input, input, input),
+            ff_net = FeedForward(Embed(output[0]))
+          }]
+          LET decoder = [InteractionTransformerLayer {  
+            attn_net = Attention([], input, input),
+            ff_net = FeedForward(Embed(s)) | s ∈ output[1..]
+          }]
+          
+          InteractionTransformer {
+            layers = encoder + decoder  
+          }
+        }
+        
+        LET T = SimulateF
+        
+        TAKE input : List[Symbol]
+        LET output = f(input)
+        
+        REWRITE T(input).Forward(input, [])
+          = T(input).Decode([], T(input).Encode(input))
+          = T(input).Decode([], Embed(output[0]))
+          = [s | (_, [Embed(s)]) ∈ T(input).layers[1..].ff_net.cells] BY Definitions
+          = output[1..] ++ [output[0]]
+          = output
+          = f(input)
+          
+        QED
+    }
+  }
+}
+
+This architecture replaces the standard attention and feed-forward layers in a transformer with "interaction nets" inspired by interaction combinators. The key ideas are:
+
+1. Represent attention and feed-forward as interaction nets, with cells for the key operations (attention, relu, dropout, etc) and wires connecting them according to the data flow. 
+
+2. Define an "interaction" operation that connects two nets by wiring up their ports.
+
+3. Define a "reduce" operation that performs interactions whenever possible, simulating the graph rewrite rules of interaction combinators.
+
+4. An InteractionTransformerLayer performs attention, passes the result through the feed-forward net, and reduces the resulting net to normal form.
+
+5. Attention masking is handled by applying a mask net that disables attention wires.
+
+The key benefit is that the architecture is based on a computational model with well-defined notions of reduction and normal forms. This constrains the space of possible layer operations in a principled way.
+
+The proof sketch argues that InteractionTransformers are Turing-complete, by showing how to simulate any computable function f using a 2-layer transformer that embeds f's input and output. The main steps are:
+
+1. The encoder attention computes the identity (input attending to itself) 
+2. The encoder feed-forward embeds f(input)[0]
+3. The decoder attention is empty (no self-attention)
+4. The decoder feed-forward embeds f(input)[1..]
+5. Reducing this net and extracting the final feed-forward outputs yields f(input)
+
+So in summary, this aims to realize the transformer architecture in terms of a novel Turing-complete model of computation, interaction combinators, in order to modularize and constrain the layer operations while retaining universality.

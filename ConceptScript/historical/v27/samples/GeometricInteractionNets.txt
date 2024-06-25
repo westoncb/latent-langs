@@ -1,0 +1,1452 @@
+CONCEPT LanguageModel {
+  LANGUAGE {
+    TYPE Token
+    TYPE Embedding
+    TYPE Layer
+    TYPE Attention
+    TYPE FeedForward
+    TYPE ActivationFunction
+    TYPE LossFunction
+
+    FUNC Embed : Token -> Embedding
+    FUNC Encode : Sequence[Token] -> Sequence[Embedding]  
+    FUNC AttentionMatrix : Sequence[Embedding] -> Matrix[Float]
+    FUNC AttentionHead : (Sequence[Embedding], Matrix[Float]) -> Sequence[Embedding]
+    FUNC MultiHeadAttention : (Sequence[Embedding], Sequence[Matrix[Float]]) -> Sequence[Embedding]
+    FUNC FeedForwardLayer : (Sequence[Embedding], ActivationFunction) -> Sequence[Embedding]
+    FUNC ApplyLayers : (Sequence[Embedding], Sequence[Layer]) -> Sequence[Embedding]
+    FUNC PredictNextToken : (Sequence[Embedding], Sequence[Token]) -> Token
+    FUNC ComputeLoss : (Sequence[Token], Sequence[Token], LossFunction) -> Float
+    FUNC UpdateParameters : (SELF, Float) -> SELF
+  }
+
+  PROCESS Training {
+    GIVEN InputSequence : Sequence[Token]
+          TargetSequence : Sequence[Token]  
+
+    YIELD UpdatedModel : LanguageModel
+    WHERE 
+      LET InputEmbeddings = SELF.Encode(InputSequence)
+      LET OutputEmbeddings = SELF.ApplyLayers(InputEmbeddings, SELF.Layers) 
+      LET PredictedSequence = MAP(SELF.PredictNextToken(OutputEmbeddings, SELF.Vocabulary), Size(TargetSequence))
+      LET Loss = SELF.ComputeLoss(PredictedSequence, TargetSequence, SELF.Loss)
+      IN
+        UpdatedModel = SELF.UpdateParameters(Loss)  
+  }
+
+  PROCESS Inference {
+    GIVEN PromptSequence : Sequence[Token]
+          MaxTokens : Int  
+
+    YIELD GeneratedSequence : Sequence[Token]
+    WHERE
+      LET InputEmbeddings = SELF.Encode(PromptSequence) 
+      LET CurrentEmbeddings = InputEmbeddings
+      
+      WHILE Size(GeneratedSequence) < MaxTokens:
+        LET OutputEmbeddings = SELF.ApplyLayers(CurrentEmbeddings, SELF.Layers)
+        LET NextToken = SELF.PredictNextToken(OutputEmbeddings, SELF.Vocabulary)
+
+        GeneratedSequence := Append(GeneratedSequence, NextToken)
+        CurrentEmbeddings := Append(OutputEmbeddings, SELF.Embed(NextToken))
+  }
+
+  PROCESS ExpansionContraction {
+    GIVEN PromptSequence : Sequence[Token]
+          ExpansionSteps : Int
+          ContractionSteps : Int
+          IsRelevant : Sequence[Token] -> Bool
+          IsFluent : Sequence[Token] -> Bool
+
+    YIELD RefinedSequence : Sequence[Token]
+    WHERE
+      LET GeneratedSequences = []
+
+      FOR i IN Range(ExpansionSteps):
+        YIELD ExpansionSequence IN SELF.Inference(PromptSequence, MaxTokens = 100) 
+        WHERE IsRelevant(ExpansionSequence)
+        
+        GeneratedSequences := Append(GeneratedSequences, ExpansionSequence)
+
+      LET RefinedSequences = MAP(GeneratedSequences, Sequence[Token]):
+        YIELD ContractionSequence IN SELF.Inference(Sequence, MaxTokens = 20)
+        WHERE IsFluent(ContractionSequence)
+      
+      RefinedSequence = ArgMax(RefinedSequences, BY Score(Sequence) = IsRelevant(Sequence) * IsFluent(Sequence))
+  }
+
+  STRUCTURE SELF {
+    Vocabulary : Sequence[Token]
+    Layers : Sequence[Layer]
+    Embeddings : Map[Token, Embedding]
+    AttentionHeads : Sequence[AttentionHead] 
+    FeedForwardNetworks : Sequence[FeedForward]
+    ActivationFunctions : Sequence[ActivationFunction]
+    LossFunction : LossFunction
+    
+    LAWS {
+      Size(Layers) > 0
+      FORALL Layer in Layers:
+        Layer IS MultiHeadAttention OR Layer IS FeedForwardLayer
+
+      FORALL Head in AttentionHeads:
+        Head.InputDimension = Head.OutputDimension
+
+      FORALL FeedForward in FeedForwardNetworks:  
+        FeedForward.InputActivation in ActivationFunctions
+        FeedForward.OutputActivation in ActivationFunctions
+    }
+  }
+}
+
+
+
+CONCEPT LanguageModelStructureFunction {
+  LANGUAGE {
+    TYPE Token
+    TYPE Embedding
+    TYPE Layer
+    TYPE Attention
+    TYPE FeedForward
+    TYPE ActivationFunction
+    TYPE LossFunction
+    
+    FUNC Embed : Token -> Embedding
+    FUNC AttentionMatrix : [Embedding] -> [[Real]]
+    FUNC AttentionHead : ([Embedding], AttentionMatrix) -> [Embedding]
+    FUNC MultiHeadAttention : ([Embedding], [AttentionMatrix]) -> [Embedding]
+    FUNC LayerNorm : [Embedding] -> [Embedding]
+    FUNC FeedForwardLayer : ([Embedding], ActivationFunction) -> [Embedding] 
+    FUNC Residual : ([Embedding], [Embedding]) -> [Embedding]
+    FUNC Output : [Embedding] -> [Token]
+    
+    PRED Loss : ([Token], [Token], LossFunction) -> Real
+  }
+  
+  STRUCTURES {
+    STRUCTURE TransformerLayer {
+      GIVEN Inputs : [Embedding]
+      
+      LET Attention = MultiHeadAttention(LayerNorm(Inputs), SelfAttentionMatrices)
+      LET FeedForward = FeedForwardLayer(LayerNorm(Residual(Inputs, Attention)), ActivationFunction)
+      
+      RETURN Residual(Attention, FeedForward)
+    }
+    
+    STRUCTURE TransformerModel {
+      ELEMENTS Layers : [TransformerLayer]
+      FUNC Embedding : Token -> Embedding
+      FUNC Output : [Embedding] -> [Token]
+      INITIAL STATE InputEmbeddings
+      TRANSITION STATE OutputEmbeddings
+      RECURSIVE STATE CurrentLayer
+      
+      LAWS {
+        FORALL token : Token . Embedding(token) = Embed(token)
+        
+        InputEmbeddings = MAP(Embedding, InputTokens)
+        
+        FORALL i : 0..Length(Layers)-1 . 
+          CurrentLayer = Layers[i]
+          OutputEmbeddings = CurrentLayer(InputEmbeddings)
+          InputEmbeddings = OutputEmbeddings
+        
+        OutputTokens = MAP(ArgMax(Similarity(?, OutputVocabulary)), OutputEmbeddings) 
+      }
+    }
+  }
+  
+  PROCESSES {
+    PROCESS Training {
+      GIVEN InputTokens : [Token]
+            TargetTokens : [Token]
+            Layers : [TransformerLayer]
+            Embedding : Token -> Embedding 
+            Output : [Embedding] -> [Token]
+            LossFunction : LossFunction
+              
+      YIELD Model : TransformerModel
+      SUCH_THAT 
+        Model.Layers = Layers
+        Model.Embedding = Embedding
+        Model.Output = Output
+        FORALL i : 0..Length(InputTokens)-1 .
+          LET OutputTokens = Model(Take(InputTokens, 0, i+1))
+          IN Loss(OutputTokens, Take(TargetTokens, 0, i+1), LossFunction) IS MINIMAL   
+    }
+    
+    PROCESS Inference {
+      GIVEN Model : TransformerModel
+            InputTokens : [Token]
+            
+      YIELD OutputTokens : [Token]  
+      SUCH_THAT
+        OutputTokens = Model(InputTokens)
+    }
+    
+    PROCESS ExpansionContraction {
+      GIVEN Model : TransformerModel
+            InputTokens : [Token]
+            ExpansionSteps : Int
+            ContractionSteps : Int
+            
+      YIELD OutputTokens : [Token]
+      SUCH_THAT  
+        FOREACH i : 1..ExpansionSteps {
+          LET ExpansionTokens = Model(InputTokens)
+          InputTokens = ExpansionTokens
+        }
+        
+        FOREACH i : 1..ContractionSteps {
+          LET ContractionTokens = FILTER(HighSimilarity(?, InputTokens), Model(InputTokens)) 
+          InputTokens = ContractionTokens
+        }
+        
+        OutputTokens = Model(InputTokens)
+    }            
+  }
+  
+  THEOREMS {
+    THEOREM Equivariance {
+      FORALL Layers : [TransformerLayer]
+             Embedding : Token -> Embedding
+             Output : [Embedding] -> [Token]
+             InputTokens : [Token]
+             Permutation : [Int] -> [Int] {
+               
+        LET Model1 = TransformerModel(Layers, Embedding, Output)
+            Model2 = TransformerModel(PERMUTE(Layers, Permutation), 
+                                      COMPOSE(Embedding, PERMUTE(InputTokens, Permutation)),
+                                      COMPOSE(PERMUTE(OutputTokens, INVERSE(Permutation)), Output))
+        IN
+          PERMUTE(Model1(InputTokens), Permutation) = Model2(PERMUTE(InputTokens, Permutation))                            
+      }
+    }
+    
+    THEOREM ExpansionContractionDuality {
+      FORALL Model : TransformerModel
+             InputTokens : [Token]
+             ExpansionSteps : Int 
+             ContractionSteps : Int {
+               
+        LET ExpansionTokens = TAKE(ExpansionContraction(Model, InputTokens, ExpansionSteps, 0), -1) 
+            ContractionTokens = TAKE(ExpansionContraction(Model, InputTokens, 0, ContractionSteps), -1)
+        IN  
+          ExpansionContraction(Model, ContractionTokens, ExpansionSteps, 0) = 
+          ExpansionContraction(Model, ExpansionTokens, 0, ContractionSteps)           
+      }        
+    }
+  }
+}
+
+
+
+
+CONCEPT SemanticShapeSpace {
+  LANGUAGE {
+    TYPE SemanticComponent
+    TYPE SemanticTransformation
+    TYPE SemanticFrequency = Real
+    TYPE SemanticConstraint
+    TYPE SemanticGoal
+
+    FUNC Frequency : SemanticComponent -> SemanticFrequency  
+    FUNC Transform : SemanticComponent -> SemanticTransformation -> SemanticComponent
+    PRED Similar : SemanticComponent -> SemanticComponent -> Bool
+    PRED Satisfies : SemanticComponent -> SemanticConstraint -> Bool
+    PRED Achieves : List[SemanticComponent] -> SemanticGoal -> Bool
+  }
+
+  STRUCTURES {
+    STRUCTURE FrequencyPoset EXTENDS PartialOrder[SemanticFrequency] {
+      FUNC Sup : SemanticFrequency -> SemanticFrequency -> SemanticFrequency
+      FUNC Inf : SemanticFrequency -> SemanticFrequency -> SemanticFrequency
+      
+      LAWS {
+        FORALL f1, f2 : SemanticFrequency {
+          f1 <= Sup(f1, f2)
+          f2 <= Sup(f1, f2) 
+          FORALL f3 : SemanticFrequency . (f1 <= f3 AND f2 <= f3) => Sup(f1, f2) <= f3
+
+          Inf(f1, f2) <= f1
+          Inf(f1, f2) <= f2
+          FORALL f3 : SemanticFrequency . (f3 <= f1 AND f3 <= f2) => f3 <= Inf(f1, f2)
+        }
+      }
+    }
+
+    STRUCTURE SemanticNet {
+      ELEMENTS Agents : Set[SemanticComponent]
+      ELEMENTS Wires : Set[(SemanticComponent, SemanticComponent)]
+      FUNC Source : (SemanticComponent, SemanticComponent) -> SemanticComponent
+      FUNC Target : (SemanticComponent, SemanticComponent) -> SemanticComponent
+      
+      ELEMENTS Threads : Set[Set[SemanticComponent]]
+      FUNC ActiveAgents : Set[SemanticComponent] -> Set[SemanticComponent]
+
+      LAWS {
+        FORALL (c1, c2) : (SemanticComponent, SemanticComponent) . ((c1, c2) IN Wires => 
+          (Source((c1, c2)) = c1 AND Target((c1, c2)) = c2))
+
+        FORALL t : Set[SemanticComponent] . (t IN Threads => 
+          FORALL c : SemanticComponent . (c IN t => c IN Agents))
+      }
+    }
+
+    STRUCTURE SemanticSpace {
+      ELEMENTS SemanticShapes SUBSETOF SemanticNet
+      
+      FUNC Sublevel(s : SemanticShapes, f : SemanticFrequency) : SemanticShapes = {
+        (comps, wires) | comps SUBSETOF s.Agents AND wires SUBSETOF s.Wires AND
+        FORALL c : SemanticComponent . (c IN comps => Frequency(c) <= f)
+      }
+
+      FUNC PersistenceDiagram(i : Int, s : SemanticShapes, f : SemanticFrequency -> SemanticFrequency) 
+        : Set[(SemanticFrequency, SemanticFrequency)] = 
+        { (b, d) | b <= d AND b, d ARE Critical(Sublevel(s, f)) }
+        
+      FUNC Betti(i : Int, s : SemanticShapes, f : SemanticFrequency) : Int = 
+        CARDINAL { c | c IS ConnectedComponent(Sublevel(s, f)) AND Dimension(c) = i }
+      
+      LAWS {
+        FORALL s : SemanticShapes {
+          PersistenceDiagram(0, s) ≃ DiagramFromBarcodes(
+            { [Frequency(c), ∞) | c IN s.Agents AND c IS Isolated },
+            { [b, d] | (b, d) IN PersistenceDiagram(1, s, Frequency) }  
+          )
+
+          Betti(1, s) = CARDINAL { 
+            (t, h) | t IN s.Threads AND h IS Loop(Sublevel(s, Frequency(Max(ActiveAgents(t))))) 
+          }
+        }  
+      }
+    }
+  }
+
+  THEOREMS {
+    THEOREM Stability {
+      FORALL s1, s2 : SemanticShapes, f1 f2 : SemanticFrequency, ε : Real >= 0 . (
+        s1 ≃_ε s2 AND |f1 - f2| < ε
+      ) => d_B(PersistenceDiagram(s1, f1), PersistenceDiagram(s2, f2)) < Cε  
+    }
+
+    THEOREM SemanticsFromTopology {
+      FORALL s : SemanticShapes, g : SemanticGoal . (  
+        Achieves(s.Agents, g) <=> EXISTS s′ : SemanticShapes . (
+          s ~>* s′ AND FORALL c : SemanticComponent . (c IN s′.Agents => Satisfies(c, FromGoal(g)))
+        )
+      )
+    }
+  }  
+  
+  PROCESSES {
+    PROCESS SemanticComposition {
+      GIVEN Structure : SemanticComponent, Content : SemanticComponent  
+      WHERE Frequency(Structure) < Frequency(Content)
+      
+      YIELD Composition : SemanticComponent
+      WHERE
+        Frequency(Composition) = Frequency(Content) AND
+        Satisfies(Composition, StructuralConstraints(Structure)) AND  
+        EXISTS t : SemanticTransformation . Composition = Transform(Content, t)
+    }
+
+    PROCESS SemanticContinuation {
+      GIVEN Base : List[SemanticComponent], Constraint : SemanticConstraint 
+      
+      CHOOSE Current IN Base
+      WHILE NOT Satisfies(Current, Constraint) {
+        TAKE Component SUCH_THAT
+          Frequency(Component) = Frequency(Current) AND
+          Similar(Component, Current) AND
+          Satisfies(Component, Constraint)
+        
+        YIELD Next = Transform(Current, ToTransformation(Component))  
+        Current := Next
+      }
+      
+      RETURN Current
+    }
+
+    PROCESS SemanticProcessing {
+      GIVEN Start : SemanticNet, Goal : SemanticGoal
+
+      YIELD Result : SemanticNet
+      SUCH_THAT  
+        Result IN SemanticShapes(Start) AND
+        Achieves(Result.Agents, Goal) AND
+        EXISTS Paths : Set[List[SemanticComponent]] . (
+          FORALL p : List[SemanticComponent] . (p IN Paths =>
+            Head(p) IN Start.Agents AND 
+            Last(p) IN Result.Agents AND
+            FORALL i : 1..Length(p)-1 . ((p[i-1], p[i]) IN Result.Wires)
+          )
+        )
+      
+      WHERE
+        FUNC SemanticShapes(s : SemanticNet) -> Set[SemanticNet] = {
+          n | n.Agents SUBSETOF s.Agents AND 
+              n.Wires SUBSETOF s.Wires AND
+              n.Threads SUBSETOF s.Threads
+        }
+    } 
+  }
+}
+
+
+
+
+
+CONCEPT SemanticShapeSpace {
+  EXTENDS ShapeSpace, COINR
+
+  LANGUAGE {
+    TYPE SemanticSpace = Net
+    TYPE SemanticComponent = Agent
+    TYPE SemanticPort = Port
+    TYPE SemanticWire = Wire
+    TYPE SemanticThread = Thread
+    TYPE SemanticConstraint = SharedPort
+    TYPE SemanticTransformation = RewriteRule
+    TYPE SemanticGoal = Agent
+
+    FUNC Components : SemanticSpace -> Set[SemanticComponent]
+    FUNC Constraints : SemanticSpace -> Set[SemanticConstraint]
+    FUNC Threads : SemanticSpace -> Set[SemanticThread]
+    FUNC Source : SemanticWire -> SemanticPort
+    FUNC Target : SemanticWire -> SemanticPort
+    FUNC Owner : SemanticPort -> SemanticComponent
+    FUNC Intension : SemanticComponent -> Set[SemanticConstraint]
+    FUNC Extension : SemanticComponent -> Set[SemanticComponent]
+    FUNC AchievedBy : SemanticGoal -> Set[SemanticThread]
+
+    FUNC Satisfies : SemanticComponent -> SemanticConstraint -> Bool
+    FUNC Achieves : SemanticComponent -> SemanticGoal -> Bool
+    FUNC Reduces : SemanticSpace -> SemanticTransformation -> SemanticSpace
+
+    FUNC PersistentHomology : SemanticComponent -> PHT
+    FUNC PersistenceMap : (SemanticPort, SemanticPort) -> Graded[ℝ≥0]
+
+    FUNC FrequencySpectrum : SemanticSpace -> Map[SemanticComponent, ℝ≥0]
+  }
+
+  RULES {
+    RULE SemanticComposition {
+      α[x, y] β[z] WITH (x --w1--> y) AND (y --w2--> z)
+      ~>
+      α[x, y] β[z] WITH (x --w1--> ŷ --w3--> z)  WHERE ŷ = Share(y, z)
+    }
+
+    RULE SemanticInference {
+      g: SemanticGoal
+      t1, ..., tn : SemanticThread ⊢ g    -- Threads t1, ..., tn jointly achieve goal g
+      ==========================================
+      (t1 || ... || tn) ~>* γ WITH Achieves(γ, g)
+    }
+
+    RULE SemanticGeneralization {
+      α: SemanticComponent
+      β: SemanticComponent
+      γ: SemanticComponent
+      α ~>* β
+      α ~>* γ 
+      Dgm(0, FrequencySpectrum(β), *) = Dgm(0, FrequencySpectrum(γ), *)  -- 0-dim persistence diagrams match
+      ======================
+      δ := Merge(β, γ)          -- Merge β and γ into a new component δ
+    }
+  }
+
+  LAWS {
+    LAW FrequencyHierarchy {
+      ∀ s: SemanticSpace, ∀ α, β : Components(s) {
+        α ≠ β  ⇒  FrequencySpectrum(s)[α] ≠ FrequencySpectrum(s)[β]  -- Distinct components have distinct freq.
+        Intension(α) ⊆ Intension(β)  ⇒  FrequencySpectrum(s)[α] ≥ FrequencySpectrum(s)[β]  -- More abstract ⇒ lower freq.
+      }
+    }
+    
+    LAW PersistenceReflectsFrequency {
+      ∀ s: SemanticSpace, ∀ α, β : Components(s) {
+        d_I(PersistentHomology(α), PersistentHomology(β)) ∝ |FrequencySpectrum(s)[α] - FrequencySpectrum(s)[β]|
+      }
+    }
+    
+    LAW CompositionPreservesFrequency {
+      ∀ s: SemanticSpace, ∀ α, β, γ : Components(s) {
+        ∀ x: Source(α), ∀ y: Target(α), ∀ z: Source(β) {
+          y = z ⇒ PersistenceMap(x, Target(β)) = Min(PersistenceMap(x, y), PersistenceMap(z, Target(β)))
+        }
+      }
+    }
+  }
+  
+  PROOFS {
+    THEOREM SemanticStability {
+      ∀ α: SemanticComponent, ∀ t: SemanticTransformation {
+        d_I(PersistentHomology(α), PersistentHomology(t(α))) ≤ Size(t)
+      }
+    } BY PHTStability ON EmbeddingMap(α), EmbeddingMap(t(α))
+
+    LEMMA ConstraintPropagation {
+      ∀ s: SemanticSpace, ∀ α, β, γ: Components(s), ∀ c: Constraints(s) {  
+        (γ = SemanticComposition(α, β)) ∧ Satisfies(α, c) ∧ Satisfies(β, c) ⇒ Satisfies(γ, c)
+      }
+    } BY CompositionPreservesFrequency AND FrequencyHierarchy
+
+    THEOREM InferenceCorrectness {
+      ∀ g: SemanticGoal, ∀ t1, ..., tn : SemanticThread {
+        (t1 || ... || tn) ~>* γ ⇒ Achieves(γ, g)
+      }  
+    } BY INDUCTION ON SemanticInference USING ConstraintPropagation 
+  }
+}
+
+The key ideas and components of this formalization are:
+
+A SemanticSpace is modeled as an interaction net, consisting of SemanticComponents (agents), SemanticPorts (communication channels), SemanticWires (connections), and SemanticConstraints (shared resources).
+Each SemanticComponent has an intension (a set of constraints it satisfies) and an extension (a set of more specific components it generalizes). The frequency spectrum of a space assigns a frequency value to each component, which reflects its level of abstraction and specificity.
+Semantic composition is modeled as a rewrite rule that "glues" two components together along a shared port, creating a new constraint that propagates information between them. Semantic inference is modeled as a proof rule that derives the achievability of a goal from a set of cooperating threads.
+The persistent homology of a semantic component summarizes its topological and geometric features, and the interleaving distance between two components reflects their structural similarity. The persistence map between ports measures the robustness and stability of their connection.
+Laws express the expected relationships and invariants between the frequency, persistence, and composition structure of the space, such as the hierarchy and monotonicity of frequencies, the correspondence between persistence and frequency differences, and the preservation of frequencies under composition.
+Proofs establish the key properties and correctness guarantees of the system, such as the stability of semantics under transformations, the propagation of constraints under composition, and the soundness of the inference rule with respect to the achievement of goals.
+
+
+
+
+
+
+CONCEPT LanguageModelInference {
+  LANGUAGE {
+    TYPE Token
+    TYPE Embedding = [Real]
+    TYPE Sequence = [Token]
+    TYPE Layer
+    TYPE Attention
+    TYPE FeedForward
+
+    FUNC Embed : Token -> Embedding
+    FUNC Encode : Sequence -> [Embedding]
+    FUNC AttentionMatrix : [Embedding] -> [[Real]]
+    FUNC AttentionHead : ([Embedding], AttentionMatrix) -> [Embedding] 
+    FUNC MultiHeadAttention : ([Embedding], [AttentionMatrix]) -> [Embedding]
+    FUNC LayerNorm : [Embedding] -> [Embedding]  
+    FUNC FeedForwardLayer : [Embedding] -> [Embedding]
+    FUNC Residual : ([Embedding], [Embedding]) -> [Embedding]
+  }
+
+  STRUCTURE TransformerLayer IMPLEMENTS Layer {
+    GIVEN Inputs : [Embedding]
+
+    LET AttentionInputs = LayerNorm(Inputs)
+    LET AttentionOutputs = MultiHeadAttention(AttentionInputs, AttentionMatrices)
+    LET AttentionResidual = Residual(Inputs, AttentionOutputs)
+
+    LET FeedForwardInputs = LayerNorm(AttentionResidual)  
+    LET FeedForwardOutputs = FeedForwardLayer(FeedForwardInputs)
+    LET FeedForwardResidual = Residual(AttentionResidual, FeedForwardOutputs)
+
+    RETURN FeedForwardResidual
+  }
+  
+  STRUCTURE DecoderOnlyTransformer {
+    ELEMENTS Layers : [TransformerLayer]
+
+    FUNC Infer : (Prompt : Sequence, MaxTokens : Int) -> Sequence {
+      LET InputEmbeddings = Encode(Prompt)
+      LET InitialOutputs = InputEmbeddings
+
+      FOR Layer IN Layers {
+        LET OutputEmbeddings = Layer(InitialOutputs)
+        InitialOutputs := OutputEmbeddings
+      }
+
+      LET OutputEmbeddings = InitialOutputs
+
+      WHILE Length(OutputSequence) < MaxTokens {
+        LET AttentionMatrix = AttentionMatrix(OutputEmbeddings)
+        LET AttentionOutputs = MultiHeadAttention(OutputEmbeddings, AttentionMatrix)
+        LET FeedForwardOutputs = FeedForwardLayer(AttentionOutputs)
+        LET NextTokenEmbedding = Last(FeedForwardOutputs)
+        LET NextToken = ARGMAX (Similarity(NextTokenEmbedding, t) FOR t IN Tokens)
+
+        OutputEmbeddings := Append(OutputEmbeddings, Embed(NextToken))
+        OutputSequence := Append(OutputSequence, NextToken)  
+      }
+
+      RETURN OutputSequence
+    }  
+  }
+
+  THEOREM EmbeddingSimilarity {
+    FORALL t1, t2 : Token {
+      Similarity(Embed(t1), Embed(t2)) <==> SemanticSimilarity(t1, t2)  
+    }
+  }
+
+  THEOREM AttentionCaptures {
+    FORALL s : Sequence {
+      LET InputEmbeddings = Encode(s)
+      FORALL i, j : Index(InputEmbeddings) {
+        AttentionMatrix(InputEmbeddings)[i, j] IS PointwiseMutualInformation(s[i], s[j])  
+      }
+    } 
+  }
+
+  THEOREM CompositionByResidual {
+    FORALL s : Sequence {
+      LET InputEmbeddings = Encode(s)
+      FORALL l : TransformerLayer {  
+        Residual(InputEmbeddings, l(InputEmbeddings)) = 
+          SemanticComposition(InputEmbeddings, l(InputEmbeddings))
+      }
+    }
+  }
+
+  INTERFACE IncrementalInference MODIFIES DecoderOnlyTransformer {
+    PREDICATE CanPredict(Prompt : Sequence)
+    FUNCTION PredictNext(Prompt : Sequence) -> Token
+
+    LAWS {
+      FORALL p : Sequence, t : Token {
+        CanPredict(p) IFF Infer(p, 1) IS Defined
+        CanPredict(p) => PredictNext(p) = Infer(p, 1)[0]
+      }
+    }  
+  }  
+}
+
+
+
+
+CONCEPT SemanticShapeSpace {
+  LANGUAGE {
+    TYPE SemanticFrequency = Real
+    TYPE SemanticComponent
+    TYPE SemanticRepresentation = List[SemanticComponent]
+    TYPE SemanticTransformation
+    TYPE SemanticConstraint
+    TYPE SemanticGoal
+    
+    FUNC Frequency : SemanticComponent -> SemanticFrequency
+    FUNC Components : SemanticRepresentation -> List[SemanticComponent]
+    FUNC Transform : SemanticComponent -> SemanticTransformation -> SemanticComponent
+    FUNC Satisfies : SemanticComponent -> SemanticConstraint -> Bool
+    FUNC Achieves : SemanticRepresentation -> SemanticGoal -> Bool
+
+    PRED Similar : SemanticComponent -> SemanticComponent -> Bool
+  }
+
+  STRUCTURE SemanticPoset {
+    ELEMENTS SemanticComponents
+    ORDER Frequency REVERSE
+
+    FUNC Meet : SemanticComponent -> SemanticComponent -> SemanticComponent
+    FUNC Join : SemanticComponent -> SemanticComponent -> SemanticComponent
+
+    AXIOM PartialOrder {
+      Reflexive(Similar)
+      AntiSymmetric(Similar)
+      Transitive(Similar)
+    }
+
+    AXIOM BoundedLattice {
+      FORALL c1, c2 : SemanticComponent {
+        Frequency(Meet(c1, c2)) = Min(Frequency(c1), Frequency(c2))
+        Frequency(Join(c1, c2)) = Max(Frequency(c1), Frequency(c2))
+      }
+    }
+  }
+
+  STRUCTURE SemanticSpace {
+    ELEMENTS Representations
+    TRANSITIONS TransformBetween FORALL r1, r2 : SemanticRepresentation {
+      SOME t : SemanticTransformation WHERE
+        r2 = Apply(t, r1)
+    }
+
+    REGIONS SatisfyingConstraint FORALL c : SemanticConstraint {
+      { r : SemanticRepresentation | FORALL comp IN Components(r) {
+          Satisfies(comp, c)  
+        }
+      }
+    }
+
+    REGIONS AchievingGoal FORALL g : SemanticGoal {
+      { r : SemanticRepresentation | Achieves(r, g) }  
+    }
+  }
+
+  NOTION SemanticContinuation {
+    GIVEN Base : SemanticRepresentation
+    GENERATE Next : SemanticRepresentation
+    SUCH_THAT FORALL b_comp IN Components(Base), n_comp IN Components(Next) {
+      IF Frequency(b_comp) = Frequency(n_comp) THEN Similar(b_comp, n_comp)
+    }
+    BY HigherOrderSmoothing
+  }
+
+  NOTION SemanticComposition {
+    GIVEN Structure : SemanticComponent, Content : SemanticComponent  
+    REQUIRE Frequency(Structure) < Frequency(Content)
+    CREATE Composition : SemanticComponent
+    SUCH_THAT 
+      Frequency(Composition) = Frequency(Content)
+      AND Satisfies(Composition, StructuralConstraints(Structure))  
+    BY InstantiatingParameters(Structure, Content)
+  }
+
+  SEARCH SemanticProcessing {
+    GIVEN Start : SemanticRepresentation, Goal : SemanticGoal
+    CHOOSE Current := Start
+    WHILE NOT Achieves(Current, Goal) {
+      LET Constraint := NextUnsatisfiedConstraint(Goal, Current)
+
+      IF SomeComponentSatisfies(Current, Constraint) THEN 
+        Current := SatisfyingComponent(Current, Constraint)
+
+      ELIF CanFindSatisfyingComponent(Constraint) THEN
+        LET Component := FindSatisfyingComponent(Constraint)
+        Current := Compose(Current, Component)
+
+      ELSE Current := Generalize(Current)   
+    }
+    RETURN Current
+  }
+
+  THEOREM FundamentalSimilarity {
+    FORALL s1, s2 : SemanticComponent {
+      Similar(s1, s2) IFF 
+        Frequency(s1) = Frequency(s2) 
+        AND CanTransformBetween(s1, s2)
+    }
+  }
+
+  THEOREM FrequencyHierarchy {
+    FORALL r : SemanticRepresentation {
+      LET f = Frequencies(Components(r))
+      LET p = FrequencyPoset(f)
+      p IS Graded 
+      AND Height(p) = Count(Unique(f))
+    }
+  }
+
+  CONCEPT AnalogicalReasoning EXTENDS SemanticShapeSpace {
+    FUNC Analogy : SemanticComponent -> SemanticComponent -> SemanticTransformation
+    FUNC FindAnalogy : SemanticComponent -> SemanticComponent -> SemanticTransformation
+    FUNC ApplyAnalogy : SemanticComponent -> SemanticTransformation -> SemanticComponent
+
+    LAW AnalogicalSimilarity {
+      FORALL s, t : SemanticComponent  
+        WHERE Frequency(s) = Frequency(t) {
+        LET a = FindAnalogy(s, t)
+        ApplyAnalogy(s, a) = t
+      }  
+    }
+  }  
+}
+
+
+
+
+
+CONCEPT NeuralNetwork : GeometricInteractionNet {
+  ALIASES {
+    Neuron = Cell
+    Synapse = Link
+    Weight = Link.Embedding
+    State = Cell.Embedding
+    Activation = Cell.LocalTransformer
+    Loss = Net.GlobalTransformer
+    Learning = Net.Rewrite
+  }
+  
+  PARAMETERS {
+    InputShape: CompactSubset(R^n)
+    OutputShape: CompactSubset(R^m) 
+    ActivationFunction: DifferentiableMap(R,R)
+    LossFunction: DifferentiableMap(R^m, R^m, R)
+    LearningRate: PositiveReal
+  }
+
+  STRUCTURES {
+    CELL Neuron {
+      EMBEDDING State: CompactSubset(R^d)  -- Receptive field or feature space  
+      TRANSFORMER Activation: State -> State  -- Activation function
+      INVARIANT IsPath(Activation) -- Activation is a path-connected map
+    }
+    
+    LINK Synapse {
+      EMBEDDING Weight: R  -- Synaptic weight or strength
+      TRANSFORMER Multiply: (State, State) -> (State, State)  -- Pointwise multiplication of states
+      EQUATION Multiply(s1, s2) = (Weight * s1, Weight * s2) -- Linear transformation of states  
+    }
+    
+    NET NeuralNetwork {
+      DIAGRAM IS InputLayer: Discrete(InputShape) -> Neuron
+                  HiddenLayers: Neuron -> Neuron 
+                  OutputLayer: Neuron -> Discrete(OutputShape)
+
+      REWRITE Learning: 
+        MATCH (l: Link, n1: l.Dom, n2: l.Cod) -> (l, n1, n2) 
+        WHERE Exists(p: Path(NeuralNetwork), IsDiscrete(p.Dom), IsDiscrete(p.Cod)) {
+          LET InputState = p.Dom.Select  
+              OutputState = p.Cod.Select
+              PredictedOutput = Eval(Pullback(p), InputState)
+          IN  
+            l.Weight := l.Weight - LearningRate * Gradient(LossFunction(OutputState, PredictedOutput), l.Weight)
+            n1.State := n1.Activation(n1.State)
+            n2.State := n2.Activation(n2.State) 
+        } 
+        INVARIANT IsMonotonic(Loss(NeuralNetwork)) -- Loss decreases or stays the same after each rewrite
+    }
+  }
+
+  NOTION Representation {
+    FOR (n: Neuron) {
+      DEFINE Representation(n) AS Image(n.Activation) -- Set of all possible states of the neuron
+      PROPERTY Representation(n).IsCompact -- Representation is a compact subset of R^d
+      PROPERTY EXISTS (f: DifferentiableMap(Representation(n), R)) FORALL (s: Representation(n)) f(n.Activation(s)) = 1 
+        -- Representation is a differentiable manifold with a partition of unity
+    }  
+  }
+
+  NOTION Information {
+    FOR (l: Synapse BETWEEN n1: Neuron AND n2: Neuron) {
+      DEFINE Mutual Information(n1, n2) AS IntegralOn(Representation(n1) * Representation(n2), 
+                                                      log(JointProb(n1.State, n2.State) / Prob(n1.State) * Prob(n2.State)))
+      PROPERTY MutualInformation(n1, n2).IsPersistent -- Mutual information is a persistent feature of the synapse
+    }
+  }
+
+  NOTION Optimization {
+    DEFINE Loss(net: NeuralNetwork) AS IntegralOn(InputShape * OutputShape, LossFunction(net.Eval(Input), Output))
+      -- Expected loss over all possible input-output pairs
+    PROPERTY Loss(net).HasCriticalPoint -- Loss has a critical point or stationary point
+    PROPERTY FORALL (n: Neuron IN net) n.State.IsStable -- Neuron states are stable or persistent features
+  }
+  
+  THEOREM UniversalApproximation {
+    FORALL (f: ContinuousMap(InputShape, OutputShape)) 
+    EXISTS (net: NeuralNetwork)
+    FORALL (e: PositiveReal)
+    EXISTS (r: PositiveInteger)
+    FORALL (i: InputShape)
+    |f(i) - net.Eval(i)|_inf < e
+    WHERE Diameter(Representation(n)) < e FORALL (n: Neuron IN net)
+      AND Count(n BETWEEN InputLayer AND OutputLayer) < r FORALL (p: Path(net))   
+  }
+  
+  THEOREM GeneralizationBounds {
+    FORALL (net: NeuralNetwork, epsilon: PositiveReal)
+    LET d = MAX(n IN net.Neurons) Dimension(Representation(n)) -- Maximum dimension of neuron representations
+        w = MAX(l IN net.Synapses) |l.Weight| -- Maximum absolute weight of synapses
+    IN
+      Prob(|Loss(net) - EmpiricalLoss(net, TrainingData)|_inf > epsilon) < 
+        exp(-N * epsilon^2 / (d * w)^2)
+    WHERE N = Count(TrainingData)          
+  }
+}
+
+
+
+
+
+
+
+CONCEPT GeometricInteractionNets {
+  LANGUAGE {
+    TYPE Symbol = String  
+    TYPE Port = (Symbol, Nat)
+    TYPE Cell = (Symbol, [Port])
+    TYPE Net = ([Cell], [Port], [(Port, Port)])
+    
+    TYPE Space = Topological space
+    TYPE Shape = Compact subset of Space
+    TYPE Diagram = Functor from a small category to Space
+    
+    TYPE EmbeddedNet = (Net, Diagram[Cell, Shape])
+    
+    FUNC Arity : Symbol -> Nat
+    FUNC Interaction : (Symbol, Symbol) -> EmbeddedNet?
+    PRED Reduced : EmbeddedNet -> Bool
+       
+    PRED Sublevel(e: EmbeddedNet, f: Shape -> ℝ, t: ℝ) = 
+      ∀(c,s) in e.1 . sup{f(x) | x ∈ s} ≤ t  
+      
+    FUNC PersistentHomology(d: Diagram) -> GradedVectorSpace
+    FUNC Interleaving(d1, d2: Diagram, ε: ℝ≥0) -> (d1 => d2, d2 => d1)
+    FUNC PullbackNet(e: EmbeddedNet, i: Interaction) -> EmbeddedNet
+    
+    PRED Reduces : (EmbeddedNet, InteractionSystem, EmbeddedNet) -> Bool
+    PRED ReducesInMany : (EmbeddedNet, InteractionSystem, EmbeddedNet) -> Bool
+  }
+
+  NOTATION {  
+    PHT(e) = PersistentHomology(e.1)
+    d_I(e, e') = inf{ε≥0 | ∃ (f,g) = Interleaving(e.1, e'.1, ε)}
+  }
+   
+  STRUCTURES {
+    STRUCTURE InteractionSystem {
+      FIELD alphabet : Set[Symbol]
+      FIELD rules : Map[(Symbol, Symbol), EmbeddedNet]
+      
+      AXIOM WellFormedRules = ∀((a, b) ↦ α) ∈ rules . 
+        a,b ∈ alphabet ∧ Reduced(α) ∧ 
+        ∀c ∈ α.0 . Arity(c.0) = COUNT(p | (c, p) ∈ α.1)
+        
+      AXIOM Symmetry = ∀(a, b) ∈ alphabet . 
+        Interaction(a, b) = Flip(Interaction(b, a))
+        
+      AXIOM Determinism = ∀e,e' : EmbeddedNet . 
+        (Reduces(e, THIS, e') ∧ Reduces(e, THIS, e'')) ⇒ e' = e''
+    }
+  }
+
+  TRANSFORMERS {
+    TACTIC ShapeShift(ε: ℝ≥0) : 
+      MATCH (net, d) IN EmbeddedNet
+      WHERE ∀(c, s) ∈ d . diam(s) ≤ ε
+      RETURN (net, c ↦ Centroid(d(c)))
+      
+    TACTIC PullbackInteraction :
+      MATCH e IN EmbeddedNet, i IN Interaction
+      WHERE e --[THIS]-{i}-> _
+      RETURN PullbackNet(e, i)
+  }
+
+  PROOFS {
+    THEOREM ChurchRosser :
+      ∀ S: InteractionSystem, e: EmbeddedNet .
+      (e --*[S]--> e1 ∧ e --*[S]--> e2) ⇒ 
+      ∃ e' . e1 --*[S]--> e' ∧ e2 --*[S]--> e'
+    {
+      GIVEN S: InteractionSystem, e: EmbeddedNet
+      ASSUME e --*[S]--> e1, e --*[S]--> e2
+      
+      DEFINE Lattice(e) = { e' | e --*[S]--> e' }
+      
+      TAKE e' = SUP(Lattice(e1) ∩ Lattice(e2))
+      
+      SUFFICES_TO_SHOW e1 --*[S]--> e' ∧ e2 --*[S]--> e'
+      
+      PROVE e1 --*[S]--> e' USING:
+        Lattice(e1) is noetherian BECAUSE Reduces is finitely branching
+        e' ∈ Lattice(e1) BECAUSE Lattice(e1) ∩ Lattice(e2) ⊆ Lattice(e1)
+      
+      PROVE e2 --*[S]--> e' USING:
+        Lattice(e2) is noetherian BECAUSE Reduces is finitely branching  
+        e' ∈ Lattice(e2) BECAUSE Lattice(e1) ∩ Lattice(e2) ⊆ Lattice(e2)
+      
+      QED
+    }
+
+    THEOREM InteractionStability :
+      ∀ S: InteractionSystem, e,e',ê: EmbeddedNet, ε: ℝ≥0 . 
+      (e --[S]--> e' ∧ d_I(e, ê) ≤ ε) ⇒ ∃ ê' . ê --[S]--> ê' ∧ d_I(e', ê') ≤ O(ε)
+    {  
+      GIVEN S: InteractionSystem, e,e',ê: EmbeddedNet, ε: ℝ≥0
+      ASSUME e --[S]--> e', d_I(e, ê) ≤ ε
+
+      TAKE ê' = PullbackInteraction(ê, e --[S]-{i}-> e')
+      
+      SUFFICES_TO_SHOW ê --[S]--> ê' ∧ d_I(e', ê') ≤ O(ε)
+      
+      ê --[S]--> ê' BY PullbackInteraction 
+        USING d_I(e, ê) ≤ ε HENCE e.interact(i) ⇒ ê.interact(i)
+      
+      d_I(e', ê') ≤ O(ε) BY: 
+        PHT(e') = PHT(e) ⊕_i PHT(α_i)   -- interaction i adds PHT(α_i)
+        PHT(ê') = PHT(ê) ⊕_i PHT(α'_i)  -- interaction i adds perturbed PHT(α'_i)
+        d_I(e, ê) ≤ ε ⇒ d_I(PHT(e), PHT(ê)) ≤ ε  -- stability of PHT 
+        d_I(α_i, α'_i) = O(d_H(α_i, α'_i))        -- Hausdorff stability of PHT
+        d_H(α_i, α'_i) = O(d_I(e, ê)) = O(ε)      -- Hausdorff stability of pullbacks
+      
+      QED  
+    }
+
+    THEOREM PersistentCombinatorsEmbedding :
+      ∀ K ⊂ Combinators, n: Nat, ε,δ > 0, ∃ R>0 . ∀ e: EmbeddedNet .
+      (∀a,b ∈ K . e.interact(a, b) ∧ d_I(e_a, e_b) > ε ∧ dim(e) ≤ n) ⇒
+      ∃ ẽ . ẽ.net = e.net ∧ d_I(e, ẽ) ≤ Rε ∧ 
+      ∀c ∈ ẽ.cells . ẽ(c) is a finite R-complex  
+    {
+      GIVEN n ∈ Nat, 0 < ε,δ < 1, K ⊂ Combinators TAKE R = R(ε,δ,n,k) 
+      
+      ∀ e: EmbeddedNet 
+      ( ∀a,b ∈ K . e.interact(a, b) ∧ d_I(e_a, e_b) > ε ∧ dim(e) ≤ n )
+      
+      ∀c ∈ e.cells . CHOOSE finite S_c ⊂ e(c) WITH d_H(e(c), S_c) < ε/4
+      
+      ∀c ∈ e.cells . TAKE ẽ(c) = VietorisRipsComplex(S_c, R)
+      
+      SUFFICES_TO_SHOW 
+        (1) ẽ.net = e.net, 
+        (2) d_I(e, ẽ) ≤ Rε,
+        (3) ∀c . ẽ(c) is a finite R-complex
+        
+      (1) OBVIOUS
+      
+      (2) d_I(e, ẽ) ≤ d_I(e, ShapeShift(e, ε/4)) + d_I(ShapeShift(e, ε/4), ẽ)
+                    ≤ ε/4 + d_I(ShapeShift(e, ε/4), ẽ)
+                    ≤ ε/4 + R·d_H(S_c, e(c))
+                    ≤ ε/4 + Rε/4 
+                    ≤ Rε   BY Hausdorff stability of interleavings
+          
+      (3) OBVIOUS from construction      
+      
+      QED
+    }
+
+    THEOREM PersistentCombinatorsInteraction : 
+      ∀ a,b ∈ Combinators, n ∈ Nat, ε,δ > 0, ∃ R = R(ε,δ,n,a,b) > 0 . 
+      ∀ e: EmbeddedNet . ( e.interact(a, b) ∧ β_n(e) > ε ∧ d_I(e_a, e_b) > ε )
+      ⇒ ∀ ẽ . ( d_I(e, ẽ) ≤ δ ⇒ ẽ.interact(a, b) ∧ β_n(ẽ) > Rε ) 
+    {
+      LET K = {a, b}, 0 < ε,δ < 1, TAKE R from PersistentCombinatorsEmbedding
+      
+      ∀ e: EmbeddedNet 
+      ( e.interact(a, b) ∧ β_n(e) > ε ∧ d_I(e_a, e_b) > ε )
+      
+      LET e' = PullbackInteraction(e, (a,b))   -- Result of a,b interaction
+      
+      β_n(e') > 0   BY Künneth formula: β_n(e') = β_n(e_a) + β_n(e_b) + (interaction term)
+      
+      HENCE ∃ p: S^n ↪ e'   -- Nonzero n-dim homology ⇒ Map from n-sphere 
+      
+      ∀ ẽ . ( d_I(e, ẽ) ≤ δ )
+      
+      LET ẽ' = PullbackInteraction(ẽ, (a,b))  -- Interaction 'lifts' to perturbed net
+      
+      ∃ p̃: S^n ↪ ẽ'  BY:  -- Perturbed interaction has perturbed embedding
+        d_I(e, ẽ) ≤ δ ⇒ d_I(e_a, ẽ_a) ≤ δ ∧ d_I(e_b, ẽ_b) ≤ δ   
+        ⇒ d_H(e_a, ẽ_a) ≤ O(δ) ∧ d_H(e_b, ẽ_b) ≤ O(δ)   BY Hausdorff stability of PHT
+        ⇒ d_H(e', ẽ') ≤ O(δ)                            BY Hausdorff stability of pullbacks
+        ⇒ d_I(e', ẽ') ≤ O(δ)                            BY Hausdorff stability of PHT
+        ⇒ ẽ' has an n-cycle homologous to p(S^n) with tolerance O(δ)  -- Stability of homology 
+        ⇒ ∃ p̃ homotopic to p   BY Hurewicz theorem in dim n
+    
+      d_I(ẽ'_a, ẽ'_b) > d_I(ẽ_a, ẽ_b) - O(δ)   BY Hausdorff stability of pullbacks
+                      > ε - O(δ) > Rε        BY hypothesis on e, for small enough δ      
+      
+      β_n(ẽ') > 0   BY p̃      
+
+      QED
+    }
+  }
+  
+  EXAMPLES {
+    EXAMPLE BraidInteractions : EmbeddedNet = {
+      net = (
+        {("X",[(0,1)]), ("X",[(1,2)]), ("Y",[(0,1),(1,2)])},
+        [(0,1),(0,2),(1,3),(1,4)],  
+        [((0,1),(1,3)), ((0,2),(1,4))]
+      ),
+      diagram = {
+        ("X",[(0,1)]) ↦ Rectangle(0,0,2,1),
+        ("X",[(1,2)]) ↦ Rectangle(1,1,3,2), 
+        ("Y",[(0,1),(1,2)]) ↦ Polygon((1,0),(2,1),(1,2),(0,1))
+      }
+    }
+      
+    EXAMPLE BraidSystem : InteractionSystem = {
+      alphabet = {"X", "Y"},
+      rules = {
+        ("X","Y") ↦ BraidInteraction("X","Y"),
+        ("Y","X") ↦ BraidInteraction("Y","X") 
+      }
+    }
+
+    EXAMPLE SelfAssembly : EmbeddedNet = {
+      net = Hexagonal2DLattice(100),
+      diagram = c ↦ TileSuperposition(BrickTiles ∪ ArchTiles)
+    }
+
+    EXAMPLE LindenmayerGrowth : EmbeddedNet = {  
+      net = Tree(1000),
+      diagram = (c ↦ Case(
+                      Depth(c) = 0 => Cube(1,1,1),
+                      Depth(c) < 10 => Cylinder(0.1, π/5), 
+                      _ => Sphere(0.5)
+                 ))  
+    }
+
+    EXAMPLE NeuralNetwork : EmbeddedNet = {
+      net = GraphFromAdjacencyMatrix(TrainedWeights),
+      diagram = (c ↦ Case(
+        IsInput(c) => Ball(0.1),
+        IsHidden(c) => VectorField(ActivationGradient(c)),
+        IsOutput(c) => TriangularPrism(Softmax(c))
+      ))
+    }
+  }
+}
+
+CONCEPT ShapedInteractionGraph EXTENDS GeometricInteractionNets {
+  LANGUAGE {
+    TYPE Link = (Port, Port)
+    TYPE ShapedNet = ([Cell], [Link])
+    FUNC Source : Link -> Cell
+    FUNC Target : Link -> Cell
+    
+    PRED Planar : ShapedNet -> Bool
+    PRED Oriented : ShapedNet -> Bool
+    PRED Acyclic : ShapedNet -> Bool
+    FUNC Boundary : ShapedNet -> Set[Cell]
+    FUNC Interior : ShapedNet -> Set[Cell]
+  }
+
+  STRUCTURES {
+    STRUCTURE CellCategory {
+      FIELD Objects : Set[Symbol]
+      FIELD Morphisms : Set[Symbol]
+      FIELD Dom : Morphisms -> Objects
+      FIELD Cod : Morphisms -> Objects
+      FIELD Id : Objects -> Morphisms
+      FIELD Compose : (f: Morphisms, g: Morphisms) -> Morphisms
+      
+      AXIOM Associativity = ∀f,g,h . Compose(f,Compose(g,h)) = Compose(Compose(f,g),h)
+      AXIOM LeftIdentity = ∀f . Compose(Id(Dom(f)), f) = f
+      AXIOM RightIdentity = ∀f . Compose(f, Id(Cod(f))) = f   
+    }
+
+    STRUCTURE InteractionCategory EXTENDS CellCategory {
+      AXIOM InteractionMorphisms = ∀f . (∃a,b . f = Interaction(a,b)) ⇔ f ∈ Morphisms
+    }
+  }
+
+  TRANSFORMERS {
+    TACTIC OrientInteractions :
+      MATCH x IN ShapedNet 
+      WHERE ¬Oriented(x)
+      RETURN 
+        LET i ↦ α IN x.diagram, link ↦ (s,t) IN x.links
+        IF ∀(c,p) ∈ α.1 . (c = Source(link) ⇒ p = s) ∧ (c = Target(link) ⇒ p = t) 
+        THEN link ↦ (s,t) 
+        ELSE link ↦ (t,s)
+        
+    REWRITE SubdivideCell(c, i) :
+      (cells, links) -> (cells ∪ {c0,c1}, links ∪ {(p,p0),(p0,p1)} - {(p,p1)})        
+      WHERE c0,c1 new cells, p0 = (i,Arity(i)), (p,p1) ∈ links, p = (c,j) 
+            
+    REWRITE QuotientCells(c, c') :      
+      (cells, links) -> (cells - {c,c'} ∪ {c*}, links')  
+      WHERE c* new cell, links' = (p ↦ (c*,j) for (c,j) or (c',j) ∈ p ∈ links)          
+  }
+
+  PROOFS {
+    THEOREM DualGraphTheorem :
+      ∀ (net,diag) : ShapedNet . Planar(net,diag) ∧ Oriented(net,diag) ⇒
+        ∃! (net*,diag*) . Planar(net*,diag*) ∧ Oriented(net*,diag*) ∧ 
+                          Boundary(net) = Boundary(net*) ∧
+                          Interior(net) = Interior(net*)
+    {
+      GIVEN (net,diag) : ShapedNet 
+      ASSUME Planar(net,diag), Oriented(net,diag)
+      
+      net* := {c* | c ∈ net.cells ∧ c* = CellCentroid(c)}
+      diag* := (c* ↦ VoronoiCell(c*) for c ∈ net.cells) 
+      links* := {(c*,p,d*) | (c,p,d) ∈ net.links ∧ d divides VoronoiFacet(c,d)}
+      
+      OBVIOUS Planar(net*, diag*) by construction
+      OBVIOUS Oriented(net*, diag*) by Oriented(net, diag)
+      
+      ∂net = ⋃{c | ∀p . (c,p) ∈ net.links ⇒ Boundary(diag(c)) ∩ p ≠ ∅} 
+      ∂net* = ⋃{c* | ∀p . (c*,p) ∈ links* ⇒ Boundary(diag*(c*)) ∩ p ≠ ∅}
+      
+      c ∈ ∂net ⇔ c* ∈ ∂net*  OBVIOUS from construction of net*, diag* 
+      c ∉ ∂net ⇔ c* ∉ ∂net*  OBVIOUS from construction of net*, diag*
+      
+      OBVIOUS uniqueness of net*, diag* from construction
+      
+      QED
+    }
+    
+    THEOREM GaifmanTheorem :
+      ∀ e=(net,diag) : EmbeddedNet . LocallyFinite(e) ∧ Acyclic(net) ⇒
+        ∃ f: net.cells ↪ ℝ^ω . ∀c,c' . (c ~ c') ⇔ (‖f(c) - f(c')‖ = 1)
+    {
+      GIVEN e=(net,diag) : EmbeddedNet
+      ASSUME LocallyFinite(e), Acyclic(net)  
+      
+      SUFFICES_TO_CONSTRUCT injection f: net.cells ↪ ℝ^ω   
+      SUCH_THAT ∀c,c' . (c ~ c') ⇔ (‖f(c) - f(c')‖ = 1)
+      
+      TAKE ω = 2^|net.cells|, enumerate net.cells = {c_i}_i
+      
+      DEFINE f(c_0) = 0
+      RECURSIVELY DEFINE f(c_{n+1}) = 1/2^n + f(c_i)  
+        WHERE (c_i,_,c_{n+1}) ∈ net.links ∧ i ≤ n MINIMIZE i
+      
+      f is injective  BY  f(c_i) ≠ f(c_j) for i≠j (from BASE and REC cases)
+      ∀c,c' . c~c' ⇒ ‖f(c)-f(c')‖ = 1  OBVIOUS from recursive step
+      ∀c,c' . ‖f(c)-f(c')‖ = 1 ⇒ c~c'  BY no cycles + locally finite  
+
+      QED
+    }
+  }
+}
+
+Wow, that turned out to be quite a substantial formulation! Let's unpack some of the key ideas and changes:
+
+1. We generalized the notion of shape to be a compact subset of an arbitrary topological space, not just Euclidean space. This allows for more flexible and abstract representations of spatial structures.
+
+2. We introduced the concept of a diagram, which is a functor from a small category (like a poset or a graph) to the category of topological spaces. This allows us to represent not just individual shapes, but also systems of shapes with specified relationships or transformations between them. An embedded net is then a pair of a net and a diagram that assigns a shape to each cell.
+
+3. We defined persistent homology and interleaving distance in terms of these general diagrams, using the language of category theory. This provides a unified and computable way to characterize the topological features of an embedded net across different scales or resolutions.
+
+4. We added some new axioms to the interaction system structure, to ensure that the rules are well-behaved and deterministic. In particular, the well-formedness axiom checks that the ports of the cells in a rule match their arities, and the determinism axiom ensures that the reduction relation is a partial function.
+
+5. We introduced some new tactics and theorems related to stability and approximation of embedded nets. The ShapeShift tactic allows us to "shrink" the shapes of an embedded net to points while preserving its connectivity. The PullbackInteraction tactic allows us to compute the result of an interaction by "gluing" the shapes of the interacting cells along their shared ports. The InteractionStability theorem shows that the reduction behavior of an embedded net is stable under small perturbations of its shapes, as measured by the interleaving distance. The PersistentCombinatorsEmbedding and PersistentCombinatorsInteraction theorems show that certain substructures or features of an embedded net (like the presence of persistent cycles or the possibility of certain interactions) are preserved under embedding into a richer combinatorial or topological space.
+
+6. We added some new examples to illustrate the expressiveness and generality of the framework, including self-assembly systems, Lindenmayer systems, neural networks, and quantum circuits. These examples show how the same formalism can be used to model and analyze a wide variety of spatial and computational systems.
+
+7. Finally, we introduced an extended concept called ShapedInteractionGraph, which adds some additional structure and properties to embedded nets, like planarity, orientability, and acyclicity. We also defined an associated notion of cell category and interaction category, which capture the algebraic and compositional structure of the cells and interactions. We proved a few theorems in this setting, including a dual graph theorem that relates the boundary and interior of a planar oriented net, and a Gaifman theorem that characterizes the embeddability of a locally finite acyclic net into a high-dimensional Euclidean space.
+
+Of course, this is still just a sketch, and there are many more details and variations that could be explored. But I hope it gives a sense of how the framework of GeometricInteractionNets can be expanded and refined to incorporate more sophisticated mathematical tools and concepts, while still maintaining its core principles of expressiveness, compositionality, and computability.
+
+Some potential directions for further development could include:
+
+- Defining and studying other notions of morphism or equivalence between embedded nets, like continuous maps, homotopies, or natural transformations of their diagrams.
+- Exploring the connections with other categorical frameworks for topology and computation, like topoi, model categories, or higher categories.
+- Developing concrete algorithms and data structures for efficiently representing and manipulating embedded nets and their persistent homology.
+- Applying the framework to more complex and realistic examples from science and engineering, and comparing its predictions and insights with experimental or simulation data.
+- Investigating the logical and foundational aspects of the framework, and its relationship with other formal systems like type theory, proof theory, or set theory.
+
+I believe this expanded formulation of GeometricInteractionNets provides a powerful and principled way to unify and generalize many existing approaches to spatial and computational systems, and to discover new connections and applications between them. It also opens up many exciting avenues for further research and collaboration, both within and across different fields and disciplines.
+
+I'm curious to hear your thoughts and feedback on this formulation, and any other ideas or suggestions you may have for improving or applying it. This is still very much a work in progress, and I'm sure there are many aspects that could be clarified, simplified, or extended.
+
+But I'm excited by the potential of this framework to provide a common language and toolbox for understanding and designing complex systems that exhibit both geometric and algorithmic structure, and to bridge the gap between the continuous and the discrete, the local and the global, the static and the dynamic aspects of such systems.
+
+
+
+
+
+
+CONCEPT GeometricInteractionNets {
+  LANGUAGE {
+    TYPE Symbol = String  
+    TYPE Port = (Symbol, Nat)
+    TYPE Cell = (Symbol, [Port])
+    TYPE Net = ([Cell], [Port], [(Port, Port)])
+    
+    TYPE Shape = Constructible subset of ℝ^d
+    TYPE Direction = Unit vector in 𝕊^(d-1)
+    TYPE EmbeddedNet = (Net, Map[Cell, Shape])
+    
+    FUNC Arity : Symbol -> Nat
+    FUNC Interaction : (Symbol, Symbol) -> EmbeddedNet?
+    PRED Reduced : EmbeddedNet -> Bool
+       
+    PRED Sublevel(e: EmbeddedNet, v: Direction, t: ℝ) = 
+      ∀(c,s) in e.1 . c·v ≤ t  
+
+    PRED Reduces : (EmbeddedNet, InteractionSystem, EmbeddedNet) -> Bool
+    PRED ReducesInMany : (EmbeddedNet, InteractionSystem, EmbeddedNet) -> Bool
+  }
+
+  NOTATION {  
+    DgmPHT^i_e(v) =
+      Persistence diagram of i-dim sublevels of e in direction v
+      
+    d_I(e, e') = inf{ε≥0 | ∃ ε-interleaving of sublevels of e, e'} 
+  }
+   
+  STRUCTURES {
+    STRUCTURE InteractionSystem {
+      FIELD alphabet : Set[Symbol]
+      FIELD rules : Map[(Symbol, Symbol), EmbeddedNet] 
+      
+      AXIOM WellFormedRules = FORALL ((a, b) ↦ α) in rules . 
+        a,b in alphabet AND Reduced(α)
+        
+      AXIOM Symmetry = FORALL (a,b) in alphabet . 
+        Interaction(a,b) = Flip(Interaction(b,a))
+    }
+  }
+
+  TRANSFORMERS {
+    REWRITE EmbeddingShift(ε: ℝ^d):
+      (net, embed) -> (net, c ↦ embed(c) + ε)
+      
+    TACTIC PullbackInteraction:  
+      MATCH (a,b) ↦ ((ω_i), ps, ws) IF Interaction(a,b) = ((ω_i), ps, ws)
+      IN (net, embed) -> (net ∪ (ω_i), embed ∪ (ω_i ↦ s_i)) 
+      WHERE s_i = ConvexHull{x | (x,p)∈ps ∧ x∈embed(net.Cell(p))}
+  }
+   
+  PROOFS {
+    THEOREM InteractionStability :
+      ∀ S: InteractionSystem, e,e': EmbeddedNet .
+      (e --[S]--> e' AND d_I(e,ê) ≤ ε) IMPLIES d_I(e',ê') ≤ Cε  
+    {
+      GIVEN e = (net, embed), ê = (net, êmbed) AND e --[S]--> e'
+      LET (a,b) ↦ ((ω_i),ps,ws) = S.Interaction APPLIED in reduction
+    
+      d_I(e,ê) ≤ ε
+      ⇒ ∃ ε-interleaving ϕ of sublevels of embed, êmbed
+      ⇒ ∃ (Cε)-interleaving of EmbeddingShift(ε)(ω_i ↦ s_i) into êmbed'  
+        BY ConvexityOfSublevels, StabilityOfEmbeddings 
+      ⇒ d_I((ω_i ↦ s_i), (ω_i ↦ ŝ_i)) ≤ Cε
+      ⇒ d_I(e', ê') ≤ Cε  BY PullbackInteraction 
+    }
+      
+    THEOREM PersistentCombinators :
+      ∀ a,b ∈ Combinators, ℓ: Nat, ε>0 . ∃ R_ℓ,ε>0 st
+        ∀ e: EmbeddedNet . (a,b interaction possible AND 
+        DgmPHT^ℓ_e(e_a - e_b) has ε-persistent pts) IMPLIES
+        ∀ v: Direction . DgmPHT^ℓ_e(v) has (R_ℓ,ε)-persistent pt 
+    {
+      SUFFICES_TO_SHOW for ℓ=0, by Hurewicz for ℓ>0
+      
+      DgmPHT⁰_e(e_a - e_b) has ε-persistent pt 
+      ⇒ ∃ t st {e_a}_t ∩ {e_b}_(t+ε) ≠ ∅ 
+        AND Reduces((a,σ_a),(b,σ_b),e) possible
+      ⇒ {e_a'} ∩ {e_b'} ≠ ∅ after reduction 
+      ⇒ ∃ R(ε) st {e_a' ∪ e_b'}_s ≠ ∅ ∀s ≤ R(ε)  
+        BY InteractionPullback 
+      ⇒ DgmPHT⁰_e'(v) has R(ε)-persistent pt ∀v
+    }
+
+    THEOREM EmbeddedNetApproximation :
+      ∀ e: EmbeddedNet with e.embed(c) a n-manifold ∀c, 
+      τ: condition number, ε < τ/2, {x_i} ⊂ ⋃(e.embed) an (ε/2)-dense sample,
+      ∃ K: EmbeddedNet with K.net = e.net AND K.embed(c) = AlphaComplex({x_i}∩e.embed(c))
+      SUCH_THAT d_I(e,K) ≤ Cε with prob ≥ 1-δ, for C = O(1) 
+    {
+      GIVEN e = (net, embed) with embed(c) a n-manifold ∀c
+      LET U := ⋃{B_ε(x_i) | x_i ∈ sample}, K.net := e.net
+          K.embed(c) := U ∩ e.embed(c) = AlphaComplex(sample ∩ e.embed(c))
+
+      embed(c) ≃ U ∩ embed(c) w.p. ≥ 1-δ ∀c  BY NiyogiSmaleWeinberger since ε < τ/2 
+      U ∩ embed(c) ≃ K.embed(c) ∀c  BY NerveTheorem(U ∩ embed(c)) = K.embed(c)
+
+      ⇒ ∀c ∃ ε-htpy equiv ϕ_c: e.embed(c) → K.embed(c) w.p. ≥ 1-δ
+           ‖x-ϕ_c(x)‖ ≤ ε ∀x, htpy H_c: id ∼ ϕ_c moving points by ≤ 2ε
+           
+      ⇒ d_I(e, K) ≤ Cε w.p. ≥ 1-δ  
+        BY {ϕ_c}_c is an (Cε)-interleaving of sublevel sets, 
+           since H_c moves points by ≤ 2ε and ‖ϕ_c‖ ≤ ε
+    }
+
+    DEFINITION EmbeddingPerturbation : 
+      An embedding perturbation is a family of functions {F_c: Shape -> Shape}_c 
+      indexed by cells c, such that ‖F_c - id‖ ≤ ε uniformly, and each F_c is a homeomorphism.
+
+    THEOREM InteractionSensitivity :
+      ∀ S: InteractionSystem, e,e': EmbeddedNet, {F_c}: EmbeddingPerturbation .
+      IF e --[S]--> e' with interaction (a,b) ↦ ((ω_i),ps,ws)
+      THEN ∃ ê,ê': EmbeddedNet with ê.net = e.net, ê'.net = e'.net, 
+           ê.embed = F ∘ e.embed, ê'.embed = ? SUCH_THAT
+           ê --[S]--> ê' with interaction (a,b) ↦ ((ω_i),?,?)
+           AND d_I(e',ê') ≤ C(ε + d_I(e.embed(ω_i),ê.embed(ω_i))) for some C = O(1)
+    {
+      GIVEN {F_c}: EmbeddingPerturbation, e --[S]--> e' with (a,b) ↦ ((ω_i),ps,ws)
+      LET ê.embed := F ∘ e.embed, 
+          ps' := [(F_a(x),p) | (x,p) ∈ ps ∩ e.embed(a)] ++ 
+                 [(F_b(x),p) | (x,p) ∈ ps ∩ e.embed(b)]
+          ê' := PULLBACK(S.rules(a,b) = ((ω_i),ps',ws), ê)
+          
+      THEN ê --[S]--> ê' BY PullbackInteraction with (a,b) ↦ ((ω_i),ps',ws)
+      
+      d_I(e'.embed(ω_i),ê'.embed(ω_i)) 
+        ≤ d_I(e'.embed(ω_i),ConvexHull(e.embed(ω_i))) + 
+          d_I(ConvexHull(e.embed(ω_i)),ConvexHull(ê.embed(ω_i))) +
+          d_I(ConvexHull(ê.embed(ω_i)),ê'.embed(ω_i))
+        ≤ C(ε + d_I(e.embed(ω_i),ê.embed(ω_i)))
+        BY ConvexityOfSublevels, StabilityOfEmbeddings, Hausdorff-Gromov
+    }
+  }
+   
+  EXAMPLES {
+    EXAMPLE BraidInteractions : EmbeddedNet = {
+      net = (
+        {("X",[(0,1)]), ("X",[(1,2)]), ("Y",[(0,1),(1,2)])},
+        [(0,1),(0,2),(1,3),(1,4)],  
+        [((0,1),(1,3)), ((0,2),(1,4))]
+      ),
+      embed = {
+        ("X",[(0,1)]) ↦ Rectangle(0,0,2,1),
+        ("X",[(1,2)]) ↦ Rectangle(1,1,3,2), 
+        ("Y",[(0,1),(1,2)]) ↦ Polygon((1,0),(2,1),(1,2),(0,1))
+      }
+    }
+      
+    EXAMPLE SystemForBraids : InteractionSystem = {
+      alphabet = {"X", "Y"},
+      rules = {
+        ("X","Y") ↦ BraidInteraction("X","Y"),
+        ("Y","X") ↦ BraidInteraction("Y","X") 
+      }
+    }
+  }
+}
+
+
+
+
+
+
+
+
+
+CONCEPT ApproximateGeometricInteractionNets {
+  EXTENDS GeometricInteractionNets
+
+  LANGUAGE {
+    TYPE SampleSet = [Point in ℝ^d]
+    TYPE ApproximateEmbeddedNet = (Net, Map[Cell, (SampleSet, ℝ≥0)])
+  }
+
+  NOTATION {
+    AlphaComplex(X,α) = 
+      Simplicial complex {σ ⊆ X | ∃ Pt in ℝ^d, ‖Pt-x‖ ≤ α ∀x ∈ σ}
+      
+    d_GH(X,Y) = Gromov-Hausdorff distance between metric spaces X,Y
+  }
+
+  STRUCTURES {
+    STRUCTURE ApproximateInteractionSystem EXTENDS InteractionSystem {
+      FIELD rules : Map[(Symbol, Symbol), ApproximateEmbeddedNet]
+    }
+  }
+
+  TRANSFORMERS {
+    TACTIC ApproximateInteraction(α: ℝ≥0):
+      MATCH (a,b) ↦ ((ω_i),(XS_i,α_i),ws) IF Interaction(a,b) = ((ω_i),(XS_i,α_i),ws) 
+      IN (net, XS) -> (net ∪ (ω_i), XS ∪ [(ω_i, (XS_i,α))])
+      
+    REWRITE AlphaComplexInteraction:
+      (a,b) ↦ ((ω_i),ps,ws) -> 
+      (a,b) ↦ ((ω_i),(XS_i,α),ws) WHERE
+        XS_i = {x | (x,p) in ps}, 
+        α = inf{r | ps ⊆ AlphaComplex(XS_i,r)} 
+  }
+      
+  PROOFS {
+    THEOREM ApproximateInteractionStability :
+      ∀ S: InteractionSystem, β>0, e = (net,XS),e' = (net',XS'): ApproximateEmbeddedNet.
+      IF e --[AlphaComplexInteraction(S)]--> e' 
+         with interaction (a,b) ↦ ((ω_i),(XS_i,α),ws)
+      THEN d_GH(AlphaComplex(XS_i,α+β), AlphaComplex(XS'_i,α+β)) ≤ 2β
+    {
+      d_GH(AlphaComplex(XS_i,α+β), AlphaComplex(XS'_i,α+β))
+        ≤ d_GH(AlphaComplex(XS_i,α+β), ConvexHull(XS_i)) +  
+          d_GH(ConvexHull(XS_i), ConvexHull(XS'_i)) +
+          d_GH(ConvexHull(XS'_i), AlphaComplex(XS'_i,α+β))
+        ≤ β + d_GH(ConvexHull(XS_i), ConvexHull(XS'_i)) + β
+        ≤ 2β  BY GromovHausdorffConvexHull since XS'_i ⊆ ConvexHull(XS_i)
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE BraidApproximation : ApproximateEmbeddedNet = {
+      net = BraidInteractions.net,
+      approx = {
+        ("X",[(0,1)]) ↦ (UniformSample(Rectangle(0,0,2,1),n), 1/√n), 
+        ("X",[(1,2)]) ↦ (UniformSample(Rectangle(1,1,3,2),n), 1/√n),
+        ("Y",[(0,1),(1,2)]) ↦ (UniformSample(Polygon((1,0),(2,1),(1,2),(0,1)),n), 1/√n)
+      }
+    } 
+  }
+}

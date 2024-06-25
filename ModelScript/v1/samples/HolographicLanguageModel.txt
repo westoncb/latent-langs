@@ -1,0 +1,125 @@
+STRUCTURE HolographicLanguageModel {
+  PARAMETERS {
+    VocabSize : Int # Size of the token vocabulary
+    ContextSize : Int # Maximum context length 
+    HiddenSize : Int # Size of hidden states
+    NumLayers : Int # Number of transformer layers
+    NumHeads : Int # Number of attention heads 
+    FFSize : Int # Size of feed-forward expansion
+  }
+
+  NOTATION {
+    ⊛(x, W) := TernaryAccumulate(x, W) # Ternary "MatMul"
+    σ(x) := Sigmoid(x)
+    τ(x) := SiLU(x)
+    S(x) := Softmax(x)
+    LN(x) := LayerNorm(x)
+  }
+
+  DEF TernaryWeight := TensorLike[[Any, Any], {-1, 0, 1}]
+
+  STRUCTURE TernaryLinear(InputSize, OutputSize) {
+    DEF weight : TernaryWeight[InputSize, OutputSize]
+    DEF bias : TensorLike[[OutputSize], Float]
+
+    DEF forward(input : TensorLike[InputSize]) -> TensorLike[OutputSize] := (
+      input ⊛ weight + bias
+    )
+  }
+
+  STRUCTURE TernaryMHA(HiddenSize, NumHeads) {
+    DEF head_size := HiddenSize / NumHeads
+    DEF query_proj : TernaryLinear(HiddenSize, HiddenSize)
+    DEF key_proj : TernaryLinear(HiddenSize, HiddenSize)
+    DEF value_proj : TernaryLinear(HiddenSize, HiddenSize)
+    DEF output_proj : TernaryLinear(HiddenSize, HiddenSize)
+
+    DEF forward(x : TensorLike[HiddenSize]) -> TensorLike[HiddenSize] := (
+      LET q := SPLIT(query_proj.forward(x), NumHeads),
+          k := SPLIT(key_proj.forward(x), NumHeads),
+          v := SPLIT(value_proj.forward(x), NumHeads),
+          scores := [S(q_i ⊛ TRANSPOSE(k_i) / SQRT(head_size))
+                     FOR (q_i, k_i) : ZIP(q, k)],
+          attn := [score ⊛ v_i FOR (score, v_i) : ZIP(scores, v)],
+          concat := CONCAT(attn, -1)
+      IN output_proj.forward(concat)
+    )
+  }
+
+  STRUCTURE TernaryFFN(HiddenSize, FFSize) {
+    DEF proj1 : TernaryLinear(HiddenSize, FFSize)
+    DEF proj2 : TernaryLinear(FFSize, HiddenSize)
+
+    DEF forward(x : TensorLike[HiddenSize]) -> TensorLike[HiddenSize] := (
+      LET expanded := τ(proj1.forward(x))
+      IN proj2.forward(expanded)
+    )
+  }
+
+  STRUCTURE TransformerLayer(HiddenSize, NumHeads, FFSize) {
+    DEF mha := TernaryMHA(HiddenSize, NumHeads)  
+    DEF ffn := TernaryFFN(HiddenSize, FFSize)
+    DEF mha_norm := LayerNorm(HiddenSize)
+    DEF ffn_norm := LayerNorm(HiddenSize)
+
+    DEF forward(x : TensorLike[HiddenSize]) -> TensorLike[HiddenSize] := (
+      LET mha_out := mha.forward(x),
+          mha_residual := LN(x + mha_out),
+          ffn_out := ffn.forward(mha_residual),  
+          ffn_residual := LN(mha_residual + ffn_out)
+      IN ffn_residual
+    )
+  }
+
+  DEF token_embedding : TernaryWeight[VocabSize, HiddenSize]
+  DEF pos_embedding : TensorLike[[ContextSize, HiddenSize], Float]
+  DEF output_proj : TernaryLinear(HiddenSize, VocabSize)
+
+  DEF layers : List[TransformerLayer]
+
+  DEF init := (
+    layers := [TransformerLayer(HiddenSize, NumHeads, FFSize) 
+               FOR _ : RANGE(NumLayers)]
+  )
+
+  DEF encode(context : Sequence[Int]) -> TensorLike[HiddenSize] := (
+    LET input_emb := token_embedding[context] + pos_embedding[0:LENGTH(context)],
+        hidden := FOLDL(
+          (h, layer) -> layer.forward(h),
+          input_emb,
+          layers  
+        )
+    IN hidden[-1]  
+  )
+
+  DEF decode(state : TensorLike[HiddenSize]) -> TensorLike[VocabSize] := (
+    output_proj.forward(state)
+  )
+
+  DEF generate(context : Sequence[Int], max_len : Int) -> Sequence[Int] := (
+    LET state := encode(context),
+        preds := [ARGMAX(decode(state))],
+        generated := preds
+    IN FOR t : [1 .. max_len] DO
+         LET state := encode(context + generated[-ContextSize:]),
+             next_token := ARGMAX(decode(state))
+         IN generated := generated + [next_token] 
+       END
+       RETURN generated
+  )
+
+  [∀context_1, context_2 : Sequence[Int] . 
+    encode(context_1) = encode(context_2) <=>
+    context_1[-ContextSize:] = context_2[-ContextSize:]   
+  ] # Holographic mapping: Sufficiently similar contexts map to same state
+
+  [∀state : TensorLike[HiddenSize] .
+    ∃ context : Sequence[Int] . encode(context) = state  
+  ] # Surjectivity of encoding: Every hidden state is a valid encoding of some context
+
+  [∀context : Sequence[Int] . 
+    SUM(SOFTMAX(decode(encode(context)))) = 1.0
+  ] # Normalized probability distribution
+
+  RETURN generate
+}

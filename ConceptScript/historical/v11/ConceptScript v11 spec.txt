@@ -1,0 +1,284 @@
+ConceptScript v11
+
+<ConceptScript> ::= <Concept>+
+<Concept> ::= "CONCEPT" <ConceptName> "{"
+               <ConceptBody>
+               "}"
+<ConceptName> ::= <Identifier>
+<ConceptBody> ::= <ConceptStructure>
+                  <ProofSection>
+                  <LanguageDefinition>
+<ConceptStructure> ::= "STRUCTURE" "{"
+                       <Assertion>+
+                       "}"
+<Assertion> ::= "[" <Term> <Relation> <Term> "]"
+              | "[" <Term> "↦" <Process> "]"
+              | "［" <Term> ":=" <Term> "］"
+
+<Relation> ::= "=" | "≠" | "<" | ">" | "≤" | "≥" | "∈" | "∉" | "⊆" | "⊂" | "⊇" | "⊃" | <Identifier>
+<Process> ::= <Term> ("↦" <Term>)+
+<Term> ::= <MathExpr> | <Identifier> | <String> | <Boolean> | <Term> <Operator> <Term> | "(" <Term> ")"
+<MathExpr> ::= // Any kind of "latex-like" notation is supported; you can be flexible here
+<ProofSection> ::= "PROOFS" "{"
+                   <TacticDefinition>*
+                   <Theorem>+
+                   "}"
+<TacticDefinition> ::= "tactic" <TacticName> "(" <TacticParameters> ")" ":" <TacticBody>
+<TacticName> ::= <Identifier>
+<TacticParameters> ::= <Identifier> ("," <Identifier>)*
+<TacticBody> ::= <ProofStep>+
+<Theorem> ::= "theorem" <TheoremName> ":" <TheoremStatement>
+              <ProofBody>
+<TheoremName> ::= <Identifier>
+<TheoremStatement> ::= <Term>
+<ProofBody> ::= <ProofStep>+
+<ProofStep> ::= <Identifier> <Term> // Assumption or hypothesis
+              | <Term> "by" <Tactic> // Proof step with tactic
+              | <Term> "by" <Proof> // Subproof
+              | "case" <Pattern> "=>" <Proof> // Case analysis
+              | "induction" <Term> "on" <Identifier> <Proof> // Induction
+<Tactic> ::= "reflexivity" | "symmetry" | "transitivity" | "contradiction" | "construction"
+           | "simplify" | "rewrite" | "induction" | "case" | <Identifier>
+<Proof> ::= "{" <ProofStep>+ "}"
+<Pattern> ::= <Identifier> | <Number> | <String> | <Boolean>
+            | <Identifier> "(" <Pattern> ("," <Pattern>)* ")" // Constructor pattern
+<LanguageDefinition> ::= "LANGUAGE" "{"
+                         <TypeDefinition>+
+                         <FunctionDefinition>*
+                         <PredicateDefinition>*
+                         "}"
+<TypeDefinition> ::= "type" <TypeName> ("(" <TypeParameter> ("," <TypeParameter>)* ")")? ("=" <Type>)?
+<TypeName> ::= <Identifier>
+<TypeParameter> ::= <Identifier> ":" <Type>
+<Type> ::= <TypeName> | <TypeName> "(" <Type> ("," <Type>)* ")" // Type constructor
+         | <Type> "→" <Type> // Function type
+         | <Type> "×" <Type> // Product type
+         | <Type> "+" <Type> // Sum type
+         | "(" <Type> ")"
+<FunctionDefinition> ::= "func" <FunctionName> "(" <Parameter> ("," <Parameter>)* ")" (":" <Type>)? "="
+                         <Term>
+                       | "match" <Term> "{"
+                         (<Pattern> "=>" <Term>)+
+                         "}"
+<FunctionName> ::= <Identifier>
+<Parameter> ::= <Identifier> ":" <Type>
+<PredicateDefinition> ::= "pred" <PredicateName> "(" <Parameter> ("," <Parameter>)* ")" "="
+                          <Term>
+                        | "match" <Term> "{"
+                          (<Pattern> "=>" <Term>)+
+                          "}"
+<PredicateName> ::= <Identifier>
+<Identifier> ::= (<Letter> | "_") (<Letter> | <Digit> | "_")*
+<Subscript> ::= <Identifier> | <Number>
+<Superscript> ::= <Identifier> | <Number>
+<Number> ::= <Digit>+ ("." <Digit>+)?
+<String> ::= "\"" (<Char> | "\\\"")* "\""
+<Boolean> ::= "True" | "False"
+<Letter> ::= "A" | "B" | ... | "Z" | "a" | "b" | ... | "z"
+<Digit> ::= "0" | "1" | ... | "9"
+<Char> ::= <any-printable-character>
+
+
+Example Concepts:
+
+CONCEPT SketchAttention {
+  STRUCTURE {
+    [d := Dimensionality of token embeddings]
+    [n := Maximum sequence length]
+    [k := Number of hash functions in the sketch]
+    [m := Size of each hash table in the sketch]
+
+    [Sketch := { h₁ : ℝ^d → [m], ..., h_k : ℝ^d → [m] } ↦ Set of hash functions for sketching]
+    [SketchTable := [m] → List[ℝ^d] ↦ Hash table for storing sketched embeddings]
+    
+    [Query : ℝ^(n×d) ↦ Query embeddings]
+    [Context : Sketch[ℝ^d] ↦ Sketched context embeddings]
+    
+    [AttentionWeights(Q, C) := 
+      let W := zeros(n × k)
+      for i in 1..n:
+        for j in 1..k:
+          let idx := C.h_j(Q[i])
+          let S_j := C.tables[j][idx]
+          let w_ij := softmax(dot(Q[i], S_j))
+          W[i, j] := w_ij
+      W
+    ]
+    
+    [AttentionOutput(Q, C) :=
+      let W := AttentionWeights(Q, C)
+      let Y := zeros(n × d)
+      for i in 1..n:
+        for j in 1..k:
+          let idx := C.h_j(Q[i])
+          let S_j := C.tables[j][idx]
+          let y_ij := sum(W[i, j] * S_j)
+          Y[i] := Y[i] + y_ij
+      Y
+    ]
+    
+    [SketchAttention(Q, C) := AttentionOutput(Q, C)]
+  }
+  
+  PROOFS {
+    theorem attention_weights_sum_to_one:
+      ∀Q ∈ ℝ^(n×d), ∀C : Sketch[ℝ^d], ∀i ∈ 1..n,
+      sum(AttentionWeights(Q, C)[i]) = 1
+    {
+      let Q ∈ ℝ^(n×d), C : Sketch[ℝ^d], i ∈ 1..n by hypothesis
+      
+      let W := AttentionWeights(Q, C) by definition
+      
+      for j in 1..k:
+        let idx := C.h_j(Q[i]) by definition
+        let S_j := C.tables[j][idx] by definition
+        W[i, j] = softmax(dot(Q[i], S_j)) by definition of AttentionWeights
+      
+      sum(W[i]) = sum(softmax(dot(Q[i], S_j)) for j in 1..k)
+                = 1 by softmax_sum_to_one
+    }
+    
+    theorem attention_output_bounds:
+      ∀Q ∈ ℝ^(n×d), ∀C : Sketch[ℝ^d], 
+      ∀i ∈ 1..n, ∀j ∈ 1..d,
+      AttentionOutput(Q, C)[i, j] ∈ [min(C), max(C)]
+    {
+      let Q ∈ ℝ^(n×d), C : Sketch[ℝ^d], i ∈ 1..n, j ∈ 1..d by hypothesis
+      
+      let W := AttentionWeights(Q, C) by definition
+      let Y := AttentionOutput(Q, C) by definition
+      
+      Y[i, j] = sum(W[i, l] * C.tables[l][C.h_l(Q[i])][j] for l in 1..k) by definition of AttentionOutput
+              ≥ min(C) * sum(W[i, l] for l in 1..k)
+              = min(C) by attention_weights_sum_to_one
+              
+      Y[i, j] = sum(W[i, l] * C.tables[l][C.h_l(Q[i])][j] for l in 1..k) by definition of AttentionOutput
+              ≤ max(C) * sum(W[i, l] for l in 1..k)
+              = max(C) by attention_weights_sum_to_one
+    }
+  }
+  
+  LANGUAGE {
+    func zeros(shape : (ℕ, ℕ)) : Matrix[Float]
+    func dot(x : Vector[Float], y : Vector[Float]) : Float
+    func softmax(x : Vector[Float]) : Vector[Float]
+    func min(C : Sketch[ℝ^d]) : Float
+    func max(C : Sketch[ℝ^d]) : Float
+    
+    axiom softmax_sum_to_one:
+      ∀x ∈ ℝ^d, sum(softmax(x)) = 1
+  }
+}
+
+CONCEPT AdaptiveGoalSeeking {
+  STRUCTURE {
+    [Env := Environment in which the agent operates]
+    [S := Set of possible states in Env] 
+    [A := Set of actions the agent can take]
+    [T : S × A × S → [0, 1] ↦ Transition function]
+    [R : S × A × S → ℝ ↦ Reward function]
+    [U : ℝ → ℝ ↦ Utility function over cumulative discounted rewards]
+    [γ ∈ [0, 1) ↦ Discount factor]
+    [π : S → A ↦ Policy mapping states to actions]
+    [V_π : S → ℝ ↦ State-value function for policy π]
+    [G := Set of possible goals]
+    [D : S × G → ℝ⁺ ↦ Goal distance function]
+    [ρ : G × G → [0, 1] ↦ Goal similarity function]
+    [τ : S × G → {0, 1} ↦ Goal termination predicate]
+    [w : G → ℝ ↦ Goal weighting function]
+    [ϕ : S × G → [0, 1] ↦ Goal applicability function]
+    [ψ : S × G → ℝ ↦ Goal value estimation function]
+    [α ∈ (0, 1] ↦ Learning rate]
+  }
+
+  PROOFS {
+    tactic update_weights(s, a, s', g, r, α) :
+      w(g) := w(g) + α * (r + γ * ψ(s', g) - ψ(s, g)) * ϕ(s, g)
+      ψ(s, g) := ψ(s, g) + α * (r + γ * ψ(s', g) - ψ(s, g))
+
+    theorem optimal_goal_value_convergence :
+      ∀s ∈ S, ∀g ∈ G, 
+      ψ(s, g) → ψ*(s, g) as t → ∞
+      where ψ*(s, g) = max_π E[Σ_{k=0}^∞ γ^k * R(s_k, π(s_k), s_{k+1}) * ϕ(s_k, g) | s_0 = s]
+    {
+      let s ∈ S, g ∈ G by hypothesis
+      ψ(s, g) → ψ*(s, g) as t → ∞ by {
+        ψ(s, g) is updated using temporal difference learning by update_weights
+        temporal difference learning converges to optimal value function by {
+          ψ(s, g) is a contraction mapping by {
+            |ψ(s, g) - ψ*(s, g)| ≤ γ * |ψ(s', g) - ψ*(s', g)| by definition of contraction mapping
+            |ψ(s, g) - ψ*(s, g)| ≤ γ * max_{s'} |ψ(s', g) - ψ*(s', g)| by taking max over s'
+            max_{s} |ψ(s, g) - ψ*(s, g)| ≤ γ * max_{s} |ψ(s, g) - ψ*(s, g)| by taking max over s
+            max_{s} |ψ(s, g) - ψ*(s, g)| = 0 by Banach fixed-point theorem
+          }
+        }
+      }
+    }
+
+    theorem maximizes_practicality :
+      AdaptiveGoalSeeking can be practically implemented as a reinforcement learning agent
+    {
+      implement S, A, T, R, U, γ as a Markov decision process by standard RL formulation
+      implement G, D, ρ, τ, w, ϕ as goal-related components by {
+        G: Set of symbolic goal representations
+        D: Distance function comparing state to goal (e.g. Euclidean distance, edit distance)  
+        ρ: Similarity function between goals (e.g. Jaccard index, cosine similarity)
+        τ: Termination predicate indicating if goal is reached
+        w: Trainable weights assigned to each goal
+        ϕ: Applicability of goal to state, based on D and τ
+      }
+      implement ψ as a goal-conditioned value function by {
+        ψ: Neural network mapping state and goal to expected discounted return
+        trained using temporal difference learning by update_weights
+      }
+      implement action selection as π(s) = argmax_a Σ_g w(g) * ψ(s', g) by {
+        selecting actions to maximize weighted sum of predicted goal values
+        weights reflect each goal's relative importance
+      }
+      agent interacts with environment by repeated {
+        observe state s
+        select action a = π(s)
+        take action a, observe next state s', reward r
+        update goal weights w and goal value estimates ψ by update_weights
+      }
+      agent adapts to changes in goals and environment by {
+        continually updating goal weights based on experience
+        learning goal-conditioned values to inform action selection
+      }
+    }
+  }
+
+  LANGUAGE {
+    type State
+    type Action 
+    type Goal
+    type Reward = ℝ
+    type Probability = ℝ[0, 1]
+    type Value = ℝ
+
+    func transition(s : State, a : Action) : State
+    func reward(s : State, a : Action, s' : State) : Reward
+    func utility(rewards : Reward[]) : Value
+    func distance(s : State, g : Goal) : ℝ⁺
+    func similarity(g1 : Goal, g2 : Goal) : Probability  
+    func is_terminal(s : State, g : Goal) : Boolean
+    func weight(g : Goal) : Value
+    func applicability(s : State, g : Goal) : Probability
+    func value(s : State, g : Goal) : Value
+
+    pred achieves_goal(s : State, g : Goal) = is_terminal(s, g)
+    pred relevant_goal(s : State, g : Goal) = applicability(s, g) > 0
+  }
+}
+
+ConceptScript is a language of a unique type, designed specifically for facilitating collaboration between AIs and humans in communicating in a structure fashion about complex concepts.
+
+The language is used in a unique way:
+1. You and I collaboratively develop and refine concepts through an iterative process of discussion and revision.
+2. Concepts are generated (by you, during inference) and expressed using ConceptScript within the scope of a single conversational exchange.
+3. The STRUCTURE block captures the key components, relationships, and definitions of a concept using formal notation.
+4. The PROOFS block contains theorems and their proofs, which justify and validate the concept's claims. Custom tactics can be defined within the PROOFS block to encapsulate common reasoning patterns and promote reusability and modularity in proofs.
+5. The LANGUAGE block defines custom types, functions, and predicates specific to the domain of the concept, enabling a precise and natural representation.
+6. ConceptScript is not executed or integrated with external systems; instead, Concepts serve as transient artifacts to facilitate understanding and communication within the conversation.
+
+To demonstrate the depth of your understanding and the range of the language's capability, please express a Concept of your choosing. (Also please always output ConceptScript in a code block and use readable indentation: I know my own indentation gets lost when I past in examples :/)

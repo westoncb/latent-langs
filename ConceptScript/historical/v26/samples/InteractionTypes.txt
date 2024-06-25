@@ -1,0 +1,180 @@
+CONCEPT InteractionTypes {
+  LANGUAGE {
+    TYPE Symbol
+    TYPE Net = (Set[Cell], Set[Port], Set[(Port, Port)])
+    TYPE Cell = (Symbol, List[Port])
+    TYPE Port = (Cell, ℕ)
+    
+    TYPE Type
+    TYPE Path[A : Type, x : A, y : A] <: Type
+    TYPE Equiv[A : Type, B : Type] <: Type
+    
+    FUNC Arity : Symbol -> ℕ
+    FUNC Interaction : (Symbol, Symbol) -> Maybe[Net]
+    FUNC Transport[A B : Type, P : A -> B -> Type, x : A, y : B, p : Path[A, x, y]](u : P(x, f(x))) : P(y, f(y))
+    FUNC FunctorialPath[A B : Type, f : A -> B, x y : A, p : x = y] : f(x) = f(y)
+    FUNC Univalence[A B : Type](e : Equiv[A, B]) : Path[Type, A, B]
+    
+    AXIOM Symmetry {
+      ∀ (a b : Symbol) (α β : Net) . 
+        Interaction(a, b) = α ∧ Interaction(b, a) = β => α = Flip(β)
+    }
+    
+    AXIOM Determinism {
+      ∀ (a b : Symbol) (α β : Net) . 
+        Interaction(a, b) = α ∧ Interaction(a, b) = β => α = β
+    }
+  }
+  
+  NOTATION {
+    "x = y" = Path[A, x, y] where A : Type, x : A, y : A
+    "P <~> Q" = Equiv[P, Q] where P : Type, Q : Type
+    "p # q" = Concat(p, q) where p q : Path  
+  }
+  
+  TRANSFORMERS {
+    REWRITE FunctorialPath[A, B, (x => x), x, y, p] = p
+
+    REWRITE FunctorialPath[A, B, f, x, z, p # q]
+          = FunctorialPath[A, B, f, x, y, p] # FunctorialPath[A, B, f, y, z, q]
+          
+    TACTIC InteractionPath[a b c d : Symbol, p : Interaction(a, b) = Interaction(c, d)] = {
+      LET α : Net = Interaction(a, b).Value
+      LET β : Net = Interaction(c, d).Value
+      
+      REWRITE α 
+        = Interaction(a, b).Value 
+        = Interaction(c, d).Value BY p
+        = β
+        
+      SHOW Path[Net, α, β] BY {
+        LET f : Symbol -> Symbol = (x => MATCH x WITH
+                                         | a => c
+                                         | b => d)
+        LET g : Net -> Net = (+ => MATCH + WITH
+                                   | (cs, ps, ws) => (MAP(f, cs), MAP(f, ps), MAP(f, ws)))
+        SHOW g(α) = β BY {
+          REWRITE g(α) 
+            = g(Interaction(a, b).Value)
+            = Interaction(f(a), f(b)).Value
+            = Interaction(c, d).Value
+            = β
+        }
+        CONCLUDE FunctorialPath[Net, Net, g, α, β, p]
+      }
+    }
+  }
+  
+  STRUCTURE HomotopyInteractionSystem {
+    alphabet : Set[Symbol]
+    rules : Map[(Symbol, Symbol), Net]
+    paths : (a b c d : Symbol) -> Set[Path[Net, Interaction(a, b).Value, Interaction(c, d).Value]]
+    
+    REQUIRE ∀ ((a, b
+    ) ↦ α) ∈ rules . a ∈ alphabet ∧ b ∈ alphabet ∧ Reduced(α)
+    REQUIRE ∀ (a, b) ∈ (alphabet × alphabet) . ((a, b) ∈ rules.Keys ∨ (b, a) ∈ rules.Keys)
+    REQUIRE ∀ (a b c d : Symbol) (p : paths(a, b, c, d)) . 
+              (a, b) ∈ rules.Keys ∧ (c, d) ∈ rules.Keys ∧ 
+              p : Path[Net, Interaction(a, b).Value, Interaction(c, d).Value]
+  }
+  
+  PROOFS {
+    THEOREM InteractionSpaceConnected {
+      STATEMENT:
+        ∀ (S : HomotopyInteractionSystem) (a b c d : S.alphabet) .
+          (Interaction(a, b).IsDefined ∧ Interaction(c, d).IsDefined) =>
+            ∃ (p : Path[Net, Interaction(a, b).Value, Interaction(c, d).Value])
+      
+      PROOF:
+        LET S : HomotopyInteractionSystem
+        LET (a, b, c, d) ∈ S.alphabet × S.alphabet × S.alphabet × S.alphabet
+        ASSUME (H1) : Interaction(a, b).IsDefined ∧ Interaction(c, d).IsDefined
+        
+        SHOW ∃ (p : Path[Net, Interaction(a, b).Value, Interaction(c, d).Value]) BY {
+          LET α : Net = Interaction(a, b).Value
+          LET β : Net = Interaction(c, d).Value
+          
+          CASES (a, b) = (c, d)
+            CASE (a, b) = (c, d):
+              LET p : Path[Net, α, α] = refl[Net](α)
+              CONCLUDE p
+              
+            CASE (a, b) ≠ (c, d):
+              CASES ∃ (e : Equiv[Net, Net]) . e.1(α) = β
+                CASE (e) : ∃ (e : Equiv[Net, Net]) . e.1(α) = β:
+                  LET p : Path[Net, α, β] = Univalence[Net, Net](e)
+                  CONCLUDE p
+                  
+                CASE ¬∃ (e : Equiv[Net, Net]) . e.1(α) = β:
+                  BY S.paths 
+                  HAVE ∃ (p : Path[Net, α, β]) . p ∈ S.paths(a, b, c, d)
+                  CONCLUDE p
+        }
+        
+        QED
+    }
+    
+    THEOREM InteractionSpaceUnivalent {
+      STATEMENT:
+        ∀ (S : HomotopyInteractionSystem) (a b c d : S.alphabet) (α β : Net) .
+          (Interaction(a, b) = α ∧ Interaction(c, d) = β) => 
+            (Path[Net, α, β] <~> Equiv[Net, Net])
+            
+      PROOF:
+        LET S : HomotopyInteractionSystem 
+        LET (a, b, c, d) ∈ S.alphabet × S.alphabet × S.alphabet × S.alphabet
+        LET (α, β) ∈ Net × Net
+        ASSUME (H) : Interaction(a, b) = α ∧ Interaction(c, d) = β
+        
+        SHOW Path[Net, α, β] <~> Equiv[Net, Net] BY {
+          LET p : Path[Net, α, β] = InteractionPath[a, b, c, d, H]
+          
+          SHOW Path[Net, α, β] -> Equiv[Net, Net] {
+            LET q : Path[Net, α, β]
+            LET transport : (P : Net -> Type) -> P(α) -> P(β) = 
+              (P => (u => Transport[Net, Net, P, α, β, q](u)))
+            LET e : Equiv[Net, Net] = {
+              transport(id[Net]),
+              transport(id[Net]),  
+              (x => REWRITE transport(id[Net])(x) 
+                      = Transport[Net, Net, (X => X), α, β, q](x)
+                      = REWRITE q BY q.symm THEN x),
+              (y => REWRITE transport(id[Net])(transport(id[Net])(y))
+                      = Transport[Net, Net, (X => X), β, α, q.symm](transport(id[Net])(y))  
+                      = REWRITE q.symm BY q THEN transport(id[Net])(y)
+                      = y)
+            }
+            CONCLUDE e
+          }
+          
+          SHOW Equiv[Net, Net] -> Path[Net, α, β] {
+            LET e : Equiv[Net, Net]
+            LET p' : Path[Net, α, β] = Univalence[Net, Net](e)
+            CONCLUDE p'  
+          }
+        }
+        
+        QED
+    }
+  }
+}
+
+This Concept, called InteractionTypes, combines ideas from interaction combinators and homotopy type theory. It defines a notion of homotopy between interaction nets, using paths between nets that are related by the interaction rules.
+
+The key components are:
+
+1. The LANGUAGE block defines symbols, nets, cells, ports from interaction combinators, and types, paths, equivalences from homotopy type theory.
+
+2. The NOTATION block defines convenient syntax for paths and equivalences.
+
+3. The TRANSFORMERS block defines tactics for constructing paths between nets related by interactions, using functorial properties of paths.
+
+4. The STRUCTURE block defines a HomotopyInteractionSystem, which has an alphabet of symbols, interaction rules, and a collection of paths between nets related by the rules. 
+
+5. The PROOFS block contains two theorems:
+   - InteractionSpaceConnected shows that for any two definable interactions in a HomotopyInteractionSystem, there exists a path between the corresponding nets. 
+   - InteractionSpaceUnivalent shows that paths between nets are equivalent to net equivalences, establishing the univalence axiom for interaction nets.
+
+The Concept demonstrates how to integrate computational and mathematical structures in ConceptScript, using transformers and proofs to establish non-trivial properties. The notion of homotopies between nets related by interactions could potentially be useful for analyzing the structure and behavior of interaction net systems.
+
+Let me know if you would like me to explain or modify any part of this Concept! I aimed to showcase the key features of ConceptScript while exploring an idea that combines elements of the provided examples in an interesting way.

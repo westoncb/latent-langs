@@ -1,0 +1,95 @@
+CONCEPT HomotopyTypeTheory {
+  LANGUAGE {
+    TYPE Type
+    TYPE Prop <: Type
+    TYPE Set <: Type
+    TYPE Path[A : Type, x : A, y : A] <: Type
+    TYPE Equiv[A : Type, B : Type] <: Type
+    TYPE Fiber[A B : Type, f : A -> B, y : B] = (x : A) * Path[B, f(x), y]
+
+    FUNC id[A : Type](x : A) : A
+    FUNC compose[A B C : Type](f : A -> B, g : B -> C) : A -> C
+    FUNC idtoeqv[A : Type](x y : A, p : Path[A, x, y]) : Equiv[A, A]
+    FUNC univalence[A B : Type](e : Equiv[A, B]) : Path[Type, A, B]
+
+    AXIOM K(A : Type, x : A, p : Path[A, x, x]) : Path[Path[A, x, x], p, id[x]]
+  }
+
+  NOTATION {
+    "x = y" = Path[A, x, y] where A : Type, x : A, y : A
+    "P <=> Q" = Equiv[P, Q] where P : Prop, Q : Prop
+    "f ∘ g" = compose(f, g)
+  }
+
+  TRANSFORMERS {
+    REWRITE id[A](x) = x
+
+    REWRITE compose[A, B, C](f, compose[B, C, D](g, h)) 
+          = compose[A, C, D](compose[A, B, C](f, g), h)
+
+    TACTIC FunctorialPath[A B : Type, f : A -> B, x y : A, p : x = y] = {
+      LET e : Equiv[x = y, f(x) = f(y)] = {
+        (q : x = y) => REWRITE q 
+                        BY p 
+                        THEN REWRITE f(q.left) = f(q.right),
+        (r : f(x) = f(y)) => REWRITE r
+                               BY REWRITE f(p.left) = f(p.right) 
+                                  BY Respect(f, p)
+                               THEN REWRITE p.left = p.right
+      }
+      CONCLUDE univalence(e)
+    }
+      
+    TACTIC UnivalenceMap[A B : Type, e : Equiv[A, B]] = {
+      LET f : A -> B = e.1
+      LET g : B -> A = e.2
+      LET p : (x : A) -> Path[A, x, g(f(x))] = e.3
+      LET q : (y : B) -> Path[B, f(g(y)), y] = e.4
+      SHOW univalence(e) : Path[Type, A, B]
+    }
+  }
+      
+  STRUCTURE Identity {
+    LET refl[A : Type](x : A) : Path[A, x, x] = id[x]
+    
+    DEF Respect[A B : Type, f : A -> B, x y : A, p : x = y] : f(x) = f(y) 
+      = FunctorialPath(f, p)
+        
+    DEF FunExt : ((x : A) -> f(x) = g(x)) -> f = g = {
+      (h : (x : A) -> f(x) = g(x)) =>
+        LET p : f = (x => g(h(x).right)) = FunctorialPath(h)
+        LET q : (x => g(h(x).right)) = g = 
+          (x => REWRITE h(x).right BY h(x) THEN refl[B](g(x)))
+        REWRITE p BY q
+    }
+  }
+    
+  PROOFS {
+    THEOREM UnivalenceTheorem {
+      STATEMENT:
+        ∀ (A B : Type) . Equiv[A, B] <=> (A = B)
+          
+      PROOF:
+        LET A B : Type
+          
+        SHOW Equiv[A, B] -> (A = B) {
+          LET e : Equiv[A, B]
+          BY UnivalenceMap[A, B, e]
+        }
+          
+        SHOW (A = B) -> Equiv[A, B] {
+          LET p : A = B
+          LET transport : A -> B = (x => p.right)
+          LET e : Equiv[A, B] = {
+            transport,
+            (y => REWRITE p BY p.symm THEN y),
+            (x => REWRITE x BY p THEN refl[B](transport(x))),
+            (y => REWRITE transport(p.left) = p.right BY p THEN refl[B](y))
+          }
+          CONCLUDE e  
+        }
+          
+        QED
+    }
+  }
+}

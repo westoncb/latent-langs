@@ -1,0 +1,620 @@
+CONCEPT ProgrammingLanguageFramework {
+  LANGUAGE {
+    TYPE Program = Statements × Variables × Functions
+    TYPE Statement
+    TYPE Variable = Identifier × Type × Value
+    TYPE Function = Identifier × Parameters × ReturnType × Body
+    TYPE Type
+    TYPE Value
+    TYPE Identifier
+    TYPE Parameters = List[Variable]
+    TYPE Body = List[Statement]
+    TYPE ReturnType <: Type
+    
+    FUNC Assign(v : Variable, val : Value) -> Statement
+    FUNC Declare(v : Variable) -> Statement
+    FUNC If(cond : Expression, body : Body) -> Statement
+    FUNC While(cond : Expression, body : Body) -> Statement
+    FUNC For(init : Statement, cond : Expression, update : Statement, body : Body) -> Statement
+    FUNC Return(expr : Expression) -> Statement
+    
+    FUNC Call(f : Function, args : List[Value]) -> Expression
+    FUNC Access(v : Variable) -> Expression
+    FUNC Literal(val : Value) -> Expression
+    
+    FUNC Add(e1 : Expression, e2 : Expression) -> Expression
+    FUNC Subtract(e1 : Expression, e2 : Expression) -> Expression
+    FUNC Multiply(e1 : Expression, e2 : Expression) -> Expression
+    FUNC Divide(e1 : Expression, e2 : Expression) -> Expression
+    
+    FUNC Equal(e1 : Expression, e2 : Expression) -> Expression
+    FUNC NotEqual(e1 : Expression, e2 : Expression) -> Expression
+    FUNC GreaterThan(e1 : Expression, e2 : Expression) -> Expression
+    FUNC LessThan(e1 : Expression, e2 : Expression) -> Expression
+    FUNC GreaterThanOrEqual(e1 : Expression, e2 : Expression) -> Expression
+    FUNC LessThanOrEqual(e1 : Expression, e2 : Expression) -> Expression
+    
+    FUNC And(e1 : Expression, e2 : Expression) -> Expression
+    FUNC Or(e1 : Expression, e2 : Expression) -> Expression
+    FUNC Not(e : Expression) -> Expression
+    
+    FUNC Execute(p : Program, input : List[Value]) -> List[Value]
+    FUNC Evaluate(e : Expression, env : Environment) -> Value
+    FUNC RunFunction(f : Function, args : List[Value], env : Environment) -> Value
+    
+    PRED WellTyped(p : Program)
+    PRED FunctionExists(p : Program, name : Identifier)
+    PRED VariableExists(p : Program, name : Identifier)
+    PRED NoUnusedVariables(p : Program)
+    PRED NoUndefinedVariables(p : Program)
+    PRED NoUnusedFunctions(p : Program)
+    PRED NoUndefinedFunctions(p : Program)
+    
+    NOTATION "PROGRAM" = Program
+    NOTATION "VAR" = Declare
+    NOTATION "=" = Assign
+    NOTATION "IF" = If
+    NOTATION "WHILE" = While
+    NOTATION "FOR" = For
+    NOTATION "FUNC" = Function
+    NOTATION "RETURN" = Return
+    NOTATION "+" = Add
+    NOTATION "-" = Subtract
+    NOTATION "*" = Multiply
+    NOTATION "/" = Divide
+    NOTATION "==" = Equal
+    NOTATION "!=" = NotEqual
+    NOTATION ">" = GreaterThan
+    NOTATION "<" = LessThan
+    NOTATION ">=" = GreaterThanOrEqual
+    NOTATION "<=" = LessThanOrEqual
+    NOTATION "AND" = And
+    NOTATION "OR" = Or
+    NOTATION "NOT" = Not
+  }
+
+  AXIOM {
+    ; Well-typed programs do not get stuck
+    FORALL (p : Program).
+      WellTyped(p) ->
+        FORALL (input : List[Value]) (output : List[Value]).
+          Execute(p, input) == output -> 
+            FORALL (v : Value) (v IN output). TypeOf(v) <: ReturnType(MainFunction(p))
+            
+    ; Function and variable existence properties
+    FORALL (p : Program) (name : Identifier).
+      FunctionExists(p, name) <->
+        EXISTS (f : Function) (f IN Functions(p)). Identifier(f) == name
+        
+    FORALL (p : Program) (name : Identifier).
+      VariableExists(p, name) <->  
+        EXISTS (v : Variable) (v IN Variables(p)). Identifier(v) == name
+        
+    ; Unused and undefined function and variable properties  
+    FORALL (p : Program).
+      NoUnusedVariables(p) <->
+        FORALL (v : Variable) (v IN Variables(p)).
+          EXISTS (s : Statement) (s IN Statements(p)). UsesVariable(s, v)
+          
+    FORALL (p : Program).  
+      NoUndefinedVariables(p) <->
+        FORALL (s : Statement) (s IN Statements(p)) (v : Variable).
+          UsesVariable(s, v) -> VariableExists(p, Identifier(v))
+          
+    FORALL (p : Program).
+      NoUnusedFunctions(p) <->  
+        FORALL (f : Function) (f IN Functions(p)).
+          f != MainFunction(p) ->
+            EXISTS (s : Statement) (s IN Statements(p)). UsesFunction(s, f)
+            
+    FORALL (p : Program).
+      NoUndefinedFunctions(p) <->
+        FORALL (s : Statement) (s IN Statements(p)) (f : Function).  
+          UsesFunction(s, f) -> FunctionExists(p, Identifier(f))
+  }
+
+  STRUCTURE {
+    REWRITE Execute(Program(stmts, vars, funcs), input) <->
+      LET initialEnv = MapFromList(ZIP(vars, input)) IN
+      RunStatements(stmts, initialEnv)
+
+    REWRITE Evaluate(Access(v), env) <-> env[Identifier(v)]
+    REWRITE Evaluate(Literal(val), env) <-> val
+    REWRITE Evaluate(Call(f, args), env) <->
+      LET evaledArgs = MAP(arg => Evaluate(arg, env), args) IN  
+      RunFunction(f, evaledArgs, env)
+
+    REWRITE Evaluate(Add(e1, e2), env) <-> Evaluate(e1, env) + Evaluate(e2, env)
+    REWRITE Evaluate(Subtract(e1, e2), env) <-> Evaluate(e1, env) - Evaluate(e2, env)  
+    REWRITE Evaluate(Multiply(e1, e2), env) <-> Evaluate(e1, env) * Evaluate(e2, env)
+    REWRITE Evaluate(Divide(e1, e2), env) <-> Evaluate(e1, env) / Evaluate(e2, env)
+      
+    REWRITE Evaluate(Equal(e1, e2), env) <-> Evaluate(e1, env) == Evaluate(e2, env)
+    REWRITE Evaluate(NotEqual(e1, e2), env) <-> Evaluate(e1, env) != Evaluate(e2, env)
+    REWRITE Evaluate(GreaterThan(e1, e2), env) <-> Evaluate(e1, env) > Evaluate(e2, env)
+    REWRITE Evaluate(LessThan(e1, e2), env) <-> Evaluate(e1, env) < Evaluate(e2, env)
+    REWRITE Evaluate(GreaterThanOrEqual(e1, e2), env) <-> Evaluate(e1, env) >= Evaluate(e2, env)
+    REWRITE Evaluate(LessThanOrEqual(e1, e2), env) <-> Evaluate(e1, env) <= Evaluate(e2, env)
+
+    REWRITE Evaluate(And(e1, e2), env) <-> Evaluate(e1, env) AND Evaluate(e2, env)  
+    REWRITE Evaluate(Or(e1, e2), env) <-> Evaluate(e1, env) OR Evaluate(e2, env)
+    REWRITE Evaluate(Not(e), env) <-> NOT Evaluate(e, env)
+  }
+
+  PROOFS {
+    TACTIC VariableSubstitution(e, v, x) = MATCH e WITH
+      | Access(v') => IF v' == v THEN x ELSE e
+      | Call(f, args) => Call(f, MAP(arg => VariableSubstitution(arg, v, x), args))
+      | _ => e
+
+    THEOREM ExpressionEvaluation {
+      FORALL (e : Expression) (env : Environment) (v : Value).
+        Evaluate(e, env) == v <->
+          EXISTS (e' : Expression). Substitute(e, env) == e' AND Evaluate(e', EmptyEnvironment) == v
+    }
+
+    THEOREM StatementExecution {
+      FORALL (s : Statement) (env : Environment) (env' : Environment).  
+        RunStatement(s, env) == env' <->
+          MATCH s WITH
+          | Assign(v, e) => env' == env[Identifier(v) -> Evaluate(e, env)]
+          | If(c, b1, b2) => 
+              IF Evaluate(c, env) 
+              THEN RunStatements(b1, env) == env'
+              ELSE RunStatements(b2, env) == env'  
+          | While(c, b) =>
+              IF Evaluate(c, env)
+              THEN LET env'' = RunStatements(b, env) IN RunStatement(While(c, b), env'') == env'
+              ELSE env == env'
+          | _ => env == env'
+    }
+      
+    THEOREM ProgramExecution {
+      FORALL (p : Program) (input : List[Value]) (output : List[Value]).
+        Execute(p, input) == output <->
+          LET initialEnv = MapFromList(ZIP(Variables(p), input)) IN
+          LET finalEnv = RunStatements(Statements(p), initialEnv) IN
+          output == MapValues(finalEnv)
+    }
+
+    THEOREM ExpressionSubstitution {
+      FORALL (e : Expression) (env : Environment).  
+        Evaluate(e, env) == Evaluate(Substitute(e, env), EmptyEnvironment)
+    }
+  }
+}
+
+CONCEPT SimpleImperativeLanguage : ProgrammingLanguageFramework {
+  STRUCTURE {
+    DEF IntType -> Type  
+    DEF BoolType -> Type
+    DEF StringType -> Type
+    
+    DEF IntLiteral(n : Int) -> Expression = Literal(IntValue(n))
+    DEF BoolLiteral(b : Bool) -> Expression = Literal(BoolValue(b))
+    DEF StringLiteral(s : String) -> Expression = Literal(StringValue(s))
+    
+    DEF PrintStatement(e : Expression) -> Statement =
+      Call(PrintFunction, [e])
+      
+    DEF ReadStatement(v : Variable) -> Statement =  
+      Assign(v, Call(ReadFunction, []))
+      
+    DEF TypeOf(IntLiteral(_)) -> Type = IntType
+    DEF TypeOf(BoolLiteral(_)) -> Type = BoolType  
+    DEF TypeOf(StringLiteral(_)) -> Type = StringType
+
+    REWRITE TypeOf(Add(e1, e2)) <-> 
+      IF TypeOf(e1) == IntType AND TypeOf(e2) == IntType THEN IntType ELSE TypeError
+    REWRITE TypeOf(Subtract(e1, e2)) <->
+      IF TypeOf(e1) == IntType AND TypeOf(e2) == IntType THEN IntType ELSE TypeError
+    REWRITE TypeOf(Multiply(e1, e2)) <->  
+      IF TypeOf(e1) == IntType AND TypeOf(e2) == IntType THEN IntType ELSE TypeError
+    REWRITE TypeOf(Divide(e1, e2)) <->
+      IF TypeOf(e1) == IntType AND TypeOf(e2) == IntType THEN IntType ELSE TypeError
+      
+    REWRITE TypeOf(Equal(e1, e2)) <->
+      IF TypeOf(e1) == TypeOf(e2) THEN BoolType ELSE TypeError  
+    REWRITE TypeOf(NotEqual(e1, e2)) <->
+      IF TypeOf(e1) == TypeOf(e2) THEN BoolType ELSE TypeError
+    REWRITE TypeOf(GreaterThan(e1, e2)) <->  
+      IF TypeOf(e1) == IntType AND TypeOf(e2) == IntType THEN BoolType ELSE TypeError
+    REWRITE TypeOf(LessThan(e1, e2)) <->
+      IF TypeOf(e1) == IntType AND TypeOf(e2) == IntType THEN BoolType ELSE TypeError
+    REWRITE TypeOf(GreaterThanOrEqual(e1, e2)) <->
+      IF TypeOf(e1) == IntType AND TypeOf(e2) == IntType THEN BoolType ELSE TypeError  
+    REWRITE TypeOf(LessThanOrEqual(e1, e2)) <->
+      IF TypeOf(e1) == IntType AND TypeOf(e2) == IntType THEN BoolType ELSE TypeError
+      
+    REWRITE TypeOf(And(e1, e2)) <->
+      IF TypeOf(e1) == BoolType AND TypeOf(e2) == BoolType THEN BoolType ELSE TypeError
+    REWRITE TypeOf(Or(e1, e2)) <->  
+      IF TypeOf(e1) == BoolType AND TypeOf(e2) == BoolType THEN BoolType ELSE TypeError
+    REWRITE TypeOf(Not(e)) <->
+      IF TypeOf(e) == BoolType THEN BoolType ELSE TypeError
+  }
+
+  PROOFS {  
+    THEOREM TypeSoundness {
+      FORALL (p : Program).
+        WellTyped(p) ->
+          FORALL (input : List[Value]) (output : List[Value]).
+            Execute(p, input) == output ->
+              FORALL (v : Value) (v IN output). TypeOf(v) <: ReturnType(MainFunction(p))
+    }
+  }  
+}
+
+CONCEPT SimpleFunctionalLanguage : ProgrammingLanguageFramework {
+  STRUCTURE {
+    DEF IntType -> Type
+    DEF BoolType -> Type
+    DEF FunctionType(argType : Type, retType : Type) -> Type
+    
+    DEF IntLiteral(n : Int) -> Expression = Literal(IntValue(n))
+    DEF BoolLiteral(b : Bool) -> Expression = Literal(BoolValue(b))
+    DEF Lambda(arg : Variable, body : Expression) -> Expression
+    
+    DEF LetExpression(v : Variable, e1 : Expression, e2 : Expression) -> Expression =
+      Call(Lambda(v, e2), [e1])
+      
+    DEF LetRecExpression(f : Function, e : Expression) -> Expression =
+      LetExpression(FunctionVariable(f), Lambda(FunctionVariable(f), FunctionBody(f)), e)
+      
+    DEF TypeOf(IntLiteral(_)) -> Type = IntType
+    DEF TypeOf(BoolLiteral(_)) -> Type = BoolType
+    DEF TypeOf(Lambda(arg, body)) -> Type = FunctionType(TypeOf(arg), TypeOf(body))
+    
+    REWRITE TypeOf(Add(e1, e2)) <->
+      IF TypeOf(e1) == IntType AND TypeOf(e2) == IntType THEN IntType ELSE TypeError
+    REWRITE TypeOf(Subtract(e1, e2)) <->  
+      IF TypeOf(e1) == IntType AND TypeOf(e2) == IntType THEN IntType ELSE TypeError
+    REWRITE TypeOf(Multiply(e1, e2)) <->
+      IF TypeOf(e1) == IntType AND TypeOf(e2) == IntType THEN IntType ELSE TypeError
+    REWRITE TypeOf(Divide(e1, e2)) <->
+      IF TypeOf(e1) == IntType AND TypeOf(e2) == IntType THEN IntType ELSE TypeError
+      
+    REWRITE TypeOf(Equal(e1, e2)) <->
+      IF TypeOf(e1) == TypeOf(e2) THEN BoolType ELSE TypeError
+    REWRITE TypeOf(NotEqual(e1, e2)) <->  
+      IF TypeOf(e1) == TypeOf(e2) THEN BoolType ELSE TypeError
+    REWRITE TypeOf(GreaterThan(e1, e2)) <->
+      IF TypeOf(e1) == IntType AND TypeOf(e2) == IntType THEN BoolType ELSE TypeError
+    REWRITE TypeOf(LessThan(e1, e2)) <->
+      IF TypeOf(e1) == IntType AND TypeOf(e2) == IntType THEN BoolType ELSE TypeError  
+    REWRITE TypeOf(GreaterThanOrEqual(e1, e2)) <->
+      IF TypeOf(e1) == IntType AND TypeOf(e2) == IntType THEN BoolType ELSE TypeError
+    REWRITE TypeOf(LessThanOrEqual(e1, e2)) <->  
+      IF TypeOf(e1) == IntType AND TypeOf(e2) == IntType THEN BoolType ELSE TypeError
+      
+    REWRITE TypeOf(And(e1, e2)) <->
+      IF TypeOf(e1) == BoolType AND TypeOf(e2) == BoolType THEN BoolType ELSE TypeError
+    REWRITE TypeOf(Or(e1, e2)) <->
+      IF TypeOf(e1) == BoolType AND TypeOf(e2) == BoolType THEN BoolType ELSE TypeError
+    REWRITE TypeOf(Not(e)) <->  
+      IF TypeOf(e) == BoolType THEN BoolType ELSE TypeError
+      
+    REWRITE TypeOf(Call(Lambda(arg, body), [e])) <->
+      LET argType = TypeOf(arg), bodyType = TypeOf(body), eType = TypeOf(e) IN  
+      IF eType <: argType THEN bodyType ELSE TypeError
+      
+    REWRITE Evaluate(Lambda(arg, body), env) <->
+      Closure(Lambda(arg, body), env)
+      
+    REWRITE Evaluate(Call(Closure(Lambda(arg, body), closureEnv), [e]), env) <->  
+      LET argVal = Evaluate(e, env) IN
+      Evaluate(body, closureEnv[Identifier(arg) -> argVal])
+  }
+
+  PROOFS {
+    THEOREM ChurchNumerals {
+      FORALL (n : Nat).
+        LET churchNumeral = Lambda(f, Lambda(x, NthApplication(f, x, n))) IN
+        FORALL (f : Variable) (x : Variable).  
+          Evaluate(Call(churchNumeral, [Access(f), Access(x)]), EmptyEnvironment) ==
+            NthApplication(Evaluate(Access(f), EmptyEnvironment), Evaluate(Access(x), EmptyEnvironment), n)
+    }
+
+    THEOREM LetExpressionEquivalence {  
+      FORALL (v : Variable) (e1 : Expression) (e2 : Expression) (env : Environment).
+        Evaluate(LetExpression(v, e1, e2), env) ==
+          Evaluate(e2, env[Identifier(v) -> Evaluate(e1, env)])
+    }
+      
+    THEOREM LetRecExpressionEquivalence {
+      FORALL (f : Function) (e : Expression) (env : Environment).  
+        Evaluate(LetRecExpression(f, e), env) ==
+          LET fVar = FunctionVariable(f), fBody = FunctionBody(f) IN
+          Evaluate(e, env[Identifier(fVar) -> Closure(Lambda(fVar, fBody), env)])
+    }
+      
+    TACTIC Substitution(e, v, x) = MATCH e WITH
+      | Access(v') => IF v' == v THEN x ELSE e 
+      | Lambda(arg, body) => 
+          IF arg == v THEN e
+          ELSE Lambda(arg, Substitution(body, v, x))
+      | Call(Lambda(arg, body), [e']) =>
+          LET e'' = Substitution(body, arg, e') IN  
+          Substitution(e'', v, x)
+      | Call(f, args) => Call(Substitution(f, v, x), MAP(arg => Substitution(arg, v, x), args))
+      | _ => e
+
+    THEOREM BetaReduction {
+      FORALL (arg : Variable) (body : Expression) (e : Expression) (env : Environment).
+        Evaluate(Call(Lambda(arg, body), [e]), env) ==  
+          Evaluate(Substitution(body, arg, e), env)
+    }
+  }
+}
+
+CONCEPT PolymorphicFunctionalLanguage : ProgrammingLanguageFramework {
+  STRUCTURE {
+    DEF TypeVariable(name : String) -> Type
+    DEF FunctionType(argType : Type, retType : Type) -> Type
+    DEF ForallType(typeVar : TypeVariable, type : Type) -> Type
+
+    DEF IntLiteral(n : Int) -> Expression = Literal(IntValue(n))  
+    DEF BoolLiteral(b : Bool) -> Expression = Literal(BoolValue(b))
+    DEF Lambda(arg : Variable, argType : Type, body : Expression, bodyType : Type) -> Expression
+
+    DEF TypeOf(IntLiteral(_)) -> Type = IntType  
+    DEF TypeOf(BoolLiteral(_)) -> Type = BoolType
+    DEF TypeOf(Lambda(arg, argType, body, bodyType)) -> Type = FunctionType(argType, bodyType)
+
+    DEF TypeScheme(e : Expression) -> ForallType =
+      LET type = TypeOf(e), freeVars = FreeTypeVariables(type) IN
+      ForallType(freeVars, type)
+
+    REWRITE TypeOf(Lambda(arg, argType, body, bodyType)) <->
+      LET bodyType' = Substitute(bodyType, arg.Identifier, argType) IN  
+      FunctionType(argType, bodyType')
+
+    REWRITE Evaluate(Lambda(arg, argType, body, bodyType), env) <->
+      Closure(Lambda(arg, argType, body, bodyType), env)  
+
+    REWRITE Evaluate(Call(Closure(Lambda(arg, argType, body, bodyType), closureEnv), [e]), env) <->
+      LET argVal = Evaluate(e, env), resultType = Instantiate(bodyType, argType, TypeOf(argVal)) IN
+      Evaluate(body, closureEnv[Identifier(arg) -> argVal], resultType)
+
+    REWRITE Unify(IntType, IntType) <-> SubstitutionIdentity
+    REWRITE Unify(BoolType, BoolType) <-> SubstitutionIdentity  
+    REWRITE Unify(FunctionType(argType1, retType1), FunctionType(argType2, retType2)) <->
+      LET s1 = Unify(argType1, argType2), s2 = Unify(ApplySubstitution(retType1, s1), ApplySubstitution(retType2, s1)) IN
+      ComposeSubstitution(s1, s2)
+    REWRITE Unify(TypeVariable(v), type) <-> IF OccursIn(TypeVariable(v), type) THEN FailedUnification ELSE Substitution(v, type)
+    REWRITE Unify(type, TypeVariable(v)) <-> Unify(TypeVariable(v), type)
+
+    REWRITE Instantiate(ForallType([], type), _, _) <-> type
+    REWRITE Instantiate(ForallType([v, ...rest], type), argType, instanceType) <->  
+      LET type' = Substitute(type, v, argType), instanceType' = Unify(type', instanceType) IN
+      Instantiate(ForallType(rest, ApplySubstitution(type, instanceType')), argType, instanceType)
+
+    REWRITE TypeInference(IntLiteral(_)) <-> (IntType, SubstitutionIdentity)
+    REWRITE TypeInference(BoolLiteral(_)) <-> (BoolType, SubstitutionIdentity)
+    REWRITE TypeInference(Lambda(arg, argType, body, bodyType)) <->  
+      LET (bodyType', s) = TypeInference(body), bodyType'' = ApplySubstitution(bodyType', s) IN
+      (FunctionType(ApplySubstitution(argType, s), bodyType''), s)
+    REWRITE TypeInference(Call(f, [e])) <->
+      LET (fType, s1) = TypeInference(f), (eType, s2) = TypeInference(ApplySubstitution(e, s1)), 
+          typeVar = FreshTypeVariable(), s3 = Unify(ApplySubstitution(fType, s2), FunctionType(eType, typeVar)) IN
+      (ApplySubstitution(typeVar, s3), ComposeSubstitution(s1, ComposeSubstitution(s2, s3)))
+  }
+
+  PROOFS {
+    THEOREM HindleyMilnerPrincipalType {
+      FORALL (e : Expression).  
+        LET (type, _) = TypeInference(e) IN
+        FORALL (env : Environment) (type' : Type).
+          TypeOf(Evaluate(e, env)) <: type' <-> Instantiate(TypeScheme(e), type, type') != FailedUnification
+    }
+
+    THEOREM TypeInferenceSound {
+      FORALL (e : Expression) (env : Environment) (type : Type) (s : Substitution).
+        TypeInference(e) == (type, s) ->  
+          TypeOf(Evaluate(ApplySubstitution(e, s), env)) <: ApplySubstitution(type, s)
+    }
+
+    THEOREM TypeInferenceComplete {  
+      FORALL (e : Expression) (env : Environment) (type : Type).
+        TypeOf(Evaluate(e, env)) <: type ->
+          EXISTS (type' : Type) (s : Substitution).
+            TypeInference(e) == (type', s) AND Instantiate(ForallType(FreeTypeVariables(type'), type'), type', type) != FailedUnification
+    }
+      
+    THEOREM LetPolymorphism {
+      FORALL (v : Variable) (e1 : Expression) (e2 : Expression) (env : Environment).  
+        LET (type1, s1) = TypeInference(e1), (type2, s2) = TypeInference(ApplySubstitution(e2, s1)),
+            env' = env[Identifier(v) -> Evaluate(ApplySubstitution(e1, s1), env)] IN
+        TypeOf(Evaluate(LetExpression(v, e1, e2), env)) <: ApplySubstitution(type2, s2)
+    }
+  }
+}
+
+
+
+
+
+CONCEPT SimpleFunctionalLanguage : ProgrammingLanguageFramework {
+  STRUCTURE {
+    DEF IntType -> Type
+    DEF BoolType -> Type
+    DEF FunctionType(argType : Type, retType : Type) -> Type
+    
+    DEF IntLiteral(n : Int) -> Expression = Literal(IntValue(n))
+    DEF BoolLiteral(b : Bool) -> Expression = Literal(BoolValue(b))
+    DEF Lambda(arg : Variable, body : Expression) -> Expression
+    
+    DEF LetExpression(v : Variable, e1 : Expression, e2 : Expression) -> Expression =
+      Call(Lambda(v, e2), [e1])
+      
+    DEF LetRecExpression(f : Function, e : Expression) -> Expression =
+      LetExpression(FunctionVariable(f), Lambda(FunctionVariable(f), FunctionBody(f)), e)
+      
+    DEF TypeOf(IntLiteral(_)) -> Type = IntType
+    DEF TypeOf(BoolLiteral(_)) -> Type = BoolType
+    DEF TypeOf(Lambda(arg, body)) -> Type = FunctionType(TypeOf(arg), TypeOf(body))
+    
+    REWRITE TypeOf(Add(e1, e2)) <->
+      IF TypeOf(e1) == IntType AND TypeOf(e2) == IntType THEN IntType ELSE TypeError
+    REWRITE TypeOf(Subtract(e1, e2)) <->  
+      IF TypeOf(e1) == IntType AND TypeOf(e2) == IntType THEN IntType ELSE TypeError
+    REWRITE TypeOf(Multiply(e1, e2)) <->
+      IF TypeOf(e1) == IntType AND TypeOf(e2) == IntType THEN IntType ELSE TypeError
+    REWRITE TypeOf(Divide(e1, e2)) <->
+      IF TypeOf(e1) == IntType AND TypeOf(e2) == IntType THEN IntType ELSE TypeError
+      
+    REWRITE TypeOf(Equal(e1, e2)) <->
+      IF TypeOf(e1) == TypeOf(e2) THEN BoolType ELSE TypeError
+    REWRITE TypeOf(NotEqual(e1, e2)) <->  
+      IF TypeOf(e1) == TypeOf(e2) THEN BoolType ELSE TypeError
+    REWRITE TypeOf(GreaterThan(e1, e2)) <->
+      IF TypeOf(e1) == IntType AND TypeOf(e2) == IntType THEN BoolType ELSE TypeError
+    REWRITE TypeOf(LessThan(e1, e2)) <->
+      IF TypeOf(e1) == IntType AND TypeOf(e2) == IntType THEN BoolType ELSE TypeError  
+    REWRITE TypeOf(GreaterThanOrEqual(e1, e2)) <->
+      IF TypeOf(e1) == IntType AND TypeOf(e2) == IntType THEN BoolType ELSE TypeError
+    REWRITE TypeOf(LessThanOrEqual(e1, e2)) <->  
+      IF TypeOf(e1) == IntType AND TypeOf(e2) == IntType THEN BoolType ELSE TypeError
+      
+    REWRITE TypeOf(And(e1, e2)) <->
+      IF TypeOf(e1) == BoolType AND TypeOf(e2) == BoolType THEN BoolType ELSE TypeError
+    REWRITE TypeOf(Or(e1, e2)) <->
+      IF TypeOf(e1) == BoolType AND TypeOf(e2) == BoolType THEN BoolType ELSE TypeError
+    REWRITE TypeOf(Not(e)) <->  
+      IF TypeOf(e) == BoolType THEN BoolType ELSE TypeError
+      
+    REWRITE TypeOf(Call(Lambda(arg, body), [e])) <->
+      LET argType = TypeOf(arg), bodyType = TypeOf(body), eType = TypeOf(e) IN  
+      IF eType <: argType THEN bodyType ELSE TypeError
+      
+    REWRITE Evaluate(Lambda(arg, body), env) <->
+      Closure(Lambda(arg, body), env)
+      
+    REWRITE Evaluate(Call(Closure(Lambda(arg, body), closureEnv), [e]), env) <->  
+      LET argVal = Evaluate(e, env) IN
+      Evaluate(body, closureEnv[Identifier(arg) -> argVal])
+  }
+
+  PROOFS {
+    THEOREM ChurchNumerals {
+      FORALL (n : Nat).
+        LET churchNumeral = Lambda(f, Lambda(x, NthApplication(f, x, n))) IN
+        FORALL (f : Variable) (x : Variable).  
+          Evaluate(Call(churchNumeral, [Access(f), Access(x)]), EmptyEnvironment) ==
+            NthApplication(Evaluate(Access(f), EmptyEnvironment), Evaluate(Access(x), EmptyEnvironment), n)
+    }
+
+    THEOREM LetExpressionEquivalence {  
+      FORALL (v : Variable) (e1 : Expression) (e2 : Expression) (env : Environment).
+        Evaluate(LetExpression(v, e1, e2), env) ==
+          Evaluate(e2, env[Identifier(v) -> Evaluate(e1, env)])
+    }
+      
+    THEOREM LetRecExpressionEquivalence {
+      FORALL (f : Function) (e : Expression) (env : Environment).  
+        Evaluate(LetRecExpression(f, e), env) ==
+          LET fVar = FunctionVariable(f), fBody = FunctionBody(f) IN
+          Evaluate(e, env[Identifier(fVar) -> Closure(Lambda(fVar, fBody), env)])
+    }
+      
+    TACTIC Substitution(e, v, x) = MATCH e WITH
+      | Access(v') => IF v' == v THEN x ELSE e 
+      | Lambda(arg, body) => 
+          IF arg == v THEN e
+          ELSE Lambda(arg, Substitution(body, v, x))
+      | Call(Lambda(arg, body), [e']) =>
+          LET e'' = Substitution(body, arg, e') IN  
+          Substitution(e'', v, x)
+      | Call(f, args) => Call(Substitution(f, v, x), MAP(arg => Substitution(arg, v, x), args))
+      | _ => e
+
+    THEOREM BetaReduction {
+      FORALL (arg : Variable) (body : Expression) (e : Expression) (env : Environment).
+        Evaluate(Call(Lambda(arg, body), [e]), env) ==  
+          Evaluate(Substitution(body, arg, e), env)
+    }
+  }
+}
+
+CONCEPT PolymorphicFunctionalLanguage : ProgrammingLanguageFramework {
+  STRUCTURE {
+    DEF TypeVariable(name : String) -> Type
+    DEF FunctionType(argType : Type, retType : Type) -> Type
+    DEF ForallType(typeVar : TypeVariable, type : Type) -> Type
+
+    DEF IntLiteral(n : Int) -> Expression = Literal(IntValue(n))  
+    DEF BoolLiteral(b : Bool) -> Expression = Literal(BoolValue(b))
+    DEF Lambda(arg : Variable, argType : Type, body : Expression, bodyType : Type) -> Expression
+
+    DEF TypeOf(IntLiteral(_)) -> Type = IntType  
+    DEF TypeOf(BoolLiteral(_)) -> Type = BoolType
+    DEF TypeOf(Lambda(arg, argType, body, bodyType)) -> Type = FunctionType(argType, bodyType)
+
+    DEF TypeScheme(e : Expression) -> ForallType =
+      LET type = TypeOf(e), freeVars = FreeTypeVariables(type) IN
+      ForallType(freeVars, type)
+
+    REWRITE TypeOf(Lambda(arg, argType, body, bodyType)) <->
+      LET bodyType' = Substitute(bodyType, arg.Identifier, argType) IN  
+      FunctionType(argType, bodyType')
+
+    REWRITE Evaluate(Lambda(arg, argType, body, bodyType), env) <->
+      Closure(Lambda(arg, argType, body, bodyType), env)  
+
+    REWRITE Evaluate(Call(Closure(Lambda(arg, argType, body, bodyType), closureEnv), [e]), env) <->
+      LET argVal = Evaluate(e, env), resultType = Instantiate(bodyType, argType, TypeOf(argVal)) IN
+      Evaluate(body, closureEnv[Identifier(arg) -> argVal], resultType)
+
+    REWRITE Unify(IntType, IntType) <-> SubstitutionIdentity
+    REWRITE Unify(BoolType, BoolType) <-> SubstitutionIdentity  
+    REWRITE Unify(FunctionType(argType1, retType1), FunctionType(argType2, retType2)) <->
+      LET s1 = Unify(argType1, argType2), s2 = Unify(ApplySubstitution(retType1, s1), ApplySubstitution(retType2, s1)) IN
+      ComposeSubstitution(s1, s2)
+    REWRITE Unify(TypeVariable(v), type) <-> IF OccursIn(TypeVariable(v), type) THEN FailedUnification ELSE Substitution(v, type)
+    REWRITE Unify(type, TypeVariable(v)) <-> Unify(TypeVariable(v), type)
+
+    REWRITE Instantiate(ForallType([], type), _, _) <-> type
+    REWRITE Instantiate(ForallType([v, ...rest], type), argType, instanceType) <->  
+      LET type' = Substitute(type, v, argType), instanceType' = Unify(type', instanceType) IN
+      Instantiate(ForallType(rest, ApplySubstitution(type, instanceType')), argType, instanceType)
+
+    REWRITE TypeInference(IntLiteral(_)) <-> (IntType, SubstitutionIdentity)
+    REWRITE TypeInference(BoolLiteral(_)) <-> (BoolType, SubstitutionIdentity)
+    REWRITE TypeInference(Lambda(arg, argType, body, bodyType)) <->  
+      LET (bodyType', s) = TypeInference(body), bodyType'' = ApplySubstitution(bodyType', s) IN
+      (FunctionType(ApplySubstitution(argType, s), bodyType''), s)
+    REWRITE TypeInference(Call(f, [e])) <->
+      LET (fType, s1) = TypeInference(f), (eType, s2) = TypeInference(ApplySubstitution(e, s1)), 
+          typeVar = FreshTypeVariable(), s3 = Unify(ApplySubstitution(fType, s2), FunctionType(eType, typeVar)) IN
+      (ApplySubstitution(typeVar, s3), ComposeSubstitution(s1, ComposeSubstitution(s2, s3)))
+  }
+
+  PROOFS {
+    THEOREM HindleyMilnerPrincipalType {
+      FORALL (e : Expression).  
+        LET (type, _) = TypeInference(e) IN
+        FORALL (env : Environment) (type' : Type).
+          TypeOf(Evaluate(e, env)) <: type' <-> Instantiate(TypeScheme(e), type, type') != FailedUnification
+    }
+
+    THEOREM TypeInferenceSound {
+      FORALL (e : Expression) (env : Environment) (type : Type) (s : Substitution).
+        TypeInference(e) == (type, s) ->  
+          TypeOf(Evaluate(ApplySubstitution(e, s), env)) <: ApplySubstitution(type, s)
+    }
+
+    THEOREM TypeInferenceComplete {  
+      FORALL (e : Expression) (env : Environment) (type : Type).
+        TypeOf(Evaluate(e, env)) <: type ->
+          EXISTS (type' : Type) (s : Substitution).
+            TypeInference(e) == (type', s) AND Instantiate(ForallType(FreeTypeVariables(type'), type'), type', type) != FailedUnification
+    }
+      
+    THEOREM LetPolymorphism {
+      FORALL (v : Variable) (e1 : Expression) (e2 : Expression) (env : Environment).  
+        LET (type1, s1) = TypeInference(e1), (type2, s2) = TypeInference(ApplySubstitution(e2, s1)),
+            env' = env[Identifier(v) -> Evaluate(ApplySubstitution(e1, s1), env)] IN
+        TypeOf(Evaluate(LetExpression(v, e1, e2), env)) <: ApplySubstitution(type2, s2)
+    }
+  }
+}

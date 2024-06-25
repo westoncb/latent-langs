@@ -1,0 +1,106 @@
+CONCEPT EvolutionaryGameTheory {
+  LANGUAGE {
+    type Player = Nat
+    type Strategy = Nat  
+    type Population = Vector<R>
+    type Game = Matrix<R>
+    type DynamicalSystem = Population -> Population
+
+    func Payoff : Game -> Player -> Strategy -> Population -> R  
+    func Fitness : Game -> Strategy -> Population -> R
+    func Replicator : Game -> Population -> DynamicalSystem
+    func EvolutionarilyStable : Game -> Population -> Bool
+
+    notation "u(i, s | G, x)" = Payoff(G)(i)(s)(x)  
+    notation "f(s | G, x)" = Fitness(G)(s)(x)
+    notation "x' = RD(G, x)" = Replicator(G)(x)  
+    notation "ESS(G, x)" = EvolutionarilyStable(G)(x)
+  }
+
+  STRUCTURE {
+    ; Payoff function
+    ∀(G: Game) (i: Player) (s: Strategy) (x: Population).
+      u(i, s | G, x) = Σⱼ Gᵢⱼₛ xⱼ   ; linear utility
+      
+    ; Fitness function  
+    ∀(G: Game) (s: Strategy) (x: Population).
+      f(s | G, x) = Σᵢ xᵢ u(i, s | G, x)   ; average utility
+
+    ; Replicator dynamics  
+    ∀(G: Game) (x: Population) (s: Strategy).
+      x'ₛ = xₛ (f(s | G, x) - Σₜ xₜ f(t | G, x))   ; replicator equation
+
+    ; Evolutionarily stable state  
+    ∀(G: Game) (x: Population).
+      ESS(G, x) ⟺ ∀y ≠ x. ∃ε > 0. ∀δ ∈ (0, ε). 
+        f(x | G, (1-δ)x + δy) > f(y | G, (1-δ)x + δy)   ; stability against mutations
+  }
+
+  PROOFS {
+    theorem FundamentalTheorem {
+      ∀(G: Game) (x: Population).
+        (∀s. xₛ > 0 ⟹ f(s | G, x) = Σₜ xₜ f(t | G, x)) ⟺ (x = RD(G, x))
+    }  
+    {
+      let φ(x) = Σₛ xₛ log(xₛ)   ; replicator potential
+      
+      assume ∀s. xₛ > 0 ⟹ f(s | G, x) = Σₜ xₜ f(t | G, x)
+      ∑ₛ (f(s | G, x) - ∑ₜ xₜ f(t | G, x)) ∂φ/∂xₛ   
+        = ∑ₛ (f(s | G, x) - ∑ₜ xₜ f(t | G, x)) (log(xₛ) + 1)   
+        = 0   ; by assumption
+      hence x = RD(G, x)   ; by Lyapunov's theorem
+
+      conversely, assume x = RD(G, x)
+      φ(x) = ∑ₛ xₛ log(xₛ)
+           = ∑ₛ xₛ log(xₛ (f(s | G, x) - ∑ₜ xₜ f(t | G, x)) / xₛ)
+           = ∑ₛ xₛ log(f(s | G, x) - ∑ₜ xₜ f(t | G, x))
+      ∂φ/∂t = ∑ₛ xₛ ∂/∂t log(f(s | G, x(t)) - ∑ₜ xₜ(t) f(t | G, x(t)))
+             = ∑ₛ xₛ (∂f(s|G,x(t))/∂t - ∑ₜ xₜ(t) ∂f(t|G,x(t))/∂t) / (f(s|G,x(t)) - ∑ₜ xₜ(t) f(t|G,x(t)))
+             = ∑ₛ xₛ (∑ᵢ ∂xᵢ/∂t ∂f(s|G,x)/∂xᵢ - ∑ₜ (∂xₜ/∂t f(t|G,x) + xₜ ∑ᵢ ∂xᵢ/∂t ∂f(t|G,x)/∂xᵢ)) / (f(s|G,x) - ∑ₜ xₜ f(t|G,x))
+             = ∑ₛ xₛ (f(s|G,x) - ∑ₜ xₜ f(t|G,x))^2 / (f(s|G,x) - ∑ₜ xₜ f(t|G,x))   ; by replicator equation
+             = ∑ₛ xₛ (f(s|G,x) - ∑ₜ xₜ f(t|G,x))
+             = 0   ; by definition of fitness
+      hence φ(x(t)) is constant   ; by fundamental theorem of calculus
+      hence ∀s. xₛ > 0 ⟹ f(s|G,x) = ∑ₜ xₜ f(t|G,x)   ; equality case of Jensen's inequality
+    }
+
+    theorem LyapunovTheorem {
+      ∀(G: Game) (x: Population).
+        (∃φ: C¹-function. ∀x. (x ≠ 0 ⟹ ∂φ/∂t ≤ 0) ∧ (x = RD(G, x) ⟹ ∂φ/∂t = 0))
+        ⟺ ESS(G, x)
+    }
+    {
+      ; Proof sketch:
+      ; (⟹) Take φ(x) = Σᵢ xᵢ log(xᵢ) - log(Σᵢ xᵢ). 
+      ;     By the Fundamental Theorem, φ decreases along the replicator dynamics and is stationary iff the population is at equilibrium.
+      ;     Equilibria are thus local maxima of φ, corresponding to evolutionarily stable states.  
+      ;
+      ; (⟸) Assume x is an ESS and take any φ that increases along the replicator dynamics.
+      ;     By definition of ESS, any deviation from x is selected against, so φ must decrease along the dynamics.
+      ;     Equality holds only at stationary points, which are equilibria of the replicator dynamics.
+    }
+  }
+
+  EXAMPLES {
+    ; Hawk-Dove game
+    let G = [[0, 3], [1, 2]]   ; [[Hawk, Dove], [Hawk, Dove]]
+    let x₀ = [1/2, 1/2]   ; equal initial population
+    
+    ; Replicator dynamics  
+    let x(t) = Simulate(RD(G), x₀, t)   ; t ∈ [0, T]
+    Plot(x(t))   ; convergence to ESS at x* = [1/4, 3/4]
+    
+    ; Evolutionary stability
+    let x* = FindESS(G)
+    Validate(ESS(G, x*))
+    
+    ; Evolutionary game on a graph
+    let A = [[0, 1, 1], [1, 0, 1], [1, 1, 0]]   ; interaction graph
+    let G(A) = [[Gᵢⱼ Aᵢⱼ for j ∈ Players] for i ∈ Players]   ; local games 
+    let x₀ = UniformPopulation(Players)
+    
+    ; Replicator dynamics on graphs
+    let x(t) = Simulate(GraphRD(G(A)), x₀, t)   ; t ∈ [0, T]
+    Animate(x(t), A)   ; evolution of strategies on the graph
+  }
+}

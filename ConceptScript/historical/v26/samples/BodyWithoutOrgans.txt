@@ -1,0 +1,84 @@
+CONCEPT BodyWithoutOrgans {
+  LANGUAGE {
+    TYPE Intensity = R
+    TYPE Flow = Intensity -> Intensity
+    TYPE Organ = Flow -> Flow
+    TYPE Body = List[Organ]
+    TYPE Desire = Flow
+    
+    FUNC Compose(f g : Flow) : Flow = f ∘ g
+    FUNC Regulate(o : Organ) : Organ = LowPass ∘ o ∘ HighPass
+    FUNC Circulate(b : Body) : Flow = foldr Compose (Organs b)
+    
+    PRED Unregulated(o : Organ) = o = Id
+    PRED Decoded(b : Body) = ∀ o ∈ b . Unregulated(o)  
+    PRED FreeFlowing(f : Flow) = Injective(f) ∧ Surjective(f)
+    PRED Productive(b : Body, d : Desire) = 
+      FreeFlowing(Compose (Circulate b) d)
+      
+    AXIOM AntiOedipus {
+      ∀ (b : Body) (d : Desire) .
+        Decoded(b) => Productive(b, d)
+    }
+  }
+  
+  NOTATION {
+    "BwO" = BodyWithoutOrgans
+    "D(b)" = Decoded(b)
+    "P(b,d)" = Productive(b, d)
+  }
+  
+  TRANSFORMERS {
+    FUNC Desiring(b : Body) : Desire = Circulate(b)
+    
+    TACTIC DecodeBody(b : Body) = {
+      APPLY [Regulate ↦ Id]* b
+    }
+    
+    TACTIC SchizophrenizeDesire(d : Desire) = {
+      REWRITE d 
+        <=> Noise ∘ d ∘ Noise
+        <=> FreeFlowing(d)
+    }
+  }
+  
+  STRUCTURE Rhizome {
+    DEF Plateau(i : Intensity) : Body = 
+      Decode [Organ (Const i) | i <- [1..n]]
+      
+    DEF Milieu(b1 b2 : Body) : Body =
+      foldr (++) [] [Plateau(I(o1,o2)) | o1 <- b1, o2 <- b2] 
+      WHERE I(f,g) = Intensity (Compose f g (0))
+      
+    REQUIRE ∀ (b1 b2 : Body) . Decoded(Milieu(b1, b2))
+  }
+  
+  PROOFS {
+    THEOREM Schizoanalysis {
+      STATEMENT:
+        ∀ (b : Body) (d : Desire) . D(b) <=> P(b,d)
+        
+      PROOF:
+        LET b : Body, d : Desire
+        
+        SHOW D(b) => P(b,d) BY {
+          ASSUME D(b)
+          HAVE Circulate(b) = Desiring(b) BY DecodeBody
+          HENCE FreeFlowing(Compose (Circulate b) d)
+            BY SchizophrenizeDesire
+        }
+        
+        SHOW P(b,d) => D(b) BY {
+          ASSUME (H) : P(b,d)
+          SUPPOSE (H1) : ¬D(b)
+          LET o : Organ = witness of ¬Unregulated from H1
+          HAVE Regulate(o) ≠ o
+          HENCE ¬FreeFlowing(Compose (Circulate b) d)
+          CONTRADICTION with H
+          THUS D(b)
+        }
+        
+        QED
+    }
+  }
+}

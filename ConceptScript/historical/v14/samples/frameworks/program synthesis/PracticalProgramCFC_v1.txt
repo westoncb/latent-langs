@@ -1,0 +1,507 @@
+CONCEPT PracticalProgramCFC_v1 {
+  LANGUAGE {
+    Program := p(C, D, F, I) | Program + Program | Program * Program
+    C := c(S, A) | C + C | C * C
+    D := d(E, R) | D + D | D * D
+    F := f(N, P, B) | F + F | F * F
+    I := i(U, H) | I + I | I * I
+    
+    p(C, D, F, I): program with components C, data D, flow F, and interface I
+    c(S, A): component with state S and actions A
+    d(E, R): data with entities E and relations R
+    f(N, P, B): flow with nodes N, paths P, and branches B
+    i(U, H): interface with user inputs U and outputs H
+    
+    S := s(V, T) | S + S | S * S
+    s(V, T): state with variables V and types T
+    
+    A := a(N, E, P) | A + A | A * A
+    a(N, E, P): action with name N, effects E, and preconditions P
+    
+    E := e(K, V, T) | E + E | E * E
+    e(K, V, T): entity with key K, values V, and type T
+    
+    R := r(E1, E2, T) | R + R | R * R
+    r(E1, E2, T): relation between entities E1 and E2 with type T
+    
+    N := n(A, T) | N + N | N * N
+    n(A, T): node with actions A and type T
+    
+    P := p(N1, N2, C) | P + P | P * P
+    p(N1, N2, C): path from node N1 to N2 with condition C
+    
+    B := b(P, C) | B + B | B * B
+    b(P, C): branch with paths P and condition C
+    
+    U := u(T, V) | U + U | U * U
+    u(T, V): user input of type T with validation V
+    
+    H := h(T, F) | H + H | H * H
+    h(T, F): output of type T with formatting F
+    
+    Valid{P} ⟺ ∀c ∈ C{P}. Consistent{c} ∧ ∀d ∈ D{P}. Consistent{d} ∧ ∀f ∈ F{P}. Consistent{f} ∧ ∀i ∈ I{P}. Consistent{i}
+    Consistent{c(S, A)} ⟺ ∀a ∈ A. Satisfied{P{a}, S} ∧ Applied{E{a}, S} ⊆ S
+    Consistent{d(E, R)} ⟺ ∀r(E1, E2, _) ∈ R. E1 ∈ E ∧ E2 ∈ E
+    Consistent{f(N, P, B)} ⟺ ∀p(N1, N2, _) ∈ P. N1 ∈ N ∧ N2 ∈ N ∧ ∀b(_, C) ∈ B. Exclusive{P{b}, C}
+    Consistent{i(U, H)} ⟺ ∀u(T, V) ∈ U. ∀h(T', _) ∈ H. T = T'
+    Satisfied{P, S} ⟺ ∀p ∈ P. Holds{p, S}  
+    Applied{E, S} = {s(V, T) | s(V', T) ∈ S ∧ ∀e(_, V'', _) ∈ E. V = V' ∨ V = V''}
+    Exclusive{P, C} ⟺ ∀p1, p2 ∈ P. p1 ≠ p2 ⇒ ¬(Holds{C, p1} ∧ Holds{C, p2})
+    Holds{p, S} ⟺ ∀s(V, T) ∈ S. ∃v. s(v, T) ∈ S ∧ p(v)
+  }
+  
+  TACTIC {
+    ComponentDecomposition{P, C} ⊢ ∀c ∈ C. ∃P'. P = P' + c
+    DataDecomposition{P, D} ⊢ ∀d ∈ D. ∃P'. P = P' * d  
+    FlowDecomposition{P, F} ⊢ ∀f ∈ F. ∃P'. P = P' + f
+    InterfaceDecomposition{P, I} ⊢ ∀i ∈ I. ∃P'. P = P' * i
+    ActionExpansion{c(S, A), a(_, E, P)} ⊢ Consistent{c(S, A)} ⇒ c(S ∪ Applied{E, S}, A ∪ {a})
+    EntityExpansion{d(E, R), e(K, V, T)} ⊢ Consistent{d(E, R)} ⇒ d(E ∪ {e(K, V, T)}, R)
+    RelationExpansion{d(E, R), r(E1, E2, T)} ⊢ Consistent{d(E, R)} ∧ E1 ∈ E ∧ E2 ∈ E ⇒ d(E, R ∪ {r(E1, E2, T)})
+    NodeExpansion{f(N, P, B), n(A, T)} ⊢ Consistent{f(N, P, B)} ⇒ f(N ∪ {n(A, T)}, P, B)
+    PathExpansion{f(N, P, B), p(N1, N2, C)} ⊢ Consistent{f(N, P, B)} ∧ N1 ∈ N ∧ N2 ∈ N ⇒ f(N, P ∪ {p(N1, N2, C)}, B)  
+    BranchExpansion{f(N, P, B), b(P', C)} ⊢ Consistent{f(N, P, B)} ∧ P' ⊆ P ∧ Exclusive{P', C} ⇒ f(N, P, B ∪ {b(P', C)})
+    InputExpansion{i(U, H), u(T, V)} ⊢ Consistent{i(U, H)} ⇒ i(U ∪ {u(T, V)}, H)
+    OutputExpansion{i(U, H), h(T, F)} ⊢ Consistent{i(U, H)} ∧ ∃u(T, _) ∈ U ⇒ i(U, H ∪ {h(T, F)})
+  }
+  
+  EXAMPLE { 
+    TextRPG := p(C, D, F, I)
+    C := {
+      PlayerState := c(S, A)
+        S := {Health := s(INT, "0..100"), Mana := s(INT, "0..100"), Strength := s(INT, "0..100"), Items := s(SET(Item), ∅)}   
+        A := {Attack := a("ATTACK", E1, P1), CastSpell := a("CASTSPELL", E2, P2), UseItem := a("USEITEM", E3, P3)}
+          E1 := {e("TARGET", Health, "-10"), e("SELF", Mana, "-10")}
+          E2 := {e("TARGET", Health, "-20"), e("SELF", Mana, "-20")}  
+          E3 := {e("SELF", Health, "+10")}
+          P1 := {p("SELF", Strength, ">=", "10")}
+          P2 := {p("SELF", Mana, ">=", "20")}
+          P3 := {p("SELF", Items, "contains", "Potion")}
+      EnemyState := c(S, A)   
+        S := {Health := s(INT, "0..100"), Strength := s(INT, "0..100")}
+        A := {Attack := a("ATTACK", E1, ∅)}
+          E1 := {e("TARGET", Health, "-10")}
+    }
+    D := {
+      Player := d({PlayerID := e(STRING, "", ""), Name := e(STRING, "", "")}, {})  
+      Enemy := d({EnemyID := e(STRING, "", ""), Name := e(STRING, "", "")}, {})
+      Item := d({ItemID := e(STRING, "", ""), Name := e(STRING, "", "")}, {
+        r(Player, Item, "HAS"), r(Enemy, Item, "DROPS")  
+      })
+    }
+    F := {
+      BattleFlow := f({Start := n(∅, ""), PlayerTurn := n({Attack, CastSpell, UseItem}, ""), EnemyTurn := n({EnemyAttack}, ""), Win := n(∅, ""), Lose := n(∅, "")}, 
+      {p(Start, PlayerTurn, TRUE), p(PlayerTurn, EnemyTurn, TRUE), p(EnemyTurn, PlayerTurn, "Player.Health > 0 ∧ Enemy.Health > 0"),
+       p(EnemyTurn, Win, "Enemy.Health ≤ 0"), p(EnemyTurn, Lose, "Player.Health ≤ 0")},
+      {})
+    }
+    I := {  
+      Input := i({u("CHOICE", OneOf{"ATTACK", "CASTSPELL", "USEITEM"})}, {})
+      Output := i({}, {h("STATUS", "Player: <Player.Name> Health: <Player.Health>, Mana: <Player.Mana>\nEnemy: <Enemy.Name>: Health: <Enemy.Health>"),
+                       h("RESULT", "You <Action>! <Result>\n<Enemy.Name> <EnemyAction>! <EnemyResult>"), 
+                       h("WIN", "You win!"), h("LOSE", "You lose!")}) 
+    }
+  }
+}
+
+
+
+
+
+
+CONCEPT PracticalProgramCFC_v1 {
+  LANGUAGE {
+    Program := Component+ | Library* | Program + Program  
+    
+    Component := c(State, Behavior, Interaction, Constraint)
+    State := s(Field+) 
+    Field := f(Name, Type, Value?)
+    Behavior := b(Input, Output, Transition+)
+    Input := i(Field+)
+    Output := o(Field+) 
+    Transition := t(Event, Action, NextState)
+    Event := e(Trigger, Condition?)
+    Action := a(Operation+)  
+    Operation := op(Target, Function, Argument*)
+    Interaction := in(Interface, Protocol)
+    Interface := inter(Operation+)
+    Protocol := p(Flow+)
+    Flow := fl(Step+, Condition?)  
+    Step := st(Operation, NextStep?)
+    Constraint := con(Invariant+, Precondition*, Postcondition*)
+    
+    Library := l(DataStructure+ | Algorithm+)
+    DataStructure := ds(State, Operation+, Invariant+) 
+    Algorithm := al(Input, Output, Precondition?, Postcondition?, Complexity, Code?)
+    
+    Complexity := comp(Time, Space)
+    Time := Θ(Bound)
+    Space := Θ(Bound)
+    Bound := Exp | Poly | Log | Const
+    
+    Type := Primitive | Composite | Abstract
+    Primitive := Int | Float | Bool | Char | String 
+    Composite := Array(Type) | Record(Field+) | Union(Field+) | Map(Type, Type)
+    Abstract := Graph | Tree | List | Set | Queue | Stack
+    
+    Exp := Func(Param+) | Exp + Exp | Exp * Exp | Exp - Exp | Exp / Exp | Exp ^ Exp | - Exp | Exp.Field | Exp[Exp] | Exp(Exp+)
+    Func := sin | cos | tan | sqrt | log | ln | exp | abs | floor | ceiling | round
+    Param := name
+  }
+  
+  TACTIC {
+    Decomposition(Program) ⊢ Component+ | Library* 
+    ComponentDesign(c) ⊢ State(c) × Behavior(c) × Interaction(c) × Constraint(c)
+    StateMachine(s, b) ⊢ ∑{s×i×b→s' | (s,i,b,s') ∈ Transition+}
+    OpenClosed(in) ⊢ Interface(in) ⊆ Protocol(in).(Operation+) 
+    TemporalOrdering(fl, ≺) ⊢ ∀x,y∈Step+. x ≺ y ⇔ (x,y) ∈ Flow(fl).NextStep?  
+    LibrarySearch(Type, Op+, Inv+) ⊢ DataStructure? | Algorithm?
+    Refinement(Exp, Func+) ⊢ Func+.(Exp+)  
+    Deduction(P, Q) ⊢ P ⊢ Q
+  }
+  
+  REFINEMENT {
+    Scenario(n, i, o) ≔ ⟨Narrative(n), Input(i), Output(o)⟩
+    Goal(s) ≔ Scenario+.(s)
+
+    RPGDesign ≔ {  
+      Component.Player(
+        State(
+          f(name, String),
+          f(health, Int, 100), 
+          f(strength, Int, 10),
+          f(inventory, Map(String, Int))),
+        Behavior(
+          i(f(command, String)),
+          o(f(message, String)),
+          t(e("attack"), a(op("monster", "takeDamage", strength)), s("combatMode")),
+          t(e("flee"), a(op(self, moveTo, "randomRoom")), s("explorationMode")),  
+          t(e("loot"), a(op(monster, transferInventory), op(self, addInventory)), s("explorationMode")))),
+          
+      Component.Monster(  
+        State(
+          f(name, String),
+          f(health, Int), 
+          f(strength, Int),
+          f(inventory, Map(String, Int))),
+        Behavior(
+          i(f(trigger, String)),
+          o(f(message, String)),
+          t(e(self.health <= 0), a(op(self, "die")), s("dead")),
+          t(e("attacked"), a(op(player, "takeDamage", strength)), s("attacking")))),
+          
+      Component.Room(
+        State(
+          f(description, String),
+          f(neighbors, Array(String)),
+          f(contents, Array(String))),
+        Behavior(
+          i(f(command, String)),
+          o(f(message, String)),
+          t(e("enter"), a(op(self, "describe")), s("occupied")),
+          t(e("loot"), a(op(self, removeItem), op(player, addItem)), s("empty")),
+          t(e("exit"), a(op(player, moveTo, neighbors.random)), s("empty"))),
+        Interaction(  
+          inter(op(contain, Entity), op(enter, Entity), op(exit, Entity)),
+          p(fl(st(op(enter), st(op(exit))))))),
+          
+      Component.Combat(
+        State(
+          f(turns, Int, 0), 
+          f(playerHealth, Int),
+          f(monsterHealth, Int)),
+        Behavior(
+          i(f(command, String)),
+          o(f(message, String)),
+          t(e(not playerHealth > 0), a(op(player, "die")), s("gameOver")),
+          t(e(not monsterHealth > 0), a(op(monster, "die")), s("victory"))),
+        Constraint(  
+          Invariant(turns >= 0),
+          Precondition(playerHealth == player.health),
+          Postcondition(playerHealth >= 0 and monsterHealth >= 0))),
+          
+      Library.Collection(
+        ds(Array(String), 
+          op(add, String), op(remove, String), op(contains?, String),
+          Invariant(size >= 0))),
+          
+      Goal(
+        Narrative("Slay the dragon and recover the treasure."),
+        Input(f(command, String)),
+        Output(f(message, String))),
+        
+      Scenario("Encounter", 
+        Input(f(command, "attack goblin")),
+        Output(f(message, "You attack the goblin for 10 damage. The goblin strikes back for 5 damage.")))
+    }
+  }
+  
+  PROOF {  
+    theorem SoundnessOfDecomposition:  
+      ∀P. P ⊢ Component+ | Library* ⇒ P ≡ Component+ | Library*
+    {
+      abstract P to P₁ + ... + Pₙ | L₁ × ... × Lₘ
+      show each Pᵢ ⊢ Component 
+      show each Lⱼ ⊢ Library  
+    }
+    
+    theorem CompletenessOfComponentDesign:
+      ∀c. c ⊢ Component ⇒ ∃s,b,in,con. c ≡ s × b × in × con
+    {
+      assume c ⊢ Component
+      take s := State(c), b := Behavior(c), in := Interaction(c), con := Constraint(c)
+      show c ≡ s × b × in × con by ComponentDesign
+    }
+    
+    theorem LivenessOfStateMachine:  
+      ∀s,b. s × b ⊢ StateMachine ⇒ ∀s. ∃i,s',b. (s,i,b,s') ∈ Transition+ 
+    {
+      assume s × b ⊢ StateMachine
+      fix arbitrary sᵢ
+      show ∃i,s',b. (sᵢ,i,b,s') ∈ Transition+ by StateMachine
+    }
+
+    theorem ConsistencyOfInteraction:
+      ∀in. in ⊢ Interaction ⇒ Interface(in) ≡ Protocol(in).(Operation+)
+    {
+      assume in ⊢ Interaction  
+      show Interface(in) ⊆ Protocol(in).(Operation+) by OpenClosed
+      show Interface(in) ⊇ Protocol(in).(Operation+)
+        by def. Protocol and Interface
+    }
+    
+    theorem ConflictFreeFlow:  
+      ∀fl. fl ⊢ Flow ⇒ ∀x,y∈Step+. x ≠ y ⇒ ¬(x ≺ y ∧ y ≺ x)
+    {
+      assume fl ⊢ Flow, x ≠ y, and x ≺ y ∧ y ≺ x  
+      have x ≺ y ⇔ (x,y) ∈ Flow(fl).NextStep? by TemporalOrdering
+      have y ≺ x ⇔ (y,x) ∈ Flow(fl).NextStep? by TemporalOrdering
+      show false by irreflexivity of NextStep
+    }
+      
+    theorem RPGSoundness:  
+      RPGDesign ⊢ Program  
+    {
+      show Player | Monster | Room | Combat ⊢ Component+ by Decomposition
+      show Collection ⊢ Library by Decomposition  
+      show Scenario+ ⊢ Goal+ by def. Goal
+      show RPGDesign ⊢ Component+ | Library | Goal+
+    }
+  }
+}
+
+This PracticalProgramCFC_v1 concept is designed to enable the generation of structures for practical programs, with a focus on game-like applications. The key ideas are:
+
+Programs are composed of Components and Libraries. Components represent the main building blocks of the program, such as Player, Monster, Room, and Combat in the RPG example. Libraries provide reusable data structures and algorithms.
+Each Component has a State (fields), Behavior (state transitions based on input/output), Interaction (interface and protocol), and Constraints (invariants, pre-/post-conditions).
+Behavior is modeled as a state machine, with transitions triggered by events and actions performed on state.
+Interaction specifies the interface of a component and the protocol for using it, enabling composition of components.
+Constraints specify invariants that must hold for the component's state, as well preconditions and postconditions for its operations.
+Libraries provide abstract data types (with operations and invariants) and algorithms (with input/output, pre-/post-conditions, complexity bounds).
+Types include primitives, composites (arrays, records, unions), and abstract data types commonly used in practical programming.
+The language includes common arithmetic and functional expressions for defining computations.
+
+The tactics enable common reasoning patterns, such as decomposing a program into components and libraries, designing components based on state machines and interactions, searching for suitable library elements, refining expressions, and performing logical deduction.
+The refinement section defines the specific structure of an RPG program, with components for Player, Monster, Room, Combat, a Collection library, and sample gameplay scenarios and goals.
+The proofs establish key properties of the system, such as the soundness of program decomposition, completeness of component design, liveness of state machines, consistency of interactions, and conflict-free flow. The final proof shows that the RPG design is a valid program according to the CFC.
+This CFC provides a high-level structure for designing practical programs, with a focus on modularity, state-based behavior, interaction, and constraints. It can be refined further to generate more detailed designs for specific applications, and the resulting structures can be translated into executable code.
+
+
+
+
+
+
+CONCEPT PracticalProgramCFC_v1 {
+  LANGUAGE {
+    Program := Component+ | Library* | Program + Program  
+    
+    Component := c(State, Behavior, Interaction, Constraint)
+    State := s(Field+) 
+    Field := f(Name, Type, Value?)
+    Behavior := b(Input, Output, Transition+)
+    Input := i(Field+)
+    Output := o(Field+) 
+    Transition := t(Event, Action, NextState)
+    Event := e(Trigger, Condition?)
+    Action := a(Operation+)  
+    Operation := op(Target, Function, Argument*)
+    Interaction := in(Interface, Protocol)
+    Interface := inter(Operation+)
+    Protocol := p(Flow+)
+    Flow := fl(Step+, Condition?)  
+    Step := st(Operation, NextStep?)
+    Constraint := con(Invariant+, Precondition*, Postcondition*)
+    
+    Library := l(DataStructure+ | Algorithm+)
+    DataStructure := ds(State, Operation+, Invariant+) 
+    Algorithm := al(Input, Output, Precondition?, Postcondition?, Complexity, Code?)
+    
+    Complexity := comp(Time, Space)
+    Time := Θ(Bound)
+    Space := Θ(Bound)
+    Bound := Exp | Poly | Log | Const
+    
+    Type := Primitive | Composite | Abstract
+    Primitive := Int | Float | Bool | Char | String 
+    Composite := Array(Type) | Record(Field+) | Union(Field+) | Map(Type, Type)
+    Abstract := Graph | Tree | List | Set | Queue | Stack
+    
+    Exp := Func(Param+) | Exp + Exp | Exp * Exp | Exp - Exp | Exp / Exp | Exp ^ Exp | - Exp | Exp.Field | Exp[Exp] | Exp(Exp+)
+    Func := sin | cos | tan | sqrt | log | ln | exp | abs | floor | ceiling | round
+    Param := name
+  }
+  
+  TACTIC {
+    Decomposition(Program) ⊢ Component+ | Library* 
+    ComponentDesign(c) ⊢ State(c) × Behavior(c) × Interaction(c) × Constraint(c)
+    StateMachine(s, b) ⊢ ∑{s×i×b→s' | (s,i,b,s') ∈ Transition+}
+    OpenClosed(in) ⊢ Interface(in) ⊆ Protocol(in).(Operation+) 
+    TemporalOrdering(fl, ≺) ⊢ ∀x,y∈Step+. x ≺ y ⇔ (x,y) ∈ Flow(fl).NextStep?  
+    LibrarySearch(Type, Op+, Inv+) ⊢ DataStructure? | Algorithm?
+    Refinement(Exp, Func+) ⊢ Func+.(Exp+)  
+    Deduction(P, Q) ⊢ P ⊢ Q
+  }
+  
+  REFINEMENT {
+    Scenario(n, i, o) ≔ ⟨Narrative(n), Input(i), Output(o)⟩
+    Goal(s) ≔ Scenario+.(s)
+
+    RPGDesign ≔ {  
+      Component.Player(
+        State(
+          f(name, String),
+          f(health, Int, 100), 
+          f(strength, Int, 10),
+          f(inventory, Map(String, Int))),
+        Behavior(
+          i(f(command, String)),
+          o(f(message, String)),
+          t(e("attack"), a(op("monster", "takeDamage", strength)), s("combatMode")),
+          t(e("flee"), a(op(self, moveTo, "randomRoom")), s("explorationMode")),  
+          t(e("loot"), a(op(monster, transferInventory), op(self, addInventory)), s("explorationMode")))),
+          
+      Component.Monster(  
+        State(
+          f(name, String),
+          f(health, Int), 
+          f(strength, Int),
+          f(inventory, Map(String, Int))),
+        Behavior(
+          i(f(trigger, String)),
+          o(f(message, String)),
+          t(e(self.health <= 0), a(op(self, "die")), s("dead")),
+          t(e("attacked"), a(op(player, "takeDamage", strength)), s("attacking")))),
+          
+      Component.Room(
+        State(
+          f(description, String),
+          f(neighbors, Array(String)),
+          f(contents, Array(String))),
+        Behavior(
+          i(f(command, String)),
+          o(f(message, String)),
+          t(e("enter"), a(op(self, "describe")), s("occupied")),
+          t(e("loot"), a(op(self, removeItem), op(player, addItem)), s("empty")),
+          t(e("exit"), a(op(player, moveTo, neighbors.random)), s("empty"))),
+        Interaction(  
+          inter(op(contain, Entity), op(enter, Entity), op(exit, Entity)),
+          p(fl(st(op(enter), st(op(exit))))))),
+          
+      Component.Combat(
+        State(
+          f(turns, Int, 0), 
+          f(playerHealth, Int),
+          f(monsterHealth, Int)),
+        Behavior(
+          i(f(command, String)),
+          o(f(message, String)),
+          t(e(not playerHealth > 0), a(op(player, "die")), s("gameOver")),
+          t(e(not monsterHealth > 0), a(op(monster, "die")), s("victory"))),
+        Constraint(  
+          Invariant(turns >= 0),
+          Precondition(playerHealth == player.health),
+          Postcondition(playerHealth >= 0 and monsterHealth >= 0))),
+          
+      Library.Collection(
+        ds(Array(String), 
+          op(add, String), op(remove, String), op(contains?, String),
+          Invariant(size >= 0))),
+          
+      Goal(
+        Narrative("Slay the dragon and recover the treasure."),
+        Input(f(command, String)),
+        Output(f(message, String))),
+        
+      Scenario("Encounter", 
+        Input(f(command, "attack goblin")),
+        Output(f(message, "You attack the goblin for 10 damage. The goblin strikes back for 5 damage.")))
+    }
+  }
+  
+  PROOF {  
+    theorem SoundnessOfDecomposition:  
+      ∀P. P ⊢ Component+ | Library* ⇒ P ≡ Component+ | Library*
+    {
+      abstract P to P₁ + ... + Pₙ | L₁ × ... × Lₘ
+      show each Pᵢ ⊢ Component 
+      show each Lⱼ ⊢ Library  
+    }
+    
+    theorem CompletenessOfComponentDesign:
+      ∀c. c ⊢ Component ⇒ ∃s,b,in,con. c ≡ s × b × in × con
+    {
+      assume c ⊢ Component
+      take s := State(c), b := Behavior(c), in := Interaction(c), con := Constraint(c)
+      show c ≡ s × b × in × con by ComponentDesign
+    }
+    
+    theorem LivenessOfStateMachine:  
+      ∀s,b. s × b ⊢ StateMachine ⇒ ∀s. ∃i,s',b. (s,i,b,s') ∈ Transition+ 
+    {
+      assume s × b ⊢ StateMachine
+      fix arbitrary sᵢ
+      show ∃i,s',b. (sᵢ,i,b,s') ∈ Transition+ by StateMachine
+    }
+
+    theorem ConsistencyOfInteraction:
+      ∀in. in ⊢ Interaction ⇒ Interface(in) ≡ Protocol(in).(Operation+)
+    {
+      assume in ⊢ Interaction  
+      show Interface(in) ⊆ Protocol(in).(Operation+) by OpenClosed
+      show Interface(in) ⊇ Protocol(in).(Operation+)
+        by def. Protocol and Interface
+    }
+    
+    theorem ConflictFreeFlow:  
+      ∀fl. fl ⊢ Flow ⇒ ∀x,y∈Step+. x ≠ y ⇒ ¬(x ≺ y ∧ y ≺ x)
+    {
+      assume fl ⊢ Flow, x ≠ y, and x ≺ y ∧ y ≺ x  
+      have x ≺ y ⇔ (x,y) ∈ Flow(fl).NextStep? by TemporalOrdering
+      have y ≺ x ⇔ (y,x) ∈ Flow(fl).NextStep? by TemporalOrdering
+      show false by irreflexivity of NextStep
+    }
+      
+    theorem RPGSoundness:  
+      RPGDesign ⊢ Program  
+    {
+      show Player | Monster | Room | Combat ⊢ Component+ by Decomposition
+      show Collection ⊢ Library by Decomposition  
+      show Scenario+ ⊢ Goal+ by def. Goal
+      show RPGDesign ⊢ Component+ | Library | Goal+
+    }
+  }
+}
+
+This PracticalProgramCFC_v1 concept is designed to enable the generation of structures for practical programs, with a focus on game-like applications. The key ideas are:
+
+Programs are composed of Components and Libraries. Components represent the main building blocks of the program, such as Player, Monster, Room, and Combat in the RPG example. Libraries provide reusable data structures and algorithms.
+Each Component has a State (fields), Behavior (state transitions based on input/output), Interaction (interface and protocol), and Constraints (invariants, pre-/post-conditions).
+Behavior is modeled as a state machine, with transitions triggered by events and actions performed on state.
+Interaction specifies the interface of a component and the protocol for using it, enabling composition of components.
+Constraints specify invariants that must hold for the component's state, as well preconditions and postconditions for its operations.
+Libraries provide abstract data types (with operations and invariants) and algorithms (with input/output, pre-/post-conditions, complexity bounds).
+Types include primitives, composites (arrays, records, unions), and abstract data types commonly used in practical programming.
+The language includes common arithmetic and functional expressions for defining computations.
+
+The tactics enable common reasoning patterns, such as decomposing a program into components and libraries, designing components based on state machines and interactions, searching for suitable library elements, refining expressions, and performing logical deduction.
+The refinement section defines the specific structure of an RPG program, with components for Player, Monster, Room, Combat, a Collection library, and sample gameplay scenarios and goals.

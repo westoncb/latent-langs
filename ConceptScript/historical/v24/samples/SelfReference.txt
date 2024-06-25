@@ -1,0 +1,215 @@
+CONCEPT SelfReference {
+  LANGUAGE {
+    TYPE Formula
+    TYPE Sentence = Formula
+    TYPE Theory = Set(Formula)
+    TYPE Model
+    
+    AXIOM Consistency {
+      ∀ (T : Theory). ¬(∃ (φ : Formula). T ⊢ φ ∧ T ⊢ ¬φ)
+    }
+
+    AXIOM Completeness {
+      ∀ (T : Theory) (φ : Sentence). T ⊢ φ ∨ T ⊢ ¬φ  
+    }
+    
+    PRED Implies(T : Theory, φ : Formula) = ∀ (M : Model). M ⊨ T -> M ⊨ φ
+    
+    NOTATION "T ⊢ φ" = Proves(T, φ)
+    NOTATION "M ⊨ φ" = ModelOf(M, φ)
+    NOTATION "⌈φ⌉" = Entails(φ)
+    NOTATION "⟨n⟩" = Numeral(n)
+    NOTATION "Sub(φ, ψ)" = Substitution(φ, ψ)
+  }
+  
+  PROOFS {
+    THEOREM Diagonalization {
+      STATEMENT:  
+        ∀ (T : Theory). Consistent(T) ∧ Defines(T, Proves) ->
+        ∃ (G : Sentence). T ⊬ G ∧ T ⊬ ¬G
+        
+      PROOF:
+        LET T : Theory
+        ASSUME Consistent(T), Defines(T, Proves)
+
+        LET G = ¬⌈Sub(⟨G⟩, ⟨⌈⟨G⟩⌉⟩)⌉
+        
+        SHOW T ⊬ G BY {
+          ASSUME T ⊢ G
+          REWRITE G = ¬⌈Sub(⟨G⟩, ⟨⌈⟨G⟩⌉⟩)⌉ BY Definition(G)
+          REWRITE ⌈Sub(⟨G⟩, ⟨⌈⟨G⟩⌉⟩)⌉ = ⌈¬G⌉ BY {
+            G = ¬⌈Sub(⟨G⟩, ⟨⌈⟨G⟩⌉⟩)⌉ ->
+            Sub(⟨G⟩, ⟨⌈⟨G⟩⌉⟩) = ¬G
+          }
+          HAVE T ⊢ G BY ASSUMPTION
+          HAVE T ⊢ ¬⌈¬G⌉ BY REWRITE 
+          HAVE T ⊢ ⌈¬G⌉ BY {
+            T ⊢ ¬G BY {
+              T ⊢ G BY ASSUMPTION
+              G = ¬⌈Sub(⟨G⟩, ⟨⌈⟨G⟩⌉⟩)⌉ BY Definition(G)
+              ⌈Sub(⟨G⟩, ⟨⌈⟨G⟩⌉⟩)⌉ = ⌈¬G⌉ PROVED ABOVE
+              T ⊢ ¬⌈¬G⌉ PROVED ABOVE
+              T ⊢ ¬G BY Substitution
+            };
+            ⌈¬G⌉ BY Entailment
+          }
+          HAVE Inconsistent(T) BY {
+            T ⊢ ⌈¬G⌉ PROVED ABOVE
+            T ⊢ ¬⌈¬G⌉ PROVED ABOVE
+            Inconsistent(T) BY Definition(Consistency)
+          }
+          CONTRADICTION BY ASSUMPTION
+        }
+          
+        SHOW T ⊬ ¬G BY {
+          ASSUME T ⊢ ¬G
+          HAVE T ⊢ ⌈¬G⌉ BY {
+            T ⊢ ¬G BY ASSUMPTION
+            ⌈¬G⌉ BY Entailment
+          }
+          REWRITE ⌈¬G⌉ = ⌈Sub(⟨G⟩, ⟨⌈⟨G⟩⌉⟩)⌉ BY {
+            G = ¬⌈Sub(⟨G⟩, ⟨⌈⟨G⟩⌉⟩)⌉ BY Definition(G)
+            ¬G = Sub(⟨G⟩, ⟨⌈⟨G⟩⌉⟩) BY Logic
+          }
+          HAVE T ⊢ ⌈Sub(⟨G⟩, ⟨⌈⟨G⟩⌉⟩)⌉ BY REWRITE
+          HAVE T ⊢ Sub(⟨G⟩, ⟨⌈⟨G⟩⌉⟩) BY DiagonalLemma {
+            Defines(T, Proves) BY ASSUMPTION
+          }
+          REWRITE Sub(⟨G⟩, ⟨⌈⟨G⟩⌉⟩) = G BY Definition(G), Logic
+          HAVE T ⊢ G BY REWRITE
+          SHOW Inconsistent(T) BY {
+            T ⊢ G PROVED ABOVE  
+            T ⊢ ¬G BY ASSUMPTION
+            Inconsistent(T) BY Definition(Consistency)
+          }
+          CONTRADICTION BY ASSUMPTION
+        }
+    }
+    
+    THEOREM Incompleteness {
+      STATEMENT:
+        ∀ (T : Theory). Consistent(T) ∧ Defines(T, Proves) ∧ Contains(T, Arithmetic) ->
+        ∃ (φ : Sentence). T ⊬ φ ∧ T ⊬ ¬φ
+        
+      PROOF:
+        LET T : Theory
+        ASSUME Consistent(T), Defines(T, Proves), Contains(T, Arithmetic)
+        
+        HAVE ∃ (G : Sentence). T ⊬ G ∧ T ⊬ ¬G BY Diagonalization, ASSUMPTION
+        LET G : Sentence
+        ASSUME T ⊬ G, T ⊬ ¬G
+        
+        LET φ = ¬∃ (x : Nat). ⌈Sub(⟨G⟩, ⟨x⟩)⌉
+        
+        SHOW T ⊬ φ BY {
+          ASSUME T ⊢ φ
+          HAVE T ⊢ ¬∃ (x : Nat). ⌈Sub(⟨G⟩, ⟨x⟩)⌉ BY ASSUMPTION
+          HAVE ∀ (x : Nat). T ⊢ ¬⌈Sub(⟨G⟩, ⟨x⟩)⌉ BY ω-Completeness {
+            Contains(T, Arithmetic) BY ASSUMPTION  
+          }
+          LET n : Nat = ⌈⟨G⟩⌉
+          HAVE T ⊢ ¬⌈Sub(⟨G⟩, ⟨⌈⟨G⟩⌉⟩)⌉ BY Specialization
+          REWRITE T ⊢ ¬G BY {
+            G = ¬⌈Sub(⟨G⟩, ⟨⌈⟨G⟩⌉⟩)⌉ BY Definition(G)
+          }
+          CONTRADICTION BY {
+            T ⊬ ¬G BY ASSUMPTION            
+          }
+        }
+        
+        SHOW T ⊬ ¬φ BY {
+          ASSUME T ⊢ ¬φ
+          REWRITE T ⊢ ∃ (x : Nat). ⌈Sub(⟨G⟩, ⟨x⟩)⌉ BY {
+            φ = ¬∃ (x : Nat). ⌈Sub(⟨G⟩, ⟨x⟩)⌉ BY Definition(φ) 
+          }
+          LET n : Nat
+          ASSUME T ⊢ ⌈Sub(⟨G⟩, ⟨n⟩)⌉
+          REWRITE T ⊢ Sub(⟨G⟩, ⟨n⟩) BY Substitution
+          CASES n = ⌈⟨G⟩⌉ BY ArithmeticTotalOrder {
+            Contains(T, Arithmetic) BY ASSUMPTION
+          }
+          CASE n = ⌈⟨G⟩⌉ -> {
+            REWRITE T ⊢ Sub(⟨G⟩, ⟨⌈⟨G⟩⌉⟩) BY ASSUMPTION
+            REWRITE T ⊢ G BY {
+              G = ¬⌈Sub(⟨G⟩, ⟨⌈⟨G⟩⌉⟩)⌉ BY Definition(G)
+            }
+            CONTRADICTION BY {
+              T ⊬ G BY ASSUMPTION
+            }
+          }
+          CASE n ≠ ⌈⟨G⟩⌉ -> {
+            HAVE ∀ (ψ : Sentence). T ⊢ ψ -> T ⊢ ⌈ψ⌉ BY {
+              Defines(T, Proves) BY ASSUMPTION
+            }
+            REWRITE T ⊢ ⌈Sub(⟨G⟩, ⟨n⟩)⌉ BY ASSUMPTION
+            HAVE T ⊢ ∃ (x : Nat). x ≠ ⌈⟨G⟩⌉ ∧ ⌈Sub(⟨G⟩, ⟨x⟩)⌉ BY Existential(n)
+            REWRITE T ⊢ ⌈∃ (x : Nat). x ≠ ⌈⟨G⟩⌉ ∧ Sub(⟨G⟩, ⟨x⟩)⌉ BY ω-Completeness {
+              Contains(T, Arithmetic) BY ASSUMPTION
+            }
+            REWRITE T ⊢ ⌈¬G⌉ BY {
+              G = ¬⌈Sub(⟨G⟩, ⟨⌈⟨G⟩⌉⟩)⌉ BY Definition(G)
+              ⌈∃ (x : Nat). x ≠ ⌈⟨G⟩⌉ ∧ Sub(⟨G⟩, ⟨x⟩)⌉ = ⌈¬G⌉ BY Logic
+            }
+            REWRITE T ⊢ ¬G BY Substitution
+            CONTRADICTION BY {
+              T ⊬ ¬G BY ASSUMPTION
+            }
+          }
+        }
+    }
+
+    THEOREM UndecidableStatements {
+      STATEMENT:
+        ∀ (A : Set(Formula)). Arithmetic(A) -> 
+        LET T = Deductive(A) IN
+        ∃ (φ : Sentence). T ⊬ φ ∧ T ⊬ ¬φ ∧ N ⊨ φ 
+
+      PROOF:
+        LET A : Set(Formula)
+        ASSUME Arithmetic(A)
+        LET T = Deductive(A)
+
+        HAVE Consistent(T) BY Soundness
+        HAVE Defines(T, Proves) BY {
+          Arithmetic(A) BY ASSUMPTION
+          Standard(Q) BY StandardModelConstruction
+        }
+        HAVE Contains(T, Arithmetic) BY {
+          Arithmetic(A) BY ASSUMPTION
+          Standard(Q) BY StandardModelConstruction
+        }
+        HAVE ∀ (φ : Sentence). T ⊢ φ -> N ⊨ φ BY Soundness
+
+        HAVE ∃ (φ : Sentence). T ⊬ φ ∧ T ⊬ ¬φ BY Incompleteness, ASSUMPTION
+        LET G : Sentence
+        ASSUME T ⊬ G, T ⊬ ¬G
+
+        LET Con(T) = ¬∃ (x : Nat). ⌈Sub(⟨G⟩, ⟨x⟩)⌉
+
+        SHOW N ⊨ Con(T) BY {
+          ASSUME N ⊨ ∃ (x : Nat). ⌈Sub(⟨G⟩, ⟨x⟩)⌉
+          LET n : Nat
+          ASSUME N ⊨ ⌈Sub(⟨G⟩, ⟨n⟩)⌉
+          REWRITE N ⊨ Sub(⟨G⟩, ⟨n⟩) BY Substitution
+          CASES n = ⌈⟨G⟩⌉ BY ArithmeticTotalOrder {
+            Arithmetic(A) BY ASSUMPTION
+          }
+          CASE n = ⌈⟨G⟩⌉ -> {
+            REWRITE N ⊨ G BY {
+              G = ¬⌈Sub(⟨G⟩, ⟨⌈⟨G⟩⌉⟩)⌉ BY Definition(G)
+            }
+            HAVE T ⊢ G BY Completeness {
+              ∀ (φ : Sentence). T ⊢ φ -> N ⊨ φ PROVED ABOVE
+            }
+            CONTRADICTION BY {  
+              T ⊬ G BY ASSUMPTION
+            }
+          }
+          CASE n ≠ ⌈⟨G⟩⌉ -> {
+            HAVE N ⊨ ∃ (x : Nat). x ≠ ⌈⟨G⟩⌉ ∧ Sub(⟨G⟩, ⟨x⟩) BY Existential(n)
+            REWRITE N ⊨ ¬G BY {
+              G = ¬⌈Sub(⟨G⟩, ⟨⌈⟨G⟩⌉⟩)⌉ BY Definition(G)
+              ∃ (x : Nat). x ≠ ⌈⟨G⟩⌉ ∧ Sub(⟨G⟩, ⟨x⟩) = ¬G BY Logic
+            }
+            HAVE T ⊢ ¬G BY Completeness {
+              ∀ (φ : Sentence). T ⊢ φ -> N ⊨ φ PROVED

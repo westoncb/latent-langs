@@ -1,0 +1,218 @@
+CONCEPT LatentSpaceNavigator : StateOrientedCLIFramework {
+  STRUCTURE {
+    TYPE ConceptID = String
+    TYPE ConceptData = String
+    TYPE ConceptDB = Map(ConceptID, ConceptData)
+    TYPE ConceptMetadata = {
+      tags : List(String),
+      notes : List(String)
+    }
+
+    TYPE LatentSpaceNavigatorState = {
+      currentConcept : ConceptID,
+      conceptDB : ConceptDB,
+      conceptMetadata : Map(ConceptID, ConceptMetadata),
+      commandHistory : List(LatentSpaceNavigatorCommand)
+    }
+
+    TYPE LatentSpaceNavigatorCommand =
+      | Sample(category : String, options : SampleOptions)
+      | Find(searchTerms : List(String), options : FindOptions)
+      | View(conceptName : ConceptID)
+      | Parts(conceptName : ConceptID)
+      | Follow(conceptName : ConceptID, partName : String, options : SampleOptions)
+      | Save(conceptName : ConceptID, metadata : ConceptMetadata)
+      | Back
+      | Forward
+      | Exit
+
+    TYPE SampleOptions = {
+      optimize : List((String, Real)),
+      constraints : List(String),
+      flavors : List((String, String)),
+      representation : String,
+      using : List((String, String))
+    }
+
+    TYPE FindOptions = {
+      tags : List(String),
+      notes : List(String)
+    }
+
+    FUNC InitialState() -> LatentSpaceNavigatorState = {
+      currentConcept = "",
+      conceptDB = EmptyMap(),
+      conceptMetadata = EmptyMap(),
+      commandHistory = []
+    }
+
+    FUNC FinalState() -> LatentSpaceNavigatorState = AnyState()
+
+    PRED ValidState(s : LatentSpaceNavigatorState) = {
+      (s.currentConcept = "" OR s.currentConcept IN Keys(s.conceptDB)) AND
+      Keys(s.conceptMetadata) SUBSETEQ Keys(s.conceptDB)
+    }
+
+    PRED ValidCommand(c : LatentSpaceNavigatorCommand, s : LatentSpaceNavigatorState) = {
+      MATCH c WITH
+        | Sample(_, _) => True
+        | Find(_, _) => True
+        | View(conceptName) => conceptName IN Keys(s.conceptDB)
+        | Parts(conceptName) => conceptName = "" OR conceptName IN Keys(s.conceptDB)
+        | Follow(conceptName, partName, _) =>
+            (conceptName = "" AND s.currentConcept != "") OR
+            (conceptName IN Keys(s.conceptDB) AND partName IN ExtractParts(Lookup(s.conceptDB, conceptName)))
+        | Save(conceptName, _) => conceptName = "" OR conceptName IN Keys(s.conceptDB)
+        | Back => Length(s.commandHistory) > 0
+        | Forward => Length(s.commandHistory) < Length(AllCommandHistory(s))
+        | Exit => True
+    }
+
+    FUNC Execute(s : LatentSpaceNavigatorState, c : LatentSpaceNavigatorCommand) -> LatentSpaceNavigatorState = {
+      MATCH c WITH
+        | Sample(category, options) =>
+            LET generatedConcept = GenerateConcept(category, options) IN
+            {
+              currentConcept = generatedConcept.id,
+              conceptDB = Insert(s.conceptDB, generatedConcept.id, generatedConcept.data),
+              conceptMetadata = s.conceptMetadata,
+              commandHistory = Append(s.commandHistory, c)
+            }
+        | Find(searchTerms, options) => s
+        | View(conceptName) =>
+            {
+              currentConcept = conceptName,
+              conceptDB = s.conceptDB,
+              conceptMetadata = s.conceptMetadata,
+              commandHistory = Append(s.commandHistory, c)
+            }
+        | Parts(conceptName) =>
+            LET id = IF conceptName = "" THEN s.currentConcept ELSE conceptName IN
+            {
+              currentConcept = id,
+              conceptDB = s.conceptDB,
+              conceptMetadata = s.conceptMetadata,
+              commandHistory = Append(s.commandHistory, c)
+            }
+        | Follow(conceptName, partName, options) =>
+            LET id = IF conceptName = "" THEN s.currentConcept ELSE conceptName IN
+            LET generatedConcept = GenerateConceptFromPart(Lookup(s.conceptDB, id), partName, options) IN
+            {
+              currentConcept = generatedConcept.id,
+              conceptDB = Insert(s.conceptDB, generatedConcept.id, generatedConcept.data),
+              conceptMetadata = s.conceptMetadata,
+              commandHistory = Append(s.commandHistory, c)
+            }
+        | Save(conceptName, metadata) =>
+            LET id = IF conceptName = "" THEN s.currentConcept ELSE conceptName IN
+            {
+              currentConcept = s.currentConcept,
+              conceptDB = s.conceptDB,
+              conceptMetadata = Insert(s.conceptMetadata, id, metadata),
+              commandHistory = Append(s.commandHistory, c)
+            }
+        | Back =>
+            IF Length(s.commandHistory) > 0 THEN
+              Undo(s)
+            ELSE
+              s
+        | Forward =>
+            IF Length(s.commandHistory) < Length(AllCommandHistory(s)) THEN
+              Redo(s)
+            ELSE
+              s
+        | Exit => s
+    }
+
+    FUNC Render(s : LatentSpaceNavigatorState) -> Output = {
+      LET currentConceptData = IF s.currentConcept = "" THEN "" ELSE Lookup(s.conceptDB, s.currentConcept) IN
+      LET currentConceptMetadata = IF s.currentConcept = "" THEN {} ELSE Lookup(s.conceptMetadata, s.currentConcept, {tags = [], notes = []}) IN
+      {
+        currentConceptID = s.currentConcept,
+        currentConceptData = currentConceptData,
+        currentConceptMetadata = currentConceptMetadata,
+        commandHistory = s.commandHistory
+      }
+    }
+
+    PRED Deterministic(s : LatentSpaceNavigatorState, c : LatentSpaceNavigatorCommand) = {
+      FORALL (s' : LatentSpaceNavigatorState) (s'' : LatentSpaceNavigatorState).
+        (Execute(s, c) = s' AND Execute(s, c) = s'') -> s' = s''
+    }
+
+    PRED Terminating(s : LatentSpaceNavigatorState) = {
+      s = FinalState() OR
+      FORALL (c : LatentSpaceNavigatorCommand).
+        NOT ValidCommand(c, s)
+    }
+
+    FUNC GenerateConcept(category : String, options : SampleOptions) -> {id : ConceptID, data : ConceptData} = {
+      ; Implementation-specific
+    }
+
+    FUNC GenerateConceptFromPart(conceptData : ConceptData, partName : String, options : SampleOptions) -> {id : ConceptID, data : ConceptData} = {
+      ; Implementation-specific
+    }
+
+    FUNC ExtractParts(conceptData : ConceptData) -> List(String) = {
+      ; Implementation-specific
+    }
+
+    FUNC Undo(s : LatentSpaceNavigatorState) -> LatentSpaceNavigatorState = {
+      ; Implementation-specific
+    }
+
+    FUNC Redo(s : LatentSpaceNavigatorState) -> LatentSpaceNavigatorState = {
+      ; Implementation-specific
+    }
+
+    FUNC AllCommandHistory(s : LatentSpaceNavigatorState) -> List(LatentSpaceNavigatorCommand) = {
+      ; Implementation-specific
+    }
+  }
+
+  PROOFS {
+    THEOREM SystemValidity {
+      FORALL (s : LatentSpaceNavigatorState).
+        Reachable(InitialState(), s) -> ValidState(s)
+
+      PROOF:
+        LET s : LatentSpaceNavigatorState
+        ASSUME Reachable(InitialState(), s)
+        ReachabilityAnalysis(InitialState(), s)
+        ValidStateAnalysis(InitialState(), s, WITNESS(c : LatentSpaceNavigatorCommand))
+    }
+
+    THEOREM CommandDeterminism {
+      FORALL (s : LatentSpaceNavigatorState) (c : LatentSpaceNavigatorCommand).
+        ValidCommand(c, s) -> Deterministic(s, c)
+
+      PROOF:
+        LET s : LatentSpaceNavigatorState, c : LatentSpaceNavigatorCommand
+        ASSUME ValidCommand(c, s)
+        DeterminismAnalysis(s, c)
+    }
+
+    THEOREM Termination {
+      FORALL (s : LatentSpaceNavigatorState).
+        Reachable(InitialState(), s) ->
+          EXISTS (s' : LatentSpaceNavigatorState).
+            Reachable(s, s') AND Terminating(s')
+
+      PROOF:
+        LET s : LatentSpaceNavigatorState
+        ASSUME Reachable(InitialState(), s)
+        ReachabilityAnalysis(InitialState(), s)
+        CASES Terminating(s)
+          CASE TRUE:
+            WITNESS s
+          CASE FALSE:
+            LET c : LatentSpaceNavigatorCommand = WITNESS(c : LatentSpaceNavigatorCommand)
+            ASSUME ValidCommand(c, s)
+            LET s' = Execute(s, c)
+            ReachabilityAnalysis(s, s')
+            ASSERT Terminating(s') BY INDUCTION
+            WITNESS s'
+    }
+  }
+}

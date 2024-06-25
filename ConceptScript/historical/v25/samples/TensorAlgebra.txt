@@ -1,0 +1,251 @@
+CONCEPT TensorAlgebra {
+  LANGUAGE {
+    TYPE Tensor[T, n..., m...] -- T is the element type, n... are contravariant indices, m... are covariant indices 
+    TYPE Scalar = Tensor[]
+    TYPE Vector[T, n] = Tensor[T, n]  
+    TYPE Covector[T, m] = Tensor[T, m]
+    TYPE Matrix[T, n, m] = Tensor[T, n, m]
+
+    FUNC Transpose(M : Matrix[T, n, m]) : Matrix[T, m, n]
+    FUNC Tr(M : Matrix[T, n, n]) : T
+    FUNC Det(M : Matrix[T, n, n]) : T
+    FUNC Inv(M : Matrix[T, n, n]) : Matrix[T, n, n]
+
+    FUNC Inner(v : Vector[T, n], w : Vector[T, n]) : Scalar
+    FUNC Outer(v : Vector[T, n], w : Covector[T, m]) : Matrix[T, n, m]  
+    FUNC Contract(A : Tensor[T, n..., i, m...], B : Tensor[T, j..., i, k...]) : Tensor[T, n..., m..., j..., k...]
+
+    FUNC Christoffel(g : Tensor[Real, i, j], ∂g : Tensor[Real, i, j, k]) : Tensor[Real, i, j, k]
+    FUNC Riemann(Γ : Tensor[Real, i, j, k], ∂Γ : Tensor[Real, i, j, k, l]) : Tensor[Real, i, j, k, l]
+    FUNC Ricci(R : Tensor[Real, i, j, k, l]) : Tensor[Real, i, j]  
+    FUNC Einstein(R : Tensor[Real, i, j], g : Tensor[Real, i, j]) : Tensor[Real, i, j]
+
+    AXIOM MatrixInverse {
+      ∀ (M : Matrix[T, n, n]). Det(M) ≠ 0 ⇒ M * Inv(M) = Inv(M) * M = I
+    }
+
+    AXIOM MetricInverse {
+      ∀ (g : Tensor[Real, i, j]). 
+        Contract(g, Inv(g)) = Tensor[Real, i, j] {
+          (i, j) -> IF i = j THEN 1 ELSE 0
+        }
+    }
+
+    NOTATION "⊗" = Outer  
+    NOTATION "·" = Inner
+    NOTATION "tr" = Tr
+    NOTATION "det" = Det
+    NOTATION "∇" = Covariant
+    NOTATION "∂" = Partial  
+    NOTATION "Γ^i_jk" = Christoffel
+    NOTATION "R^i_jkl" = Riemann
+    NOTATION "R_ij" = Ricci
+    NOTATION "G_ij" = Einstein
+    NOTATION "δ^i_j" = KroneckerDelta
+    NOTATION "ε^ijk" = LeviCivita
+  }
+
+  STRUCTURE TensorSpace[T, n..., m...] {
+    DEF Zero : Tensor[T, n..., m...] = Tensor[T, n..., m...] { (n..., m...) -> 0 }
+
+    DEF Neg(t : Tensor[T, n..., m...]) : Tensor[T, n..., m...] = 
+      Tensor[T, n..., m...] { (n..., m...) -> -t[n..., m...] }
+
+    DEF Add(t1 : Tensor[T, n..., m...], t2 : Tensor[T, n..., m...]) : Tensor[T, n..., m...] =
+      Tensor[T, n..., m...] { (n..., m...) -> t1[n..., m...] + t2[n..., m...] }  
+
+    DEF ScalarMul(k : T, t : Tensor[T, n..., m...]) : Tensor[T, n..., m...] =
+      Tensor[T, n..., m...] { (n..., m...) -> k * t[n..., m...] }
+
+    REQUIRE TensorSpace[T, n..., m...] IS VectorSpace(Zero, Neg, Add, ScalarMul)
+  }
+
+  STRUCTURE RiemannianManifold(M : Manifold, g : Tensor[Real, i, j]) {
+    DEF Christoffel(g : Tensor[Real, i, j], ∂g : Tensor[Real, i, j, k]) : Tensor[Real, i, j, k] =
+      Tensor[Real, i, j, k] { (i, j, k) ->
+        (1/2) * (∂g[k, i, j] + ∂g[k, j, i] - ∂g[i, j, k])  
+      }
+
+    DEF Riemann(Γ : Tensor[Real, i, j, k], ∂Γ : Tensor[Real, i, j, k, l]) : Tensor[Real, i, j, k, l] = 
+      Tensor[Real, i, j, k, l] { (i, j, k, l) ->  
+        ∂Γ[i, j, l, k] - ∂Γ[i, j, k, l] + Contract(Γ, Γ)[i, j, l, k] - Contract(Γ, Γ)[i, j, k, l]
+      }
+
+    DEF Ricci(R : Tensor[Real, i, j, k, l]) : Tensor[Real, i, j] =
+      Tensor[Real, i, j] { (i, j) -> Contract(R, δ^k_l)[i, k, j, l] }
+
+    DEF Einstein(R : Tensor[Real, i, j], g : Tensor[Real, i, j]) : Tensor[Real, i, j] =
+      Tensor[Real, i, j] { (i, j) -> R[i, j] - (1/2) * tr(R) * g[i, j] }
+
+    REQUIRE ∀ (i j k l : Nat). R^i_jkl = -R^i_jlk ∧ R^i_jkl = R^k_lij  
+  }
+
+  PROOFS {
+    THEOREM RicciSymmetry {
+      STATEMENT:
+        ∀ (M : Manifold) (g : Tensor[Real, i, j]).
+          LET R = Ricci(Riemann(Christoffel(g, ∂g), ∂Christoffel(g, ∂g)))
+          IN ∀ (i j : Nat). R[i, j] = R[j, i]
+
+      PROOF:
+        LET M : Manifold, g : Tensor[Real, i, j]
+        LET Γ = Christoffel(g, ∂g), ∂Γ = ∂Christoffel(g, ∂g)  
+        LET R^i_jkl = Riemann(Γ, ∂Γ), R_ij = Ricci(R^i_jkl)
+        SHOW ∀ (i j : Nat). R_ij = R_ji BY {
+          LET i j : Nat
+          R_ij
+            = Contract(R^i_jkl, δ^k_l)[i, k, j, l]                BY DEFINITION Ricci
+            = R^i_jkk                                             BY DEFINITION Contract  
+            = R^j_ikk                                             BY RiemannSymmetry2
+            = Contract(R^j_ikl, δ^k_l)[j, k, i, l]                BY DEFINITION Contract
+            = R_ji                                                BY DEFINITION Ricci
+        }
+    }
+
+    THEOREM Bianchi1 {
+      STATEMENT:
+        ∀ (M : Manifold) (g : Tensor[Real, i, j]).
+          LET Γ = Christoffel(g, ∂g), ∂Γ = ∂Christoffel(g, ∂g), R^i_jkl = Riemann(Γ, ∂Γ)  
+          IN ∀ (i j k l : Nat). ∇_i R^i_jkl + ∇_j R^i_kil + ∇_k R^i_lij = 0
+
+      PROOF:
+        LET M : Manifold, g : Tensor[Real, i, j]  
+        LET Γ = Christoffel(g, ∂g), ∂Γ = ∂Christoffel(g, ∂g), R^i_jkl = Riemann(Γ, ∂Γ)
+        SHOW ∀ (i j k l : Nat). ∇_i R^i_jkl + ∇_j R^i_kil + ∇_k R^i_lij = 0 BY {
+          LET i j k l : Nat
+          LET B = ∇_i R^i_jkl + ∇_j R^i_kil + ∇_k R^i_lij
+          REWRITE B  
+            = ∂_i R^i_jkl + Γ^i_im R^m_jkl - Γ^m_ji R^i_mkl - Γ^m_ki R^i_jml - Γ^m_li R^i_jkm   
+              + ∂_j R^i_kil + Γ^i_jm R^m_kil - Γ^m_kj R^i_mil - Γ^m_ij R^i_mkl - Γ^m_lj R^i_kim
+              + ∂_k R^i_lij + Γ^i_km R^m_lij - Γ^m_lk R^i_mij - Γ^m_ik R^i_lmj - Γ^m_jk R^i_lim
+            = ∂_i R^i_jkl + ∂_j R^i_kil + ∂_k R^i_lij  
+              + Γ^i_im (R^m_jkl + R^m_kil + R^m_lij)
+              - Γ^m_ji R^i_mkl - Γ^m_ki R^i_jml - Γ^m_li R^i_jkm
+              - Γ^m_kj R^i_mil - Γ^m_ij R^i_mkl - Γ^m_lj R^i_kim  
+              - Γ^m_lk R^i_mij - Γ^m_ik R^i_lmj - Γ^m_jk R^i_lim
+            = ∂_i R^i_jkl + ∂_j R^i_kil + ∂_k R^i_lij
+              + Γ^i_im (R^m_jkl + R^m_kil + R^m_lij)
+              - Γ^m_ij (R^i_mkl + R^i_mlk) - Γ^m_ik (R^i_mjl + R^i_mlj) - Γ^m_il (R^i_mjk + R^i_mkj)
+            = ∂_i R^i_jkl + ∂_j R^i_kil + ∂_k R^i_lij  
+              + Γ^i_im (R^m_jkl + R^m_kil + R^m_lij)
+              - Γ^m_ij (R^i_mkl - R^i_klm) - Γ^m_ik (R^i_mjl - R^i_ljm) - Γ^m_il (R^i_mjk - R^i_kjm)
+            = ∂_i R^i_jkl + ∂_j R^i_kil + ∂_k R^i_lij
+              + Γ^i_im (R^m_jkl + R^m_kil + R^m_lij)  
+              - Γ^m_ij R^i_mkl + Γ^m_ij R^i_klm - Γ^m_ik R^i_mjl + Γ^m_ik R^i_ljm - Γ^m_il R^i_mjk + Γ^m_il R^i_kjm
+            = 0  BY RiemannBianchi
+        }
+    }
+  }
+}
+
+
+
+CONCEPT TensorAlgebra {
+  LANGUAGE {
+    TYPE Scalar
+    TYPE Vector
+    TYPE Matrix
+    TYPE Tensor[d : Nat] = Tensor[Scalar, d]
+    
+    FUNC Dim : Tensor[d] -> Nat
+    FUNC Component[d : Nat] : (Tensor[d], Nat^d) -> Scalar
+    FUNC ZeroTensor[d : Nat] : Tensor[d]
+    FUNC Identity[d : Nat] : Tensor[d, d]
+
+    FUNC ScalarMult[d : Nat] : (Scalar, Tensor[d]) -> Tensor[d]
+    FUNC TensorAdd[d : Nat] : (Tensor[d], Tensor[d]) -> Tensor[d]  
+    FUNC MatrixMult : (Tensor[2], Tensor[2]) -> Tensor[2]
+    FUNC TensorProduct[d1 : Nat, d2 : Nat] : (Tensor[d1], Tensor[d2]) -> Tensor[d1 + d2]
+    FUNC Contract[d : Nat] : (Tensor[d+2], Nat, Nat) -> Tensor[d]
+    FUNC Transpose[d1 : Nat, d2 : Nat] : Tensor[d1, d2] -> Tensor[d2, d1]
+    FUNC Trace : Tensor[2] -> Scalar
+
+    AXIOM ZeroTensorZero : ∀ (d : Nat) (i : Nat^d). Component(ZeroTensor[d], i) = 0
+    
+    AXIOM IdentityDef : ∀ (d : Nat) (i j : 1..d). 
+      Component(Identity[d], [i, j]) = IF i = j THEN 1 ELSE 0
+
+    AXIOM ScalarMultDef : ∀ (a : Scalar) (T : Tensor[d]) (i : Nat^d).
+      Component(ScalarMult(a, T), i) = a * Component(T, i)
+
+    AXIOM TensorAddDef : ∀ (S T : Tensor[d]) (i : Nat^d).   
+      Component(TensorAdd(S, T), i) = Component(S, i) + Component(T, i)
+
+    AXIOM MatrixMultDef : ∀ (A B : Tensor[2]) (i j : Nat).
+      Component(MatrixMult(A, B), [i, j]) = Sum(k -> Component(A, [i, k]) * Component(B, [k, j]), 1..Dim(A))
+
+    AXIOM TensorProductDef : ∀ (S : Tensor[d1]) (T : Tensor[d2]) (i : Nat^(d1+d2)).  
+      Component(TensorProduct(S, T), i) = Component(S, Take(d1, i)) * Component(T, Drop(d1, i))
+
+    AXIOM ContractDef : ∀ (T : Tensor[d+2]) (k l : Nat) (i : Nat^d).
+      Component(Contract(T, k, l), i) = Sum(j -> Component(T, Insert(i, k, j)), 1..Dim(T))
+
+    AXIOM TransposeDef : ∀ (T : Tensor[d1, d2]) (i : 1..d1) (j : 1..d2).  
+      Component(Transpose(T), [j, i]) = Component(T, [i, j])
+
+    AXIOM TraceDef : ∀ (T : Tensor[2]). 
+      Trace(T) = Sum(i -> Component(T, [i, i]), 1..Dim(T))
+  }
+
+  STRUCTURE VectorSpace {
+    TYPE V : Vector
+    FUNC DotProduct : (V, V) -> Scalar
+    FUNC Norm : V -> Scalar
+    FUNC Normalize : V -> V
+    FUNC OrthogonalProjection : (V, V) -> V
+
+    REQUIRE ∀ (u v : V). DotProduct(u, v) = DotProduct(v, u)
+    REQUIRE ∀ (u v w : V) (a : Scalar).  
+      DotProduct(u, TensorAdd(v, w)) = DotProduct(u, v) + DotProduct(u, w) ∧
+      DotProduct(ScalarMult(a, u), v) = a * DotProduct(u, v)
+    REQUIRE ∀ (v : V). Norm(v) = Sqrt(DotProduct(v, v))  
+    REQUIRE ∀ (v : V). Normalize(v) = ScalarMult(1 / Norm(v), v)
+    REQUIRE ∀ (u v : V). 
+      OrthogonalProjection(u, v) = ScalarMult(DotProduct(u, v) / DotProduct(v, v), v)
+  }
+
+  PROOFS {
+    THEOREM MatrixMultAssociative {
+      STATEMENT:
+        ∀ (A B C : Tensor[2]). MatrixMult(MatrixMult(A, B), C) = MatrixMult(A, MatrixMult(B, C))
+
+      PROOF:
+        LET (A B C : Tensor[2]) (i j : Nat)
+        REWRITE Component(MatrixMult(MatrixMult(A, B), C), [i, j])  
+          = Sum(k -> Component(MatrixMult(A, B), [i, k]) * Component(C, [k, j]), 1..Dim(A)) BY MatrixMultDef
+          = Sum(k -> Sum(l -> Component(A, [i, l]) * Component(B, [l, k]), 1..Dim(A)) * Component(C, [k, j]), 1..Dim(A)) BY MatrixMultDef
+          = Sum(l -> Component(A, [i, l]) * Sum(k -> Component(B, [l, k]) * Component(C, [k, j]), 1..Dim(B)), 1..Dim(A)) BY ALGEBRA  
+          = Sum(l -> Component(A, [i, l]) * Component(MatrixMult(B, C), [l, j]), 1..Dim(A)) BY MatrixMultDef
+          = Component(MatrixMult(A, MatrixMult(B, C)), [i, j]) BY MatrixMultDef
+    }
+
+    THEOREM TensorProductAssociative {
+      STATEMENT:
+        ∀ (S : Tensor[d1]) (T : Tensor[d2]) (U : Tensor[d3]).
+          TensorProduct(TensorProduct(S, T), U) = TensorProduct(S, TensorProduct(T, U))
+
+      PROOF:
+        LET (S : Tensor[d1]) (T : Tensor[d2]) (U : Tensor[d3]) (i : Nat^(d1+d2+d3))
+        REWRITE Component(TensorProduct(TensorProduct(S, T), U), i)
+          = Component(TensorProduct(S, T), Take(d1+d2, i)) * Component(U, Drop(d1+d2, i)) BY TensorProductDef
+          = Component(S, Take(d1, Take(d1+d2, i))) * Component(T, Drop(d1, Take(d1+d2, i))) * Component(U, Drop(d1+d2, i)) BY TensorProductDef  
+          = Component(S, Take(d1, i)) * Component(T, Take(d2, Drop(d1, i))) * Component(U, Drop(d1+d2, i)) BY ALGEBRA
+          = Component(S, Take(d1, i)) * Component(TensorProduct(T, U), Drop(d1, i)) BY TensorProductDef
+          = Component(TensorProduct(S, TensorProduct(T, U)), i) BY TensorProductDef
+    }
+
+    THEOREM ContractTensorProduct {
+      STATEMENT:
+        ∀ (S : Tensor[d1]) (T : Tensor[d2]) (k : 1..d1) (l : 1..d2).
+          Contract(TensorProduct(S, T), k, d1+l) = TensorProduct(Contract(S, k, k), Contract(T, l, l))
+
+      PROOF:
+        LET (S : Tensor[d1]) (T : Tensor[d2]) (k : 1..d1) (l : 1..d2) (i : Nat^(d1+d2-2))
+        REWRITE Component(Contract(TensorProduct(S, T), k, d1+l), i)
+          = Sum(j -> Component(TensorProduct(S, T), Insert(i, k, j)), 1..Dim(S)) BY ContractDef
+          = Sum(j -> Component(S, Insert(Take(d1-1, i), k, j)) * Component(T, Insert(Drop(d1-1, i), l, j)), 1..Dim(S)) BY TensorProductDef
+          = Sum(j -> Component(Contract(S, k, k), Take(d1-1, i)) * Component(Contract(T, l, l), Drop(d1-1, i)), 1..Dim(S)) BY ContractDef
+          = Component(TensorProduct(Contract(S, k, k), Contract(T, l, l)), i) BY TensorProductDef
+    }
+  }
+}

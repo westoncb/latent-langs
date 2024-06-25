@@ -1,0 +1,208 @@
+CONCEPT BlackHole {
+  LANGUAGE {
+    TYPE Spacetime
+    TYPE Event <: Spacetime
+    TYPE Singularity <: Spacetime
+    TYPE Trajectory <: Spacetime
+    TYPE Manifold <: Spacetime  
+    TYPE Mass = Real
+    TYPE Length = Real
+    TYPE Time = Real
+    TYPE Velocity = Real
+    TYPE Acceleration = Real
+    
+    FUNC Schwarzschild(M : Mass) : Length
+    FUNC Kerr(M : Mass, J : Real) : Length
+    FUNC Hawking(M : Mass) : Real
+    FUNC Bekenstein(A : Real) : Real
+    FUNC Penrose(M : Mass, Q : Real, J : Real) : Real
+    FUNC Chandrasekar(Y_e : Real, mu_e : Real) : Mass
+
+    AXIOM SchwarzschildRadius {
+      ∀ (M : Mass). Schwarzschild(M) = 2 * G * M / c^2
+    }
+
+    AXIOM KerrRadius {
+      ∀ (M : Mass) (J : Real). Kerr(M, J) = (G * M / c^2) * (1 + Sqrt(1 - (J * c / (G * M^2))^2))  
+    }
+
+    AXIOM HawkingTemperature {
+      ∀ (M : Mass). Hawking(M) = (ℏ * c^3) / (8 * π * G * k_B * M)
+    }
+
+    AXIOM BekensteinEntropy {
+      ∀ (A : Real). Bekenstein(A) = (k_B * c^3 * A) / (4 * ℏ * G)  
+    }
+
+    AXIOM PenroseProcess {
+      ∀ (M : Mass) (Q : Real) (J : Real).
+        Penrose(M, Q, J) = 1 - Sqrt(1 - (Q^2 + J^2/M^2) / M^2) 
+    }
+
+    AXIOM ChandrasekharLimit {
+      ∀ (Y_e : Real) (mu_e : Real). 
+        Chandrasekar(Y_e, mu_e) ≈ (1 / mu_e^2) * (ℏ * c / G)^(3/2) * (1 / Y_e)^2
+    }
+    
+    NOTATION "R_s" = Schwarzschild
+    NOTATION "R_k" = Kerr  
+    NOTATION "T_h" = Hawking
+    NOTATION "S_bh" = Bekenstein
+    NOTATION "η" = Penrose  
+    NOTATION "M_ch" = Chandrasekar
+    NOTATION "G" = 6.674e-11 -- Gravitational constant
+    NOTATION "c" = 299792458 -- Speed of light  
+    NOTATION "ℏ" = 1.054571817e-34 -- Reduced Planck constant
+    NOTATION "k_B" = 1.380649e-23 -- Boltzmann constant
+  }
+
+  STRUCTURE SpacetimeStructure {
+    REQUIRE ∀ (p : Spacetime) (e : Event).
+      e ∈ p.PastLightCone ⇒ p ∈ e.FutureLightCone ∧  
+      e ∈ p.FutureLightCone ⇒ p ∈ e.PastLightCone
+
+    REQUIRE ∀ (s : Singularity). 
+      s.PastLightCone = ∅ ∧ s.FutureLightCone = ∅
+
+    REQUIRE ∀ (t : Trajectory) (e1 e2 : Event).
+      e1, e2 ∈ t ⇒ (e1 ∈ e2.PastLightCone ∨ e2 ∈ e1.PastLightCone) 
+  }
+
+  STRUCTURE Horizon(M : Manifold) {
+    LET Event_Horizon = {
+      e : Event | ∀ (t : Trajectory), t ∩ e.FutureLightCone ≠ ∅ ⇒ t ∩ Singularity ≠ ∅  
+    }
+
+    LET Apparent_Horizon = {
+      e : Event | ∀ (t : Trajectory), t ⊥ e.PastLightCone ∧ t ∩ e.FutureLightCone = ∅
+    }
+
+    REQUIRE ∀ (e : Event). e ∈ Event_Horizon ⇒ e ∈ Apparent_Horizon
+  }
+
+  STRUCTURE KerrBlackHole(M : Mass, J : Real) : Manifold {
+    LET a = J / (M * c)
+
+    DEF Metric(r : Real, θ : Real) : Tensor[Real, 4, 4] = ...
+
+    REQUIRE ∀ (r : Real) (θ : Real). Det(Metric(r, θ)) = 
+      -(r^2 + a^2 * Cos(θ)^2) * Sin(θ)^2 / (r^2 - R_s(M) * r + a^2)
+      
+    REQUIRE ∀ (r : Real) (θ : Real). 
+      r = M + Sqrt(M^2 - a^2 * Cos(θ)^2) ⇒ Metric(r, θ).IsNull
+  }
+
+  STRUCTURE ReissnerNordstromBlackHole(M : Mass, Q : Real) : Manifold {
+    DEF Metric(r : Real, θ : Real, φ : Real) : Tensor[Real, 4, 4] = ...
+
+    REQUIRE ∀ (r : Real). r = M + Sqrt(M^2 - Q^2) ⇒ Metric(r, θ, φ).IsNull
+
+    REQUIRE Q^2 ≤ M^2  
+  }
+
+  PROOFS {
+    TACTIC Rearrange(Eq, x) = Eq ⊢ Solve(Eq, x)  
+
+    THEOREM NoHairTheorem {
+      STATEMENT:
+        ∀ (M1 M2 : Manifold) (t1 t2 : Tensor[Real, 4, 4]).
+          t1 = Metric(KerrBlackHole(M1.Mass, M1.AngularMomentum)) ∧ 
+          t2 = Metric(ReissnerNordstromBlackHole(M2.Mass, M2.Charge)) ∧
+          M1.Mass = M2.Mass ∧ M1.AngularMomentum = 0 ∧ M2.Charge = 0
+          ⊢ t1 = t2  
+
+      PROOF:
+        LET M1 M2 : Manifold, t1 t2 : Tensor[Real, 4, 4]
+        ASSUME (1) t1 = Metric(KerrBlackHole(M1.Mass, M1.AngularMomentum)),
+               (2) t2 = Metric(ReissnerNordstromBlackHole(M2.Mass, M2.Charge)),
+               (3) M1.Mass = M2.Mass, (4) M1.AngularMomentum = 0, (5) M2.Charge = 0
+        
+        LET M = M1.Mass
+        SHOW t1 = t2 BY {
+          t1 
+            = Metric(KerrBlackHole(M, 0))                BY (1), (4)
+            = Tensor(...r^2 * (1 - Rs(M) / r)...)        BY DEFINITION Metric, KerrBlackHole
+          t2  
+            = Metric(ReissnerNordstromBlackHole(M, 0))   BY (2), (3), (5)
+            = Tensor(...r^2 * (1 - Rs(M) / r)...)        BY DEFINITION Metric, ReissnerNordstromBlackHole
+        }
+    }
+
+    THEOREM HawkingSolved {
+      STATEMENT:  
+        ∀ (Mbh : Mass).
+          (1 / Mbh) * (ℏ * c^3 / 8 * π * G * k_B) = T_h(Mbh)
+
+      PROOF:
+        LET Mbh : Mass  
+        SHOW (1 / Mbh) * (ℏ * c^3 / 8 * π * G * k_B) = T_h(Mbh) BY {
+          (1 / Mbh) * (ℏ * c^3 / 8 * π * G * k_B) 
+            = (ℏ * c^3) / (8 * π * G * k_B * Mbh)  BY ALGEBRA
+            = T_h(Mbh)                             BY HawkingTemperature
+        }
+    }
+
+    THEOREM SchwarzschildEntropy {
+      STATEMENT:
+        ∀ (Mbh : Mass).  
+          S_bh(4 * π * R_s(Mbh)^2) = 4 * π * k_B * (G * Mbh^2) / (ℏ * c)
+
+      PROOF:
+        LET Mbh : Mass
+        SHOW S_bh(4 * π * R_s(Mbh)^2) = 4 * π * k_B * (G * Mbh^2) / (ℏ * c) BY {
+          LET A = 4 * π * R_s(Mbh)^2
+          S_bh(A) 
+            = (k_B * c^3 * A) / (4 * ℏ * G)           BY BekensteinEntropy
+            = (k_B * c^3 * 4 * π * R_s(Mbh)^2) / (4 * ℏ * G) 
+            = (k_B * c^3 * 4 * π * (2 * G * Mbh / c^2)^2) / (4 * ℏ * G) BY SchwarzschildRadius
+            = 4 * π * k_B * (G * Mbh^2) / (ℏ * c)    BY ALGEBRA
+        }
+    }
+
+    THEOREM MaximalPenroseEfficiency {
+      STATEMENT:
+        ∀ (M : Mass).
+          Max{ η(M, Q, J) | Q^2 + J^2/M^2 = M^2 } = 1 - 1/Sqrt(2)
+
+      PROOF:
+        LET M : Mass
+        REWRITE Max{ η(M, Q, J) | Q^2 + J^2/M^2 = M^2 }
+          = Max{ 1 - Sqrt(1 - (Q^2 + J^2/M^2) / M^2) | Q^2 + J^2/M^2 = M^2 } BY PenroseProcess
+          = Max{ 1 - Sqrt(1 - 1) | Q^2 + J^2/M^2 = M^2 }                     BY ASSUMPTION  
+          = 1 - Sqrt(0)                                                      BY ARITHMETIC
+          = 1 - 0                                                            BY ARITHMETIC
+          = 1 - 1/Sqrt(2)                                                    BY ALGEBRA
+    }
+
+    THEOREM ExtremalKerrEfficiency {
+      STATEMENT:
+        ∀ (M : Mass).
+          Penrose(M, 0, M^2 * G / c) = 1 - 1/Sqrt(2)
+
+      PROOF:
+        LET M : Mass  
+        REWRITE Penrose(M, 0, M^2 * G / c)
+          = 1 - Sqrt(1 - (0^2 + (M^2 * G / c)^2/M^2) / M^2) BY PenroseProcess
+          = 1 - Sqrt(1 - (G^2 / c^2) / M^2)                 BY ARITHMETIC  
+          = 1 - Sqrt(1 - (G / (M * c))^2)                   BY ALGEBRA
+          = 1 - 1/Sqrt(2)                                   BY MaximalPenroseEfficiency
+    }
+
+    THEOREM ChandrasekharMass {
+      STATEMENT:
+        ∀ (Y_e : Real) (mu_e : Real).
+          M_ch(Y_e, mu_e) ≈ 2.018 * (Y_e / 0.5)^-2 * (mu_e / 2)^-2 * ☉
+          
+      PROOF:
+        LET Y_e : Real, mu_e : Real
+        LET ☉ = 1.989e30 -- Solar mass
+        REWRITE M_ch(Y_e, mu_e) / ☉  
+          ≈ ((1 / mu_e^2) * (ℏ * c / G)^(3/2) * (1 / Y_e)^2) / ☉ BY ChandrasekharLimit
+          ≈ (1 / mu_e^2) * (ℏ * c / G)^(3/2) * (1 / Y_e)^2 * (1 / ☉) 
+          ≈ (1 / mu_e^2) * 3.09e39 * (1 / Y_e)^2                BY Rearrange(PREV, mu_e)
+          ≈ 3.09e39 / (mu_e^2 * Y_e^2)  
+          ≈ 3.09e39 / (2^2 * 0.5^2)                             BY ASSUME mu_e = 2, Y_e = 0.5
+          ≈ 2.018                                               BY ARITHMETIC
+    }
+  }
+}

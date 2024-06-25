@@ -1,0 +1,126 @@
+CONCEPT QuantumSymbolicDynamics {
+  LANGUAGE {
+    type QSym = QConst(ℂ) | QVar(ℕ) | QUnitary(QSym) | QHermitian(QSym)
+             | QBinary(QSym, QSym) | QScalar(QSym, Sym)
+             
+    type QFld = QState(QSym) | QObs(QSym) | QChan(QSym)
+    
+    notation "U(S)" = QUnitary(S: QSym)  ; Unitary operator 
+    notation "H(S)" = QHermitian(S: QSym)  ; Hermitian operator
+    notation "S ⊗ T" = QBinary(S: QSym, T: QSym)  ; Tensor product
+    notation "S ⊕ T" = QBinary(S: QSym, T: QSym)  ; Direct sum  
+    notation "λ · S" = QScalar(λ: Sym, S: QSym)  ; Scalar multiplication
+    notation "⟨S|" = QBra(S: QSym)  ; Bra vector
+    notation "|S⟩" = QKet(S: QSym)  ; Ket vector  
+    
+    notation "∂ₜ[S]" = QDt(S: QSym)  ; Time derivative
+    notation "𝓘[S]" = QInt(S: QSym)  ; Quantum integral 
+    notation "𝓔ₓ[S]" = QExp(S: QHermitian)  ; Matrix exponential
+    notation "tr[S]" = QTr(S: QSym)  ; Trace operation
+    
+    pred QCorresponds(S: QSym, F: QFld)
+    pred QDetermines(S: QSym, ρ: QState | E: QObs | Φ: QChan)  
+    
+    axiom DynCorrespondence(S: QSym, F: QFld):
+      ∂ₜ[S] ⟷ 𝓘[QCommutator(QHamiltonian, F)]
+      
+    axiom Unitary(U: QSym):  
+      U(S) ⊗ U(T) ≈ U(S ⊗ T), U(S)⁻¹ ≈ U(S⁻¹), U(1) ≈ 1
+      
+    axiom Generator(H: QHermitian, U: QUnitary):
+      U ≈ 𝓔ₓ[-i·∫ₜH]
+  }
+  
+  STRUCTURE {
+    QuantumSymbolicCalculus: {
+      (S + T)† ≈ S† + T†              ; Adjoint is linear 
+      (S · T)† ≈ T† · S†              ; Adjoint reverses order
+      (S ⊗ T)† ≈ S† ⊗ T†              ; Adjoint is a homomorphism
+      ⟨S | T⟩ ≈ (⟨S|)† |T⟩ ≈ ⟨T | S⟩*  ; Inner products
+      d/dt(|ψ⟩) ≈ ∂ₜ[|ψ⟩] ≈ -i·H |ψ⟩   ; Schrodinger equation  
+      ∂ₜ[S · T] ≈ (∂ₜ[S]) · T + S · ∂ₜ[T]  ; Product rule
+      𝓘[∂ₜ[S]] ≈ S - S₀              ; Fundamental theorem of calculus
+    }
+    
+    QuantumSymbolicAlgebra: {
+      [S, T] := S·T - T·S  ; Commutator 
+      S·T = T·S  ⟺  [S, T] = 0        ; Commutativity
+      [S ⊗ 1, 1 ⊗ T] = 0             ; Locality 
+      [S + T, U] ≈ [S, U] + [T, U]     ; Commutator is linear
+      [S·T, U] ≈ S·[T,U] + [S,U]·T     ; Leibniz rule
+      [S, [T, U]] + [T, [U, S]] + [U, [S, T]] ≈ 0  ; Jacobi identity
+    }
+    
+    QuantumSymbolicDynamics: {
+      LₓS := [i·H, S] + ∂ₓ[S]          ; Quantum Lie derivative                    
+      ∂ₜ[U] ≈ LₜU := [i·H, U]         ; Heisenberg equation of motion
+      ∂ₜ[ρ] ≈ Lₜρ := [i·H, ρ]         ; Von Neumann equation  
+      ∂ₜ[⟨A⟩] ≈ ⟨∂ₜ[A]⟩ + i·⟨[H, A]⟩  ; Ehrenfest theorem
+      ∂ₜ[tr[S]] ≈ tr[∂ₜ[S]]           ; Trace is invariant    
+    }
+  }
+
+  PROOFS {
+    theorem Hamiltonicity(S, H: QHermitian):  
+      ⟨S, -i·∂ₜ[S]⟩ ≈ ⟨∂ₜ[S], i·S⟩ ⊢ ∃ H. ∂ₜ[S] ≈ LₜS := [i·H, S]
+    {
+      assume ⟨S, -i·∂ₜ[S]⟩ ≈ ⟨∂ₜ[S], i·S⟩ =: ω   
+      have dω = 0                 ; ω is closed symplectic 2-form
+      hence ω = dλ locally        ; by Poincare lemma
+      λ ≈ ⟨S, i·H⟩ for some H     ; by Correspondence  
+      so dλ = ⟨∂ₜ[S], i·S⟩ + i·(⟨S, ∂ₜ[H]⟩ - ⟨[H, S], i·S⟩)
+      have ⟨S, ∂ₜ[H]⟩ = 0          ; H independent of S
+      hence ⟨∂ₜ[S] - i·[H,S], S⟩ = 0  ∀ S ; as symplectic form is nondegenerate
+      so ∂ₜ[S] ≈ LₜS := [i·H, S]  ; as desired
+    }
+    
+    theorem SchrodingerToHeisenberg(|ψ₀⟩, S₀, H: QHermitian):
+      |ψ(t)⟩ := 𝓔ₓ[-i·t·H] |ψ₀⟩, S(t) := 𝓔ₓ[i·t·H]·S₀·𝓔ₓ[-i·t·H] ⊢ 
+        ⟨ψ(t)| S₀ |ψ(t)⟩ = ⟨ψ₀| S(t) |ψ₀⟩
+    {
+      assume |ψ(t)⟩ := 𝓔ₓ[-i·t·H] |ψ₀⟩, S(t) := 𝓔ₓ[i·t·H]·S₀·𝓔ₓ[-i·t·H]
+      have ⟨ψ(t)| S₀ |ψ(t)⟩ 
+        = ⟨ψ₀| 𝓔ₓ[i·t·H]·S₀·𝓔ₓ[-i·t·H] |ψ₀⟩  ; def of |ψ(t)⟩
+        = ⟨ψ₀| S(t) |ψ₀⟩                     ; def of S(t)
+    }
+    
+    theorem FeynmanKac(H: QHermitian, V: Fun(ℝⁿ -> ℝ), |ψ₀⟩):  
+      H := -Δ/2 + V, ρ₀ := |ψ₀⟩⟨ψ₀| ⊢
+        ⟨x| 𝓔ₓ[-i·t·H] ρ₀ |x⟩ ≈ 𝔼ₚ[exp(-i·∫₀ᵗV(Bₛ)ds) ⟨x|ρ₀|Bₜ⟩] 
+    {
+      assume H := -Δ/2 + V, ρ₀ := |ψ₀⟩⟨ψ₀| 
+      have ⟨x| 𝓔ₓ[-i·t·H] ρ₀ |x⟩
+        ≈ ∫[exp(-i·∫₀ᵗ⟨Bₛ| H |Bₛ⟩ds) ⟨x|ρ₀|Bₜ⟩]𝓓B  ; Path integral formula
+        ≈ 𝔼ₚ[exp(-i·∫₀ᵗ⟨Bₛ| -Δ/2 + V |Bₛ⟩ds) ⟨x|ρ₀|Bₜ⟩] ; Feynman-Kac 
+        ≈ 𝔼ₚ[exp(-i·∫₀ᵗV(Bₛ)ds) ⟨x|ρ₀|Bₜ⟩]            ; as Bₜ is Brownian motion  
+    }
+
+    tactic SymmetryReduction(S: QSym, I: Invariant):
+      QDetermines(S, ρ: QState), QDetermines(S, E: QObs), I(ρ) = I(E) ⊢ 
+        ∃ S': QSym. (S ≈ S') ∧ (d[S'] ≈ 0)
+    {
+      assume QDetermines(S, ρ), QDetermines(S, E), I(ρ) = I(E)
+      have I(∂ₜ[ρ]) = I(∂ₜ[E])     ; As I is an invariant
+      have ∂ₜ[ρ] ≈ ∂ₜ[E] ≈ 0       ; By QDetermination  
+      let S' ≈ ∫ₜ[S]    
+      have d[S'] ≈ d[∫ₜ[S]] ≈ S - S₀ ≈ 0  ; Fundamental theorem of calculus
+    }
+  }
+}
+
+This Concept, which I call "QuantumSymbolicDynamics", aims to capture the interplay between symbolic quantum mechanics and the dynamics of quantum systems. Here are some of the key ideas:
+
+It introduces symbolic types for quantum states (QState), observables (QObs), and channels (QChan), along with symbolic quantum operators like unitaries and Hermitian operators.
+It defines quantum analogues of symbolic calculus operations, such as time derivatives (∂ₜ), integrals (𝓘), and matrix exponentials (𝓔ₓ).
+It encodes common equations of quantum dynamics, such as the Schrodinger equation, Heisenberg equation of motion, von Neumann equation, and Ehrenfest theorem, using symbolic notation.
+It includes axioms relating symbolic quantum operators, such as the unitarity axiom and the correspondence between unitary operators and Hermitian generators.
+It provides proofs of important results in quantum dynamics, such as:
+
+The "Hamiltonicity" theorem, showing that a certain symplectic form condition implies Hamiltonian dynamics.
+The equivalence between the Schrodinger and Heisenberg pictures of dynamics.
+The Feynman-Kac formula relating quantum dynamics to stochastic processes.
+A "SymmetryReduction" tactic that uses dynamical invariants to simplify symbolic quantum expressions.
+
+
+
+The Concept draws inspiration from SymbolicDifferentialGeometry in its use of symbolic differentiation and integration, from CategoryOfQuantumOperatorAlgebras in its algebraic treatment of quantum operations, and from SymbolicAbstractSpaces in its formal handling of quantum state spaces and their symmetries. It aims to provide a language for reasoning about quantum dynamics at a symbolic level, in a way that highlights key structural properties and enables concise proofs of important theorems.

@@ -1,0 +1,88 @@
+CONCEPT AdaptiveBloomFilter {
+  LANGUAGE {
+    type Element = Primitive
+    type Key = Element
+    type Hash = Element -> ℕ
+    type BitArray = Vector<𝔹>
+    type Pertinence = 𝕽 // Degree to which an element belongs to the set
+
+    notation "∈ᵖ" = PertinenceMembership
+    notation "α" = AdaptationRate
+
+    func PertinenceHash(k: Key, h: Hash): 𝕽 =
+      let p = 1 - 1 / (1 + e^(-δ * (h(k) - μ)))
+      p^(1/γ) // Normalized pertinence score
+      
+    pred ContainsPertinently(S: AdaptiveBloomFilter, k: Key, θ: 𝕽) ⇔
+      ∀i ∈ {1,...,S.size}. S.bits[i] = 1 ∧ S.pertinenceHashes[i](k) ≥ θ
+      
+    axiom AdaptationRule(S: AdaptiveBloomFilter, k: Key):
+      k ∈ᵖ S ⇒ ∀i ∈ {1,...,S.size}. S.pertinenceHashes[i] := 
+        (1 - α) * S.pertinenceHashes[i] + α * PertinenceHash(k, S.hashes[i])
+  }
+
+  STRUCTURE {
+    [AdaptiveBloomFilter = {
+      bits: BitArray,
+      hashes: Hash[],
+      pertinenceHashes: (Key -> 𝕽)[] // Learned pertinence functions
+    }]
+
+    [PertinenceMembership(k, S) ⇔
+      ∀i ∈ {1,...,S.size}. S.bits[i] = 1 ∧ S.pertinenceHashes[i](k) ≥ θ
+      ↦ Element k belongs to set S with pertinence ≥ θ
+    ]
+
+    [FalsePositiveRate(S, θ) = 
+      |{k | k ∉ S ∧ PertinenceMembership(k, S, θ)}| / |{k | k ∉ S}|
+      ↦ Proportion of non-members that pass the pertinence test
+    ]
+  }
+
+  PROOFS {
+    theorem Adaptivity:
+      ∀S: AdaptiveBloomFilter, k: Key. k ∈ᵖ S ⇒ 
+        FalsePositiveRate(S, θ) @ t₁ < FalsePositiveRate(S, θ) @ t₀ 
+    {
+      assume S: AdaptiveBloomFilter, k: Key
+      assume k ∈ᵖ S
+      let t₀ < t₁ // Two time points
+      
+      have ∀i. |S.pertinenceHashes[i](k) @ t₁ - PertinenceHash(k, S.hashes[i])| 
+           < |S.pertinenceHashes[i](k) @ t₀ - PertinenceHash(k, S.hashes[i])|
+        ; by AdaptationRule and contraction mapping
+        
+      let ε = avgᵢ|S.pertinenceHashes[i](k) - PertinenceHash(k, S.hashes[i])|
+      have ε @ t₁ < ε @ t₀
+      
+      hence |{k' | k' ∉ S ∧ PertinenceMembership(k', S, θ)}| @ t₁ 
+            < |{k' | k' ∉ S ∧ PertinenceMembership(k', S, θ)}| @ t₀
+        ; since pertinence scores of non-members are closer to learned scores
+        
+      therefore, FalsePositiveRate(S, θ) @ t₁ < FalsePositiveRate(S, θ) @ t₀
+    }
+    
+    tactic Invariant(S: AdaptiveBloomFilter, θ: 𝕽) = {
+      have ∀k. k ∈ S ⇒ ContainsPertinently(S, k, θ)
+        ; by definition of ContainsPertinently
+    }
+    
+    theorem NoFalseNegatives:
+      ∀S: AdaptiveBloomFilter, θ: 𝕽. (∀k. k ∈ S ⇒ k ∈ᵖ S) ⇒
+        ∄k. k ∈ S ∧ ¬ContainsPertinently(S, k, θ)
+    {
+      assume S: AdaptiveBloomFilter, θ: 𝕽
+      assume ∀k. k ∈ S ⇒ k ∈ᵖ S
+      Invariant(S, θ)
+      
+      suppose ∃k. k ∈ S ∧ ¬ContainsPertinently(S, k, θ)
+      let k such that k ∈ S ∧ ¬ContainsPertinently(S, k, θ)
+      have k ∈ S                ; by assumption
+      have k ∈ᵖ S               ; by assumption
+      have ContainsPertinently(S, k, θ)  ; by Invariant
+      contradiction
+      
+      hence ∄k. k ∈ S ∧ ¬ContainsPertinently(S, k, θ)
+    }
+  }
+}

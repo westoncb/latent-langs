@@ -1,0 +1,124 @@
+CONCEPT MenieresDisease {
+  LANGUAGE {
+    TYPE Compartment
+    TYPE Substance
+    TYPE Concentration = Real
+    TYPE Volume = Real
+    TYPE Pressure = Real
+    TYPE Flow = Real
+    TYPE Rate = Real
+    
+    FUNC Endolymph : Compartment
+    FUNC Perilymph : Compartment
+    FUNC Potassium : Substance
+    FUNC Sodium : Substance
+    
+    PRED Normal : Concentration -> Bool
+    PRED High : Concentration -> Bool
+    PRED Low : Concentration -> Bool
+    
+    FUNC (+) : Concentration -> Concentration -> Concentration
+    FUNC (-) : Concentration -> Concentration -> Concentration
+
+    CLASS ConservedQuantity(S : Substance) {
+      TotalAmount : Compartment -> S -> Concentration
+      Conserved : (c : Compartment) -> (s : S) -> TotalAmount(c, s) = Const
+    }
+    
+    NOTATION "Δ" = Diff
+  }
+  
+  STRUCTURE {
+    INSTANCE ConservedQuantity(Potassium) {
+      TotalAmount(Endolymph, Potassium) + TotalAmount(Perilymph, Potassium) = Const
+    }
+    
+    INSTANCE ConservedQuantity(Sodium) {
+      TotalAmount(Endolymph, Sodium) + TotalAmount(Perilymph, Sodium) = Const
+    }
+    
+    DEF FlowRate(Δp : Pressure) : Rate = k * Δp
+      WHERE k : Real
+    
+    DEF OsmoticFlow(Δc : Concentration) : Flow = P * Δc
+      WHERE P : Real
+      
+    DEF IonicFlow(Δv : Pressure, Δc : Concentration) : Flow = 
+      G * (Δv - E(Δc))
+        WHERE 
+          G : Real
+          E(Δc) = (R * T / z * F) * ln((c1 + Δc) / c2)
+          R : Real = GasConstant
+          T : Real = Temperature
+          z : Real = IonicCharge
+          F : Real = FaradayConstant
+          c1 : Concentration = ConcentrationIn
+          c2 : Concentration = ConcentrationOut
+  }
+  
+  PROOFS {
+    THEOREM EndolymphPotassiumRegulation {
+      STATEMENT:
+        LET E = Endolymph, P = Perilymph, K = Potassium IN
+        Normal(TotalAmount(E, K)) AND Normal(Pressure(E)) ->
+        LET t1 = TotalAmount(E, K), p1 = Pressure(E), 
+            t2 = TotalAmount(E, K), p2 = Pressure(E)
+        IN
+        High(t1) AND Normal(p1) ->
+          EXISTS t. 
+            LET fs = FlowRate(p1 - p2),
+                fc = OsmoticFlow(t1 - t2),
+                fi = IonicFlow(p1 - p2, t1 - t2)
+            IN
+            Δ(t2) = -fi - fc AND
+            Δ(p2) = fs AND
+            Normal(t2) AND Normal(p2)
+            
+      PROOF:
+        LET E = Endolymph, P = Perilymph, K = Potassium;
+        
+        ASSUME Normal(TotalAmount(E, K)), Normal(Pressure(E));
+        
+        LET t1 : Concentration = TotalAmount(E, K),
+            p1 : Pressure = Pressure(E);
+        
+        ASSUME High(t1), Normal(p1);
+        
+        LET t2 : Concentration = TotalAmount(E, K),
+            p2 : Pressure = Pressure(E);
+        
+        EXISTS t. {
+          LET fs : Rate = FlowRate(p1 - p2),
+              fc : Flow = OsmoticFlow(t1 - t2),
+              fi : Flow = IonicFlow(p1 - p2, t1 - t2);
+          
+          REWRITE Δ(t2) = -fi - fc BY {
+            Δ(t2) 
+            = Δ(TotalAmount(E, K))
+            = - Δ(TotalAmount(P, K)) BY ConservedQuantity(Potassium).Conserved
+            = - (IonicFlow(p1 - p2, t1 - t2) + OsmoticFlow(t1 - t2))
+            = -fi - fc
+          };
+          
+          REWRITE Δ(p2) = fs BY {
+            Δ(p2)
+            = Δ(Pressure(E))
+            = FlowRate(p1 - p2)
+            = fs
+          };
+          
+          SHOW Normal(t2) BY {
+            High(t1) AND Δ(t2) = -fi - fc ->
+            Δ(t2) < 0 AND t2 = t1 + Δ(t2) ->
+            Normal(t2)
+          };
+          
+          SHOW Normal(p2) BY {
+            Normal(p1) AND Δ(p2) = fs ->
+            ABS(Δ(p2)) <= Threshold AND p2 = p1 + Δ(p2) ->
+            Normal(p2)  
+          }
+        }
+    }
+  }
+}

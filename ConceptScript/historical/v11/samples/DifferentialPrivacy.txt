@@ -1,0 +1,109 @@
+CONCEPT DifferentialPrivacy {
+  STRUCTURE {
+    [X := Set of possible database inputs]
+    [Y := Set of possible query outputs]
+    [K := Set of queries]
+    [ε ∈ ℝ⁺ ↦ Privacy budget]
+    [M_ε : X → P(Y) ↦ ε-differentially private mechanism]
+    [∀x, x' ∈ X, ∀S ⊆ Y, P(M_ε(x) ∈ S) ≤ exp(ε) · P(M_ε(x') ∈ S) ］
+    [Composition ↦ (M_ε₁ ∘ M_ε₂) satisfies (ε₁ + ε₂)-differential privacy]
+    [PostProcessing ↦ f ∘ M_ε preserves ε-differential privacy]
+    [GroupPrivacy ↦ k-fold composition of M_ε satisfies (k·ε)-differential privacy]
+  }
+  
+  PROOFS {
+    theorem post_processing :
+      ∀f : Y → Z, ∀M_ε : X → P(Y), 
+      (M_ε is ε-differentially private) ⇒ (f ∘ M_ε is ε-differentially private)
+    {
+      let f : Y → Z by hypothesis
+      let M_ε : X → P(Y) by hypothesis
+      assume M_ε is ε-differentially private by hypothesis
+      
+      let x, x' ∈ X by hypothesis
+      let S ⊆ Z by hypothesis
+      
+      P((f ∘ M_ε)(x) ∈ S) 
+        = P(M_ε(x) ∈ f⁻¹(S)) by definition of composition
+        ≤ exp(ε) · P(M_ε(x') ∈ f⁻¹(S)) by differential privacy of M_ε
+        = exp(ε) · P((f ∘ M_ε)(x') ∈ S) by definition of composition
+        
+      (f ∘ M_ε) is ε-differentially private by definition
+    }
+    
+    theorem group_privacy :
+      ∀M_ε : X → P(Y), ∀k ∈ ℕ,
+      (M_ε is ε-differentially private) ⇒ (M_ε^(k) is (k·ε)-differentially private)
+    {
+      let M_ε : X → P(Y) by hypothesis
+      assume M_ε is ε-differentially private by hypothesis
+      
+      let k ∈ ℕ by hypothesis
+      
+      M_ε^(1) is ε-differentially private by hypothesis
+      
+      induction k on k {
+        case 0 => {
+          M_ε^(0) = id_X by definition of function exponentiation
+          id_X is 0-differentially private by definition
+        }
+        case k + 1 => {
+          assume M_ε^(k) is (k·ε)-differentially private by induction hypothesis
+          
+          M_ε^(k+1) = M_ε ∘ M_ε^(k) by definition of function exponentiation
+          M_ε^(k+1) is ((k+1)·ε)-differentially private by composition theorem
+        }
+      }
+    }
+  }
+  
+  LANGUAGE {
+    type Database = Set(Individual)
+    type Query = Database → ℝ
+    type Mechanism = Database → Probability(ℝ)
+    
+    func Laplace(λ : ℝ⁺) : Probability(ℝ) =
+      match r {
+        r ∈ ℝ => 1/(2λ) · exp(-|r|/λ)
+      }
+    
+    func AddLaplaceNoise(q : Query, ε : ℝ⁺) : Mechanism =
+      λ := Δq / ε;
+      match db : Database {
+        db => q(db) + Laplace(λ)
+      }
+      
+    pred is_private(M : Mechanism, ε : ℝ⁺) =
+      ∀x, x' : Database, ∀S ⊆ ℝ,
+      P(M(x) ∈ S) ≤ exp(ε) · P(M(x') ∈ S)
+      
+    func compose(M₁ : Mechanism, M₂ : Mechanism) : Mechanism =
+      match db : Database {
+        db => (r₁, r₂) ∈ (M₁(db), M₂(db))
+      }
+  }
+}
+
+
+
+This ConceptScript defines the concept of Differential Privacy, a mathematical framework for protecting the privacy of individuals in a database while allowing statistical analysis on the data.
+
+The STRUCTURE block captures the key components and properties of differential privacy:
+
+The sets of possible database inputs (X), query outputs (Y), and queries (K)
+The privacy budget (ε) which quantifies the level of privacy protection
+The ε-differentially private mechanism (M_ε) which randomizes query outputs to protect privacy
+The key property of differential privacy, which bounds the ratio of output probabilities on neighboring databases
+Important properties like composition, post-processing, and group privacy
+The PROOFS block contains two key theorems:
+
+The post-processing theorem, which states that applying any function to the output of a differentially private mechanism preserves differential privacy
+The group privacy theorem, which states that the k-fold composition of an ε-differentially private mechanism satisfies (k·ε)-differential privacy
+The LANGUAGE block defines the domain-specific types, functions, and predicates for differential privacy:
+
+Types for databases, queries, and mechanisms
+The Laplace distribution for adding noise to query outputs
+A function for constructing the Laplace mechanism from a query and privacy budget
+A predicate for checking if a mechanism satisfies ε-differential privacy
+A function for composing two differentially private mechanisms
+This ConceptScript provides a precise and formal specification of differential privacy, enabling clear communication of the concept's key components, properties, and theorems. The custom language elements allow direct expression of the relevant types and operations.

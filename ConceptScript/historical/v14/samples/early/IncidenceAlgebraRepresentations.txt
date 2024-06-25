@@ -1,0 +1,99 @@
+CONCEPT IncidenceAlgebraRepresentations {
+  LANGUAGE {
+    NOTATION {
+      "≤" := "partial order relation"
+      "𝟙" := "indicator function"
+      "𝑘" := "base field"
+      "𝐼" := "incidence algebra"
+      "𝑅" := "representation"
+    }
+
+    type POSet
+    type Element : POSet -> Type
+    type 𝑘 : Field
+    type I(P: POSet) : Algebra(𝑘)
+    type R(A: Algebra(𝑘)) : Module(𝑘)
+
+    pred (≤) : ∀ (P: POSet). Element(P) * Element(P) -> Prop  
+    func 𝟙 : ∀ (P: POSet). ∀ (x y : Element(P)). (x ≤ y) -> 𝑘
+    func · : ∀ (P: POSet). I(P) * I(P) -> I(P)
+    func eval : ∀ (P: POSet). ∀ (f : I(P)). ∀ (x y : Element(P)). (x ≤ y) -> 𝑘
+
+    axiom PartialOrder : ∀ (P: POSet). 
+      (∀ x : Element(P). x ≤ x) ∧
+      (∀ x y : Element(P). (x ≤ y ∧ y ≤ x) ⇒ x = y) ∧ 
+      (∀ x y z : Element(P). (x ≤ y ∧ y ≤ z) ⇒ x ≤ z)
+
+    axiom IncidenceAlgebraAxioms : ∀ (P: POSet). ∀ (f g : I(P)). ∀ (x y z : Element(P)).
+      eval(f · g)(x, z) = ∑ (y : Element(P)) (x ≤ y ∧ y ≤ z), eval(f)(x, y) * eval(g)(y, z)
+      𝟙(x, y) = if (x = y) then 1 else 0
+  }
+
+  STRUCTURE {
+    [∀ (P: POSet). I(P) is an associative 𝑘-algebra with unit 𝟙]
+    [∀ (P: POSet). ∀ (x y : Element(P)). 𝟙(x, y) is the identity of I(P)]
+    [∀ (P: POSet). ∀ (x y z : Element(P)). (x ≤ y ∧ y ≤ z) ⇒ 𝟙(x, y) · 𝟙(y, z) = 𝟙(x, z)]
+  }
+
+  PROOFS {
+    tactic IncidenceAlgebraTactic: {
+      (P: POSet); (f g h : I(P)); (x y z w : Element(P)); 
+      (x ≤ y ∧ y ≤ z ∧ z ≤ w) ⇒ (f · (g · h))(x, w) = ((f · g) · h)(x, w)
+    }
+    
+    proof AssociativityOfComposition: ∀ (P: POSet). ∀ (f g h : I(P)). f · (g · h) = (f · g) · h {
+      let P: POSet, f g h : I(P), x w : Element(P)
+      assume x ≤ w
+      
+      eval(f · (g · h))(x, w)
+        = ∑ (z : Element(P)) (x ≤ z ∧ z ≤ w), eval(f)(x, z) * eval(g · h)(z, w)  ; by IncidenceAlgebraAxioms
+        = ∑ (z : Element(P)) (x ≤ z ∧ z ≤ w), eval(f)(x, z) * 
+            (∑ (y : Element(P)) (z ≤ y ∧ y ≤ w), eval(g)(z, y) * eval(h)(y, w))  ; by IncidenceAlgebraAxioms
+        = ∑ (y z : Element(P)) (x ≤ z ∧ z ≤ y ∧ y ≤ w), 
+            eval(f)(x, z) * eval(g)(z, y) * eval(h)(y, w)  ; by rearranging sums
+        = ∑ (y : Element(P)) (x ≤ y ∧ y ≤ w), 
+            (∑ (z : Element(P)) (x ≤ z ∧ z ≤ y), eval(f)(x, z) * eval(g)(z, y)) * eval(h)(y, w)  ; by rearranging sums
+        = ∑ (y : Element(P)) (x ≤ y ∧ y ≤ w), eval(f · g)(x, y) * eval(h)(y, w)  ; by IncidenceAlgebraAxioms
+        = eval((f · g) · h)(x, w)  ; by IncidenceAlgebraAxioms
+          
+      therefore, ∀ x w : Element(P). (x ≤ w) ⇒ eval(f · (g · h))(x, w) = eval((f · g) · h)(x, w)
+      thus, f · (g · h) = (f · g) · h  ; by extensionality
+    }
+      
+    proof IdentityOfComposition: ∀ (P: POSet). ∀ (f : I(P)). 𝟙 · f = f · 𝟙 = f {
+      let P : POSet, f : I(P), x y : Element(P)
+      assume x ≤ y
+      
+      eval(𝟙 · f)(x, y) 
+        = ∑ (z : Element(P)) (x ≤ z ∧ z ≤ y), 𝟙(x, z) * eval(f)(z, y)  ; by IncidenceAlgebraAxioms
+        = 1 * eval(f)(x, y) + ∑ (z : Element(P)) (x < z ∧ z ≤ y), 0 * eval(f)(z, y)  ; by definition of 𝟙
+        = eval(f)(x, y)
+        
+      similarly, eval(f · 𝟙)(x, y) = eval(f)(x, y)
+      
+      therefore, ∀ x y : Element(P). (x ≤ y) ⇒ eval(𝟙 · f)(x, y) = eval(f)(x, y) = eval(f · 𝟙)(x, y)
+      thus, 𝟙 · f = f · 𝟙 = f  ; by extensionality
+    }
+      
+    proof RepresentationsAreModules: ∀ (P: POSet). ∀ (ρ : R(I(P))). ρ is a 𝑘-module {
+      let P : POSet, ρ : R(I(P)), v w : ρ, c : 𝑘, f g : I(P)
+      
+      ρ(c · v) 
+        = ρ(c · ρ(𝟙) · v)  ; since ρ(𝟙) = id
+        = ρ(ρ(c · 𝟙) · v)  ; since ρ is a representation
+        = ρ(c · 𝟙) · ρ(v)  ; by definition of representation
+        = c · ρ(v)  ; since ρ(c · 𝟙) = c · id
+        
+      ρ(v + w) 
+        = ρ(ρ(𝟙) · (v + w))  ; since ρ(𝟙) = id  
+        = ρ(𝟙) · ρ(v + w)  ; by definition of representation
+        = ρ(v + w)
+        = ρ(v) + ρ(w)  ; by linearity of ρ
+        
+      ρ(f · g) 
+        = ρ(f) · ρ(g)  ; by definition of representation
+        
+      therefore, ρ satisfies the axioms of a 𝑘-module.
+    }
+  }
+}

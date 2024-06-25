@@ -1,0 +1,157 @@
+CONCEPT AbstractInterpretation {
+  PARAMETERS {
+    AbstractDomain : TYPE
+    ConcreteDomain : TYPE
+    System : TYPE  
+  }
+
+  CONTEXT {
+    TYPES {
+      StateC := ConcreteDomain
+      StateA := AbstractDomain
+
+      INDUCTIVE Expr {
+        CASE Const(v : ConcreteDomain)  
+        CASE Var(x : String)
+        CASE Op(f : ConcreteDomain -> ConcreteDomain, args : List(Expr))
+      }
+
+      ExprA := Expr[ConcreteDomain := AbstractDomain]
+      
+      System(S : Type) := (INIT : S, STEP : S -> S)
+    }
+    
+    STRUCTURES {
+      STRUCTURE Abstraction {
+        FIELD alpha : ConcreteDomain -> AbstractDomain
+        FIELD gamma : AbstractDomain -> Set(ConcreteDomain)
+        
+        AXIOM Soundness {
+          FORALL (x : ConcreteDomain) . x ∈ gamma(alpha(x))
+        }
+
+        AXIOM BestApproximation {
+          FORALL (y : AbstractDomain) (x : ConcreteDomain) .
+            x ∈ gamma(y) IMPLIES alpha(x) ⊑ y  
+        }
+
+        FUNC lfp(f : AbstractDomain -> AbstractDomain) -> AbstractDomain
+          f(lfp(f)) = lfp(f)
+      }
+
+      STRUCTURE TransferFunctions {
+        FIELD A : Abstraction
+        
+        FIELD AbstractEval(e : ExprA, env : Map(String, StateA)) -> StateA
+          CASE Const(v) => A.alpha(v)
+          CASE Var(x) => env(x)
+          CASE Op(f, args) => A.alpha(f)(MAP(AbstractEval(?, env), args))
+
+        FUNC AbstractStep(s : System(StateC))(env : Map(String, StateA)) -> Map(String, StateA)
+          MAP(x => AbstractEval(s.STEP, env), dom(env))
+          
+        FUNC AbstractInterpret(s : System(StateC))(fuel : Nat) -> StateA  
+          IF fuel = 0 THEN A.alpha(s.INIT) 
+                     ELSE LET env_prev = AbstractInterpret(s)(fuel - 1)
+                          env_next = AbstractStep(s)(env_prev)
+                          IF env_prev = env_next THEN env_prev
+                                                ELSE AbstractInterpret(s)(fuel - 1)              
+      }
+    }
+    
+    ASSERTIONS {
+      AXIOM MonotoneFramework {
+        FORALL (A : Abstraction) (f g : AbstractDomain -> AbstractDomain) .
+          IsMonotone(f) AND IsMonotone(g) IMPLIES IsMonotone(x => f(g(x)))
+      }  
+    }
+  }
+  
+  PROOFS {
+    THEOREM SoundnessOfAbstractInterpretation {
+      FORALL (s : System(StateC)) (f : Nat) .
+        LET M = TransferFunctions(Abstraction(alpha, gamma)) 
+            CS = ITERATE(s.STEP, f)(s.INIT)
+            AS = M.AbstractInterpret(s)(f)
+        IN CS ∈ gamma(AS)
+    }
+    PROOF {
+      <a>1. ASSUME s : System(StateC), f : Nat
+            DEFINE M := TransferFunctions(Abstraction(alpha, gamma))
+            DEFINE CS := ITERATE(s.STEP, f)(s.INIT)  
+            DEFINE AS := M.AbstractInterpret(s)(f)
+            
+      <a>2. PROVE CS ∈ gamma(AS)  
+        <b>1. INDUCT ON f
+          <c>1. CASE f = 0:
+            <d>1. CS = ITERATE(s.STEP, 0)(s.INIT) = s.INIT
+                     BY ITERATE DEF
+            <d>2. AS = M.AbstractInterpret(s)(0) = alpha(s.INIT) 
+                     BY AbstractInterpret DEF
+            <d>3. s.INIT ∈ gamma(alpha(s.INIT))  
+                     BY Abstraction.Soundness
+            <d>4. CS ∈ gamma(AS)
+                     BY <d>1, <d>2, <d>3
+          <c>2. CASE f = f' + 1:      
+            <d>1. ASSUME HYP: ITERATE(s.STEP, f')(s.INIT) ∈ gamma(M.AbstractInterpret(s)(f'))
+            <d>2. M.AbstractStep(ITERATE(s.STEP, f')(s.INIT))
+                   ∈ gamma(M.AbstractInterpret(s)(f))
+                     BY AbstractInterpret DEF, AbstractStep Monotonicity, <d>1 
+            <d>3. s.STEP(ITERATE(s.STEP, f')(s.INIT))
+                   = ITERATE(s.STEP, f' + 1)(s.INIT) = CS  
+                     BY ITERATE DEF                 
+            <d>4. CS ∈ gamma(AS)
+                     BY TransferFunctions.Soundness, <d>2, <d>3
+        <b>2. CS ∈ gamma(AS) BY <b>1
+          
+      <a>3. QED BY <a>2  
+    }
+  }
+
+  EXAMPLES {
+    EXAMPLE ProgramAnalysis {
+      LET Sign := {Neg, Zero, Pos}
+
+      DEFINE alpha(x : Int) -> Sign
+        CASE x < 0 => Neg  
+        CASE x = 0 => Zero
+        CASE x > 0 => Pos
+        
+      DEFINE gamma(s : Sign) -> Set(Int)  
+        MATCH s
+          CASE Neg => {x : Int | x < 0}
+          CASE Zero => {0}
+          CASE Pos => {x : Int | x > 0}
+
+      DEFINE Neg + Neg => Neg  
+      DEFINE Neg + Zero => Neg
+      DEFINE Neg + Pos => Top
+      DEFINE Zero + s => s
+      DEFINE Pos + Neg => Top
+      DEFINE Pos + Zero => Pos
+      DEFINE Pos + Pos => Pos
+
+      THEN Sign WITH AbstractOps {
+        FUNC Add(s1 s2 : Sign) -> Sign
+          CASE (s1, s2) OF
+            (Neg, Neg) => Neg
+            (Neg, Zero) => Neg
+            (Neg, Pos) => Top
+            (Zero, s) => s
+            (Pos, Neg) => Top 
+            (Pos, Zero) => Pos
+            (Pos, Pos) => Pos         
+      } SATISFIES Abstraction(alpha, gamma)
+        
+      LET FactorialSystem := (
+          INIT = 1,
+          STEP(n) = (n, PRODUCT(RANGE(1, n)))  
+      )
+
+      LET M = TransferFunctions(AbstractionInt(alpha, gamma))
+        
+      THEN M.AbstractInterpret(FactorialSystem)(10) = Pos
+        BECAUSE FORALL (n : Nat) . n > 0 IMPLIES Factorial(n) > 0
+    }
+  }
+}

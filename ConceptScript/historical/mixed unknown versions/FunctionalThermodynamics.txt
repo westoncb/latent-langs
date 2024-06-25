@@ -1,0 +1,109 @@
+CONCEPT FunctionalThermodynamics {
+  LANGUAGE {
+    type Sys<S> = (State<S>, Dynamics<S>)
+    type State<S> = S
+    type Dynamics<S> = S -> S 
+
+    type Obs<S> = Sys<S> -> ℝ
+    type Endo<S> = S -> S
+
+    func Entropy<S>(s: State<S>, μ: Obs<State<S>>): ℝ
+    func Hamiltonian<S>(s: Sys<S>): Endo<State<S>> 
+    func Lagrangian<S>(s: Sys<S>): Endo<State<S>>
+    func FixedPoint<S>(f: Endo<S>): S
+
+    notation "s ⊢ φ" = φ(s)
+    notation "H(s)" = Hamiltonian(s)
+    notation "L(s)" = Lagrangian(s)
+    notation "D[μ]" = λs. Entropy(s, μ)
+    notation "s ⇀ t" = s.Dynamics(s.State) = t.State
+    notation "s ⥲ T" = ∀μ: Obs<State<S>>. (s ⊢ D[μ]) = (T ⊢ D[μ])
+
+    infer LagrangianInvariance<S>(s: Sys<S>, t: Sys<S>):
+      s ⥲ t ↔ ∃T: Endo<State<S>>. L(s) = L(t) ∘ T
+      
+    infer HamiltonianInvariance<S>(s: Sys<S>, t: Sys<S>):
+      s ⥲ t ↔ ∃T: Endo<State<S>>. H(s) = T⁻¹ ∘ H(t) ∘ T
+
+    infer EntropyDynamics<S>(s: Sys<S>, μ: Obs<State<S>>):
+      (s.State ⊢ D[μ]) ≤ (s.Dynamics(s.State) ⊢ D[μ])
+      
+    infer Equilibrium<S>(s: Sys<S>):
+      s ⇀ s ↔ s.State = FixedPoint(s.Dynamics)
+  }
+
+  STRUCTURE {
+    ; Entropy increase of measurement
+    ∀S, (s: Sys<S>, μ: Obs<State<S>>). 
+      Entropy(s.State, μ) ≤ Entropy(μ(s), μ)
+      
+    ; 2nd Law of Thermodynamics  
+    ∀S, (s: Sys<S>). ∃μ: Obs<State<S>.
+      (s.      ⊢ D[μ]) ≤ (s.Dynamics(s.State) ⊢ D[μ]) ≤ (s.Dynamics(s.State) ⊢ D[μ])
+      
+    ; Noether's Theorem
+    ∀S, (s: Sys<S>). (L(s) = L(s) ∘ s.Dynamics) ↔ 
+      ∃Q: State<S> -> ℝ. ∀t. (Q ∘ s.Dynamics^t = Q)
+
+    ; Entropy as Lyapunov function  
+    ∀S, (s: Sys<S>). ∃μ: Obs<State<S>>.
+      (s ⊢ D[μ] ≤ s.Dynamics(s.State) ⊢ D[μ]) ∧  
+      (Equilibrium(s) ↔ ∀t. (s.Dynamics^t(s.State) ⊢ D[μ]) = (s ⊢ D[μ]))
+  }
+
+  PROOFS {
+    theorem NoetherInvariance<S>:
+      ∀(s: Sys<S>). 
+        (∃T: Endo<State<S>>. L(s) = L(s) ∘ T)
+        ⟺ ∃Q: State<S> -> ℝ. ∀t. (Q ∘ s.Dynamics^t = Q)
+    {
+      assume ∃T: Endo<State<S>>. L(s) = L(s) ∘ T
+      let t: ℝ
+      
+      define Q(x) := ⟨L(s)(x), T(x) - x⟩   ; Noether charge
+      
+      calc Q(s.Dynamics^t(s.State))
+         = ⟨L(s)(s.Dynamics^t(s.State)), T(s.Dynamics^t(s.State)) - s.Dynamics^t(s.State)⟩  ; by def.
+         = ⟨L(s)(T(s.Dynamics^t(s.State)) - s.Dynamics^t(s.State))⟩   ; by invariance
+         = ⟨L(s)(T(s.Dynamics^t(T⁻¹(s.State))), T(s.Dynamics^t(T(T⁻¹(s.State)) - s.State)⟩  ; since T∘Dynamics^t = Dynamics^t∘T
+         = ⟨L(s)(s.State), T(s.State) - s.State⟩   ; by simplifying
+         = Q(s.State)
+         
+      hence ∃Q. ∀t. (Q ∘ s.Dynamics^t = Q)
+      
+      ; The converse follows by reversing the steps
+    }
+
+    theorem EntropyAsLyapunov<S>: 
+      ∀(s: Sys<S>). 
+        (∃μ: Obs<State<S>>. (s ⊢ D[μ] ≤ s.Dynamics(s.State) ⊢ D[μ]) 
+        ∧ (Equilibrium(s) ⟺ (∀t. (s.Dynamics^t(s.State) ⊢ D[μ]) = (s ⊢ D[μ]))) 
+      {
+        let μ(x) = -log(ρ(x)) where ρ: State<S> -> ℝ≥0 is an invariant measure for s.Dynamics
+        
+        calc s.Dynamics(s.State) ⊢ D[μ]  
+             = Entropy(s.Dynamics(s.State), μ)  
+             ≥ Entropy(s.State, μ)   ; by 2nd Law
+             = s ⊢ D[μ]
+             
+        calc Equilibrium(s)
+             ⟺ ∀t. s.Dynamics(s.State) = s.State   ; by def.
+             ⟺ ∀t. s.Dynamics^t(s.State) = s.State
+             ⟺ ∀t. ρ(s.Dynamics^t(s.State)) = ρ(s.State)  ; since ρ invariant 
+             ⟺ ∀t. (s.Dynamics^t(s.State) ⊢ D[μ]) = (s ⊢ D[μ])  ; by def. of μ
+      }
+  }
+}
+
+This Concept abstracts thermodynamic ideas to the setting of functional dynamics on general state spaces. Key elements:
+
+Systems are defined by state spaces and endo-dynamics
+Observables are real-valued functions on state space
+Entropy is defined relative to an observable
+Invariant quantities (like Noether charges) correspond to dynamical symmetries
+The 2nd Law manifests as increasing entropy under dynamics
+Equilibrium is characterized by entropy being stationary at a fixed point of the dynamics
+Noether's Theorem relates dynamical symmetries to conserved quantities
+Entropy serves as a Lyapunov function characterizing equilibrium
+
+The proofs sketch how these elements fit together, e.g. deriving Noether's Theorem abstractly and showing how entropy functions as a Lyapunov stability certificate. The abstraction allows transporting thermodynamic intuitions to new mathematical contexts.

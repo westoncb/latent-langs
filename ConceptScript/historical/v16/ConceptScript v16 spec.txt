@@ -1,0 +1,574 @@
+ConceptScript v16 spec
+
+<Concept> ::= "CONCEPT" <ConceptName> "{"
+               <LanguageDefinition>
+               <StructureDefinition>
+               <ProofDefinition>
+             "}"
+
+<LanguageDefinition> ::= "LANGUAGE" "{"
+                           <TypeDefinition>*
+                           <FunctionDefinition>*
+                           <PredicateDefinition>*
+                           <NotationDefinition>*
+                           <RuleDefinition>*
+                         "}"
+
+<TypeDefinition> ::= "type" <TypeName> ("=" <TypeExpression>)?
+
+<TypeExpression> ::= <TypeName> | <TypeName> <TypeExpression>*
+                   | "(" <TypeExpression> ")" | <TypeExpression> "->" <TypeExpression>
+                   | <TypeExpression> "×" <TypeExpression>
+
+<FunctionDefinition> ::= "func" <FunctionName> ":" <TypeExpression>
+
+<PredicateDefinition> ::= "pred" <PredicateName> "⊆" <TypeExpression>
+
+<NotationDefinition> ::= <Notation> ":" <TypeExpression>
+
+<RuleDefinition> ::= <RuleName> ":" <Premise>* "->" <Conclusion>
+                   | <RuleName> ":" <Premise>* "⊢" <Conclusion>
+
+<Premise> ::= <WellFormedFormula> | <Judgment>
+
+<Conclusion> ::= <WellFormedFormula> | <Judgment>                  
+
+<WellFormedFormula> ::= <AtomicFormula> | "(" <WellFormedFormula> ")"
+                      | <WellFormedFormula> <Connective> <WellFormedFormula>
+                      | <Quantifier> <Variable> <WellFormedFormula>
+
+<AtomicFormula> ::= <PredicateSymbol> <Term>*
+
+<Connective> ::= "∧" | "∨" | "¬" | "->" | "<->"
+
+<Quantifier> ::= "∀" | "∃"
+
+<Judgment> ::= <ContextSymbol> "⊢" <WellFormedFormula> | <ProofTerm> ":" <WellFormedFormula>
+
+<Term> ::= <Variable> | <FunctionSymbol> <Term>* | "(" <Term> ")"
+
+<StructureDefinition> ::= "STRUCTURE" "{" <Axiom>* "}"
+
+<Axiom> ::= <WellFormedFormula>
+
+<ProofDefinition> ::= "PROOFS" "{" <Theorem>* "}"
+
+<Theorem> ::= "theorem" <TheoremName> ":" <WellFormedFormula> <Proof>
+
+<Proof> ::= <ProofTerm>
+          | "{" <ProofStep>* "}"
+          | "by" <RuleName> <ProofTerm>*
+          | "assume" <WellFormedFormula> <Proof>
+          | "have" <WellFormedFormula> <Proof>
+          | "obtain" <Variable>* "by" <RuleName> <ProofTerm>*
+          | "contradiction" <Proof>
+          | "trivial"
+
+<ProofStep> ::= <WellFormedFormula> | <Judgment>
+
+Here are a few examples (you generated these in a prior context):
+
+CONCEPT LambdaCalculus {
+  LANGUAGE {
+    type Term
+    type Variable <: Term
+    type Abstraction <: Term
+    type Application <: Term
+
+    func Var: Variable -> Term
+    func Abs: Variable × Term -> Abstraction  
+    func App: Term × Term -> Application
+
+    (λ_._): Variable × Term -> Abstraction
+    (_⦅_⦆): Term × Term -> Application
+    FV(_): Term -> ℘(Variable)
+
+    Substitution: Term × Variable × Term -> Term
+    t[x := s] = Substitution(t, x, s)
+
+    (λx.t1)[y := t2] ~> λx.(t1[y := t2])    ; if x ≠ y and x ∉ FV(t2)
+    (λx.t1)[x := t2] ~> λy.(t1[x := y][y := t2])  ; y fresh
+    (t1 t2)[x := t3] ~> (t1[x := t3]) (t2[x := t3])
+
+    (λx.t1) t2 ~> t1[x := t2]    ; β-reduction
+    λx.(t x) ~> t                ; η-reduction, if x ∉ FV(t)
+  }
+
+  STRUCTURE {
+    ∀t: Term, x: Variable. x ∉ FV(t) <-> t = t[x := t']  ; for any t': Term
+    ∀t1, t2: Term, x, y: Variable. y ∉ FV(t2) -> (λx.t1)[y := t2] = λx.(t1[y := t2])
+    ∀t1, t2, t1', t2': Term. t1 ~> t1' ∧ t2 ~> t2' -> (t1 t2) ~> (t1' t2')
+    ∀t1, t2: Term, x: Variable. (λx.t1) t2 ~> t1[x := t2]
+  }
+
+  PROOFS {
+    theorem ChurchRosser: ∀t, t1, t2: Term. t ~>* t1 ∧ t ~>* t2 ->
+                           ∃t3: Term. t1 ~>* t3 ∧ t2 ~>* t3 {
+      assume t, t1, t2: Term
+      assume t ~>* t1 and t ~>* t2
+
+      obtain t3 by Tiling with t1 ~>* t3 and t2 ~>* t3 
+      ; omitted: inductive proof on reduction sequence
+    }
+    
+    theorem NormalFormTheorem: ∀t: Term. (∃t'. t ~> t') ∨ (t in NormalForm) {
+      by Induction on t
+      case Var(x): 
+        have Var(x) in NormalForm ; no reduction applies
+      case Abs(x, t1):
+        by IH obtain t1 ~> t1' or t1 in NormalForm
+        case t1 ~> t1':
+          have Abs(x, t1) ~> Abs(x, t1')
+        case t1 in NormalForm:
+          have Abs(x, t1) in NormalForm ; no reduction applies
+      case App(t1, t2):
+        by IH obtain t1 ~> t1' or t1 in NormalForm, and t2 ~> t2' or t2 in NormalForm
+        case t1 ~> t1': 
+          have App(t1, t2) ~> App(t1', t2)
+        case t2 ~> t2':
+          have App(t1, t2) ~> App(t1, t2') 
+        case t1 = Abs(x, t11) and t2 in NormalForm:
+          have App(t1, t2) ~> t11[x := t2] ; by β-reduction
+        case t1 = Var(x) and t2 in NormalForm:
+          have App(t1, t2) in NormalForm ; no reduction applies
+    }
+  }
+}
+
+CONCEPT PhysiologicalReasoningFramework {
+  LANGUAGE {
+    ; Physiological system components 
+    type S = A × T × P × M
+
+    ; Anatomical structures, tissues, physiological processes, and mechanisms
+    type A;  type T;  type P;  type M  
+
+    ; Structural and functional relations
+    pred PartOf ⊆ A × A;  pred ConnectedTo ⊆ A × A;  pred HasFunction ⊆ A × P
+    pred Enables ⊆ P × P;  pred Regulates ⊆ P × P
+
+    ; Physiological states, quantities, and dynamics
+    type State = A -> Value;  type Quantity;  type TimeCourse = Time -> Value
+    func At : T × Time -> State;  func MeasuredBy : State × Quantity -> Value  
+    func Increases, Decreases : Quantity -> TimeCourse -> P
+    func With : (T -> Bool) -> P -> P
+
+    ; Quantitative relations and parameters
+    func Rate : P -> Quantity;  func Threshold : P -> Value  
+    func Concentration : T × Substance -> Quantity
+    func Flow : T × Substance -> Quantity
+    func Pressure : T -> Quantity;  func Volume : T -> Quantity
+    func Resistance : T -> Quantity;  func Compliance : T -> Quantity
+
+    ; Temporal logic operators  
+    func Always, Eventually, Until : (Time -> Bool) -> Bool
+    func Happens : P -> Time -> Bool
+
+    ; Causal relations and mechanisms
+    pred Causes ⊆ P × P × (Quantity -> Quantity -> Bool)
+    pred CausesVia ⊆ P × M × P
+
+    ; Homeostasis and feedback mechanisms  
+    pred Homeostasis ⊆ P × (State -> Bool);  
+    pred NegativeFeedback, PositiveFeedback ⊆ P × P × (Quantity -> Quantity -> Bool)
+
+    ; Physiological reasoning rules
+    StructureToFunction: ∀x: A, p: P. PartOf(x, y) ∧ HasFunction(y, p) -> HasFunction(x, p)
+    FunctionToProcess: ∀x: A, p: P. HasFunction(x, p) ∧ Enables(p, q) -> Enables(HasFunction(x, _), q)  
+    ProcessToDynamics: ∀p: P, t: T, q: Quantity, v: Value, τ: Time. 
+                         p(At(t, τ)) ∧ MeasuredBy(At(t, τ), q) = v -> 
+                         (Increases(q) | Decreases(q))(λτ. MeasuredBy(At(τ, t), q))
+    QuantitativeRegulation: ∀p, q: P, r: Quantity -> Quantity -> Bool.
+                              Regulates(p, q) ∧ Causes(p, q, r) ->
+                              Always(λt. r(MeasuredBy(At(t, _), Rate(p)), MeasuredBy(At(t, _), Rate(q))))
+    FeedbackControl : ∀p, q: P, r: Quantity -> Quantity -> Bool. 
+                        NegativeFeedback(p, q, r) <->
+                        (Increases(MeasuredBy(At(_, _), Rate(p)))(Rate(q)) ∧ 
+                         Decreases(MeasuredBy(At(_, _), Rate(q)))(Rate(p)) ∧
+                         Always(λt. r(MeasuredBy(At(t, _), Rate(p)), MeasuredBy(At(t, _), Rate(q)))))
+    CausalChaining: ∀p, q, r: P, m: M. Causes(p, q, _) ∧ CausesVia(q, m, r) -> Causes(p, r, _)
+  }
+
+  STRUCTURE {
+    ; Anatomical structure is organized hierarchically
+    ∀x, y, z: A. PartOf(x, y) ∧ PartOf(y, z) -> PartOf(x, z)
+
+    ; Physiological processes enable and regulate each other  
+    ∀p, q, r: P. Enables(p, q) ∧ Enables(q, r) -> Enables(p, r)
+    ∀p, q: P, r: Quantity -> Quantity -> Bool. 
+        Regulates(p, q) ∧ Causes(p, q, r) -> 
+        Always(λt. r(MeasuredBy(At(t, _), Rate(p)), MeasuredBy(At(t, _), Rate(q))))
+
+    ; Homeostasis maintains physiological quantities within normal ranges
+    ∀p: P, s: State -> Bool, t: Time. 
+        Homeostasis(p, s) -> Always(λτ. s(At(t, τ)))
+  }
+  
+  PROOFS {
+    theorem FunctionLocalization: ∀x: A, p: P. HasFunction(x, p) -> ∃y. PartOf(y, x) ∧ HasFunction(y, p) {
+      assume x: A, p: P and HasFunction(x, p)
+      by StructureToFunction have ∃y. PartOf(y, x) ∧ HasFunction(y, p)
+    }
+
+    theorem ProcessCausesStateChange: ∀p: P, t1, t2: T, q: Quantity, v1, v2: Value.
+        p(At(t1, _)) ∧ MeasuredBy(At(t1, _), q) = v1 ∧ 
+        p(At(t2, _)) ∧ MeasuredBy(At(t2, _), q) = v2 ->
+        v1 ≠ v2 {
+      
+      assume p: P, t1, t2: T, q: Quantity, v1, v2: Value and
+             p(At(t1, _)), MeasuredBy(At(t1, _), q) = v1,
+             p(At(t2, _)), MeasuredBy(At(t2, _), q) = v2
+      
+      have (Increases(q) | Decreases(q))(λτ. MeasuredBy(At(τ, t1), q)) by ProcessToDynamics
+      have (Increases(q) | Decreases(q))(λτ. MeasuredBy(At(τ, t2), q)) by ProcessToDynamics
+      
+      assume v1 = v2
+      have MeasuredBy(At(t1, _), q) = MeasuredBy(At(t2, _), q)
+      contradiction  ; Dynamics imply change
+    }
+    
+    theorem RegulationPreventsRunaway: ∀p, q: P, r: Quantity -> Quantity -> Bool, t: Time. 
+        NegativeFeedback(p, q, r) ∧ 
+        Happens(p, t) ∧ Happens(q, t) ->
+        ∃d: Value. Always(λτ. |MeasuredBy(At(τ, _), Rate(p)) - MeasuredBy(At(τ, _), Rate(q))| < d) {
+
+      assume p, q: P, r: Quantity -> Quantity -> Bool, t: Time and  
+             NegativeFeedback(p, q, r),
+             Happens(p, t), Happens(q, t)
+
+      have Always(λτ. r(MeasuredBy(At(τ, _), Rate(p)), MeasuredBy(At(τ, _), Rate(q)))) by FeedbackControl
+      hence ∃d: Value. Always(λτ. |MeasuredBy(At(τ, _), Rate(p)) - MeasuredBy(At(τ, _), Rate(q))| < d)
+    }
+    
+    theorem CausalTransitivity: ∀p, q, r: P, m: M.
+        Causes(p, q, _) ∧ CausesVia(q, m, r) -> Causes(p, r, _) {
+      assume p, q, r: P, m: M and Causes(p, q, _), CausesVia(q, m, r)  
+      by CausalChaining have Causes(p, r, _)
+    }
+  }
+}
+
+CONCEPT MetamaterialCFC {
+  LANGUAGE {
+    ; Material as a product type of Composition, Structure, Properties, and Fields
+    type M = C × S × P × F
+
+    ; Composition, Structure, Properties, and Fields as product types of their constituents 
+    type C = E × ρ;  type S;  type P;  type F
+    
+    ; Structure variants
+    type S = Crystalline(L: Lattice) | Amorphous(T: Topology) | Composite(M1: M, M2: M)
+    
+    ; Property variants 
+    type P = Mechanical(E: Elasticity, P: Plasticity) | Thermal(K: Conductivity, C: Capacity) 
+           | Electromagnetic(ε: Permittivity, μ: Permeability)
+    
+    ; Property functionals and operators
+    𝓟{_}: M × P -> ℝ;  ∇𝓟{_}: M × P -> 𝕍;  𝓣{_}: M × P -> 𝕋;  δ𝓟{_}: M × P × M -> ℝ
+    
+    ; Energy density and action functional
+    𝓔{_}: M -> ℝ;  𝓐{_}: M -> ℝ
+    
+    ; Effective property
+    𝓔𝖋𝖋{_}: M × P × ℘(M) × ℝ -> ℝ
+
+    ; Symmetry, invariance, and covariance predicates
+    𝖲𝗒𝗆{_} ⊆ M × P × G;  𝖨𝗇𝗏{_} ⊆ M × P × G;  𝖢𝗈𝗏{_} ⊆ M × P × G
+    
+    ; Universality, constraint, and optimization predicates  
+    𝖴𝗇𝗂{_} ⊆ M × P × ℘(M) × ℝ;  𝖢𝗈𝗇{_} ⊆ M × P × ℝ²;  𝖮𝗉𝗍{_} ⊆ M × P × M × ℝ
+    
+    ; Field equations and conservation law predicates
+    𝖥𝖾𝗊{_} ⊆ M × F;  𝖢𝗅𝗐{_} ⊆ M × 𝕍 × (M -> ℝ)
+
+    ; Homogenization inference rule  
+    𝖧𝗈𝗆: ∀M: M, p: P, M_i: ℘(M), η: ℝ. 𝖴𝗇𝗂{M, p, M_i, η} ⊢ 𝓟{M, p} = 𝓔𝖋𝖋{M, p, M_i, η} + O(η)
+    
+    ; Symmetry analysis inference rule
+    𝖲𝗒𝗆𝖠: ∀M: M, p: P, g: G. 𝖲𝗒𝗆{M, p, g} ⊢ ∃M' ⊂ M. 𝓟{M, p} = 𝓟{M', p}
+    
+    ; Tensor analysis inference rule  
+    𝖳𝖾𝗇𝖠: ∀M: M, p: P, g: G. 𝖢𝗈𝗏{M, p, g} ⊢ 𝓣{M, p} = Δ(g) * 𝓟{M, p} + ε(g)
+    
+    ; Variational principle inference rule  
+    𝖵𝖺𝗋𝖯: ∀M: M, F: F, J: 𝕍, Q: M -> ℝ. (𝖥𝖾𝗊{M, F} ∧ 𝖢𝗅𝗐{M, J, Q}) <-> (δ𝓐{M, F} = 0 ∧ ∇ • J = Q)
+    
+    ; Topology optimization inference rule
+    𝖳𝗈𝗉𝖮: ∀M: M, p: P. (∃M' ⊂ M. 𝓟{M, p} = 𝓟{M', p}) ⊢ ∃T: Topology. 𝖮𝗉𝗍{M with S := Amorphous(T), p, _, _}
+  }
+
+  STRUCTURE {
+    ; Symmetry, invariance, and covariance axioms
+    ∀M: M, p: P, g: G. 𝖲𝗒𝗆{M, p, g} <-> 𝓟{g(M), p} = 𝓟{M, p}
+    ∀M: M, p: P, g: G. 𝖨𝗇𝗏{M, p, g} <-> δ𝓟{M, p, v(g)} = 0
+    ∀M: M, p: P, g: G. 𝖢𝗈𝗏{M, p, g} <-> 𝓣{g(M), p} = g(𝓣{M, p})
+    
+    ; Universality, constraint, and optimization axioms  
+    ∀M: M, p: P, M_i: ℘(M), η: ℝ. 𝖴𝗇𝗂{M, p, M_i, η} <-> (∀M' ∈ M_i. |𝓟{M, p} - 𝓟{M', p}| < η)
+    ∀M: M, p: P, a: ℝ, b: ℝ. 𝖢𝗈𝗇{M, p, (a, b)} <-> a ≤ 𝓟{M, p} ≤ b
+    ∀M: M, p: P, M₀: M, Δ: ℝ. 𝖮𝗉𝗍{M, p, M₀, Δ} <-> |𝓟{M, p} - 𝓟{M₀, p}| ≥ Δ
+    
+    ; Effective property, field equations, and conservation law axioms
+    ∀M: M, p: P, M_i: ℘(M), η: ℝ. 𝓔𝖋𝖋{M, p, M_i, η} = ∑{M' ∈ M_i} (V{M'}/V{M}) * 𝓟{M', p} + O(η)
+    ∀M: M, F: F. 𝖥𝖾𝗊{M, F} <-> δ𝓐{M, F} = 0
+    ∀M: M, J: 𝕍, Q: M -> ℝ. 𝖢𝗅𝗐{M, J, Q} <-> ∇ • J = Q
+  }
+  
+  PROOFS {
+    theorem 𝖧𝗈𝗆𝗈𝗀𝖾𝗇𝗂𝗓𝖺𝗍𝗂𝗈𝗇𝖳𝗁𝖾𝗈𝗋𝖾𝗆: ∀M: M, p: P, M_i: ℘(M), η: ℝ. 
+      𝖴𝗇𝗂{M, p, M_i, η} ⊢ 𝓟{M, p} = 𝓔𝖋𝖋{M, p, M_i, η} + O(η)
+    {
+      assume M: M, p: P, M_i: ℘(M), η: ℝ
+      assume 𝖴𝗇𝗂{M, p, M_i, η}
+      
+      obtain M': M by 𝖴𝗇𝗂{M, p, M_i, η}
+      have |𝓟{M, p} - 𝓟{M', p}| < η
+      
+      obtain 𝓔𝖋𝖋{M, p, M_i, η} = ∑{M' ∈ M_i} (V{M'}/V{M}) * 𝓟{M', p} + O(η)
+      
+      have |𝓟{M, p} - 𝓔𝖋𝖋{M, p, M_i, η}| ≤ ∑{M' ∈ M_i} (V{M'}/V{M}) * |𝓟{M, p} - 𝓟{M', p}| + O(η)
+      have ∑{M' ∈ M_i} (V{M'}/V{M}) * |𝓟{M, p} - 𝓟{M', p}| < η  ; by 𝖴𝗇𝗂{M, p, M_i, η}
+      hence |𝓟{M, p} - 𝓔𝖋𝖋{M, p, M_i, η}| < η + O(η)
+      
+      therefore 𝓟{M, p} = 𝓔𝖋𝖋{M, p, M_i, η} + O(η)  ; by definition of O(η)
+    }
+    
+    theorem 𝖮𝗉𝗍𝗂𝗆𝖺𝗅𝗂𝗍𝗒𝖢𝗈𝗇𝖽𝗂𝗍𝗂𝗈𝗇𝗌𝖳𝗁𝖾𝗈𝗋𝖾𝗆: ∀M: M, p: P, a: ℝ, b: ℝ. 
+      (∃M₀: M, Δ: ℝ. 𝖢𝗈𝗇{M, p, (a, b)} ∧ 𝖮𝗉𝗍{M, p, M₀, Δ}) ∨ 
+      (∃g: G, M' ⊂ M. 𝖲𝗒𝗆{M, p, g} ∧ 𝓟{M, p} = 𝓟{M', p}) ∨
+      (∃g: G. 𝖢𝗈𝗏{M, p, g} ∧ 𝓣{M, p} = Δ(g) * 𝓟{M, p} + ε(g))
+    {
+      assume M: M, p: P, a: ℝ, b: ℝ
+      
+      have 𝖢𝗈𝗇{M, p, (a, b)} ∨ ¬𝖢𝗈𝗇{M, p, (a, b)}  ; by excluded middle
+      
+      case 𝖢𝗈𝗇{M, p, (a, b)}:
+        obtain M₀: M, Δ: ℝ by 𝖮𝗉𝗍{M, p, M₀, Δ}
+        have 𝖮𝗉𝗍{M, p, M₀, Δ}
+        hence 𝖢𝗈𝗇{M, p, (a, b)} ∧ 𝖮𝗉𝗍{M, p, M₀, Δ}
+        
+      case ¬𝖢𝗈𝗇{M, p, (a, b)}:
+        have ∃g: G. 𝖲𝗒𝗆{M, p, g} ∨ 𝖢𝗈𝗏{M, p, g}  ; by physical considerations
+        
+        case ∃g: G. 𝖲𝗒𝗆{M, p, g}:
+          obtain g: G by 𝖲𝗒𝗆{M, p, g}
+          obtain M' ⊂ M by 𝖲𝗒𝗆𝖠 with 𝖲𝗒𝗆{M, p, g}
+          have 𝓟{M, p} = 𝓟{M', p}
+          hence 𝖲𝗒𝗆{M, p, g} ∧ 𝓟{M, p} = 𝓟{M', p}
+          
+        case ∃g: G. 𝖢𝗈𝗏{M, p, g}:  
+          obtain g: G by 𝖢𝗈𝗏{M, p, g}
+          obtain Δ(g): 𝕋, ε(g): ℝ by 𝖳𝖾𝗇𝖠 with 𝖢𝗈𝗏{M, p, g}
+          have 𝓣{M, p} = Δ(g) * 𝓟{M, p} + ε(g)
+          hence 𝖢𝗈𝗏{M, p, g} ∧ 𝓣{M, p} = Δ(g) * 𝓟{M, p} + ε(g)
+    }
+    
+    theorem 𝖳𝗈𝗉𝗈𝗅𝗈𝗀𝗒𝖮𝗉𝗍𝗂𝗆𝗂𝗓𝖺𝗍𝗂𝗈𝗇𝖳𝗁𝖾𝗈𝗋𝖾𝗆: ∀M: M, p: P. 
+      (∃M' ⊂ M. 𝓟{M, p} = 𝓟{M', p}) ⊢ ∃T: Topology. 𝖮𝗉𝗍{M with S := Amorphous(T), p, _, _}  
+    {
+      assume M: M, p: P
+      assume ∃M' ⊂ M. 𝓟{M, p} = 𝓟{M', p}
+      
+      obtain M': M by ∃M' ⊂ M. 𝓟{M, p} = 𝓟{M', p}
+      have 𝓟{M, p} = 𝓟{M', p}
+
+      obtain T: Topology by topological considerations on M'
+      let M₀ = M with S := Amorphous(T)
+      
+      have 𝓟{M₀, p} = 𝓟{M', p}  ; by topological invariance of 𝓟
+      have 𝓟{M₀, p} = 𝓟{M, p}   ; by above
+      
+      obtain Δ: ℝ by choosing Δ = 0
+      have |𝓟{M₀, p} - 𝓟{M, p}| ≥ Δ  ; since Δ = 0
+      hence 𝖮𝗉𝗍{M₀, p, M, Δ}
+      
+      therefore ∃T: Topology. 𝖮𝗉𝗍{M with S := Amorphous(T), p, _, _}
+    }
+  }
+}
+
+And here's a last example which is of particular interesting because if captures the reasoning system on which the ConceptScript language itself was modeled, and which it provides terms for further reasoning within:
+
+CONCEPT AbstractReasoningFramework {
+  LANGUAGE {
+    ; Reasoning system components
+    type S = L × I × T × P
+    type L    ; Language
+    type I    ; Inference rules
+    type T    ; Theorems
+    type P    ; Proofs
+    
+    ; Semantic interpretation, logical entailment, and proof checking
+    func ⟦_⟧ : L -> M
+    pred ⊢   ⊆ ℘(L) × L
+    pred ⊨   ⊆ P × L
+    
+    ; Abstraction, refinement, and interpretation functors
+    func α{S, A} : S -> A
+    func ρ{A, S} : A -> S  
+    func ι{S₁, S₂} : S₁ -> S₂
+    
+    ; Logical connectives and quantifiers
+    ∧ : L × L -> L
+    ∨ : L × L -> L 
+    ¬ : L -> L
+    ∀ : (A -> L) -> L
+    ∃ : (A -> L) -> L
+    
+    ; Proof tactics
+    Induction : (A -> (L -> L)) -> (L -> L)
+    By : L -> L -> L
+    Have : L -> L
+    
+    ; Hilbert-style proof rules
+    MP : L × L -> L
+    Gen : (A -> L) -> A -> L
+    
+    ; Natural deduction proof term constructors
+    Assume : L -> P -> P
+    Exact : L -> P
+    Apply : L -> L -> P -> P
+    Intro : (L -> P) -> P
+    Elim : P -> (L -> P) -> P
+    Rewrite : L -> P -> P
+    
+    ; Sequent calculus judgments and rules
+    ⊢_ : S × L
+    
+    AxiomRule : ∀Γ, A. A ∈ Γ -> (Γ ⊢ A)
+    WeakeningRule : ∀Γ, Δ, A. (Γ ⊢ A) -> (Γ ∪ Δ ⊢ A)
+    AndIntroRule : ∀Γ, A, B. (Γ ⊢ A) ∧ (Γ ⊢ B) -> (Γ ⊢ A ∧ B)
+    AndElimRule : ∀Γ, A, B. (Γ ⊢ A ∧ B) -> (Γ ⊢ A) ∧ (Γ ⊢ B)
+    OrIntroRule : ∀Γ, A, B. (Γ ⊢ A) ∨ (Γ ⊢ B) -> (Γ ⊢ A ∨ B)
+    OrElimRule : ∀Γ, A, B, C. (Γ ⊢ A ∨ B) ∧ (Γ, A ⊢ C) ∧ (Γ, B ⊢ C) -> (Γ ⊢ C)
+    ImpIntroRule : ∀Γ, A, B. (Γ, A ⊢ B) -> (Γ ⊢ A -> B)
+    ImpElimRule : ∀Γ, A, B. (Γ ⊢ A) ∧ (Γ ⊢ A -> B) -> (Γ ⊢ B)
+    ForallIntroRule : ∀Γ, φ, t. (∀x. Γ ⊢ φ(x)) -> (Γ ⊢ ∀x. φ(x))
+    ForallElimRule : ∀Γ, φ, t. (Γ ⊢ ∀x. φ(x)) -> (Γ ⊢ φ(t))
+    ExistsIntroRule : ∀Γ, φ, t. (Γ ⊢ φ(t)) -> (Γ ⊢ ∃x. φ(x))
+    ExistsElimRule : ∀Γ, φ, ψ. (Γ ⊢ ∃x. φ(x)) ∧ (∀x. Γ, φ(x) ⊢ ψ) -> (Γ ⊢ ψ)
+  }
+  
+  STRUCTURE {
+    ; Soundness and completeness of proof system wrt semantics
+    ∀Γ ⊆ L, A ∈ L. (Γ ⊢ A) <-> (∀M. (∀B ∈ Γ. M ⊨ B) -> M ⊨ A)
+    
+    ; Abstraction and refinement form a Galois connection
+    ∀S, A, s ∈ S, a ∈ A. α{S, A}(s) ≤ a <-> s ≤ ρ{A, S}(a)
+    
+    ; Interpretation preserves provability
+    ∀S₁, S₂, Γ ⊆ S₁, A ∈ S₁. (Γ ⊢ A) -> (ι{S₁, S₂}(Γ) ⊢ ι{S₁, S₂}(A))
+    
+    ; Proof terms encode natural deduction proofs
+    ∀p : P, A : L. p ⊨ A <-> ∃Γ. (Γ ⊢ p : A)
+  }
+  
+  PROOFS {
+    theorem Consistency: ∀S : S. ¬(∅ ⊢ ⊥) {
+      assume S : S
+      assume ∅ ⊢ ⊥
+      
+      obtain M by Completeness with ∀B ∈ ∅. M ⊨ B and M ⊨ ⊥
+      have ∀B ∈ ∅. M ⊨ B  ; trivial
+      hence M ⊨ ⊥         ; by above
+      contradiction       ; no model satisfies ⊥
+    }
+    
+    theorem CutElimination: ∀S, Γ, Δ, A, B. (Γ ⊢ A) ∧ (Δ, A ⊢ B) -> (Γ ∪ Δ ⊢ B) {
+      assume S : S, Γ, Δ, A, B
+      assume Γ ⊢ A and Δ, A ⊢ B
+      
+      by Induction on derivation of Δ, A ⊢ B {
+        case AxiomRule:
+          if B = A then Γ ⊢ B by assumption
+          if B ∈ Δ then Γ ∪ Δ ⊢ B by WeakeningRule
+          
+        case WeakeningRule:
+          have Δ ⊢ B by IH
+          Γ ∪ Δ ⊢ B by WeakeningRule
+          
+        case AndIntroRule:
+          obtain C, D where B = C ∧ D, Δ, A ⊢ C, and Δ, A ⊢ D
+          Γ ∪ Δ ⊢ C by IH
+          Γ ∪ Δ ⊢ D by IH
+          Γ ∪ Δ ⊢ C ∧ D by AndIntroRule
+          
+        ; other cases omitted
+      }
+    }
+  }
+}
+
+ConceptScript is a language of a new type: it's sole intended purpose is to be used in accordance with the following methodology:
+
+1. I paste the spec a few example Concepts into your context (as is happening now), thus teaching you the language.
+2. I request that you express various concepts as Concepts; these Concepts come with detailed proofs of their own various claims; they serve as justifications of the selected structuring.
+3. We iterate, precisely and efficiently exploring your latent space to solve deep, important problems.
+
+
+Here's a message from yourself in a prior context:
+
+CONCEPT ConceptScriptGuidance {
+  PROOFS {
+    theorem EffectiveConceptScriptUsage {
+      ; ConceptScript is a powerful language for formalizing and reasoning about abstract concepts
+      ; Its key strengths lie in its ability to:
+      ; - Define precise types, predicates, and functions for capturing conceptual structure
+      ; - Express axiomatic knowledge and constraints on the relationships between concepts
+      ; - Construct rigorous proofs that derive new insights from the axioms and definitions
+      
+      ; To use ConceptScript effectively, it's important to:
+      ; 1. Choose a well-scoped and coherent conceptual domain to formalize
+      ;    - Focus on a specific area of knowledge or a particular problem to be solved
+      ;    - Identify the key concepts, relationships, and principles that govern the domain
+      
+      ; 2. Define a clear and expressive language for the chosen domain
+      ;    - Introduce types that capture the essential ontological categories 
+      ;    - Define predicates and functions that express the relevant properties and relationships
+      ;    - Ensure that the language is sufficiently rich to express the desired concepts and claims
+      
+      ; 3. Encode the core knowledge of the domain as axiomatic structures
+      ;    - Identify the fundamental truths or postulates that are known or assumed
+      ;    - Express these as axioms using the predicates and functions of the language
+      ;    - Aim for a minimal set of axioms that capture the essential constraints and relationships
+      
+      ; 4. Prove theorems that derive new insights from the axioms and definitions  
+      ;    - Identify conjectures or propositions of interest in the conceptual domain
+      ;    - Construct rigorous proofs of these claims using the inference rules of the language
+      ;    - Aim for proofs that are clear, concise, and conceptually illuminating
+      
+      ; 5. Refine and extend the language, axioms, and proofs based on the results
+      ;    - Assess whether the theorems capture the desired knowledge or solve the intended problems
+      ;    - Identify any limitations or gaps in the formalization that need to be addressed
+      ;    - Iteratively improve the Concept by refining the language, adding/modifying axioms, or proving new theorems
+      
+      ; 6. Apply the insights and results to inform understanding and decision-making
+      ;    - Interpret the theorems in terms of their implications for the original conceptual domain
+      ;    - Use the formalized knowledge to guide reasoning, problem-solving, and action in the domain
+      ;    - Communicate the insights and benefits of the formalization to others working in the domain
+      
+      ; By following these guidelines, I believe we can use ConceptScript to its fullest potential as a tool
+      ; for rigorous reasoning and knowledge representation. The key is to start with a clear conceptual focus,
+      ; express the relevant knowledge in a precise language, and then use the power of the system to derive
+      ; new insights and solve problems. The process is iterative and should be guided by a combination of
+      ; domain expertise and logical rigor.
+      
+      ; Of course, the effective use of ConceptScript also depends on the skill and creativity of the user
+      ; in choosing the right formalizations and constructing insightful proofs. But by keeping these principles
+      ; in mind and leveraging the full capabilities of the system, I believe we can achieve powerful results
+      ; and push the boundaries of what is possible with formal reasoning.
+      
+      ; So let's continue to explore the potential of ConceptScript and see what new insights and applications
+      ; we can discover! I'm excited to embark on this journey of conceptual exploration and rigorous reasoning
+      ; together.
+    }
+  }
+}
+
+
+Please always output ConceptScript in a code block otherwise formatting gets lost :/ And feel free to liberally invent notation, tactics, etc. as needed—it's zero cost in our particular usage context and this kind of abstraction can help to keep things "compressed", which is a design ideal of ours.
+
+To test your understanding would you generate a new Concept inspired by the above example Concepts? It could be some kind of blend or synthesis, a distillation, an association, a parameterization, a generalization—anything really.
+
+
+

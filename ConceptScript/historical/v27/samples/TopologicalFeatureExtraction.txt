@@ -1,0 +1,79 @@
+CONCEPT TopologicalFeatureExtraction {
+  NOTATION {
+    Img = Grayscale image as function ℝ^2 → ℝ
+    Subl(I,t) = Sublevel set {x ∈ ℝ^2 | I(x) ≤ t}  
+    Feat_I = {(b_i,d_i,t_i)} = Birth-death-thresh features of I
+    PD_t(I) = Persistence diagram of PHT(Subl(I,t))
+  }
+
+  LANGUAGE {
+    FUNC ExtractFeatures(I: Img, ε: ℝ>0): 
+      {(b,d,t) | b,d ∈ PD_t(I), d-b ≥ ε, t∈ℝ}
+      
+    FUNC Segment(I: Img, ε: ℝ>0): 
+      ⋃_{(b,d,t) ∈ ExtractFeatures(I,ε)} Subr(I,b,d)
+      WHERE Subr(I,b,d) = {x | b ≤ I(x) ≤ d}
+        
+    PRED IsTopologicallyStable(F: Collection<Feat>, ε: ℝ>0) =
+      ∀ I,J: Img . d_I(PHT(I),PHT(J)) ≤ ε ⇒ 
+        ∀(b,d,t)∈F_I ∃(b',d',t')∈F_J . |b-b'|,|d-d'|,|t-t'| ≤ ε
+  }
+
+  STRUCTURES {
+    STRUCTURE TopologicalDescriptor {
+      FIELD Features: Collection<Feat>
+      FIELD Threshold: ℝ
+      
+      FUNC FromImage(I: Img, ε: ℝ>0):
+        RETURN NEW TopologicalDescriptor WITH {
+          Features ← ExtractFeatures(I, ε)
+          Threshold ← ε
+        }
+        
+      FUNC Compare(D: TopologicalDescriptor): ℝ =
+        Hausdorff(Features, D.Features)
+    }
+  }
+
+  PROOFS {
+    THEOREM SegmentationStability:
+      ∀ I,J: Img, ε>0 . d_I(PHT(I),PHT(J)) ≤ ε ⇒
+        d_H(Segment(I,ε), Segment(J,ε)) ≤ O(ε)
+    {
+      d_I(PHT(I),PHT(J)) ≤ ε
+      ⇒ ∀t. d_B(PD_t(I),PD_t(J)) ≤ ε   BY Stability of PHT
+      ⇒ ∀(b,d,t)∈Feat_I ∃(b',d',t')∈Feat_J . 
+           |b-b'|,|d-d'|,|t-t'| ≤ ε      BY Stability of PD
+      ⇒ d_H(Subr(I,b,d), Subr(J,b',d')) ≤ O(ε)
+      ⇒ d_H(Segment(I,ε), Segment(J,ε)) ≤ O(ε)
+    }
+    
+    THEOREM DescriptorComplexity:
+      TopologicalDescriptor.Compare(D) takes O(N²) time 
+      for N = max(|Features|, |D.Features|)
+    {
+      RECALL Hausdorff distance: 
+        d_H(A,B) = max{sup_a∈A inf_b∈B d(a,b), sup_b∈B inf_a∈A d(a,b)}
+        
+      COMPUTE sup_a∈A inf_b∈B d(a,b):
+        FOR a ∈ Features:  // O(N)
+          COMPUTE inf_b∈D.Features d(a,b) in O(N) time
+        RETURN max over a   // O(N)
+        
+      SYMMETRICALLY COMPUTE sup_b∈B inf_a∈A d(a,b)
+      
+      TOTAL: O(N²)
+    }
+  }
+}
+
+Explanation:
+This TopologicalFeatureExtraction Concept demonstrates how the ShapeSpace framework can be applied to the domain of image analysis and computer vision. The key insights are:
+
+We can view a grayscale image as a function on ℝ^2 and consider its sublevel sets as shapes. This allows us to apply the PHT to images.
+The persistence diagrams of the PHT across different thresholds capture the topological features of the image at different scales. Significant features correspond to high-persistence points in these diagrams.
+The Stability result for PHT implies that the extracted features are robust to small perturbations of the image. This is formalized in the SegmentationStability theorem.
+We can define a TopologicalDescriptor structure that encodes these features and allows for efficient comparison based on the Hausdorff distance between feature sets, as shown in the DescriptorComplexity theorem.
+
+This application leverages the theoretical foundations of the ShapeSpace Concept to develop a principled and robust methodology for extracting and comparing topological features in image data. The stability and efficiency guarantees are a direct consequence of the fundamental results established in ShapeSpace.
+Without the ShapeSpace framework, it would be difficult to justify the use of topological methods in image analysis and to provide formal guarantees on the robustness and computability of the feature extraction pipeline. The ShapeSpace Concept thus serves as a essential theoretical backbone for this computer vision application.
