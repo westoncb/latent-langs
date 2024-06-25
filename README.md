@@ -10,5 +10,7 @@ The purpose of this repository is to share my findings so far on this topic, and
 
 To get started I would recommend watching the video below.
 
-<video>
+[![Introduction to LLM languages+ConceptScript](https://i9.ytimg.com/vi/lmhvevCL7RU/maxresdefault.jpg?v=66736912&sqp=CMic7bMG&rs=AOn4CLDGuWTzrtlW3jv2dJOtqP5ffKyPnQ)](https://youtu.be/lmhvevCL7RU)
+
+[<img src="[https://img.youtube.com/vi/VIDEO_ID/0.jpg](https://i9.ytimg.com/vi/lmhvevCL7RU/maxresdefault.jpg?v=66736912&sqp=CMic7bMG&rs=AOn4CLDGuWTzrtlW3jv2dJOtqP5ffKyPnQ)" width="600px">](https://youtu.be/lmhvevCL7RU "Introduction to LLM languages+ConceptScript")
  
