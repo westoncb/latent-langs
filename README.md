@@ -10,7 +10,7 @@ The purpose of this repository is to share my findings so far on this topic, and
 
 ## Overview of included languages
 - ConceptScript: used for conceptual modeling and exploration—the most well-developed of the set.
-- LatentScript: used for doing semi-automated analysis, pulling rich/diverse info into context first; very early in development, not really ready for use yet.
+- LatentScript: used for doing semi-automated analysis, pulling rich/diverse info into context first; very early in development, not really ready for use yet (temporary name).
 - ModelScript: basically a minimalist/essentialized version of ConceptScript. It's the most recent development, not yet thoroughly tested but likely the best bet for many use cases.
 
 ## Basic usage instructions for ConceptScript
