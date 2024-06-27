@@ -8,7 +8,18 @@ I believe much of the value here is in language design as a general technique fo
 
 The purpose of this repository is to share my findings so far on this topic, and to provide some structure for continued collaborative exploration.
 
-To get started I would recommend watching the video below.
+## Overview of included languages
+- ConceptScript: used for conceptual modeling and exploration—the most well-developed of the set.
+- LatentScript: used for doing semi-automated analysis, pulling rich/diverse info into context first; very early in development, not really ready for use yet (temporary name).
+- ModelScript: basically a minimalist/essentialized version of ConceptScript. It's the most recent development, not yet thoroughly tested but likely the best bet for many use cases.
 
-<video>
+## Basic usage instructions for ConceptScript
+- Paste the boot prompt into context: [boot_prompt.txt](ConceptScript/boot_prompt.txt)
+- This will generate a first Concept combining ideas from the embedded example Concepts
+- Ask the LLM (works best with Claude so far) to express various things as Concepts
+- Iterate on the generated Concept, requesting modifications or for various operations to be performed.
+
+There is a bit of art to it, so I'd recommend watching the video below for a more in-depth introduction.
+
+[![Introduction to LLM languages+ConceptScript](https://i9.ytimg.com/vi/lmhvevCL7RU/maxresdefault.jpg?v=66736912&sqp=CMic7bMG&rs=AOn4CLDGuWTzrtlW3jv2dJOtqP5ffKyPnQ)](https://youtu.be/lmhvevCL7RU)
  
