@@ -1,0 +1,206 @@
+ModelScript {
+    METADATA {
+        MODELS: "Advanced Ecosystem Simulation incorporating species interactions, environmental factors, and evolutionary processes"
+        VERSION: "3.3"
+    }
+    
+    INTERFACE {
+        INCOMING {
+            initialSpecies : List[Species]
+            environmentalFactors : EnvironmentalFactors
+            simulationDuration : Int
+            evolutionRate : Float
+        }
+        OUTGOING {
+            finalEcosystemState : EcosystemState
+            biodiversityMetrics : BiodiversityMetrics
+            evolutionaryEvents : List[EvolutionaryEvent]
+        }
+    }
+    
+    TYPE Species := Record{
+        name: String,
+        population: Int,
+        geneticCode: GeneticCode,
+        traits: List[Trait],
+        feedingStrategy: FeedingStrategy
+    }
+    
+    TYPE GeneticCode := List[Gene]
+    TYPE Gene := Record{locus: Int, alleles: List[Allele]}
+    TYPE Allele := Record{id: Int, expression: Float}
+    
+    TYPE Trait := Record{name: String, value: Float}
+    
+    TYPE FeedingStrategy := Enum{Herbivore, Carnivore, Omnivore, Decomposer}
+    
+    TYPE EnvironmentalFactors := Record{
+        temperature: Float,
+        humidity: Float,
+        resources: Dict[ResourceType, Float]
+    }
+    
+    TYPE ResourceType := Enum{Water, Nutrients, Sunlight}
+    
+    TYPE EcosystemState := Record{
+        species: List[Species],
+        environmentalFactors: EnvironmentalFactors,
+        time: Int
+    }
+    
+    TYPE BiodiversityMetrics := Record{
+        speciesRichness: Int,
+        shannonIndex: Float,
+        simpsonIndex: Float
+    }
+    
+    TYPE EvolutionaryEvent := Record{
+        species: String,
+        eventType: EvolutionEventType,
+        description: String,
+        time: Int
+    }
+    
+    TYPE EvolutionEventType := Enum{Mutation, Adaptation, Speciation, Extinction}
+    
+    NOTATION {
+        Σ(list, func) := sum(map(list, func))
+        ∏(list, func) := product(map(list, func))
+        ∀x ∈ set, cond := forall(x, set, cond)
+        ∃x ∈ set, cond := exists(x, set, cond)
+        x ∈ set := contains(set, x)
+        A ∪ B := union(A, B)
+        A ∩ B := intersection(A, B)
+        A \ B := difference(A, B)
+        |set| := length(set)
+        ẋ := derivative(x, t)
+    }
+
+    MODEL := AdvancedEcosystemSimulation {
+        TYPE PopulationDynamics := Function<Species, EnvironmentalFactors, Float>
+        TYPE MutationFunction := Function<Gene, Float, Gene>
+        TYPE FitnessFunction := Function<Species, EnvironmentalFactors, Float>
+        
+        STRUCTURE GeneticAlgorithm<T> {
+            DEF crossover(parent1: T, parent2: T) : T
+            DEF mutate(individual: T, rate: Float) : T
+            DEF select(population: List[T], fitnessFunc: Function<T, Float>, n: Int) : List[T]
+        }
+        
+        STRUCTURE SpeciesEvolver : GeneticAlgorithm<Species> {
+            DEF crossover(parent1, parent2) := 
+                LET childGenes := [IF random() < 0.5 THEN g1 ELSE g2 
+                                   FOR g1, g2 IN zip(parent1.geneticCode, parent2.geneticCode)]
+                IN Record{...parent1, geneticCode: childGenes}
+            
+            DEF mutate(species, rate) := 
+                LET mutatedGenes := [IF random() < rate 
+                                     THEN Record{...gene, alleles: [Record{...allele, expression: allele.expression * (1 + random_normal(0, 0.1))} 
+                                                                    FOR allele IN gene.alleles]}
+                                     ELSE gene 
+                                     FOR gene IN species.geneticCode]
+                IN Record{...species, geneticCode: mutatedGenes}
+            
+            DEF select(population, fitnessFunc, n) := 
+                LET fitnesses := [fitnessFunc(species) FOR species IN population]
+                IN weighted_sample(population, fitnesses, n)
+        }
+        
+        DEF lotkaVolterra(prey: Species, predator: Species, α: Float, β: Float, γ: Float, δ: Float) := 
+            LET ẋ := α * prey.population - β * prey.population * predator.population
+                ẏ := δ * prey.population * predator.population - γ * predator.population
+            IN (ẋ, ẏ)
+        
+        DEF updatePopulation(species: Species, Δpop: Float) := 
+            Record{...species, population: max(0, round(species.population + Δpop))}
+        
+        DEF simulateInteractions(species: List[Species], env: EnvironmentalFactors) := 
+            LET interactions := [lotkaVolterra(s1, s2, 0.1, 0.01, 0.01, 0.1) 
+                                 FOR s1 IN species 
+                                 FOR s2 IN species 
+                                 IF s1.feedingStrategy == Herbivore AND s2.feedingStrategy == Carnivore]
+                Δpopulations := [Σ(interactions, λ(Δprey, Δpred) . 
+                                    IF s == prey THEN Δprey ELSE (IF s == predator THEN Δpred ELSE 0))
+                                 FOR s IN species]
+            IN [updatePopulation(s, Δp) FOR s, Δp IN zip(species, Δpopulations)]
+        
+        DEF mutateSpecies(species: Species, mutationRate: Float) := 
+            SpeciesEvolver().mutate(species, mutationRate)
+        
+        DEF evolvePopulation(species: List[Species], env: EnvironmentalFactors, evolutionRate: Float) := 
+            LET fitnessFunc := λ s . Σ(s.traits, λ t . t.value) * (s.population / 1000)
+                evolver := SpeciesEvolver()
+                newPopulation := evolver.select(species, fitnessFunc, |species|)
+                evolvedPopulation := [evolver.mutate(s, evolutionRate) FOR s IN newPopulation]
+            IN evolvedPopulation
+        
+        DEF calculateBiodiversity(species: List[Species]) := 
+            LET totalPopulation := Σ(species, λ s . s.population)
+                proportions := [s.population / totalPopulation FOR s IN species]
+                shannonIndex := -Σ(proportions, λ p . p * log(p))
+                simpsonIndex := 1 - Σ(proportions, λ p . p^2)
+            IN Record{
+                speciesRichness: |species|,
+                shannonIndex: shannonIndex,
+                simpsonIndex: simpsonIndex
+            }
+        
+        DEF detectEvolutionaryEvents(oldState: EcosystemState, newState: EcosystemState) := 
+            LET extinctions := [Record{species: s.name, eventType: Extinction, description: "Species went extinct", time: newState.time}
+                                FOR s IN oldState.species IF s.name ∉ [ns.name FOR ns IN newState.species]]
+                mutations := [Record{species: s.name, eventType: Mutation, description: "Genetic mutation occurred", time: newState.time}
+                              FOR s IN newState.species IF s.geneticCode != oldState.species[find_index(oldState.species, λ os . os.name == s.name)].geneticCode]
+                adaptations := [Record{species: s.name, eventType: Adaptation, description: "Species adapted to environment", time: newState.time}
+                                FOR s IN newState.species IF s.traits != oldState.species[find_index(oldState.species, λ os . os.name == s.name)].traits]
+            IN extinctions ∪ mutations ∪ adaptations
+        
+        DEF simulateEcosystem(initialSpecies, environmentalFactors, simulationDuration, evolutionRate) := 
+            LET simulate := λ state .
+                LET newSpecies := simulateInteractions(state.species, state.environmentalFactors)
+                    evolvedSpecies := evolvePopulation(newSpecies, state.environmentalFactors, evolutionRate)
+                    newState := Record{species: evolvedSpecies, 
+                                       environmentalFactors: state.environmentalFactors,
+                                       time: state.time + 1}
+                    events := detectEvolutionaryEvents(state, newState)
+                IN (newState, events)
+            
+            DEF simulationLoop(state, events, 0) := (state, events)
+            DEF simulationLoop(state, events, steps) := 
+                LET (newState, newEvents) := simulate(state)
+                IN simulationLoop(newState, events ∪ newEvents, steps - 1)
+            
+            LET initialState := Record{species: initialSpecies, 
+                                       environmentalFactors: environmentalFactors,
+                                       time: 0}
+                (finalState, allEvents) := simulationLoop(initialState, [], simulationDuration)
+                
+            IN Record{
+                finalEcosystemState: finalState,
+                biodiversityMetrics: calculateBiodiversity(finalState.species),
+                evolutionaryEvents: allEvents
+            }
+        
+        DEF head(x::xs) := x
+        
+        DEF tail(x::xs) := xs
+        
+        DEF processSpeciesList(Nil) := 0
+        DEF processSpeciesList(x::xs) := 1 + processSpeciesList(xs)
+        
+        [∀ species IS (x::xs), length(species) > 0]
+        
+        [∀ s ∈ initialSpecies, s.population > 0]
+        
+        [∀ state, ∀ t1 < t2 . 
+            LET s1 := simulateEcosystem(initialSpecies, environmentalFactors, t1, evolutionRate)
+                s2 := simulateEcosystem(initialSpecies, environmentalFactors, t2, evolutionRate)
+            IN |s1.finalEcosystemState.species| <= |s2.finalEcosystemState.species|]
+        
+        [∀ state . 
+            Σ(state.species, λ s . s.population) > 0]
+        
+        EXPAND for_all_fields(Species, generate_getter)
+        
+        RETURN simulateEcosystem
+    }
+}

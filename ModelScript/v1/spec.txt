@@ -1,3 +1,7 @@
+ModelScript is an LLM language, used exclusively by LLMs to guide/structure their outputs in certain ways.
+
+ModelScript v1 spec:
+
 ModelScript := 
   STRUCTURE := name(params) : extended_structure {
     PARAMETERS {
@@ -33,3 +37,372 @@ assertion := expr rel expr
            | expr C expr
            | ~expr
            | struc(.struc)*(.def)?
+
+
+Examples:
+
+STRUCTURE AttentionMechanism {
+  PARAMETERS {
+    query_size : Int
+    key_size : Int 
+    value_size : Int
+    hidden_size : Int
+  }
+
+  NOTATION {
+    α(q, K) := ATTENTION_WEIGHTS(q, K)  
+    V(K, v) := VALUE_VECTORS(K, v)
+    qᵀ := TRANSPOSE(q)
+  }
+
+  DEF Tensor := [[[Float]]]
+
+  STRUCTURE DotProductAttention {
+    DEF query_proj : Tensor[query_size, hidden_size]
+    DEF key_proj : Tensor[key_size, hidden_size] 
+    DEF value_proj : Tensor[value_size, hidden_size]
+
+    DEF init(query_size, key_size, value_size, hidden_size) := (
+      query_proj := XAVIER_INIT(query_size, hidden_size),
+      key_proj := XAVIER_INIT(key_size, hidden_size),
+      value_proj := XAVIER_INIT(value_size, hidden_size)
+    )
+
+    DEF forward(query : Tensor[batch_size, seq_len, query_size],
+                key : Tensor[batch_size, seq_len, key_size], 
+                value : Tensor[batch_size, seq_len, value_size]) -> Tensor[batch_size, seq_len, hidden_size] := (
+      LET Q := MATMUL(query, query_proj),
+          K := MATMUL(key, key_proj),
+          V := MATMUL(value, value_proj),
+          weights := α(Q, K),
+          output := MATMUL(weights, V)
+      IN output  
+    )
+  }
+
+  STRUCTURE MultiHeadAttention {
+    PARAMETERS {
+      num_heads : Int
+    }
+
+    DEF heads : [DotProductAttention]
+
+    DEF init(query_size, key_size, value_size, hidden_size, num_heads) := (
+      heads := [DotProductAttention(query_size, key_size, value_size, hidden_size / num_heads) FOR _ : range(num_heads)]
+    )
+
+    DEF forward(query : Tensor[batch_size, seq_len, query_size],
+                key : Tensor[batch_size, seq_len, key_size], 
+                value : Tensor[batch_size, seq_len, value_size]) -> Tensor[batch_size, seq_len, hidden_size] := (
+      LET head_outputs := [head.forward(query, key, value) FOR head : heads],
+          concat_output := CONCAT(head_outputs, dim=-1)
+      IN concat_output
+    )
+  }
+
+  DEF ATTENTION_WEIGHTS(query : Tensor[batch_size, seq_len, hidden_size],
+                        key : Tensor[batch_size, seq_len, hidden_size]) -> Tensor[batch_size, seq_len, seq_len] := (
+    LET scores := MATMUL(query, TRANSPOSE(key, (0, 2, 1))) / SQRT(hidden_size),
+        weights := SOFTMAX(scores, dim=-1)
+    IN weights                  
+  )
+
+  DEF VALUE_VECTORS(key : Tensor[batch_size, seq_len, hidden_size], 
+                    value : Tensor[batch_size, seq_len, hidden_size]) -> Tensor[batch_size, seq_len, hidden_size] := (
+    value
+  )
+
+  [∀q, ∀K, ∀V . 
+    MATMUL(α(q, K), V(K, V)).shape = (q.shape[0], q.shape[1], V.shape[2])
+  ] # Output shape of attention is (batch_size, query_seq_len, value_hidden_size)
+
+  [∀q, ∀K .
+    ∑(α(q, K), dim=-1) = 1
+  ] # Attention weights sum to 1 over key dimension  
+
+  [∀q₁, ∀q₂, ∀K, ∀V .
+    COSINE_SIMILARITY(q₁, q₂) ≈ 1 => COSINE_SIMILARITY(MATMUL(α(q₁, K), V(K, V)), MATMUL(α(q₂, K), V(K, V))) ≈ 1
+  ] # Similar queries attend to similar values
+
+  [∀q, ∀K₁, ∀K₂, ∀V₁, ∀V₂ .
+    K₁ ≈ K₂ AND V₁ ≠ V₂ => MATMUL(α(q, K₁), V(K₁, V₁)) ≠ MATMUL(α(q, K₂), V(K₂, V₂)) 
+  ] # Different values with similar keys produce different outputs
+
+  RETURN MultiHeadAttention
+}
+
+
+STRUCTURE HolographicLanguageModel {
+  PARAMETERS {
+    VocabSize : Int # Size of the token vocabulary
+    ContextSize : Int # Maximum context length 
+    HiddenSize : Int # Size of hidden states
+    NumLayers : Int # Number of transformer layers
+    NumHeads : Int # Number of attention heads 
+    FFSize : Int # Size of feed-forward expansion
+  }
+
+  NOTATION {
+    ⊛(x, W) := TernaryAccumulate(x, W) # Ternary "MatMul"
+    σ(x) := Sigmoid(x)
+    τ(x) := SiLU(x)
+    S(x) := Softmax(x)
+    LN(x) := LayerNorm(x)
+  }
+
+  DEF TernaryWeight := TensorLike[[Any, Any], {-1, 0, 1}]
+
+  STRUCTURE TernaryLinear(InputSize, OutputSize) {
+    DEF weight : TernaryWeight[InputSize, OutputSize]
+    DEF bias : TensorLike[[OutputSize], Float]
+
+    DEF forward(input : TensorLike[InputSize]) -> TensorLike[OutputSize] := (
+      input ⊛ weight + bias
+    )
+  }
+
+  STRUCTURE TernaryMHA(HiddenSize, NumHeads) {
+    DEF head_size := HiddenSize / NumHeads
+    DEF query_proj : TernaryLinear(HiddenSize, HiddenSize)
+    DEF key_proj : TernaryLinear(HiddenSize, HiddenSize)
+    DEF value_proj : TernaryLinear(HiddenSize, HiddenSize)
+    DEF output_proj : TernaryLinear(HiddenSize, HiddenSize)
+
+    DEF forward(x : TensorLike[HiddenSize]) -> TensorLike[HiddenSize] := (
+      LET q := SPLIT(query_proj.forward(x), NumHeads),
+          k := SPLIT(key_proj.forward(x), NumHeads),
+          v := SPLIT(value_proj.forward(x), NumHeads),
+          scores := [S(q_i ⊛ TRANSPOSE(k_i) / SQRT(head_size))
+                     FOR (q_i, k_i) : ZIP(q, k)],
+          attn := [score ⊛ v_i FOR (score, v_i) : ZIP(scores, v)],
+          concat := CONCAT(attn, -1)
+      IN output_proj.forward(concat)
+    )
+  }
+
+  STRUCTURE TernaryFFN(HiddenSize, FFSize) {
+    DEF proj1 : TernaryLinear(HiddenSize, FFSize)
+    DEF proj2 : TernaryLinear(FFSize, HiddenSize)
+
+    DEF forward(x : TensorLike[HiddenSize]) -> TensorLike[HiddenSize] := (
+      LET expanded := τ(proj1.forward(x))
+      IN proj2.forward(expanded)
+    )
+  }
+
+  STRUCTURE TransformerLayer(HiddenSize, NumHeads, FFSize) {
+    DEF mha := TernaryMHA(HiddenSize, NumHeads)  
+    DEF ffn := TernaryFFN(HiddenSize, FFSize)
+    DEF mha_norm := LayerNorm(HiddenSize)
+    DEF ffn_norm := LayerNorm(HiddenSize)
+
+    DEF forward(x : TensorLike[HiddenSize]) -> TensorLike[HiddenSize] := (
+      LET mha_out := mha.forward(x),
+          mha_residual := LN(x + mha_out),
+          ffn_out := ffn.forward(mha_residual),  
+          ffn_residual := LN(mha_residual + ffn_out)
+      IN ffn_residual
+    )
+  }
+
+  DEF token_embedding : TernaryWeight[VocabSize, HiddenSize]
+  DEF pos_embedding : TensorLike[[ContextSize, HiddenSize], Float]
+  DEF output_proj : TernaryLinear(HiddenSize, VocabSize)
+
+  DEF layers : List[TransformerLayer]
+
+  DEF init := (
+    layers := [TransformerLayer(HiddenSize, NumHeads, FFSize) 
+               FOR _ : RANGE(NumLayers)]
+  )
+
+  DEF encode(context : Sequence[Int]) -> TensorLike[HiddenSize] := (
+    LET input_emb := token_embedding[context] + pos_embedding[0:LENGTH(context)],
+        hidden := FOLDL(
+          (h, layer) -> layer.forward(h),
+          input_emb,
+          layers  
+        )
+    IN hidden[-1]  
+  )
+
+  DEF decode(state : TensorLike[HiddenSize]) -> TensorLike[VocabSize] := (
+    output_proj.forward(state)
+  )
+
+  DEF generate(context : Sequence[Int], max_len : Int) -> Sequence[Int] := (
+    LET state := encode(context),
+        preds := [ARGMAX(decode(state))],
+        generated := preds
+    IN FOR t : [1 .. max_len] DO
+         LET state := encode(context + generated[-ContextSize:]),
+             next_token := ARGMAX(decode(state))
+         IN generated := generated + [next_token] 
+       END
+       RETURN generated
+  )
+
+  [∀context_1, context_2 : Sequence[Int] . 
+    encode(context_1) = encode(context_2) <=>
+    context_1[-ContextSize:] = context_2[-ContextSize:]   
+  ] # Holographic mapping: Sufficiently similar contexts map to same state
+
+  [∀state : TensorLike[HiddenSize] .
+    ∃ context : Sequence[Int] . encode(context) = state  
+  ] # Surjectivity of encoding: Every hidden state is a valid encoding of some context
+
+  [∀context : Sequence[Int] . 
+    SUM(SOFTMAX(decode(encode(context)))) = 1.0
+  ] # Normalized probability distribution
+
+  RETURN generate
+}
+
+
+STRUCTURE MatMulFreeLM {
+  # Model hyperparameters
+  PARAMETERS {
+    VocabSize : Int # Size of the token vocabulary
+    EmbeddingSize : Int # Size of token embeddings
+    NumLayers : Int # Number of stacked MLMB blocks
+    HiddenSize : Int # Size of hidden states in MLMBs
+    FFSize : Int # Size of expanded hidden states in GLU
+  }
+
+  # Custom notations for key operations
+  NOTATION {
+    ⊛(x, W) := TernaryAccumulate(x, W) # Ternary "MatMul"
+    σ(x) := Sigmoid(x) # Sigmoid activation
+    τ(x) := SiLU(x) # SiLU activation
+    ⊙(x, y) := ElementwiseMultiply(x, y) # Element-wise multiplication
+  }
+
+  # --- Quantization and Normalization ---
+
+  # Weights are quantized to ternary values {-1, 0, 1} to replace MatMul with accumulation
+  DEF TernaryWeight := TensorLike[[Any, Any], {-1, 0, 1}]
+
+  # RMS Normalization layer for stabilizing activations after quantization
+  STRUCTURE RMSNorm(Size) {
+    DEF scale : TensorLike[[Size], Float]
+
+    DEF forward(x : TensorLike[Size]) -> TensorLike[Size] := (
+      LET μ := MEAN(x),
+          σ² := MEAN(SQUARE(x - μ))
+      IN (x - μ) / SQRT(σ² + ε) * scale
+    )
+  }
+
+  # --- MatMul-Free Building Blocks ---
+
+  # Linear layer with ternary weights
+  STRUCTURE TernaryLinear(InputSize, OutputSize) {
+    DEF weight : TernaryWeight[InputSize, OutputSize]
+    DEF bias : TensorLike[[OutputSize], Float]
+
+    DEF forward(input : TensorLike[InputSize]) -> TensorLike[OutputSize] := (
+      input ⊛ weight + bias
+    )
+  }
+
+  # MatMul-Free variant of Gated Recurrent Unit (GRU) for token mixing
+  # Replaces the self-attention layer in standard Transformers
+  STRUCTURE MLGRU(InputSize, HiddenSize) {
+    DEF forget_gate : TernaryLinear(InputSize, HiddenSize)
+    DEF candidate : TernaryLinear(InputSize, HiddenSize)
+    DEF output_gate : TernaryLinear(InputSize, HiddenSize)
+    DEF output_proj : TernaryLinear(HiddenSize, HiddenSize)
+
+    DEF forward(input : TensorLike[InputSize],
+                prev_hidden : TensorLike[HiddenSize]) -> TensorLike[HiddenSize] := (
+      LET f := σ(forget_gate.forward(input)), # Forget gate
+          c := τ(candidate.forward(input)), # Candidate state
+          h := f ⊙ prev_hidden + (1 - f) ⊙ c, # Hidden state update
+          g := σ(output_gate.forward(input)) # Output gate
+      IN output_proj.forward(g ⊙ h) # Gated output projection
+    )
+  }
+
+  # MatMul-Free variant of Gated Linear Unit (GLU) for channel mixing
+  # Replaces the feedforward layer in standard Transformers
+  STRUCTURE MatMulFreeGLU(InputSize, FFSize) {
+    DEF gate_proj : TernaryLinear(InputSize, FFSize)
+    DEF update_proj : TernaryLinear(InputSize, FFSize)
+    DEF output_proj : TernaryLinear(FFSize, InputSize)
+
+    DEF forward(input : TensorLike[InputSize]) -> TensorLike[InputSize] := (
+      LET g := σ(gate_proj.forward(input)), # Gate projection
+          u := τ(update_proj.forward(input)), # Update projection
+          p := g ⊙ u # Gated update
+      IN output_proj.forward(p) # Output projection back to InputSize
+    )
+  }
+
+  # --- Model Architecture ---
+
+  # Main MatMul-Free Language Model Block (MLMB)
+  # Composes MLGRU and MatMulFreeGLU with normalization layers
+  STRUCTURE MLMB(InputSize, HiddenSize, FFSize) {
+    DEF input_norm : RMSNorm(InputSize)
+    DEF mlgru : MLGRU(InputSize, HiddenSize)
+    DEF mlgru_norm : RMSNorm(HiddenSize)
+    DEF glu : MatMulFreeGLU(HiddenSize, FFSize)
+    DEF glu_norm : RMSNorm(HiddenSize)
+
+    DEF forward(input : TensorLike[InputSize],
+                prev_hidden : TensorLike[HiddenSize]) -> TensorLike[HiddenSize] := (
+      LET x := input_norm.forward(input), # Normalize input
+          h := mlgru.forward(x, prev_hidden), # Token mixing with MLGRU
+          h_norm := mlgru_norm.forward(h), # Normalize MLGRU output
+          glu_out := glu.forward(h_norm), # Channel mixing with GLU
+          output := glu_norm.forward(glu_out) # Normalize GLU output
+      IN output
+    )
+  }
+
+  # Token and position embeddings
+  DEF token_embedding : TensorLike[[VocabSize, EmbeddingSize], Float]
+  DEF pos_embedding : TensorLike[[MaxLen, EmbeddingSize], Float]
+
+  # Output projection
+  DEF output_proj : TernaryLinear(HiddenSize, VocabSize)
+
+  # Stack of MLMBs
+  DEF blocks : List[MLMB]
+
+  # Model initialization
+  DEF init := (
+    blocks := [MLMB(IF i = 0 THEN EmbeddingSize ELSE HiddenSize,
+                    HiddenSize,
+                    FFSize)
+               FOR i : RANGE(NumLayers)] # Initialize MLMB stack
+  )
+
+  # --- Forward Pass and Inference ---
+
+  DEF forward(input : Sequence[Int], seq_len : Int) -> TensorLike[VocabSize] := (
+    LET input_emb := token_embedding[input] + pos_embedding[0:seq_len], # Input embedding
+        hidden := FOLDL(
+          (h, block) -> block.forward(input_emb, h), # Pass through MLMB stack
+          ZEROS(HiddenSize),
+          blocks
+        )
+    IN SOFTMAX(output_proj.forward(hidden[-1])) # Project last hidden state to vocab probs
+  )
+
+  # --- Model Properties and Assertions ---
+
+  # Model output is a valid probability distribution over vocabulary
+  [∀seq : Sequence[Int] .
+    SUM(forward(seq, LENGTH(seq))) = 1.0
+    AND ARGMAX(forward(seq, LENGTH(seq))) ∈ [0, VocabSize)
+  ]
+
+  # Permutation invariance of token mixing
+  [∀seq : Sequence[Int], ∀perm : Sequence[Int] .
+    IS_PERMUTATION(perm, RANGE(LENGTH(seq))) =>
+      PERMUTE(forward(seq, LENGTH(seq)), perm) = forward(PERMUTE(seq, perm), LENGTH(seq))
+  ]
+
+  RETURN forward
+}

@@ -1,0 +1,182 @@
+ModelScript {
+    METADATA {
+        MODELS: "Black Hole Model incorporating General Relativity, Quantum Effects, and Hawking Radiation"
+        VERSION: "3.0"
+    }
+    
+    INTERFACE {
+        INCOMING {
+            mass : Float
+            angularMomentum : Vector3D
+            charge : Float
+            observerPosition : Vector3D
+        }
+        OUTGOING {
+            metrics : SpacetimeMetrics
+            hawkingRadiation : HawkingRadiationSpectrum
+            singularityType : SingularityType
+            eventHorizonGeometry : EventHorizonGeometry
+        }
+    }
+    
+    TYPE Vector3D := Record{x: Float, y: Float, z: Float}
+    TYPE Tensor4D := Array[Float, 4, 4]
+    TYPE SpacetimeMetrics := Record{
+        schwarzschildMetric: Tensor4D,
+        kerrNewmanMetric: Tensor4D
+    }
+    TYPE HawkingRadiationSpectrum := Function<Float, Float>  # Energy -> Intensity
+    TYPE SingularityType := Enum{Schwarzschild, KerrNewman, Naked}
+    TYPE EventHorizonGeometry := Record{shape: Shape, area: Float}
+    TYPE Shape := Enum{Spherical, Oblate}
+    
+    NOTATION {
+        ∂_μ := partial_derivative(μ)
+        ∇ := covariant_derivative
+        ∑_μ := sum(μ, 0, 3)
+        ∫ := integral
+        ℏ := PLANCK_CONSTANT
+        c := SPEED_OF_LIGHT
+        G := GRAVITATIONAL_CONSTANT
+        κ := surface_gravity
+        Λ := cosmological_constant
+    }
+
+    MODEL := BlackHole {
+        TYPE MetricTensor := Tensor4D
+        TYPE EinsteinTensor := Tensor4D
+        TYPE StressEnergyTensor := Tensor4D
+        TYPE Christoffel := Array[Float, 4, 4, 4]
+        TYPE KerrParameter := Float
+        
+        DEF schwarzschildRadius(m: Float) := 2 * G * m / (c^2)
+        
+        DEF kerrParameter(j: Vector3D, m: Float) := 
+            magnitude(j) / (m * c)
+        
+        DEF surfaceGravity(m: Float, a: KerrParameter, r: Float, θ: Float) := 
+            (r - G * m / (c^2)) / (2 * (r^2 + a^2 * cos(θ)^2))
+        
+        STRUCTURE GeneralRelativitySolver {
+            DEF computeChristoffelSymbols(g: MetricTensor) : Christoffel := 
+                [[[0.5 * (∂_σ(g[μ][ν]) + ∂_ν(g[μ][σ]) - ∂_μ(g[ν][σ]))
+                   FOR σ IN range(4)]
+                  FOR ν IN range(4)]
+                 FOR μ IN range(4)]
+            
+            DEF computeRiemannTensor(Γ: Christoffel) : Tensor4D := 
+                [[[[∂_σ(Γ[ρ][μ][ν]) - ∂_μ(Γ[ρ][σ][ν]) + 
+                    ∑_λ(Γ[λ][σ][ν] * Γ[ρ][μ][λ] - Γ[λ][μ][ν] * Γ[ρ][σ][λ])
+                   FOR ν IN range(4)]
+                  FOR μ IN range(4)]
+                 FOR σ IN range(4)]
+                FOR ρ IN range(4)]
+            
+            DEF computeRicciTensor(R: Tensor4D) : Tensor4D := 
+                [[∑_λ(R[λ][μ][λ][ν]) FOR ν IN range(4)] FOR μ IN range(4)]
+            
+            DEF computeRicciScalar(Ric: Tensor4D, g: MetricTensor) : Float := 
+                ∑_μ(∑_ν(g[μ][ν] * Ric[μ][ν]))
+            
+            DEF computeEinsteinTensor(Ric: Tensor4D, R: Float, g: MetricTensor) : EinsteinTensor := 
+                [[Ric[μ][ν] - 0.5 * R * g[μ][ν] - Λ * g[μ][ν] FOR ν IN range(4)] FOR μ IN range(4)]
+        }
+        
+        STRUCTURE KerrNewmanMetricSolver {
+            DEF computeMetric(m: Float, a: KerrParameter, q: Float) : MetricTensor := 
+                λ r, θ, ϕ .
+                    LET Σ := r^2 + a^2 * cos(θ)^2
+                        Δ := r^2 - 2*m*r + a^2 + q^2
+                    IN [
+                        [-1 + 2*m*r/Σ, 0, 0, -2*m*a*r*sin(θ)^2/Σ],
+                        [0, Σ/Δ, 0, 0],
+                        [0, 0, Σ, 0],
+                        [-2*m*a*r*sin(θ)^2/Σ, 0, 0, (r^2+a^2+2*m*a^2*r*sin(θ)^2/Σ)*sin(θ)^2]
+                    ]
+        }
+        
+        STRUCTURE HawkingRadiationCalculator {
+            DEF computeTemperature(κ: Float) : Float := 
+                ℏ * κ / (2 * π * c * BOLTZMANN_CONSTANT)
+            
+            DEF computeSpectrum(T: Float) : HawkingRadiationSpectrum := 
+                λ E . 1 / (exp(E / (BOLTZMANN_CONSTANT * T)) - 1) * (E^2 / (π^2 * ℏ^3 * c^2))
+            
+            DEF computeTotalPower(m: Float, a: KerrParameter, q: Float) : Float := 
+                LET rH := m + sqrt(m^2 - a^2 - q^2)
+                    AH := 4 * π * (rH^2 + a^2)
+                    TH := computeTemperature(surfaceGravity(m, a, rH, π/2))
+                IN (π^2 / 60) * AH * TH^4 * STEFAN_BOLTZMANN_CONSTANT
+        }
+        
+        STRUCTURE QuantumEffectsSolver {
+            DEF computeQuantumCorrections(m: Float, λ: Float) : Float := 
+                LET lp := sqrt(ℏ * G / c^3)  # Planck length
+                IN (λ * lp^2) / (m^2 * G^2)  # Leading order quantum correction
+            
+            DEF modifyMetric(g: MetricTensor, δ: Float) : MetricTensor := 
+                [[g[μ][ν] * (1 + δ) FOR ν IN range(4)] FOR μ IN range(4)]
+        }
+        
+        DEF computeEventHorizon(m: Float, a: KerrParameter, q: Float) : EventHorizonGeometry := 
+            LET rH := m + sqrt(m^2 - a^2 - q^2)
+                shape := IF a == 0 THEN Spherical ELSE Oblate
+                area := 4 * π * (rH^2 + a^2)
+            IN Record{shape: shape, area: area}
+        
+        DEF determineSingularityType(m: Float, a: KerrParameter, q: Float) : SingularityType := 
+            IF a == 0 AND q == 0 THEN Schwarzschild
+            ELSE IF a^2 + q^2 <= m^2 THEN KerrNewman
+            ELSE Naked
+        
+        DEF processBlackHole(mass, angularMomentum, charge, observerPosition) := 
+            LET a := kerrParameter(angularMomentum, mass)
+                grSolver := GeneralRelativitySolver()
+                knSolver := KerrNewmanMetricSolver()
+                hawkingCalc := HawkingRadiationCalculator()
+                qeSolver := QuantumEffectsSolver()
+                
+                schwarzschildMetric := grSolver.computeMetric(mass, 0, 0)
+                kerrNewmanMetric := knSolver.computeMetric(mass, a, charge)
+                
+                Γ := grSolver.computeChristoffelSymbols(kerrNewmanMetric)
+                R := grSolver.computeRiemannTensor(Γ)
+                Ric := grSolver.computeRicciTensor(R)
+                ricciScalar := grSolver.computeRicciScalar(Ric, kerrNewmanMetric)
+                einsteinTensor := grSolver.computeEinsteinTensor(Ric, ricciScalar, kerrNewmanMetric)
+                
+                κ := surfaceGravity(mass, a, schwarzschildRadius(mass), π/2)
+                T := hawkingCalc.computeTemperature(κ)
+                spectrum := hawkingCalc.computeSpectrum(T)
+                totalPower := hawkingCalc.computeTotalPower(mass, a, charge)
+                
+                quantumCorrection := qeSolver.computeQuantumCorrections(mass, 1)
+                quantumCorrectedMetric := qeSolver.modifyMetric(kerrNewmanMetric, quantumCorrection)
+                
+                eventHorizon := computeEventHorizon(mass, a, charge)
+                singularityType := determineSingularityType(mass, a, charge)
+                
+            IN Record{
+                metrics: Record{
+                    schwarzschildMetric: schwarzschildMetric,
+                    kerrNewmanMetric: quantumCorrectedMetric
+                },
+                hawkingRadiation: spectrum,
+                singularityType: singularityType,
+                eventHorizonGeometry: eventHorizon
+            }
+        
+        [∀ m, j, q . determineSingularityType(m, kerrParameter(j, m), q) == Naked => 
+            magnitude(j)^2 / m^2 + q^2 / m^2 > 1]
+        
+        [∀ m, a, q . 
+            LET horizon := computeEventHorizon(m, a, q)
+            IN horizon.shape == Spherical => a == 0]
+        
+        [∀ m1, m2 . m1 > m2 => 
+            hawkingCalc.computeTemperature(surfaceGravity(m1, 0, schwarzschildRadius(m1), π/2)) <
+            hawkingCalc.computeTemperature(surfaceGravity(m2, 0, schwarzschildRadius(m2), π/2))]
+        
+        RETURN processBlackHole
+    }
+}

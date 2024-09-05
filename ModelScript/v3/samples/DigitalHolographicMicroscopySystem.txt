@@ -1,0 +1,257 @@
+ModelScript {
+    METADATA {
+        MODELS: "Optimized Digital Holographic Microscopy System"
+        VERSION: "4.0"
+    }
+    
+    INTERFACE {
+        INCOMING {
+            sampleProperties : SampleProperties
+            illuminationParameters : IlluminationParameters
+            reconstructionParameters : ReconstructionParameters
+        }
+        OUTGOING {
+            hologram : ComplexAmplitude2D
+            reconstructedImage : ComplexAmplitude3D
+            quantitativePhaseImage : PhaseMap2D
+        }
+    }
+    
+    TYPE Wavelength := Float  # In meters
+    TYPE RefractiveIndex := Complex
+    TYPE Amplitude := Float
+    TYPE Phase := Float
+    TYPE Frequency := Float
+    TYPE ComplexAmplitude := Complex
+    TYPE ComplexAmplitude2D := Array[ComplexAmplitude, 2]
+    TYPE ComplexAmplitude3D := Array[ComplexAmplitude, 3]
+    TYPE PhaseMap2D := Array[Phase, 2]
+    TYPE IntensityMap2D := Array[Amplitude, 2]
+    TYPE Vector3D := Record{x: Float, y: Float, z: Float}
+    
+    NOTATION {
+        ℱ := fourier_transform
+        ℱ⁻¹ := inverse_fourier_transform
+        ∇² := laplacian
+        ∇ := gradient
+        ⊗ := convolution
+        δ := dirac_delta
+    }
+
+    MODEL := OptimizedDHM {
+        TYPE SampleProperties := Record{
+            refractiveIndex: RefractiveIndex,
+            thickness: Float,
+            lateralDimensions: Record{width: Float, height: Float}
+        }
+        
+        TYPE IlluminationParameters := Record{
+            centralWavelength: Wavelength,
+            spectralWidth: Wavelength,
+            power: Float,
+            coherenceLength: Float,
+            polarization: Vector3D
+        }
+        
+        TYPE ReconstructionParameters := Record{
+            propagationDistance: Float,
+            lateralResolution: Float,
+            axialResolution: Float,
+            syntheticApertureAngles: List[Float]
+        }
+        
+        STRUCTURE AdjustableCoherenceSource {
+            DEF model : String := "Thorlabs SLD1005S - Fiber-Coupled Superluminescent Diode"
+            DEF centralWavelength : Wavelength := 1050e-9  # 1050 nm
+            DEF spectralWidth : Wavelength := 100e-9  # 100 nm FWHM
+            DEF maxPower : Float := 20e-3  # 20 mW
+            
+            DEF tunableFilter : String := "Coherent SWS-1100 - Tunable Bandwidth Filter"
+            DEF filterRange : Record{min: Wavelength, max: Wavelength} := Record{min: 1000e-9, max: 1100e-9}
+            DEF minBandwidth : Wavelength := 0.1e-9  # 0.1 nm
+            
+            DEF fiberCoupler : String := "Thorlabs CFC-11X-APC - FC/APC Fiber Collimator"
+            
+            DEF setParameters(centralWavelength: Wavelength, spectralWidth: Wavelength, power: Float) : Boolean := 
+                filterRange.min <= centralWavelength <= filterRange.max AND
+                minBandwidth <= spectralWidth <= self.spectralWidth AND
+                0 < power <= maxPower
+            
+            DEF generateIllumination(params: IlluminationParameters) : ComplexAmplitude2D := 
+                LET 
+                    k := 2 * π / params.centralWavelength
+                    r := sqrt(x^2 + y^2)
+                    coherenceLength := params.centralWavelength^2 / params.spectralWidth
+                    amplitude := sqrt(params.power) * exp(-r^2 / (2 * coherenceLength^2))
+                    phase := k * r
+                IN amplitude * exp(i * phase)
+        }
+        
+        STRUCTURE OffAxisInterferometer {
+            DEF diffractiveOptic : String := "Custom Diffractive Optical Element for Off-Axis Holography"
+            DEF splitRatio : Float := 0.9  # 90% to object, 10% to reference
+            DEF offAxisAngle : Float := 2 * π / 180  # 2 degrees
+            
+            DEF beamSplitter : String := "Thorlabs CCM1-PBS251/M - 30 mm Cage Cube-Mounted Polarizing Beamsplitter Cube"
+            
+            DEF splitAndCombineBeams(input: ComplexAmplitude2D) : ComplexAmplitude2D := 
+                LET 
+                    objectWave := input * sqrt(splitRatio)
+                    referenceWave := input * sqrt(1 - splitRatio) * exp(i * k * x * sin(offAxisAngle))
+                IN objectWave + referenceWave
+        }
+        
+        STRUCTURE SyntheticApertureIllumination {
+            DEF scanningMirror : String := "Physik Instrumente S-330.2SL - Tip/Tilt Platform"
+            DEF maxTiltAngle : Float := 2 * π / 180  # 2 degrees
+            DEF resolution : Float := 1e-6  # 1 µrad resolution
+            
+            DEF setIlluminationAngle(angle: Vector3D) : Boolean := 
+                sqrt(angle.x^2 + angle.y^2) <= maxTiltAngle
+            
+            DEF scanAperture(angles: List[Vector3D]) : List[ComplexAmplitude2D] := 
+                [illuminateAtAngle(angle) FOR angle IN angles]
+            
+            DEF illuminateAtAngle(angle: Vector3D) : ComplexAmplitude2D := 
+                # Simulate illumination at a specific angle
+                λ x, y . exp(i * k * (x * sin(angle.x) + y * sin(angle.y)))
+        }
+        
+        STRUCTURE BalancedDetection {
+            DEF camera1 : String := "Photometrics Prime BSI sCMOS Camera"
+            DEF camera2 : String := "Photometrics Prime BSI sCMOS Camera"
+            DEF pixelSize : Float := 6.5e-6  # 6.5 µm
+            DEF resolution : Record{width: Int, height: Int} := Record{width: 2048, height: 2048}
+            DEF bitDepth : Int := 16
+            DEF quantumEfficiency : Float := 0.95  # at 1050 nm
+            DEF readoutNoise : Float := 1.3  # 1.3 electrons (median)
+            DEF frameRate : Float := 100  # 100 fps (full resolution)
+            
+            DEF captureHologram(interference: ComplexAmplitude2D) : ComplexAmplitude2D := 
+                LET 
+                    intensity1 := abs(interference)^2
+                    intensity2 := abs(interference * exp(i * π))^2  # π phase shift
+                    electrons1 := random_poisson(intensity1 * quantumEfficiency)
+                    electrons2 := random_poisson(intensity2 * quantumEfficiency)
+                    readNoise1 := random_normal(0, readoutNoise, size=size(electrons1))
+                    readNoise2 := random_normal(0, readoutNoise, size=size(electrons2))
+                    signal := (electrons1 - electrons2) + (readNoise1 - readNoise2)
+                IN signal * exp(i * atan2(imag(interference), real(interference)))
+        }
+        
+        STRUCTURE HeterodyneDetection {
+            DEF acoustoOpticModulator : String := "Gooch & Housego R23080-1-LTD AOM"
+            DEF modulationFrequency : Frequency := 80e6  # 80 MHz
+            DEF diffraction_efficiency : Float := 0.85
+            
+            DEF applyFrequencyShift(wave: ComplexAmplitude2D, t: Float) : ComplexAmplitude2D := 
+                wave * exp(i * 2 * π * modulationFrequency * t)
+        }
+        
+        STRUCTURE MonolithicBaseplate {
+            DEF material : String := "Invar 36"
+            DEF dimensions : Record{length: Float, width: Float, thickness: Float} := 
+                Record{length: 0.5, width: 0.3, thickness: 0.05}  # meters
+            DEF thermalExpansionCoefficient : Float := 1.3e-6  # 1.3 ppm/°C
+            
+            DEF fiberPorts : List[String] := [
+                "Thorlabs PAF2S-11B - SMA Fiber Adapter Plate with Ø2.2 mm Ceramic Ferrule",
+                "Thorlabs PAF2S-11B - SMA Fiber Adapter Plate with Ø2.2 mm Ceramic Ferrule"
+            ]
+            
+            DEF opticalMounts : List[String] := [
+                "Thorlabs POLARIS-K1S2 - Ø25.4 mm Precision Kinematic Mirror Mount",
+                "Thorlabs POLARIS-K1S2 - Ø25.4 mm Precision Kinematic Mirror Mount"
+            ]
+            
+            DEF calculateThermalDrift(deltaT: Float) : Vector3D := 
+                Vector3D{
+                    x: dimensions.length * thermalExpansionCoefficient * deltaT,
+                    y: dimensions.width * thermalExpansionCoefficient * deltaT,
+                    z: dimensions.thickness * thermalExpansionCoefficient * deltaT
+                }
+        }
+        
+        STRUCTURE NumericalReconstruction {
+            DEF angularSpectrumMethod(hologram: ComplexAmplitude2D, params: ReconstructionParameters) : ComplexAmplitude3D := 
+                LET 
+                    k := 2 * π / params.centralWavelength
+                    propagator := λ z . exp(i * k * z * sqrt(1 - (λ * fx)^2 - (λ * fy)^2))
+                    reconstruct := λ z . ℱ⁻¹(ℱ(hologram) * propagator(z))
+                IN [reconstruct(z) FOR z IN range(-params.propagationDistance/2, params.propagationDistance/2, params.axialResolution)]
+            
+            DEF synthesizeAperture(holograms: List[ComplexAmplitude2D], angles: List[Vector3D]) : ComplexAmplitude2D := 
+                LET 
+                    shiftAndSum := λ h, a . ℱ⁻¹(ℱ(h) * exp(-i * k * (fx * sin(a.x) + fy * sin(a.y))))
+                IN sum([shiftAndSum(h, a) FOR h, a IN zip(holograms, angles)])
+        }
+        
+        DEF assembleSystem() : Boolean := 
+            LET 
+                source := AdjustableCoherenceSource{}
+                interferometer := OffAxisInterferometer{}
+                illumination := SyntheticApertureIllumination{}
+                detection := BalancedDetection{}
+                heterodyne := HeterodyneDetection{}
+                baseplate := MonolithicBaseplate{}
+            IN 
+                source.setParameters(1050e-9, 50e-9, 10e-3) AND
+                illumination.setIlluminationAngle(Vector3D{x: 0, y: 0, z: 0}) AND
+                baseplate.calculateThermalDrift(0.1).x < 1e-9  # Drift less than 1 nm for 0.1°C change
+        
+        DEF captureHologram(sample: SampleProperties, illum: IlluminationParameters) : ComplexAmplitude2D := 
+            LET 
+                source := AdjustableCoherenceSource{}
+                interferometer := OffAxisInterferometer{}
+                illumination := SyntheticApertureIllumination{}
+                detection := BalancedDetection{}
+                heterodyne := HeterodyneDetection{}
+                
+                sourceField := source.generateIllumination(illum)
+                illuminationAngles := [Vector3D{x: a, y: 0, z: 0} FOR a IN range(-1, 1, 0.1) * π/180]
+                holograms := [
+                    LET 
+                        illuminatedField := sourceField * illumination.illuminateAtAngle(angle)
+                        sampleField := illuminatedField * exp(i * 2π / illum.centralWavelength * sample.thickness * (sample.refractiveIndex - 1))
+                        interferenceField := interferometer.splitAndCombineBeams(sampleField)
+                        shiftedField := heterodyne.applyFrequencyShift(interferenceField, 0)
+                    IN detection.captureHologram(shiftedField)
+                    FOR angle IN illuminationAngles
+                ]
+            IN NumericalReconstruction().synthesizeAperture(holograms, illuminationAngles)
+        
+        DEF reconstructHologram(hologram: ComplexAmplitude2D, params: ReconstructionParameters) : Record{volume: ComplexAmplitude3D, phaseMap: PhaseMap2D} := 
+            LET 
+                reconstruction := NumericalReconstruction()
+                volume := reconstruction.angularSpectrumMethod(hologram, params)
+                focusedField := volume[argmax(abs(volume))]
+                phaseMap := atan2(imag(focusedField), real(focusedField))
+            IN Record{volume: volume, phaseMap: phaseMap}
+        
+        DEF processHologram(sampleProperties: SampleProperties, illuminationParameters: IlluminationParameters, reconstructionParameters: ReconstructionParameters) := 
+            LET 
+                systemReady := assembleSystem()
+                hologram := IF systemReady THEN captureHologram(sampleProperties, illuminationParameters) ELSE []
+                reconstructedData := reconstructHologram(hologram, reconstructionParameters)
+            IN Record{
+                hologram: hologram,
+                reconstructedImage: reconstructedData.volume,
+                quantitativePhaseImage: reconstructedData.phaseMap
+            }
+        
+        [∀ sample, illum, recon . 
+            LET result := processHologram(sample, illum, recon)
+            IN size(result.hologram) == BalancedDetection().resolution]
+        
+        [∀ sample, illum, recon . 
+            LET result := processHologram(sample, illum, recon)
+            IN size(result.reconstructedImage, 2) == size(result.hologram, 0) AND
+               size(result.reconstructedImage, 3) == size(result.hologram, 1)]
+        
+        [∀ sample, illum, recon . 
+            LET result := processHologram(sample, illum, recon)
+            IN min(result.quantitativePhaseImage) >= -π AND max(result.quantitativePhaseImage) <= π]
+        
+        RETURN processHologram
+    }
+}

@@ -1,0 +1,134 @@
+ModelScript {
+    METADATA {
+        MODELS: "Turing Machine with Tape, States, and Transition Functions"
+        VERSION: "3.0"
+    }
+    
+    INTERFACE {
+        INCOMING {
+            initialState : State
+            transitionFunction : TransitionFunction
+            initialTape : Tape
+            input : String
+        }
+        OUTGOING {
+            finalState : State
+            finalTape : Tape
+            accepted : Bool
+            steps : Int
+        }
+    }
+    
+    TYPE State := String
+    TYPE Symbol := Char
+    TYPE Direction := Enum{Left, Right, Stay}
+    TYPE Tape := Record{
+        left: List[Symbol],
+        current: Symbol,
+        right: List[Symbol]
+    }
+    TYPE TransitionFunction := Function<State, Symbol, (State, Symbol, Direction)>
+    
+    NOTATION {
+        ε := EMPTY_SYMBOL
+        δ := transition_function
+        ∀x ∈ set, cond := forall(x, set, cond)
+        ∃x ∈ set, cond := exists(x, set, cond)
+        λ := function
+        ⊕ := concat
+    }
+
+    MODEL := TuringMachine {
+        STRUCTURE Configuration {
+            DEF state : State
+            DEF tape : Tape
+        }
+        
+        DEF createTape(input: String) : Tape := 
+            Record{
+                left: [],
+                current: IF input.isEmpty() THEN ε ELSE input[0],
+                right: IF input.length() <= 1 THEN [ε] ELSE input[1:] ⊕ [ε]
+            }
+        
+        DEF moveTape(tape: Tape, direction: Direction) : Tape := 
+            MATCH direction
+                Left -> IF tape.left.isEmpty()
+                        THEN Record{left: [], current: ε, right: [tape.current] ⊕ tape.right}
+                        ELSE Record{
+                            left: tape.left[:-1],
+                            current: tape.left[-1],
+                            right: [tape.current] ⊕ tape.right
+                        }
+                Right -> IF tape.right.isEmpty()
+                         THEN Record{left: tape.left ⊕ [tape.current], current: ε, right: []}
+                         ELSE Record{
+                            left: tape.left ⊕ [tape.current],
+                            current: tape.right[0],
+                            right: tape.right[1:]
+                         }
+                Stay -> tape
+        
+        DEF writeTape(tape: Tape, symbol: Symbol) : Tape := 
+            Record{...tape, current: symbol}
+        
+        DEF step(config: Configuration, δ: TransitionFunction) : Configuration := 
+            LET (newState, newSymbol, direction) := δ(config.state, config.tape.current)
+                newTape := moveTape(writeTape(config.tape, newSymbol), direction)
+            IN Configuration{state: newState, tape: newTape}
+        
+        DEF run(initialState: State, δ: TransitionFunction, initialTape: Tape, maxSteps: Int) := 
+            LET rec runHelper := λ config, steps . 
+                IF steps >= maxSteps THEN (config, False, steps)
+                ELSE IF δ(config.state, config.tape.current) == None THEN (config, True, steps)
+                ELSE runHelper(step(config, δ), steps + 1)
+            
+            LET (finalConfig, accepted, steps) := runHelper(Configuration{state: initialState, tape: initialTape}, 0)
+            
+            IN Record{
+                finalState: finalConfig.state,
+                finalTape: finalConfig.tape,
+                accepted: accepted,
+                steps: steps
+            }
+        
+        DEF simulateTM(initialState: State, δ: TransitionFunction, input: String) := 
+            run(initialState, δ, createTape(input), 1000000)  # Set a reasonable step limit
+        
+        STRUCTURE UniversalTuringMachine {
+            DEF simulateEncodedTM(encodedTM: String, input: String) := 
+                LET (initialState, δ) := decodeTM(encodedTM)
+                IN simulateTM(initialState, δ, input)
+            
+            DEF decodeTM(encodedTM: String) : (State, TransitionFunction) := 
+                # Implementation of decoding a TM from its encoding
+                # This would involve parsing the encoded string and constructing the transition function
+                ...
+        }
+        
+        DEF isHalting(tm: (State, TransitionFunction), input: String) : Bool := 
+            LET (initialState, δ) := tm
+                result := simulateTM(initialState, δ, input)
+            IN result.accepted OR result.steps < 1000000
+        
+        DEF computabilityTest(f: Function<String, String>) : Bool := 
+            ∃ tm: (State, TransitionFunction), ∀ x: String, 
+                simulateTM(tm[0], tm[1], x).finalTape.toString() == f(x)
+        
+        [∀ config, δ . 
+            LET newConfig := step(config, δ)
+            IN newConfig.tape.left.length() + newConfig.tape.right.length() == 
+               config.tape.left.length() + config.tape.right.length() + 1]
+        
+        [∀ initialState, δ, input . 
+            LET result := simulateTM(initialState, δ, input)
+            IN result.steps > 0 => result.finalTape != createTape(input)]
+        
+        RETURN Record{
+            simulateTM: simulateTM,
+            UniversalTuringMachine: UniversalTuringMachine,
+            isHalting: isHalting,
+            computabilityTest: computabilityTest
+        }
+    }
+}

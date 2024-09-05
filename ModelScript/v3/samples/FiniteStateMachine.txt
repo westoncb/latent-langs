@@ -1,0 +1,159 @@
+ModelScript {
+    METADATA {
+        MODELS: "Finite State Machine with Hierarchical States and Transition Actions"
+        VERSION: "3.0"
+    }
+    
+    INTERFACE {
+        INCOMING {
+            initialState : StateID
+            transitionTable : TransitionTable
+            input : List[InputSymbol]
+        }
+        OUTGOING {
+            finalState : StateID
+            stateHistory : List[StateID]
+            outputHistory : List[OutputSymbol]
+        }
+    }
+    
+    TYPE StateID := String
+    TYPE InputSymbol := String
+    TYPE OutputSymbol := String
+    TYPE TransitionTable := Dict[StateID, Dict[InputSymbol, Transition]]
+    TYPE Transition := Record{targetState: StateID, action: Option[Action]}
+    TYPE Action := Function<FSMContext, OutputSymbol>
+    TYPE FSMContext := Record{currentState: StateID, input: InputSymbol, outputHistory: List[OutputSymbol]}
+    
+    NOTATION {
+        ∀x ∈ set, cond := forall(x, set, cond)
+        ∃x ∈ set, cond := exists(x, set, cond)
+        λ := function
+        ⊕ := concat
+    }
+
+    MODEL := FiniteStateMachine {
+        TYPE StateMachine := Record{
+            states: Set[State],
+            initialState: StateID,
+            currentState: StateID,
+            transitionTable: TransitionTable
+        }
+        
+        STRUCTURE State {
+            DEF id : StateID
+            DEF parent : Option[StateID]
+            DEF children : Set[StateID]
+            DEF entryAction : Option[Action]
+            DEF exitAction : Option[Action]
+            
+            [parent.isDefined() => id ∉ parent.get().children]
+            [∀ child ∈ children, child.parent == Some(id)]
+        }
+        
+        DEF createStateMachine(initialState: StateID, transitionTable: TransitionTable) : StateMachine := 
+            LET states := extractStates(transitionTable)
+            IN Record{
+                states: states,
+                initialState: initialState,
+                currentState: initialState,
+                transitionTable: transitionTable
+            }
+        
+        DEF extractStates(transitionTable: TransitionTable) : Set[State] := 
+            LET stateIDs := Set(transitionTable.keys() ⊕ 
+                                [transition.targetState for state in transitionTable.values() 
+                                                       for transition in state.values()])
+            IN Set([State{id: id, parent: None, children: Set(), entryAction: None, exitAction: None} 
+                    for id in stateIDs])
+        
+        DEF addHierarchicalState(machine: StateMachine, stateId: StateID, parentId: Option[StateID]) : StateMachine := 
+            LET updatedStates := IF parentId.isDefined()
+                THEN machine.states.map(λ state . 
+                    IF state.id == parentId.get()
+                    THEN Record{...state, children: state.children ⊕ Set(stateId)}
+                    ELSE IF state.id == stateId
+                    THEN Record{...state, parent: parentId}
+                    ELSE state
+                )
+                ELSE machine.states
+            IN Record{...machine, states: updatedStates}
+        
+        DEF addStateAction(machine: StateMachine, stateId: StateID, actionType: String, action: Action) : StateMachine := 
+            LET updatedStates := machine.states.map(λ state . 
+                IF state.id == stateId
+                THEN MATCH actionType
+                    "entry" -> Record{...state, entryAction: Some(action)}
+                    "exit" -> Record{...state, exitAction: Some(action)}
+                    _ -> state
+                ELSE state
+            )
+            IN Record{...machine, states: updatedStates}
+        
+        DEF processInput(machine: StateMachine, input: InputSymbol) : (StateMachine, Option[OutputSymbol]) := 
+            LET currentState := machine.currentState
+                transition := machine.transitionTable.get(currentState, {}).get(input, None)
+            IN MATCH transition
+                Some(t) -> processTransition(machine, t, input)
+                None -> (machine, None)
+        
+        DEF processTransition(machine: StateMachine, transition: Transition, input: InputSymbol) : (StateMachine, Option[OutputSymbol]) := 
+            LET context := Record{currentState: machine.currentState, input: input, outputHistory: []}
+                exitOutput := executeStateAction(machine, machine.currentState, "exit", context)
+                transitionOutput := executeTransitionAction(transition, context)
+                entryOutput := executeStateAction(machine, transition.targetState, "entry", context)
+                allOutputs := [exitOutput, transitionOutput, entryOutput].flatten().filterNone()
+                newMachine := Record{...machine, currentState: transition.targetState}
+            IN (newMachine, IF allOutputs.isEmpty() THEN None ELSE Some(allOutputs.last()))
+        
+        DEF executeStateAction(machine: StateMachine, stateId: StateID, actionType: String, context: FSMContext) : Option[OutputSymbol] := 
+            LET state := machine.states.find(λ s . s.id == stateId).get()
+                action := MATCH actionType
+                    "entry" -> state.entryAction
+                    "exit" -> state.exitAction
+                    _ -> None
+            IN MATCH action
+                Some(a) -> Some(a(context))
+                None -> None
+        
+        DEF executeTransitionAction(transition: Transition, context: FSMContext) : Option[OutputSymbol] := 
+            MATCH transition.action
+                Some(a) -> Some(a(context))
+                None -> None
+        
+        DEF runMachine(initialState: StateID, transitionTable: TransitionTable, input: List[InputSymbol]) := 
+            LET machine := createStateMachine(initialState, transitionTable)
+                (finalMachine, stateHistory, outputHistory) := 
+                    input.foldl(
+                        λ (m, sh, oh), symbol . 
+                            LET (newMachine, output) := processInput(m, symbol)
+                            IN (newMachine, 
+                                sh ⊕ [newMachine.currentState], 
+                                oh ⊕ [output].filterNone()),
+                        (machine, [initialState], [])
+                    )
+            IN Record{
+                finalState: finalMachine.currentState,
+                stateHistory: stateHistory,
+                outputHistory: outputHistory
+            }
+        
+        [∀ machine, input . 
+            LET (newMachine, _) := processInput(machine, input)
+            IN newMachine.currentState ∈ machine.states.map(λ s . s.id)]
+        
+        [∀ machine, stateId, parentId . 
+            LET newMachine := addHierarchicalState(machine, stateId, Some(parentId))
+            IN newMachine.states.find(λ s . s.id == stateId).get().parent == Some(parentId)]
+        
+        [∀ machine, stateId, actionType, action . 
+            LET newMachine := addStateAction(machine, stateId, actionType, action)
+                state := newMachine.states.find(λ s . s.id == stateId).get()
+            IN MATCH actionType
+                "entry" -> state.entryAction == Some(action)
+                "exit" -> state.exitAction == Some(action)
+                _ -> ⊤]
+        
+        RETURN runMachine
+    }
+}

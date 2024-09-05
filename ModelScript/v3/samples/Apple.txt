@@ -1,0 +1,223 @@
+ModelScript {
+    METADATA {
+        MODELS: "Apple (Malus domestica) Biological Model"
+        VERSION: "3.0"
+    }
+    
+    INTERFACE {
+        INCOMING {
+            geneticProfile : GeneticProfile
+            environmentalFactors : EnvironmentalFactors
+            growthDuration : Int  # Days
+        }
+        OUTGOING {
+            matureApple : Apple
+            growthStats : GrowthStatistics
+            nutrientProfile : NutrientProfile
+        }
+    }
+    
+    TYPE CellType := Enum{Epidermis, Parenchyma, Vascular}
+    TYPE Tissue := Record{cellType: CellType, cellCount: Int}
+    TYPE GeneticProfile := Record{chromosomes: List[Chromosome], ploidy: Int}
+    TYPE Chromosome := List[Gene]
+    TYPE Gene := Record{name: String, alleles: List[Allele]}
+    TYPE Allele := Record{id: String, dominance: Float}
+    TYPE EnvironmentalFactors := Record{
+        temperature: Float,
+        sunlightHours: Float,
+        soilpH: Float,
+        waterAvailability: Float,
+        nutrientAvailability: Record{nitrogen: Float, phosphorus: Float, potassium: Float}
+    }
+    TYPE GrowthStatistics := Record{
+        sizeOverTime: List[Float],
+        massOverTime: List[Float],
+        sugarContentOverTime: List[Float]
+    }
+    TYPE NutrientProfile := Record{
+        carbohydrates: Float,
+        fiber: Float,
+        vitamins: Record{vitaminC: Float, vitaminA: Float, vitaminK: Float},
+        minerals: Record{potassium: Float, calcium: Float, magnesium: Float}
+    }
+    
+    NOTATION {
+        ∑(list, func) := sum(map(list, func))
+        ∏(list, func) := product(map(list, func))
+        ∀x ∈ set, cond := forall(x, set, cond)
+        ∃x ∈ set, cond := exists(x, set, cond)
+        μ := mean
+        σ := std_dev
+    }
+
+    MODEL := Apple {
+        STRUCTURE AppleTissue {
+            DEF epidermis : Tissue
+            DEF cortex : Tissue
+            DEF core : Tissue
+            DEF vascularBundle : Tissue
+            
+            [epidermis.cellType == Epidermis]
+            [cortex.cellType == Parenchyma]
+            [core.cellType == Parenchyma]
+            [vascularBundle.cellType == Vascular]
+        }
+        
+        STRUCTURE Apple {
+            DEF tissue : AppleTissue
+            DEF size : Float  # Diameter in cm
+            DEF mass : Float  # Grams
+            DEF color : Record{red: Float, green: Float, blue: Float}
+            DEF sugarContent : Float  # Brix
+            DEF starchContent : Float  # mg/g
+            DEF seeds : List[Seed]
+            
+            [size > 0]
+            [mass > 0]
+            [sugarContent >= 0 AND sugarContent <= 25]  # Typical Brix range for apples
+            [starchContent >= 0]
+            [length(seeds) >= 0 AND length(seeds) <= 10]  # Typical seed count range
+        }
+        
+        STRUCTURE Seed {
+            DEF genotype : GeneticProfile
+            DEF size : Float
+            DEF viability : Float  # 0 to 1
+            
+            [size > 0]
+            [viability >= 0 AND viability <= 1]
+        }
+        
+        DEF initializeApple(geneticProfile: GeneticProfile) : Apple := 
+            Apple{
+                tissue: AppleTissue{
+                    epidermis: Tissue{cellType: Epidermis, cellCount: 1000},
+                    cortex: Tissue{cellType: Parenchyma, cellCount: 10000},
+                    core: Tissue{cellType: Parenchyma, cellCount: 5000},
+                    vascularBundle: Tissue{cellType: Vascular, cellCount: 500}
+                },
+                size: 0.1,  # Initial size in cm
+                mass: 0.1,  # Initial mass in grams
+                color: Record{red: 0, green: 0.8, blue: 0},  # Initial green color
+                sugarContent: 2.0,  # Initial Brix
+                starchContent: 15.0,  # Initial starch content in mg/g
+                seeds: [Seed{genotype: geneticProfile, size: 0.01, viability: 0.8} FOR _ IN range(5)]
+            }
+        
+        DEF growApple(apple: Apple, environmentalFactors: EnvironmentalFactors, days: Int) : Apple := 
+            LET growthRate := calculateGrowthRate(apple.tissue, environmentalFactors)
+                sugarAccumulation := calculateSugarAccumulation(environmentalFactors)
+                colorDevelopment := calculateColorDevelopment(apple.color, environmentalFactors)
+            IN foldl(
+                range(days),
+                λ currentApple, _ . 
+                    Record{
+                        ...currentApple,
+                        size: currentApple.size * (1 + growthRate),
+                        mass: currentApple.mass * (1 + growthRate * 1.1),  # Mass increases slightly faster than size
+                        color: colorDevelopment(currentApple.color),
+                        sugarContent: min(currentApple.sugarContent + sugarAccumulation, 25),
+                        starchContent: max(currentApple.starchContent - sugarAccumulation * 0.5, 0),
+                        seeds: map(currentApple.seeds, growSeed(environmentalFactors))
+                    },
+                apple
+            )
+        
+        DEF calculateGrowthRate(tissue: AppleTissue, env: EnvironmentalFactors) : Float := 
+            LET baseRate := 0.01
+                tempFactor := gaussian(env.temperature, μ=20, σ=5)
+                waterFactor := sigmoid(env.waterAvailability, midpoint=0.5, steepness=10)
+                nutrientFactor := (env.nutrientAvailability.nitrogen + 
+                                   env.nutrientAvailability.phosphorus + 
+                                   env.nutrientAvailability.potassium) / 3
+            IN baseRate * tempFactor * waterFactor * nutrientFactor
+        
+        DEF calculateSugarAccumulation(env: EnvironmentalFactors) : Float := 
+            LET baseSugarRate := 0.1
+                sunlightFactor := log(env.sunlightHours + 1) / log(13)  # Normalized to 12 hours
+                tempFactor := gaussian(env.temperature, μ=25, σ=7)
+            IN baseSugarRate * sunlightFactor * tempFactor
+        
+        DEF calculateColorDevelopment(currentColor: Record{red: Float, green: Float, blue: Float}, 
+                                      env: EnvironmentalFactors) : Function<Record{red: Float, green: Float, blue: Float}, 
+                                                                           Record{red: Float, green: Float, blue: Float}> := 
+            LET sunlightFactor := sigmoid(env.sunlightHours, midpoint=8, steepness=0.5)
+                tempFactor := sigmoid(env.temperature, midpoint=15, steepness=0.3)
+                colorChangeRate := sunlightFactor * tempFactor * 0.01
+            IN λ color . Record{
+                red: min(color.red + colorChangeRate, 1),
+                green: max(color.green - colorChangeRate, 0),
+                blue: color.blue
+            }
+        
+        DEF growSeed(env: EnvironmentalFactors) : Function<Seed, Seed> := 
+            LET growthFactor := (env.temperature / 30 + env.waterAvailability + env.nutrientAvailability.phosphorus) / 3
+            IN λ seed . Record{
+                ...seed,
+                size: seed.size * (1 + growthFactor * 0.1),
+                viability: min(seed.viability * (1 + growthFactor * 0.05), 1)
+            }
+        
+        DEF simulateAppleGrowth(geneticProfile: GeneticProfile, 
+                                environmentalFactors: EnvironmentalFactors, 
+                                growthDuration: Int) := 
+            LET initialApple := initializeApple(geneticProfile)
+                growthProcess := λ apple, day . 
+                    LET updatedApple := growApple(apple, environmentalFactors, 1)
+                        stats := Record{
+                            size: updatedApple.size,
+                            mass: updatedApple.mass,
+                            sugarContent: updatedApple.sugarContent
+                        }
+                    IN (updatedApple, stats)
+                (matureApple, growthStats) := foldl(
+                    range(growthDuration),
+                    λ (apple, stats), day . 
+                        LET (newApple, newStats) := growthProcess(apple, day)
+                        IN (newApple, Record{
+                            sizeOverTime: stats.sizeOverTime ⊕ [newStats.size],
+                            massOverTime: stats.massOverTime ⊕ [newStats.mass],
+                            sugarContentOverTime: stats.sugarContentOverTime ⊕ [newStats.sugarContent]
+                        }),
+                    (initialApple, Record{sizeOverTime: [], massOverTime: [], sugarContentOverTime: []})
+                )
+                nutrientProfile := calculateNutrientProfile(matureApple)
+            IN Record{
+                matureApple: matureApple,
+                growthStats: growthStats,
+                nutrientProfile: nutrientProfile
+            }
+        
+        DEF calculateNutrientProfile(apple: Apple) : NutrientProfile := 
+            LET baseFactor := apple.mass / 100  # Nutrients per 100g
+            IN Record{
+                carbohydrates: apple.sugarContent * baseFactor,
+                fiber: 2.4 * baseFactor,
+                vitamins: Record{
+                    vitaminC: 4.6 * baseFactor,
+                    vitaminA: 0.003 * baseFactor,
+                    vitaminK: 0.0022 * baseFactor
+                },
+                minerals: Record{
+                    potassium: 107 * baseFactor,
+                    calcium: 6 * baseFactor,
+                    magnesium: 5 * baseFactor
+                }
+            }
+        
+        [∀ apple, env, days . 
+            LET grownApple := growApple(apple, env, days)
+            IN grownApple.size >= apple.size AND grownApple.mass >= apple.mass]
+        
+        [∀ apple, env, days . 
+            LET grownApple := growApple(apple, env, days)
+            IN grownApple.sugarContent >= apple.sugarContent OR grownApple.starchContent < apple.starchContent]
+        
+        [∀ geneticProfile, env, duration . 
+            LET result := simulateAppleGrowth(geneticProfile, env, duration)
+            IN length(result.growthStats.sizeOverTime) == duration]
+
+        RETURN simulateAppleGrowth
+    }
+}
