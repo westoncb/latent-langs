@@ -21,5 +21,7 @@ The purpose of this repository is to share my findings so far on this topic, and
 
 There is a bit of art to it, so I'd recommend watching the video below for a more in-depth introduction.
 
-[![Introduction to LLM languages+ConceptScript](https://i9.ytimg.com/vi/lmhvevCL7RU/maxresdefault.jpg?v=66736912&sqp=CMic7bMG&rs=AOn4CLDGuWTzrtlW3jv2dJOtqP5ffKyPnQ)](https://youtu.be/lmhvevCL7RU)
+YouTube video: [Introduction to LLM languages+ConceptScript](https://youtu.be/lmhvevCL7RU)
+
+And here's a fun way to view Concepts—it's loaded with one by default but you can paste your own in: https://westoncb.github.io/concept_inspector/
  
